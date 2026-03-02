@@ -24,7 +24,28 @@ Use CRW as a web scraping tool in any AI coding assistant that supports MCP.
 
 [MCP (Model Context Protocol)](https://modelcontextprotocol.io) is an open standard that lets AI assistants use external tools. CRW ships with a built-in MCP server that gives any MCP-compatible client 4 web scraping tools.
 
-## Build the MCP Server
+## Two Transport Options
+
+CRW supports **two ways** to connect MCP clients:
+
+| Transport | Setup | Requires |
+|:----------|:------|:---------|
+| **HTTP** (recommended) | One-liner, no binary needed | `crw-server` running |
+| **Stdio** | Separate binary (`crw-mcp`) | `crw-server` running + `crw-mcp` binary |
+
+### Option 1: Streamable HTTP (Recommended)
+
+The `crw-server` has a built-in `/mcp` endpoint. No extra binary needed — just point your MCP client at the URL:
+
+```bash
+claude mcp add --transport http crw http://localhost:3000/mcp
+```
+
+That's it. No build step, no binary path.
+
+### Option 2: Stdio Binary
+
+Build the standalone MCP binary:
 
 ```bash
 cargo build --release --bin crw-mcp
@@ -33,7 +54,7 @@ cargo build --release --bin crw-mcp
 The binary is at `target/release/crw-mcp` (~4 MB). It has **zero dependency** on CRW's internal crates — it's a pure JSON-RPC 2.0 stdio proxy.
 
 {: .warning }
-Make sure `crw-server` is running before using the MCP tools. The MCP server forwards all requests to the HTTP API.
+Make sure `crw-server` is running before using the MCP tools. Both transports forward requests to the HTTP API.
 
 ## Available Tools
 
@@ -94,7 +115,13 @@ Once connected, these tools appear in your AI assistant:
 
 ### Claude Code
 
-One-liner:
+**HTTP transport (recommended):**
+
+```bash
+claude mcp add --transport http crw http://localhost:3000/mcp
+```
+
+**Stdio transport:**
 
 ```bash
 claude mcp add crw -- /absolute/path/to/crw-mcp
@@ -294,7 +321,7 @@ codex mcp add crw -- /absolute/path/to/crw-mcp
 
 | Platform | Config Format | Config Path | One-liner |
 |:---------|:-------------|:------------|:----------|
-| Claude Code | JSON | `~/.claude.json` | `claude mcp add crw -- /path/to/crw-mcp` |
+| Claude Code | JSON | `~/.claude.json` | `claude mcp add --transport http crw http://localhost:3000/mcp` |
 | Claude Desktop | JSON | OS-specific (see above) | — |
 | Cursor | JSON | `~/.cursor/mcp.json` | — |
 | Windsurf | JSON | `~/.codeium/windsurf/mcp_config.json` | — |
@@ -349,14 +376,26 @@ Expected:
 
 ## How It Works
 
+**HTTP transport (recommended):**
+
+```
+AI Assistant (Claude, Cursor, Codex, ...)
+    ↓ HTTP POST (JSON-RPC 2.0)
+  crw-server /mcp endpoint (localhost:3000)
+    ↓ direct function calls
+  Web pages
+```
+
+**Stdio transport:**
+
 ```
 AI Assistant (Claude, Cursor, Codex, ...)
     ↓ stdin (JSON-RPC 2.0)
-  crw-mcp
+  crw-mcp binary
     ↓ HTTP (POST/GET)
   crw-server (localhost:3000)
     ↓
   Web pages
 ```
 
-The MCP server is a pure JSON proxy. It works with any Firecrawl-compatible API backend — not just CRW.
+The HTTP transport calls internal functions directly with zero overhead. The stdio transport is a pure JSON proxy that works with any Firecrawl-compatible API backend.
