@@ -1,0 +1,42 @@
+[server]
+host = "0.0.0.0"
+port = 3000
+request_timeout_secs = 60
+
+[renderer]
+mode = "auto"                     # auto | lightpanda | playwright | chrome | none
+page_timeout_ms = 30000
+pool_size = 4
+
+[renderer.lightpanda]
+ws_url = "ws://127.0.0.1:9222"
+
+# [renderer.playwright]
+# ws_url = "ws://playwright:9222"
+
+# [renderer.chrome]
+# ws_url = "ws://chrome:9222"
+
+[crawler]
+max_concurrency = 10
+requests_per_second = 10.0
+respect_robots_txt = true
+user_agent = "CRW/0.1"
+default_max_depth = 2
+default_max_pages = 100
+job_ttl_secs = 3600
+# proxy = "http://proxy:8080"
+
+[extraction]
+default_format = "markdown"
+only_main_content = true
+
+[auth]
+# api_keys = ["fc-key-1234"]
+
+# [extraction.llm]
+# provider = "anthropic"        # "anthropic" or "openai"
+# api_key = "sk-..."            # or use CRW_EXTRACTION__LLM__API_KEY env var
+# model = "claude-sonnet-4-20250514"
+# max_tokens = 4096
+# base_url = "https://custom-endpoint.example.com"  # optional, for OpenAI-compatible APIs

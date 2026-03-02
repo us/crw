@@ -1,0 +1,23 @@
+services:
+  crw:
+    build: .
+    ports:
+      - "3000:3000"
+    depends_on:
+      - lightpanda
+    environment:
+      - RUST_LOG=info
+      - CRW_RENDERER__LIGHTPANDA__WS_URL=ws://lightpanda:9222
+
+  lightpanda:
+    image: lightpanda/browser:latest
+    ports:
+      - "9222:9222"
+
+  # Optional Playwright fallback
+  # playwright:
+  #   image: mcr.microsoft.com/playwright:v1.49.0-noble
+  #   command: ["npx", "playwright", "run-server", "--port=9223"]
+  #   profiles: [playwright]
+  #   ports:
+  #     - "9223:9223"

@@ -1,0 +1,59 @@
+[workspace]
+members = [
+    "crates/crw-core",
+    "crates/crw-renderer",
+    "crates/crw-extract",
+    "crates/crw-crawl",
+    "crates/crw-server",
+    "crates/crw-mcp",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Web framework
+axum = { version = "0.7", features = ["macros"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace", "timeout"] }
+
+# HTTP client
+reqwest = { version = "0.12", default-features = false, features = ["json", "cookies", "rustls-tls-native-roots"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# HTML processing
+lol_html = "2"
+scraper = "0.21"
+fast_html2md = "0.0.58"
+
+# Async utilities
+futures = "0.3"
+
+# Config
+config = "0.14"
+
+# Error handling
+thiserror = "2"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Misc
+uuid = { version = "1", features = ["v4", "serde"] }
+url = { version = "2", features = ["serde"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

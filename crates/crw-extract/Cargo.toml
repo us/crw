@@ -1,0 +1,18 @@
+[package]
+name = "crw-extract"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+crw-core = { path = "../crw-core" }
+lol_html = { workspace = true }
+scraper = { workspace = true }
+fast_html2md = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+url = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
+tokio = { workspace = true }

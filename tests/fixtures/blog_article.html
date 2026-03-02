@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Understanding Rust Ownership - Dev Blog</title>
+    <meta name="description" content="A deep dive into Rust's ownership system and how it ensures memory safety.">
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/">Dev Blog</a>
+            <a href="/posts">All Posts</a>
+            <a href="/about">About</a>
+        </nav>
+    </header>
+    <main>
+        <article>
+            <h1>Understanding Rust Ownership</h1>
+            <p class="meta">Published on 2025-01-15 by Jane Doe</p>
+            <p>Rust's ownership system is one of its most distinctive features. It enables memory safety without a garbage collector.</p>
+            <h2>The Three Rules</h2>
+            <ol>
+                <li>Each value in Rust has a variable that's called its <em>owner</em>.</li>
+                <li>There can only be one owner at a time.</li>
+                <li>When the owner goes out of scope, the value will be dropped.</li>
+            </ol>
+            <h2>Borrowing</h2>
+            <p>Instead of transferring ownership, you can <strong>borrow</strong> a reference to the data.</p>
+            <pre><code>fn main() {
+    let s = String::from("hello");
+    let len = calculate_length(&amp;s);
+    println!("Length of '{}' is {}.", s, len);
+}</code></pre>
+            <p>This is a powerful concept that eliminates data races at compile time.</p>
+            <a href="/posts/lifetimes">Next: Understanding Lifetimes</a>
+        </article>
+    </main>
+    <aside>
+        <h3>Related Posts</h3>
+        <ul>
+            <li><a href="/posts/lifetimes">Understanding Lifetimes</a></li>
+            <li><a href="/posts/traits">Traits in Rust</a></li>
+        </ul>
+    </aside>
+    <footer>
+        <p>&copy; 2025 Dev Blog</p>
+    </footer>
+</body>
+</html>
