@@ -4,7 +4,7 @@ use crw_renderer::FallbackRenderer;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{watch, RwLock};
+use tokio::sync::{RwLock, watch};
 use uuid::Uuid;
 
 /// Tracks a crawl job receiver + creation time for TTL cleanup.
@@ -55,7 +55,11 @@ impl AppState {
                 });
                 let removed = before - jobs.len();
                 if removed > 0 {
-                    tracing::info!(removed, remaining = jobs.len(), "Cleaned up expired crawl jobs");
+                    tracing::info!(
+                        removed,
+                        remaining = jobs.len(),
+                        "Cleaned up expired crawl jobs"
+                    );
                 }
             }
         });

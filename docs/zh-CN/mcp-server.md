@@ -369,7 +369,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"nam
   "result": {
     "protocolVersion": "2024-11-05",
     "capabilities": {"tools": {}},
-    "serverInfo": {"name": "crw-mcp", "version": "0.1.0"}
+    "serverInfo": {"name": "crw-mcp", "version": "0.0.1"}
   }
 }
 ```

@@ -3,9 +3,14 @@ name = "crw-extract"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "HTML extraction and markdown conversion engine for the CRW web scraper"
 
 [dependencies]
-crw-core = { path = "../crw-core" }
+crw-core = { path = "../crw-core", version = "0.0.1" }
 lol_html = { workspace = true }
 scraper = { workspace = true }
 fast_html2md = { workspace = true }

@@ -49,6 +49,7 @@ fn is_allowed_scheme(url: &url::Url) -> bool {
 }
 
 /// Run a BFS crawl starting from a URL.
+#[allow(clippy::too_many_arguments)]
 pub async fn run_crawl(
     id: Uuid,
     req: CrawlRequest,
@@ -131,11 +132,11 @@ pub async fn run_crawl(
             break;
         }
 
-        if let Ok(parsed) = url::Url::parse(&url) {
-            if !robots.is_allowed(parsed.path()) {
-                tracing::debug!(url, "Blocked by robots.txt");
-                continue;
-            }
+        if let Ok(parsed) = url::Url::parse(&url)
+            && !robots.is_allowed(parsed.path())
+        {
+            tracing::debug!(url, "Blocked by robots.txt");
+            continue;
         }
 
         let _permit = match semaphore.clone().acquire_owned().await {
@@ -147,10 +148,7 @@ pub async fn run_crawl(
         };
         rate_limiter.wait().await;
 
-        let fetch_result = match renderer
-            .fetch(&url, &Default::default(), None, None)
-            .await
-        {
+        let fetch_result = match renderer.fetch(&url, &Default::default(), None, None).await {
             Ok(r) => r,
             Err(e) => {
                 tracing::warn!(url, error = %e, "Crawl: failed to fetch page");
@@ -192,11 +190,13 @@ pub async fn run_crawl(
             &[],
         );
 
-        if let (Some(schema), Some(llm)) = (&req.json_schema, llm_config) {
-            if let Some(md) = &data.markdown {
-                match crw_extract::structured::extract_structured(md, schema, llm).await {
-                    Ok(json) => data.json = Some(json),
-                    Err(e) => tracing::warn!(url = url.as_str(), "Crawl LLM extraction failed: {e}"),
+        if let (Some(schema), Some(llm)) = (&req.json_schema, llm_config)
+            && let Some(md) = &data.markdown
+        {
+            match crw_extract::structured::extract_structured(md, schema, llm).await {
+                Ok(json) => data.json = Some(json),
+                Err(e) => {
+                    tracing::warn!(url = url.as_str(), "Crawl LLM extraction failed: {e}")
                 }
             }
         }
@@ -249,7 +249,7 @@ pub async fn discover_urls(
         None => {
             return Err(crw_core::error::CrwError::InvalidRequest(
                 "URL has no host".into(),
-            ))
+            ));
         }
     };
 

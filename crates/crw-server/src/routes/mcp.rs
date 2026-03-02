@@ -5,7 +5,7 @@ use crw_core::types::{CrawlRequest, MapRequest, ScrapeRequest};
 use crw_crawl::crawl::discover_urls;
 use crw_crawl::single::scrape_url;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::time::Instant;
 use uuid::Uuid;
 
@@ -140,8 +140,8 @@ fn tool_definitions() -> Value {
 async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result<Value, String> {
     match tool_name {
         "crw_scrape" => {
-            let req: ScrapeRequest = serde_json::from_value(args)
-                .map_err(|e| format!("invalid arguments: {e}"))?;
+            let req: ScrapeRequest =
+                serde_json::from_value(args).map_err(|e| format!("invalid arguments: {e}"))?;
             let llm_config = state.config.extraction.llm.as_ref();
             let data = scrape_url(&req, &state.renderer, llm_config)
                 .await
@@ -149,8 +149,8 @@ async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result<Val
             serde_json::to_value(&data).map_err(|e| format!("serialize error: {e}"))
         }
         "crw_crawl" => {
-            let req: CrawlRequest = serde_json::from_value(args)
-                .map_err(|e| format!("invalid arguments: {e}"))?;
+            let req: CrawlRequest =
+                serde_json::from_value(args).map_err(|e| format!("invalid arguments: {e}"))?;
             let id = Uuid::new_v4();
             let initial = crw_core::types::CrawlState {
                 id,
@@ -163,10 +163,13 @@ async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result<Val
             let (tx, rx) = tokio::sync::watch::channel(initial);
             {
                 let mut jobs = state.crawl_jobs.write().await;
-                jobs.insert(id, CrawlJob {
-                    rx,
-                    created_at: Instant::now(),
-                });
+                jobs.insert(
+                    id,
+                    CrawlJob {
+                        rx,
+                        created_at: Instant::now(),
+                    },
+                );
             }
             let renderer = state.renderer.clone();
             let max_concurrency = state.config.crawler.max_concurrency;
@@ -178,7 +181,14 @@ async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result<Val
             tokio::spawn(async move {
                 let _permit = crawl_semaphore.acquire().await;
                 crw_crawl::crawl::run_crawl(
-                    id, req, renderer, max_concurrency, respect_robots, rps, &user_agent, tx,
+                    id,
+                    req,
+                    renderer,
+                    max_concurrency,
+                    respect_robots,
+                    rps,
+                    &user_agent,
+                    tx,
                     llm_config.as_ref(),
                 )
                 .await;
@@ -186,20 +196,24 @@ async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result<Val
             Ok(json!({"success": true, "id": id.to_string()}))
         }
         "crw_check_crawl_status" => {
-            let id_str = args.get("id").and_then(|v| v.as_str())
+            let id_str = args
+                .get("id")
+                .and_then(|v| v.as_str())
                 .ok_or("missing required parameter: id")?;
-            let id: Uuid = id_str.parse()
+            let id: Uuid = id_str
+                .parse()
                 .map_err(|_| format!("invalid crawl id: {id_str}"))?;
             let jobs = state.crawl_jobs.read().await;
-            let job = jobs.get(&id)
-                .ok_or(format!("crawl job {id} not found"))?;
+            let job = jobs.get(&id).ok_or(format!("crawl job {id} not found"))?;
             let current = job.rx.borrow().clone();
             serde_json::to_value(&current).map_err(|e| format!("serialize error: {e}"))
         }
         "crw_map" => {
-            let req: MapRequest = serde_json::from_value(args)
-                .map_err(|e| format!("invalid arguments: {e}"))?;
-            let max_depth = req.max_depth.unwrap_or(state.config.crawler.default_max_depth);
+            let req: MapRequest =
+                serde_json::from_value(args).map_err(|e| format!("invalid arguments: {e}"))?;
+            let max_depth = req
+                .max_depth
+                .unwrap_or(state.config.crawler.default_max_depth);
             let urls = discover_urls(
                 &req.url,
                 max_depth,
@@ -220,7 +234,11 @@ async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result<Val
 async fn handle_request(state: &AppState, req: JsonRpcRequest) -> Option<JsonRpcResponse> {
     if req.jsonrpc != "2.0" {
         if let Some(id) = req.id {
-            return Some(JsonRpcResponse::error(id, -32600, "invalid jsonrpc version".into()));
+            return Some(JsonRpcResponse::error(
+                id,
+                -32600,
+                "invalid jsonrpc version".into(),
+            ));
         }
         return None;
     }
@@ -250,7 +268,11 @@ async fn handle_request(state: &AppState, req: JsonRpcRequest) -> Option<JsonRpc
 
         "tools/call" => {
             let id = req.id.unwrap_or(Value::Null);
-            let tool_name = req.params.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            let tool_name = req
+                .params
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             let arguments = req.params.get("arguments").cloned().unwrap_or(json!({}));
 
             match call_tool(state, tool_name, arguments).await {
@@ -280,7 +302,11 @@ async fn handle_request(state: &AppState, req: JsonRpcRequest) -> Option<JsonRpc
 
         _ => {
             if let Some(id) = req.id {
-                Some(JsonRpcResponse::error(id, -32601, format!("method not found: {}", req.method)))
+                Some(JsonRpcResponse::error(
+                    id,
+                    -32601,
+                    format!("method not found: {}", req.method),
+                ))
             } else {
                 None
             }

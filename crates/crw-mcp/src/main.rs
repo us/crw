@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::io::BufRead;
 use tokio::io::AsyncWriteExt;
 
@@ -172,7 +172,9 @@ async fn call_tool(
     if let Some(key) = api_key {
         headers.insert(
             "authorization",
-            format!("Bearer {key}").parse().map_err(|e| format!("invalid api key: {e}"))?,
+            format!("Bearer {key}")
+                .parse()
+                .map_err(|e| format!("invalid api key: {e}"))?,
         );
     }
 
@@ -239,11 +241,7 @@ async fn parse_response(resp: reqwest::Response) -> Result<Value, String> {
 }
 
 fn truncate(s: &str, max: usize) -> &str {
-    if s.len() <= max {
-        s
-    } else {
-        &s[..max]
-    }
+    if s.len() <= max { s } else { &s[..max] }
 }
 
 // --- Request handling ---
@@ -256,7 +254,11 @@ async fn handle_request(
 ) -> Option<JsonRpcResponse> {
     if req.jsonrpc != "2.0" {
         if let Some(id) = req.id {
-            return Some(JsonRpcResponse::error(id, -32600, "invalid jsonrpc version".into()));
+            return Some(JsonRpcResponse::error(
+                id,
+                -32600,
+                "invalid jsonrpc version".into(),
+            ));
         }
         return None;
     }
@@ -294,11 +296,7 @@ async fn handle_request(
                 .get("name")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            let arguments = req
-                .params
-                .get("arguments")
-                .cloned()
-                .unwrap_or(json!({}));
+            let arguments = req.params.get("arguments").cloned().unwrap_or(json!({}));
 
             match call_tool(client, base_url, api_key, tool_name, arguments).await {
                 Ok(result) => {
@@ -362,8 +360,7 @@ async fn main() {
         )
         .init();
 
-    let base_url = std::env::var("CRW_API_URL")
-        .unwrap_or_else(|_| "http://localhost:3000".into());
+    let base_url = std::env::var("CRW_API_URL").unwrap_or_else(|_| "http://localhost:3000".into());
     let api_key = std::env::var("CRW_API_KEY").ok();
 
     tracing::info!("Starting {SERVER_NAME} v{SERVER_VERSION}");

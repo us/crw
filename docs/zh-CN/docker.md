@@ -20,7 +20,18 @@ parent: 首页
 
 ---
 
-## 快速开始
+## 预构建镜像
+
+从 GitHub Container Registry 拉取并运行预构建镜像：
+
+```bash
+docker pull ghcr.io/us/crw:latest
+docker run -p 3000:3000 ghcr.io/us/crw:latest
+```
+
+可用标签：`latest`、`0.0.1`、`0.0`
+
+## 快速开始（Docker Compose）
 
 ```bash
 git clone https://github.com/us/crw.git
@@ -87,7 +98,7 @@ services:
 多阶段构建，最小化镜像体积：
 
 ```dockerfile
-FROM rust:1.83-bookworm AS builder
+FROM rust:1.93-bookworm AS builder
 WORKDIR /app
 COPY . .
 RUN cargo build --release --bin crw-server --features crw-server/cdp

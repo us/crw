@@ -1,4 +1,4 @@
-use lol_html::{element, rewrite_str, RewriteStrSettings};
+use lol_html::{RewriteStrSettings, element, rewrite_str};
 use scraper::{Html, Selector};
 use std::collections::HashSet;
 
@@ -12,20 +12,53 @@ pub fn clean_html(
 ) -> Result<String, String> {
     // Phase 1: lol_html streaming removal of always-unwanted tags.
     let mut handlers = vec![
-        element!("script", |el| { el.remove(); Ok(()) }),
-        element!("style", |el| { el.remove(); Ok(()) }),
-        element!("noscript", |el| { el.remove(); Ok(()) }),
-        element!("iframe", |el| { el.remove(); Ok(()) }),
-        element!("svg", |el| { el.remove(); Ok(()) }),
-        element!("canvas", |el| { el.remove(); Ok(()) }),
+        element!("script", |el| {
+            el.remove();
+            Ok(())
+        }),
+        element!("style", |el| {
+            el.remove();
+            Ok(())
+        }),
+        element!("noscript", |el| {
+            el.remove();
+            Ok(())
+        }),
+        element!("iframe", |el| {
+            el.remove();
+            Ok(())
+        }),
+        element!("svg", |el| {
+            el.remove();
+            Ok(())
+        }),
+        element!("canvas", |el| {
+            el.remove();
+            Ok(())
+        }),
     ];
 
     if only_main_content {
-        handlers.push(element!("nav", |el| { el.remove(); Ok(()) }));
-        handlers.push(element!("footer", |el| { el.remove(); Ok(()) }));
-        handlers.push(element!("header", |el| { el.remove(); Ok(()) }));
-        handlers.push(element!("aside", |el| { el.remove(); Ok(()) }));
-        handlers.push(element!("menu", |el| { el.remove(); Ok(()) }));
+        handlers.push(element!("nav", |el| {
+            el.remove();
+            Ok(())
+        }));
+        handlers.push(element!("footer", |el| {
+            el.remove();
+            Ok(())
+        }));
+        handlers.push(element!("header", |el| {
+            el.remove();
+            Ok(())
+        }));
+        handlers.push(element!("aside", |el| {
+            el.remove();
+            Ok(())
+        }));
+        handlers.push(element!("menu", |el| {
+            el.remove();
+            Ok(())
+        }));
     }
 
     let mut result = rewrite_str(
@@ -109,7 +142,10 @@ fn remove_by_selectors(html: &str, selectors: &[String]) -> String {
     out
 }
 
-fn is_excluded(el: &scraper::ElementRef, skip_ptrs: &HashSet<*const scraper::node::Element>) -> bool {
+fn is_excluded(
+    el: &scraper::ElementRef,
+    skip_ptrs: &HashSet<*const scraper::node::Element>,
+) -> bool {
     let ptr = el.value() as *const scraper::node::Element;
     skip_ptrs.contains(&ptr)
 }
@@ -151,7 +187,18 @@ fn collect_excluding(
 
     let self_closing = matches!(
         &*el.name.local,
-        "br" | "hr" | "img" | "input" | "meta" | "link" | "area" | "base" | "col" | "embed" | "source" | "track" | "wbr"
+        "br" | "hr"
+            | "img"
+            | "input"
+            | "meta"
+            | "link"
+            | "area"
+            | "base"
+            | "col"
+            | "embed"
+            | "source"
+            | "track"
+            | "wbr"
     );
     if !self_closing {
         out.push_str("</");
@@ -166,7 +213,8 @@ mod tests {
 
     #[test]
     fn strips_scripts_and_styles() {
-        let html = r#"<html><body><script>alert(1)</script><p>Hello</p><style>x{}</style></body></html>"#;
+        let html =
+            r#"<html><body><script>alert(1)</script><p>Hello</p><style>x{}</style></body></html>"#;
         let result = clean_html(html, false, &[], &[]).unwrap();
         assert!(!result.contains("<script>"));
         assert!(!result.contains("<style>"));
@@ -192,7 +240,8 @@ mod tests {
 
     #[test]
     fn include_tags_keeps_only_matching() {
-        let html = r#"<body><nav>Nav</nav><article><p>Article</p></article><footer>Foot</footer></body>"#;
+        let html =
+            r#"<body><nav>Nav</nav><article><p>Article</p></article><footer>Foot</footer></body>"#;
         let result = clean_html(html, false, &["article".into()], &[]).unwrap();
         assert!(result.contains("Article"));
         assert!(!result.contains("Nav"));

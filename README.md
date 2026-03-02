@@ -42,17 +42,30 @@ Benchmark: [Firecrawl scrape-content-dataset-v1](https://huggingface.co/datasets
 
 ## Quick Start
 
+**Install from crates.io:**
+
+```bash
+cargo install crw-server
+crw-server
+```
+
+**Docker (pre-built image):**
+
+```bash
+docker run -p 3000:3000 ghcr.io/us/crw:latest
+```
+
+**Docker Compose (with JS rendering):**
+
+```bash
+docker compose up
+```
+
 **Build from source:**
 
 ```bash
 cargo build --release --bin crw-server
 ./target/release/crw-server
-```
-
-**Docker:**
-
-```bash
-docker compose up
 ```
 
 **Scrape a page:**
@@ -279,6 +292,15 @@ def load_documents(urls):
 ```
 
 ## Docker
+
+**Pre-built image from GHCR:**
+
+```bash
+docker pull ghcr.io/us/crw:latest
+docker run -p 3000:3000 ghcr.io/us/crw:latest
+```
+
+**Docker Compose (with JS rendering sidecar):**
 
 ```bash
 docker compose up

@@ -1,5 +1,5 @@
-use axum::extract::State;
 use axum::Json;
+use axum::extract::State;
 use crw_core::error::CrwError;
 use crw_core::types::{MapRequest, MapResponse};
 use crw_crawl::crawl::discover_urls;

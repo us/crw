@@ -22,8 +22,27 @@ parent: 首页
 
 ## 系统要求
 
-- **Rust 1.83+**（从源码构建）
+- **Rust 1.85+**（从源码构建）
 - **Docker**（可选，用于容器化部署）
+
+## 从 crates.io 安装
+
+```bash
+cargo install crw-server
+```
+
+MCP 服务器：
+
+```bash
+cargo install crw-mcp
+```
+
+## 使用 Docker 安装（预构建镜像）
+
+```bash
+docker pull ghcr.io/us/crw:latest
+docker run -p 3000:3000 ghcr.io/us/crw:latest
+```
 
 ## 从源码安装
 
@@ -63,7 +82,7 @@ cargo build --release --bin crw-mcp
 | `crw-server` | `target/release/crw-server` | API 服务器 |
 | `crw-mcp` | `target/release/crw-mcp` | LLM 工具的 MCP 服务器 |
 
-## 使用 Docker 安装
+## 使用 Docker Compose 安装
 
 ```bash
 git clone https://github.com/us/crw.git
@@ -100,7 +119,7 @@ curl http://localhost:3000/health
 ```json
 {
   "status": "ok",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "renderers": {
     "http": true
   },

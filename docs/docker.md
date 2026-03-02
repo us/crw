@@ -19,7 +19,18 @@ Run CRW with Docker Compose for the easiest setup with JS rendering included.
 
 ---
 
-## Quick Start
+## Pre-built Image
+
+Pull and run the pre-built image from GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/us/crw:latest
+docker run -p 3000:3000 ghcr.io/us/crw:latest
+```
+
+Available tags: `latest`, `0.0.1`, `0.0`
+
+## Quick Start (Docker Compose)
 
 ```bash
 git clone https://github.com/us/crw.git
@@ -86,7 +97,7 @@ Then add the env var to the `crw` service:
 Multi-stage build for minimal image size:
 
 ```dockerfile
-FROM rust:1.83-bookworm AS builder
+FROM rust:1.93-bookworm AS builder
 WORKDIR /app
 COPY . .
 RUN cargo build --release --bin crw-server --features crw-server/cdp

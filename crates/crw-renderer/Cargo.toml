@@ -3,13 +3,18 @@ name = "crw-renderer"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "HTTP and CDP browser rendering engine for the CRW web scraper"
 
 [features]
 default = []
 cdp = ["tokio-tungstenite"]
 
 [dependencies]
-crw-core = { path = "../crw-core" }
+crw-core = { path = "../crw-core", version = "0.0.1" }
 reqwest = { workspace = true }
 tokio = { workspace = true }
 tokio-tungstenite = { version = "0.28", features = ["rustls-tls-native-roots"], optional = true }

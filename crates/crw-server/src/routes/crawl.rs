@@ -1,5 +1,5 @@
-use axum::extract::{Path, State};
 use axum::Json;
+use axum::extract::{Path, State};
 use crw_core::error::CrwError;
 use crw_core::types::{CrawlRequest, CrawlStartResponse, CrawlState, CrawlStatus};
 use crw_crawl::crawl::run_crawl;
@@ -35,10 +35,13 @@ pub async fn start_crawl(
 
     {
         let mut jobs = state.crawl_jobs.write().await;
-        jobs.insert(id, CrawlJob {
-            rx,
-            created_at: Instant::now(),
-        });
+        jobs.insert(
+            id,
+            CrawlJob {
+                rx,
+                created_at: Instant::now(),
+            },
+        );
     }
 
     let renderer = state.renderer.clone();

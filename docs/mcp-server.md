@@ -369,7 +369,7 @@ Expected:
   "result": {
     "protocolVersion": "2024-11-05",
     "capabilities": {"tools": {}},
-    "serverInfo": {"name": "crw-mcp", "version": "0.1.0"}
+    "serverInfo": {"name": "crw-mcp", "version": "0.0.1"}
   }
 }
 ```

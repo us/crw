@@ -55,16 +55,19 @@ impl PageFetcher for HttpFetcher {
             req = req.header(k.as_str(), v.as_str());
         }
 
-        let resp = req.send().await.map_err(|e| CrwError::HttpError(e.to_string()))?;
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| CrwError::HttpError(e.to_string()))?;
         let status = resp.status().as_u16();
 
         // Check content-length before downloading
-        if let Some(len) = resp.content_length() {
-            if len as usize > MAX_RESPONSE_BYTES {
-                return Err(CrwError::HttpError(format!(
-                    "Response too large: {len} bytes (max {MAX_RESPONSE_BYTES})"
-                )));
-            }
+        if let Some(len) = resp.content_length()
+            && len as usize > MAX_RESPONSE_BYTES
+        {
+            return Err(CrwError::HttpError(format!(
+                "Response too large: {len} bytes (max {MAX_RESPONSE_BYTES})"
+            )));
         }
 
         let bytes = resp

@@ -1,5 +1,5 @@
-use axum::extract::State;
 use axum::Json;
+use axum::extract::State;
 use crw_core::error::CrwError;
 use crw_core::types::{ApiResponse, ScrapeData, ScrapeRequest};
 use crw_crawl::single::scrape_url;

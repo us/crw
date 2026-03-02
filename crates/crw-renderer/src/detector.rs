@@ -33,30 +33,32 @@ pub fn needs_js_rendering(html: &str) -> bool {
 
 /// Rough estimate of text content length inside <body>.
 fn extract_body_text_len(html: &str) -> usize {
-    let body_start = html.find("<body").and_then(|i| html[i..].find('>').map(|j| i + j + 1));
+    let body_start = html
+        .find("<body")
+        .and_then(|i| html[i..].find('>').map(|j| i + j + 1));
     let body_end = html.rfind("</body>");
 
-    if let (Some(start), Some(end)) = (body_start, body_end) {
-        if start < end {
-            let body = &html[start..end];
-            // Strip all tags and count remaining chars.
-            let mut in_tag = false;
-            let text_len = body
-                .chars()
-                .filter(|&c| {
-                    if c == '<' {
-                        in_tag = true;
-                        false
-                    } else if c == '>' {
-                        in_tag = false;
-                        false
-                    } else {
-                        !in_tag && !c.is_whitespace()
-                    }
-                })
-                .count();
-            return text_len;
-        }
+    if let (Some(start), Some(end)) = (body_start, body_end)
+        && start < end
+    {
+        let body = &html[start..end];
+        // Strip all tags and count remaining chars.
+        let mut in_tag = false;
+        let text_len = body
+            .chars()
+            .filter(|&c| {
+                if c == '<' {
+                    in_tag = true;
+                    false
+                } else if c == '>' {
+                    in_tag = false;
+                    false
+                } else {
+                    !in_tag && !c.is_whitespace()
+                }
+            })
+            .count();
+        return text_len;
     }
     // If we can't find body tags, assume it has content.
     1000

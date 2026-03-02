@@ -98,13 +98,10 @@ impl PageFetcher for CdpRenderer {
         let start = Instant::now();
 
         // Open a fresh WebSocket connection per request
-        let (ws, _) = tokio::time::timeout(
-            Duration::from_secs(10),
-            connect_async(&self.ws_url),
-        )
-        .await
-        .map_err(|_| CrwError::Timeout(10000))?
-        .map_err(|e| CrwError::RendererError(format!("CDP connect: {e}")))?;
+        let (ws, _) = tokio::time::timeout(Duration::from_secs(10), connect_async(&self.ws_url))
+            .await
+            .map_err(|_| CrwError::Timeout(10000))?
+            .map_err(|e| CrwError::RendererError(format!("CDP connect: {e}")))?;
 
         let (mut write, mut read) = ws.split();
 
@@ -167,9 +164,7 @@ impl CdpRenderer {
         let target_id = create_result
             .get("targetId")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| {
-                CrwError::RendererError(format!("No targetId: {create_result}"))
-            })?
+            .ok_or_else(|| CrwError::RendererError(format!("No targetId: {create_result}")))?
             .to_string();
 
         // 2. Attach to target

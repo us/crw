@@ -9,10 +9,7 @@ pub struct RobotsTxt {
 
 impl RobotsTxt {
     pub async fn fetch(base_url: &str, client: &reqwest::Client) -> CrwResult<Self> {
-        let url = format!(
-            "{}/robots.txt",
-            base_url.trim_end_matches('/')
-        );
+        let url = format!("{}/robots.txt", base_url.trim_end_matches('/'));
 
         let resp = client
             .get(&url)
@@ -60,12 +57,11 @@ impl RobotsTxt {
                 continue;
             }
 
-            if in_our_section {
-                if let Some(path) = directive_value(line, "disallow:") {
-                    if !path.is_empty() {
-                        disallowed.push(path.to_string());
-                    }
-                }
+            if in_our_section
+                && let Some(path) = directive_value(line, "disallow:")
+                && !path.is_empty()
+            {
+                disallowed.push(path.to_string());
             }
         }
 

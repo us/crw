@@ -29,10 +29,7 @@ pub async fn scrape_url(
     // Phase 4: LLM structured extraction
     if formats_include_json(&req.formats) {
         if let (Some(schema), Some(llm)) = (&req.json_schema, llm_config) {
-            let md = data
-                .markdown
-                .as_deref()
-                .unwrap_or("");
+            let md = data.markdown.as_deref().unwrap_or("");
             match crw_extract::structured::extract_structured(md, schema, llm).await {
                 Ok(json) => data.json = Some(json),
                 Err(e) => {

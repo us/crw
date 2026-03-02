@@ -7,6 +7,7 @@ pub mod structured;
 use crw_core::types::{OutputFormat, PageMetadata, ScrapeData};
 
 /// High-level extraction: given raw HTML + options, produce ScrapeData.
+#[allow(clippy::too_many_arguments)]
 pub fn extract(
     raw_html: &str,
     source_url: &str,

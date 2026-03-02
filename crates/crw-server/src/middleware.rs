@@ -1,8 +1,8 @@
+use axum::Json;
 use axum::extract::Request;
 use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use crw_core::types::ApiResponse;
 use std::sync::Arc;
 
@@ -35,7 +35,10 @@ pub async fn auth_middleware(
     match auth_header {
         Some(header) if header.starts_with("Bearer ") => {
             let token = &header[7..];
-            if api_keys.iter().any(|k| constant_time_eq(k.as_bytes(), token.as_bytes())) {
+            if api_keys
+                .iter()
+                .any(|k| constant_time_eq(k.as_bytes(), token.as_bytes()))
+            {
                 next.run(req).await
             } else {
                 let body = ApiResponse::<()>::err("Invalid API key");

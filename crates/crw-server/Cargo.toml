@@ -3,16 +3,21 @@ name = "crw-server"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Firecrawl-compatible API server for the CRW web scraper"
 
 [features]
 default = []
 cdp = ["crw-renderer/cdp"]
 
 [dependencies]
-crw-core = { path = "../crw-core" }
-crw-renderer = { path = "../crw-renderer" }
-crw-extract = { path = "../crw-extract" }
-crw-crawl = { path = "../crw-crawl" }
+crw-core = { path = "../crw-core", version = "0.0.1" }
+crw-renderer = { path = "../crw-renderer", version = "0.0.1" }
+crw-extract = { path = "../crw-extract", version = "0.0.1" }
+crw-crawl = { path = "../crw-crawl", version = "0.0.1" }
 axum = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }

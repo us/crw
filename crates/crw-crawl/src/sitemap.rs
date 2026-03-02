@@ -49,14 +49,14 @@ pub fn parse_sitemap(xml: &str) -> Vec<String> {
     }
 
     // Fallback: look for <loc> anywhere.
-    if urls.is_empty() {
-        if let Ok(sel) = Selector::parse("loc") {
-            for el in document.select(&sel) {
-                let text: String = el.text().collect();
-                let trimmed = text.trim();
-                if !trimmed.is_empty() {
-                    urls.push(trimmed.to_string());
-                }
+    if urls.is_empty()
+        && let Ok(sel) = Selector::parse("loc")
+    {
+        for el in document.select(&sel) {
+            let text: String = el.text().collect();
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                urls.push(trimmed.to_string());
             }
         }
     }

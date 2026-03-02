@@ -214,8 +214,7 @@ impl AppConfig {
         if let Ok(extra) = std::env::var("CRW_CONFIG") {
             builder = builder.add_source(config::File::with_name(&extra).required(true));
         } else {
-            builder =
-                builder.add_source(config::File::with_name("config.local").required(false));
+            builder = builder.add_source(config::File::with_name("config.local").required(false));
         }
 
         let cfg = builder

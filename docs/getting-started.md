@@ -21,8 +21,27 @@ Get CRW running in under a minute.
 
 ## Requirements
 
-- **Rust 1.83+** (for building from source)
+- **Rust 1.85+** (for building from source)
 - **Docker** (optional, for containerized deployment)
+
+## Install from crates.io
+
+```bash
+cargo install crw-server
+```
+
+For the MCP server:
+
+```bash
+cargo install crw-mcp
+```
+
+## Install with Docker (pre-built)
+
+```bash
+docker pull ghcr.io/us/crw:latest
+docker run -p 3000:3000 ghcr.io/us/crw:latest
+```
 
 ## Install from Source
 
@@ -62,7 +81,7 @@ cargo build --release --bin crw-mcp
 | `crw-server` | `target/release/crw-server` | API server |
 | `crw-mcp` | `target/release/crw-mcp` | MCP server for LLM tools |
 
-## Install with Docker
+## Install with Docker Compose
 
 ```bash
 git clone https://github.com/us/crw.git
@@ -99,7 +118,7 @@ curl http://localhost:3000/health
 ```json
 {
   "status": "ok",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "renderers": {
     "http": true
   },

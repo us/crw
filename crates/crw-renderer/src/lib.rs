@@ -25,10 +25,7 @@ impl FallbackRenderer {
         let mut js_renderers: Vec<Arc<dyn PageFetcher>> = Vec::new();
 
         if config.mode == "none" {
-            return Self {
-                http,
-                js_renderers,
-            };
+            return Self { http, js_renderers };
         }
 
         #[cfg(feature = "cdp")]
@@ -58,13 +55,12 @@ impl FallbackRenderer {
 
         #[cfg(not(feature = "cdp"))]
         if config.lightpanda.is_some() || config.playwright.is_some() || config.chrome.is_some() {
-            tracing::warn!("CDP renderers configured but 'cdp' feature not enabled. JS rendering disabled.");
+            tracing::warn!(
+                "CDP renderers configured but 'cdp' feature not enabled. JS rendering disabled."
+            );
         }
 
-        Self {
-            http,
-            js_renderers,
-        }
+        Self { http, js_renderers }
     }
 
     /// Fetch a URL with smart mode: HTTP first, then JS if needed.
@@ -80,9 +76,7 @@ impl FallbackRenderer {
             Some(true) => self.fetch_with_js(url, headers, wait_for_ms).await,
             None => {
                 let result = self.http.fetch(url, headers, None).await?;
-                if !self.js_renderers.is_empty()
-                    && detector::needs_js_rendering(&result.html)
-                {
+                if !self.js_renderers.is_empty() && detector::needs_js_rendering(&result.html) {
                     tracing::info!(url, "SPA shell detected, retrying with JS renderer");
                     match self.fetch_with_js(url, headers, wait_for_ms).await {
                         Ok(js_result) => Ok(js_result),

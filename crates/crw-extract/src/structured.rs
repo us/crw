@@ -15,13 +15,13 @@ fn shared_client() -> &'static reqwest::Client {
 }
 
 /// Validate a JSON value against a JSON schema.
-fn validate_against_schema(
-    value: &serde_json::Value,
-    schema: &serde_json::Value,
-) -> CrwResult<()> {
+fn validate_against_schema(value: &serde_json::Value, schema: &serde_json::Value) -> CrwResult<()> {
     let validator = jsonschema::validator_for(schema)
         .map_err(|e| CrwError::ExtractionError(format!("Invalid JSON schema: {e}")))?;
-    let errors: Vec<String> = validator.iter_errors(value).map(|e| e.to_string()).collect();
+    let errors: Vec<String> = validator
+        .iter_errors(value)
+        .map(|e| e.to_string())
+        .collect();
     if !errors.is_empty() {
         return Err(CrwError::ExtractionError(format!(
             "LLM output failed schema validation:\n{}",
@@ -143,10 +143,9 @@ async fn call_anthropic(
         .map_err(|e| CrwError::ExtractionError(format!("Anthropic API request failed: {e}")))?;
 
     let status = resp.status();
-    let text = resp
-        .text()
-        .await
-        .map_err(|e| CrwError::ExtractionError(format!("Failed to read Anthropic response: {e}")))?;
+    let text = resp.text().await.map_err(|e| {
+        CrwError::ExtractionError(format!("Failed to read Anthropic response: {e}"))
+    })?;
 
     if !status.is_success() {
         return Err(CrwError::ExtractionError(format!(
@@ -155,8 +154,9 @@ async fn call_anthropic(
         )));
     }
 
-    let parsed: AnthropicResponse = serde_json::from_str(&text)
-        .map_err(|e| CrwError::ExtractionError(format!("Failed to parse Anthropic response: {e}")))?;
+    let parsed: AnthropicResponse = serde_json::from_str(&text).map_err(|e| {
+        CrwError::ExtractionError(format!("Failed to parse Anthropic response: {e}"))
+    })?;
 
     // Try tool_use blocks first (structured output).
     for block in &parsed.content {
@@ -238,10 +238,7 @@ async fn call_openai(
     schema: &serde_json::Value,
     llm: &LlmConfig,
 ) -> CrwResult<serde_json::Value> {
-    let base_url = llm
-        .base_url
-        .as_deref()
-        .unwrap_or("https://api.openai.com");
+    let base_url = llm.base_url.as_deref().unwrap_or("https://api.openai.com");
 
     let url = format!("{base_url}/v1/chat/completions");
 
@@ -299,14 +296,14 @@ async fn call_openai(
         .ok_or_else(|| CrwError::ExtractionError("OpenAI returned no choices".into()))?;
 
     // Try tool_calls first (function calling).
-    if let Some(tool_calls) = &choice.message.tool_calls {
-        if let Some(call) = tool_calls.first() {
-            return serde_json::from_str(&call.function.arguments).map_err(|e| {
-                CrwError::ExtractionError(format!(
-                    "Failed to parse OpenAI function call arguments: {e}"
-                ))
-            });
-        }
+    if let Some(tool_calls) = &choice.message.tool_calls
+        && let Some(call) = tool_calls.first()
+    {
+        return serde_json::from_str(&call.function.arguments).map_err(|e| {
+            CrwError::ExtractionError(format!(
+                "Failed to parse OpenAI function call arguments: {e}"
+            ))
+        });
     }
 
     // Fallback: extract from content text.
@@ -324,10 +321,7 @@ fn parse_json_response(text: &str) -> CrwResult<serde_json::Value> {
             .strip_prefix("```json")
             .or_else(|| trimmed.strip_prefix("```"))
             .unwrap_or(trimmed);
-        inner
-            .strip_suffix("```")
-            .unwrap_or(inner)
-            .trim()
+        inner.strip_suffix("```").unwrap_or(inner).trim()
     } else {
         trimmed
     };
@@ -342,11 +336,7 @@ fn parse_json_response(text: &str) -> CrwResult<serde_json::Value> {
 
 /// Truncate text for error messages to avoid leaking large responses.
 fn truncate_for_error(text: &str) -> &str {
-    if text.len() > 200 {
-        &text[..200]
-    } else {
-        text
-    }
+    if text.len() > 200 { &text[..200] } else { text }
 }
 
 #[cfg(test)]

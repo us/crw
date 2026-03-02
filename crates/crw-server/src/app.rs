@@ -1,6 +1,6 @@
+use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::routing::{get, post};
-use axum::Router;
 use std::sync::Arc;
 use std::time::Duration;
 use tower_http::cors::CorsLayer;
@@ -41,7 +41,10 @@ pub fn create_app(state: AppState) -> Router {
         .with_state(state)
         .merge(api_routes)
         .layer(DefaultBodyLimit::max(MAX_BODY_SIZE))
-        .layer(TimeoutLayer::with_status_code(axum::http::StatusCode::GATEWAY_TIMEOUT, timeout))
+        .layer(TimeoutLayer::with_status_code(
+            axum::http::StatusCode::GATEWAY_TIMEOUT,
+            timeout,
+        ))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
 }

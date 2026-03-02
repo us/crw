@@ -3,11 +3,16 @@ name = "crw-crawl"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Async BFS web crawler with rate limiting and robots.txt support for CRW"
 
 [dependencies]
-crw-core = { path = "../crw-core" }
-crw-renderer = { path = "../crw-renderer" }
-crw-extract = { path = "../crw-extract" }
+crw-core = { path = "../crw-core", version = "0.0.1" }
+crw-renderer = { path = "../crw-renderer", version = "0.0.1" }
+crw-extract = { path = "../crw-extract", version = "0.0.1" }
 reqwest = { workspace = true }
 scraper = { workspace = true }
 tokio = { workspace = true }

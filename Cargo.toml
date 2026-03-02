@@ -10,9 +10,13 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.0.1"
 edition = "2024"
 license = "MIT"
+repository = "https://github.com/us/crw"
+homepage = "https://us.github.io/crw"
+keywords = ["web-scraper", "web-crawler", "firecrawl", "mcp", "llm"]
+categories = ["web-programming", "command-line-utilities"]
 
 [workspace.dependencies]
 # Async runtime

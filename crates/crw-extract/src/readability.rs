@@ -6,23 +6,28 @@ pub fn extract_main_content(html: &str) -> String {
     let document = Html::parse_document(html);
 
     let selectors = [
-        "article", "main", "[role=\"main\"]",
-        ".post-content", ".article-body", ".entry-content",
-        "#content", ".content",
+        "article",
+        "main",
+        "[role=\"main\"]",
+        ".post-content",
+        ".article-body",
+        ".entry-content",
+        "#content",
+        ".content",
     ];
 
     for sel_str in &selectors {
-        if let Ok(sel) = Selector::parse(sel_str) {
-            if let Some(el) = document.select(&sel).next() {
-                return el.html();
-            }
+        if let Ok(sel) = Selector::parse(sel_str)
+            && let Some(el) = document.select(&sel).next()
+        {
+            return el.html();
         }
     }
 
-    if let Ok(sel) = Selector::parse("body") {
-        if let Some(body) = document.select(&sel).next() {
-            return body.inner_html();
-        }
+    if let Ok(sel) = Selector::parse("body")
+        && let Some(body) = document.select(&sel).next()
+    {
+        return body.inner_html();
     }
 
     html.to_string()
@@ -97,7 +102,10 @@ pub fn extract_links(html: &str, base_url: &str) -> Vec<String> {
         .select(&sel)
         .filter_map(|el| {
             let href = el.value().attr("href")?;
-            if href.starts_with('#') || href.starts_with("javascript:") || href.starts_with("mailto:") {
+            if href.starts_with('#')
+                || href.starts_with("javascript:")
+                || href.starts_with("mailto:")
+            {
                 return None;
             }
             if let Some(base) = &base {
@@ -151,6 +159,9 @@ mod tests {
         let links = extract_links(html, "https://example.com");
         assert_eq!(links.len(), 2);
         assert!(links.contains(&"https://example.com/page1".to_string()));
-        assert!(links.contains(&"https://other.com".to_string()) || links.contains(&"https://other.com/".to_string()));
+        assert!(
+            links.contains(&"https://other.com".to_string())
+                || links.contains(&"https://other.com/".to_string())
+        );
     }
 }
