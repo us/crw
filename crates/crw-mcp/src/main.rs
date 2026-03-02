@@ -109,6 +109,10 @@ fn tool_definitions() -> Value {
                         "maxPages": {
                             "type": "integer",
                             "description": "Maximum number of pages to crawl (default: 10)"
+                        },
+                        "jsonSchema": {
+                            "type": "object",
+                            "description": "JSON schema for LLM-based structured data extraction on each crawled page"
                         }
                     },
                     "required": ["url"]

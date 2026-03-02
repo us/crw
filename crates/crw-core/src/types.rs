@@ -131,6 +131,8 @@ pub struct CrawlRequest {
     pub formats: Vec<OutputFormat>,
     #[serde(default = "default_true")]
     pub only_main_content: bool,
+    #[serde(default, alias = "json_schema")]
+    pub json_schema: Option<serde_json::Value>,
 }
 
 /// Status of an async crawl job.

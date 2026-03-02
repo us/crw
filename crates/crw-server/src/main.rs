@@ -29,6 +29,11 @@ async fn main() {
     let addr = format!("{}:{}", config.server.host, config.server.port);
     tracing::info!("Starting CRW on {addr}");
     tracing::info!("Renderer mode: {}", config.renderer.mode);
+    if let Some(lp) = &config.renderer.lightpanda {
+        tracing::info!("Lightpanda CDP: {}", lp.ws_url);
+    } else {
+        tracing::warn!("No Lightpanda CDP endpoint configured");
+    }
 
     if config.extraction.llm.is_some() {
         tracing::info!("LLM structured extraction: enabled");

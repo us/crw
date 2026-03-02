@@ -174,10 +174,12 @@ async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result<Val
             let rps = state.config.crawler.requests_per_second;
             let user_agent = state.config.crawler.user_agent.clone();
             let crawl_semaphore = state.crawl_semaphore.clone();
+            let llm_config = state.config.extraction.llm.clone();
             tokio::spawn(async move {
                 let _permit = crawl_semaphore.acquire().await;
                 crw_crawl::crawl::run_crawl(
                     id, req, renderer, max_concurrency, respect_robots, rps, &user_agent, tx,
+                    llm_config.as_ref(),
                 )
                 .await;
             });

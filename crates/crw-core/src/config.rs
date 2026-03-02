@@ -207,8 +207,18 @@ impl AppConfig {
     /// Load config from config.default.toml + environment variable overrides.
     /// Env vars use `CRW_` prefix, `__` as separator. E.g. `CRW_SERVER__PORT=8080`.
     pub fn load() -> Result<Self, config::ConfigError> {
-        let cfg = config::Config::builder()
-            .add_source(config::File::with_name("config.default").required(false))
+        let mut builder = config::Config::builder()
+            .add_source(config::File::with_name("config.default").required(false));
+
+        // Load optional override config file (e.g. config.docker.toml in containers).
+        if let Ok(extra) = std::env::var("CRW_CONFIG") {
+            builder = builder.add_source(config::File::with_name(&extra).required(true));
+        } else {
+            builder =
+                builder.add_source(config::File::with_name("config.local").required(false));
+        }
+
+        let cfg = builder
             .add_source(
                 config::Environment::with_prefix("CRW")
                     .separator("__")

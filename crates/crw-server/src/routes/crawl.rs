@@ -47,6 +47,7 @@ pub async fn start_crawl(
     let rps = state.config.crawler.requests_per_second;
     let user_agent = state.config.crawler.user_agent.clone();
     let crawl_semaphore = state.crawl_semaphore.clone();
+    let llm_config = state.config.extraction.llm.clone();
 
     tokio::spawn(async move {
         // Limit concurrent crawl jobs to prevent resource exhaustion.
@@ -73,6 +74,7 @@ pub async fn start_crawl(
             rps,
             &user_agent,
             tx,
+            llm_config.as_ref(),
         )
         .await;
     });

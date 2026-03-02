@@ -1,0 +1,2 @@
+[renderer.lightpanda]
+ws_url = "ws://lightpanda:9222/"

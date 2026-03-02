@@ -7,7 +7,9 @@ services:
       - lightpanda
     environment:
       - RUST_LOG=info
-      - CRW_RENDERER__LIGHTPANDA__WS_URL=ws://lightpanda:9222
+      - CRW_CONFIG=config.docker
+    volumes:
+      - ./config.docker.toml:/app/config.docker.toml:ro
 
   lightpanda:
     image: lightpanda/browser:latest

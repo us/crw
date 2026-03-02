@@ -9,7 +9,7 @@ page_timeout_ms = 30000
 pool_size = 4
 
 [renderer.lightpanda]
-ws_url = "ws://127.0.0.1:9222"
+ws_url = "ws://127.0.0.1:9222/"
 
 # [renderer.playwright]
 # ws_url = "ws://playwright:9222"

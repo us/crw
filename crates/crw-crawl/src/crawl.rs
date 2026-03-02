@@ -1,3 +1,4 @@
+use crw_core::config::LlmConfig;
 use crw_core::error::CrwResult;
 use crw_core::types::{CrawlRequest, CrawlState, CrawlStatus, ScrapeData};
 use crw_extract::readability::extract_links;
@@ -57,6 +58,7 @@ pub async fn run_crawl(
     requests_per_second: f64,
     user_agent: &str,
     state_tx: tokio::sync::watch::Sender<CrawlState>,
+    llm_config: Option<&LlmConfig>,
 ) {
     let max_depth = req.max_depth.unwrap_or(2).min(10);
     let max_pages = req.max_pages.unwrap_or(100).min(1000) as usize;
@@ -178,7 +180,7 @@ pub async fn run_crawl(
             }
         }
 
-        let data = crw_extract::extract(
+        let mut data = crw_extract::extract(
             &fetch_result.html,
             &fetch_result.url,
             fetch_result.status_code,
@@ -189,6 +191,15 @@ pub async fn run_crawl(
             &[],
             &[],
         );
+
+        if let (Some(schema), Some(llm)) = (&req.json_schema, llm_config) {
+            if let Some(md) = &data.markdown {
+                match crw_extract::structured::extract_structured(md, schema, llm).await {
+                    Ok(json) => data.json = Some(json),
+                    Err(e) => tracing::warn!(url = url.as_str(), "Crawl LLM extraction failed: {e}"),
+                }
+            }
+        }
 
         results.push(data);
 
