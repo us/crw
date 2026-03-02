@@ -11,7 +11,7 @@ resolver = "2"
 
 [workspace.package]
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 
 [workspace.dependencies]
@@ -19,12 +19,12 @@ license = "MIT"
 tokio = { version = "1", features = ["full"] }
 
 # Web framework
-axum = { version = "0.7", features = ["macros"] }
-tower = "0.4"
-tower-http = { version = "0.5", features = ["cors", "trace", "timeout"] }
+axum = { version = "0.8", features = ["macros"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace", "timeout"] }
 
 # HTTP client
-reqwest = { version = "0.12", default-features = false, features = ["json", "cookies", "rustls-tls-native-roots"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "cookies", "rustls"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -33,14 +33,14 @@ toml = "0.8"
 
 # HTML processing
 lol_html = "2"
-scraper = "0.21"
+scraper = "0.25"
 fast_html2md = "0.0.58"
 
 # Async utilities
 futures = "0.3"
 
 # Config
-config = "0.14"
+config = "0.15"
 
 # Error handling
 thiserror = "2"

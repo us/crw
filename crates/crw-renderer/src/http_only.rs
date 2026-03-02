@@ -20,8 +20,7 @@ impl HttpFetcher {
             .user_agent(user_agent)
             .connect_timeout(std::time::Duration::from_secs(5))
             .timeout(std::time::Duration::from_secs(30))
-            .redirect(reqwest::redirect::Policy::limited(10))
-            .tls_built_in_root_certs(true);
+            .redirect(reqwest::redirect::Policy::limited(10));
 
         if let Some(proxy_url) = proxy {
             match reqwest::Proxy::all(proxy_url) {

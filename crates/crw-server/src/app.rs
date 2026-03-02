@@ -21,7 +21,7 @@ pub fn create_app(state: AppState) -> Router {
     let api_routes = Router::new()
         .route("/v1/scrape", post(routes::scrape::scrape))
         .route("/v1/crawl", post(routes::crawl::start_crawl))
-        .route("/v1/crawl/:id", get(routes::crawl::get_crawl))
+        .route("/v1/crawl/{id}", get(routes::crawl::get_crawl))
         .route("/v1/map", post(routes::map::map));
 
     let api_routes = if api_keys.is_empty() {
@@ -41,7 +41,7 @@ pub fn create_app(state: AppState) -> Router {
         .with_state(state)
         .merge(api_routes)
         .layer(DefaultBodyLimit::max(MAX_BODY_SIZE))
-        .layer(TimeoutLayer::new(timeout))
+        .layer(TimeoutLayer::with_status_code(axum::http::StatusCode::GATEWAY_TIMEOUT, timeout))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
 }
