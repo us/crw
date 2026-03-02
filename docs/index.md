@@ -2,14 +2,14 @@
 title: Home
 layout: home
 nav_order: 1
-description: "CRW — lightweight, Firecrawl-compatible web scraper. Single binary, ~3MB RAM, JS rendering, MCP server for Claude."
+description: "CRW — lightweight, Firecrawl-compatible web scraper and crawler for AI. Single binary, ~3MB RAM, LLM extraction, MCP server for Claude, JS rendering."
 permalink: /
 ---
 
 # CRW
 {: .fs-9 }
 
-Lightweight, Firecrawl-compatible web scraper. Single binary, ~3MB idle RAM, optional JS rendering via LightPanda.
+Lightweight, Firecrawl-compatible web scraper and crawler for AI. Single binary, ~3 MB idle RAM, LLM structured extraction, MCP server for Claude.
 {: .fs-6 .fw-300 }
 
 [Get Started]({% link getting-started.md %}){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
@@ -21,28 +21,35 @@ Lightweight, Firecrawl-compatible web scraper. Single binary, ~3MB idle RAM, opt
 
 ## Why CRW?
 
-CRW is a **drop-in replacement** for [Firecrawl](https://firecrawl.dev) that you can self-host. It's built in Rust for maximum performance with minimal resource usage.
+CRW is a **drop-in replacement** for [Firecrawl](https://firecrawl.dev) that you can self-host. Built in Rust for maximum performance with minimal resource usage — no Node.js, no Redis, just a single binary.
 
 | | CRW | Firecrawl |
 |---|---|---|
 | **Idle RAM** | 3.3 MB | ~500 MB+ |
-| **Cold start** | 85ms | seconds |
-| **HTTP scrape** | ~30ms | ~200ms+ |
+| **Cold start** | 85 ms | seconds |
+| **HTTP scrape** | ~30 ms | ~200 ms+ |
 | **Binary size** | ~8 MB | Node.js runtime |
-| **Dependencies** | single binary | Node, Redis, etc. |
+| **Dependencies** | single binary | Node + Redis |
 | **License** | MIT | AGPL |
 
 ## Features
 
-- **Firecrawl-compatible API** — same endpoints, same request/response format
-- **4 endpoints** — `/v1/scrape`, `/v1/crawl`, `/v1/crawl/:id`, `/v1/map`
-- **Multiple output formats** — markdown, HTML, cleaned HTML, plain text, links
-- **JS rendering** — auto-detect SPAs, render via LightPanda, Playwright, or Chrome
-- **BFS crawler** — async crawl with rate limiting, robots.txt, sitemap support
-- **LLM extraction** — structured JSON output via Claude or OpenAI
-- **MCP server** — use CRW as a tool in Claude Code or Claude Desktop
-- **Auth** — optional Bearer token authentication
-- **Docker ready** — multi-stage Dockerfile + docker-compose with LightPanda
+- **🔌 Firecrawl-compatible API** — same endpoints, same request/response format, drop-in replacement
+- **📄 6 output formats** — markdown, HTML, cleaned HTML, raw HTML, plain text, links, structured JSON
+- **🤖 LLM structured extraction** — send a JSON schema, get validated structured data back (Anthropic tool_use + OpenAI function calling)
+- **🌐 JS rendering** — auto-detect SPAs with shell heuristics, render via LightPanda, Playwright, or Chrome (CDP)
+- **🕷️ BFS crawler** — async crawl with rate limiting, robots.txt, sitemap support, concurrent jobs
+- **🔧 MCP server** — built-in stdio + HTTP transport for Claude Code and Claude Desktop
+- **🔒 Auth** — optional Bearer token with constant-time comparison
+- **🐳 Docker ready** — multi-stage build with LightPanda sidecar
+
+## Use Cases
+
+- **RAG pipelines** — crawl websites and extract structured data for vector databases
+- **AI agents** — give Claude Code or Claude Desktop web scraping tools via MCP
+- **Content monitoring** — periodic crawl with LLM extraction to track changes
+- **Data extraction** — combine CSS selectors + LLM to extract any schema from any page
+- **Web archiving** — full-site BFS crawl to markdown
 
 ## Quick Example
 
@@ -70,11 +77,16 @@ curl -X POST http://localhost:3000/v1/scrape \
 ## Architecture
 
 ```
-crates/
-  crw-core      Types, config, error types
-  crw-extract   HTML cleaning, readability, markdown, LLM extraction
-  crw-renderer  HTTP fetcher, CDP client (tokio-tungstenite)
-  crw-crawl     Single scrape, BFS crawl, rate limiting, robots.txt
-  crw-server    Axum HTTP server, routes, auth middleware
-  crw-mcp       MCP stdio server (JSON-RPC 2.0 proxy)
+┌─────────────────────────────────────────────┐
+│                 crw-server                  │
+│         Axum HTTP API + Auth + MCP          │
+├──────────┬──────────┬───────────────────────┤
+│ crw-crawl│crw-extract│    crw-renderer      │
+│ BFS crawl│ HTML→MD   │  HTTP + CDP(WS)      │
+│ robots   │ LLM/JSON  │  LightPanda/Chrome   │
+│ sitemap  │ clean/read│  auto-detect SPA     │
+├──────────┴──────────┴───────────────────────┤
+│                 crw-core                    │
+│        Types, Config, Errors                │
+└─────────────────────────────────────────────┘
 ```
