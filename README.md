@@ -1,5 +1,7 @@
 # CRW
 
+**English** | [中文](README.zh-CN.md)
+
 Lightweight, Firecrawl-compatible web scraper. Single binary, ~3MB idle RAM, optional JS rendering via LightPanda sidecar.
 
 **API-compatible with [Firecrawl](https://firecrawl.dev)** — drop-in replacement for self-hosted deployments.

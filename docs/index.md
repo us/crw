@@ -15,6 +15,8 @@ Lightweight, Firecrawl-compatible web scraper. Single binary, ~3MB idle RAM, opt
 [Get Started]({% link getting-started.md %}){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
 [API Reference]({% link api-reference.md %}){: .btn .fs-5 .mb-4 .mb-md-0 }
 
+**English** | [中文]({% link zh-CN/index.md %})
+
 ---
 
 ## Why CRW?
