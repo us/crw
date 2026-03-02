@@ -25,12 +25,19 @@ CRW 是 [Firecrawl](https://firecrawl.dev) 的**直接替代品**，可自行托
 
 | | CRW | Firecrawl |
 |---|---|---|
-| **空闲内存** | 3.3 MB | ~500 MB+ |
+| **覆盖率（1K URL）** | **91.5%** | 77.2% |
+| **平均延迟** | **833ms** | 4,600ms |
+| **P50 延迟** | **446ms** | — |
+| **噪声过滤率** | **89.1%** | — |
+| **空闲内存** | 6.6 MB | ~500 MB+ |
 | **冷启动** | 85 ms | 数秒 |
 | **HTTP 抓取** | ~30 ms | ~200 ms+ |
 | **二进制大小** | ~8 MB | Node.js 运行时 |
+| **每千次成本** | **$0** | $0.83–5.33 |
 | **依赖** | 单一二进制 | Node + Redis |
 | **许可证** | MIT | AGPL |
+
+基准测试：[Firecrawl scrape-content-dataset-v1](https://huggingface.co/datasets/firecrawl/scrape-content-dataset-v1) — 1,000 个真实 URL。
 
 ## 功能特性
 

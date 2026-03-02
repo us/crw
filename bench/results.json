@@ -1,0 +1,20 @@
+{
+  "benchmark": "Firecrawl scrape-content-dataset-v1 (HuggingFace)",
+  "dataset_size": 1000,
+  "concurrency": 10,
+  "timeout_s": 30,
+  "js_rendering": true,
+  "renderer": "LightPanda",
+  "coverage": {
+    "success": 915,
+    "failed": 85,
+    "success_rate_pct": 91.5
+  },
+  "latency_ms": {
+    "avg": 833,
+    "p50": 446,
+    "p95": 2570,
+    "p99": 5505
+  },
+  "noise_rejection_pct": 89.1
+}

@@ -15,12 +15,19 @@ CRW gives you Firecrawl's API with a fraction of the resource usage. No runtime 
 
 | | CRW | Firecrawl |
 |---|---|---|
-| **Idle RAM** | 3.3 MB | ~500 MB+ |
+| **Coverage (1K URLs)** | **91.5%** | 77.2% |
+| **Avg Latency** | **833ms** | 4,600ms |
+| **P50 Latency** | **446ms** | — |
+| **Noise Rejection** | **89.1%** | — |
+| **Idle RAM** | 6.6 MB | ~500 MB+ |
 | **Cold start** | 85 ms | seconds |
 | **HTTP scrape** | ~30 ms | ~200 ms+ |
 | **Binary size** | ~8 MB | Node.js runtime |
+| **Cost / 1K scrapes** | **$0** (self-hosted) | $0.83–5.33 |
 | **Dependencies** | single binary | Node + Redis |
 | **License** | MIT | AGPL |
+
+Benchmark: [Firecrawl scrape-content-dataset-v1](https://huggingface.co/datasets/firecrawl/scrape-content-dataset-v1) — 1,000 real-world URLs with JS rendering enabled.
 
 ## Features
 
@@ -278,6 +285,26 @@ docker compose up
 ```
 
 This starts CRW on port `3000` with LightPanda as a JS rendering sidecar on port `9222`. CRW auto-connects to LightPanda for SPA rendering.
+
+## Benchmark
+
+Tested on [Firecrawl's scrape-content-dataset-v1](https://huggingface.co/datasets/firecrawl/scrape-content-dataset-v1) (1,000 real-world URLs, JS rendering enabled):
+
+| | CRW | Firecrawl v2.5 |
+|---|---|---|
+| **Coverage** | **91.5%** | 77.2% |
+| **Avg Latency** | **833ms** | 4,600ms |
+| **P50 Latency** | **446ms** | — |
+| **Noise Rejection** | **89.1%** | — |
+| **Cost / 1,000 scrapes** | **$0** (self-hosted) | $0.83–5.33 |
+| **Idle RAM** | **6.6 MB** | ~500 MB+ |
+
+Run the benchmark yourself:
+
+```bash
+pip install datasets aiohttp
+python3 bench/run_bench.py
+```
 
 ## Documentation
 
