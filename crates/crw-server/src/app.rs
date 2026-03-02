@@ -37,6 +37,7 @@ pub fn create_app(state: AppState) -> Router {
 
     Router::new()
         .route("/health", get(routes::health::health))
+        .route("/mcp", post(routes::mcp::mcp_handler))
         .with_state(state)
         .merge(api_routes)
         .layer(DefaultBodyLimit::max(MAX_BODY_SIZE))
