@@ -1,3 +1,26 @@
+//! HTML content extraction and format conversion for the CRW web scraper.
+//!
+//! Converts raw HTML into clean, structured output formats:
+//!
+//! - **Markdown** — via [`markdown::html_to_markdown`], with multi-stage fallback chain
+//! - **Plain text** — via [`plaintext::html_to_plaintext`]
+//! - **Cleaned HTML** — boilerplate removal with [`clean::clean_html`]
+//! - **Readability** — main-content extraction and metadata parsing
+//! - **Structured JSON** — LLM-based extraction with JSON Schema validation
+//!
+//! # Example
+//!
+//! ```rust
+//! use crw_core::types::OutputFormat;
+//!
+//! let html = "<html><body><h1>Hello</h1><p>World</p></body></html>";
+//! let data = crw_extract::extract(
+//!     html, "https://example.com", 200, None, 50,
+//!     &[OutputFormat::Markdown], true, &[], &[],
+//! );
+//! assert!(data.markdown.is_some());
+//! ```
+
 pub mod clean;
 pub mod markdown;
 pub mod plaintext;

@@ -286,6 +286,19 @@ docker compose up
 
 这将在端口 `3000` 启动 CRW，并在端口 `9222` 启动 LightPanda 作为 JS 渲染边车。CRW 会自动连接到 LightPanda 进行 SPA 渲染。
 
+## Crates
+
+| Crate | 描述 | |
+|-------|------|-|
+| [`crw-core`](crates/crw-core) | 核心类型、配置和错误处理 | [![crates.io](https://img.shields.io/crates/v/crw-core.svg)](https://crates.io/crates/crw-core) |
+| [`crw-renderer`](crates/crw-renderer) | HTTP + CDP 浏览器渲染引擎 | [![crates.io](https://img.shields.io/crates/v/crw-renderer.svg)](https://crates.io/crates/crw-renderer) |
+| [`crw-extract`](crates/crw-extract) | HTML → Markdown/纯文本提取 | [![crates.io](https://img.shields.io/crates/v/crw-extract.svg)](https://crates.io/crates/crw-extract) |
+| [`crw-crawl`](crates/crw-crawl) | 异步 BFS 爬虫，支持 robots.txt 和站点地图 | [![crates.io](https://img.shields.io/crates/v/crw-crawl.svg)](https://crates.io/crates/crw-crawl) |
+| [`crw-server`](crates/crw-server) | Axum API 服务器（兼容 Firecrawl） | [![crates.io](https://img.shields.io/crates/v/crw-server.svg)](https://crates.io/crates/crw-server) |
+| [`crw-mcp`](crates/crw-mcp) | MCP stdio 代理二进制文件 | [![crates.io](https://img.shields.io/crates/v/crw-mcp.svg)](https://crates.io/crates/crw-mcp) |
+
+详细用法和 `cargo add` 命令请参见 [docs/crates.md](docs/crates.md)。
+
 ## 文档
 
 完整文档：**[docs/index.md](docs/index.md)** | **[中文文档](docs/zh-CN/index.md)**
