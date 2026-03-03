@@ -146,36 +146,122 @@ model = "claude-sonnet-4-20250514"
 
 ## MCP Server
 
-CRW works as an MCP tool server for Claude Code and Claude Desktop with two transports.
+CRW works as an MCP tool server for any AI assistant that supports MCP. It provides 4 tools: `crw_scrape`, `crw_crawl`, `crw_check_crawl_status`, `crw_map`.
 
-**HTTP transport (recommended):**
+### Claude Code
 
 ```bash
 claude mcp add --transport http crw http://localhost:3000/mcp
 ```
 
-**Stdio transport:**
+### Claude Desktop
 
-```bash
-cargo build --release --bin crw-mcp
-```
+Edit your config file:
 
-Add to `~/.claude.json`:
+| OS | Path |
+|---|---|
+| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Linux | `~/.config/Claude/claude_desktop_config.json` |
 
 ```json
 {
   "mcpServers": {
     "crw": {
       "command": "/absolute/path/to/crw-mcp",
-      "env": {
-        "CRW_API_URL": "http://localhost:3000"
-      }
+      "env": { "CRW_API_URL": "http://localhost:3000" }
     }
   }
 }
 ```
 
-**Tools:** `crw_scrape`, `crw_crawl`, `crw_check_crawl_status`, `crw_map`
+### Cursor
+
+Edit `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project):
+
+```json
+{
+  "mcpServers": {
+    "crw": {
+      "command": "/absolute/path/to/crw-mcp",
+      "env": { "CRW_API_URL": "http://localhost:3000" }
+    }
+  }
+}
+```
+
+### Windsurf
+
+Edit `~/.codeium/windsurf/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "crw": {
+      "command": "/absolute/path/to/crw-mcp",
+      "env": { "CRW_API_URL": "http://localhost:3000" }
+    }
+  }
+}
+```
+
+### Cline (VS Code)
+
+```json
+{
+  "mcpServers": {
+    "crw": {
+      "command": "/absolute/path/to/crw-mcp",
+      "env": { "CRW_API_URL": "http://localhost:3000" },
+      "alwaysAllow": ["crw_scrape", "crw_map"],
+      "disabled": false
+    }
+  }
+}
+```
+
+### Continue.dev (VS Code / JetBrains)
+
+Edit `~/.continue/config.yaml`:
+
+```yaml
+mcpServers:
+  - name: crw
+    command: /absolute/path/to/crw-mcp
+    env:
+      CRW_API_URL: http://localhost:3000
+```
+
+### OpenAI Codex CLI
+
+Edit `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.crw]
+command = "/absolute/path/to/crw-mcp"
+
+[mcp_servers.crw.env]
+CRW_API_URL = "http://localhost:3000"
+```
+
+### Other MCP Clients
+
+Any MCP-compatible client can connect to CRW using the standard JSON format:
+
+```json
+{
+  "mcpServers": {
+    "crw": {
+      "command": "/absolute/path/to/crw-mcp",
+      "env": { "CRW_API_URL": "http://localhost:3000" }
+    }
+  }
+}
+```
+
+> **Tip:** The stdio binary (`crw-mcp`) works with any client. For clients that support HTTP transport, use `http://localhost:3000/mcp` directly — no binary needed.
+
+See the full [MCP setup guide](docs/mcp-server.md) for detailed instructions, auth configuration, and platform comparison.
 
 ## JS Rendering
 
