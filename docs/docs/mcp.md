@@ -1,49 +1,23 @@
----
-title: MCP Server
-layout: default
-nav_order: 5
-description: "Use CRW as a web scraping tool in Claude Code, Claude Desktop, Cursor, Windsurf, Cline, Continue.dev, and OpenAI Codex via MCP."
-has_children: true
----
-
 # MCP Server
-{: .no_toc }
 
-Use CRW as a web scraping tool in any AI coding assistant that supports MCP.
-{: .fs-6 .fw-300 }
-
-## Table of Contents
-{: .no_toc .text-delta }
-
-1. TOC
-{:toc}
-
----
-
-## What is MCP?
-
-[MCP (Model Context Protocol)](https://modelcontextprotocol.io) is an open standard that lets AI assistants use external tools. CRW ships with a built-in MCP server that gives any MCP-compatible client 4 web scraping tools.
+crw includes a built-in MCP server that gives any MCP-compatible AI assistant 4 web scraping tools.
 
 ## Two Transport Options
 
-CRW supports **two ways** to connect MCP clients:
-
 | Transport | Setup | Requires |
-|:----------|:------|:---------|
+|-----------|-------|----------|
 | **HTTP** (recommended) | One-liner, no binary needed | `crw-server` running |
 | **Stdio** | Separate binary (`crw-mcp`) | `crw-server` running + `crw-mcp` binary |
 
-### Option 1: Streamable HTTP (Recommended)
+### HTTP Transport (Recommended)
 
-The `crw-server` has a built-in `/mcp` endpoint. No extra binary needed — just point your MCP client at the URL:
+The `crw-server` has a built-in `/mcp` endpoint. No extra binary needed:
 
 ```bash
 claude mcp add --transport http crw http://localhost:3000/mcp
 ```
 
-That's it. No build step, no binary path.
-
-### Option 2: Stdio Binary
+### Stdio Transport
 
 Build the standalone MCP binary:
 
@@ -51,65 +25,58 @@ Build the standalone MCP binary:
 cargo build --release --bin crw-mcp
 ```
 
-The binary is at `target/release/crw-mcp` (~4 MB). It has **zero dependency** on CRW's internal crates — it's a pure JSON-RPC 2.0 stdio proxy.
+The binary is at `target/release/crw-mcp` (~4 MB). It's a pure JSON-RPC 2.0 stdio proxy that forwards to the HTTP API.
 
-{: .warning }
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CRW_API_URL` | `http://localhost:3000` | crw server URL |
+| `CRW_API_KEY` | — | Bearer token (if auth is enabled) |
+| `RUST_LOG` | `crw_mcp=info` | Log level (logs go to stderr) |
+
 Make sure `crw-server` is running before using the MCP tools. Both transports forward requests to the HTTP API.
 
 ## Available Tools
 
-Once connected, these tools appear in your AI assistant:
-
 | Tool | Description | HTTP Endpoint |
-|:-----|:------------|:-------------|
+|------|-------------|---------------|
 | `crw_scrape` | Scrape a URL → markdown, HTML, links | `POST /v1/scrape` |
 | `crw_crawl` | Start async crawl → returns job ID | `POST /v1/crawl` |
 | `crw_check_crawl_status` | Poll crawl status and get results | `GET /v1/crawl/:id` |
 | `crw_map` | Discover all URLs on a site | `POST /v1/map` |
 
-### Tool Parameters
-
-**crw_scrape:**
+### crw_scrape
 
 | Parameter | Type | Required | Description |
-|:----------|:-----|:---------|:------------|
+|-----------|------|----------|-------------|
 | `url` | string | **yes** | The URL to scrape |
 | `formats` | string[] | no | `markdown`, `html`, `links` |
 | `onlyMainContent` | boolean | no | Strip nav/footer (default: true) |
 | `includeTags` | string[] | no | CSS selectors to keep |
 | `excludeTags` | string[] | no | CSS selectors to remove |
 
-**crw_crawl:**
+### crw_crawl
 
 | Parameter | Type | Required | Description |
-|:----------|:-----|:---------|:------------|
+|-----------|------|----------|-------------|
 | `url` | string | **yes** | Starting URL |
 | `maxDepth` | integer | no | Max crawl depth (default: 2) |
 | `maxPages` | integer | no | Max pages (default: 10) |
 
-**crw_check_crawl_status:**
+### crw_check_crawl_status
 
 | Parameter | Type | Required | Description |
-|:----------|:-----|:---------|:------------|
+|-----------|------|----------|-------------|
 | `id` | string | **yes** | Job ID from `crw_crawl` |
 
-**crw_map:**
+### crw_map
 
 | Parameter | Type | Required | Description |
-|:----------|:-----|:---------|:------------|
+|-----------|------|----------|-------------|
 | `url` | string | **yes** | URL to map |
 | `maxDepth` | integer | no | Discovery depth (default: 2) |
 | `useSitemap` | boolean | no | Read sitemap.xml (default: true) |
-
-## MCP Environment Variables
-
-| Variable | Default | Description |
-|:---------|:--------|:------------|
-| `CRW_API_URL` | `http://localhost:3000` | CRW server URL |
-| `CRW_API_KEY` | — | Bearer token (if auth is enabled) |
-| `RUST_LOG` | `crw_mcp=info` | Log level (logs go to stderr) |
-
----
 
 ## Platform Setup Guides
 
@@ -127,12 +94,6 @@ claude mcp add --transport http crw http://localhost:3000/mcp
 claude mcp add crw -- /absolute/path/to/crw-mcp
 ```
 
-With environment variables:
-
-```bash
-claude mcp add --env CRW_API_URL=http://localhost:3000 crw -- /absolute/path/to/crw-mcp
-```
-
 Or manually edit `~/.claude.json`:
 
 ```json
@@ -148,26 +109,17 @@ Or manually edit `~/.claude.json`:
 }
 ```
 
-For project-level config, create `.mcp.json` in your project root with the same format.
-
-Restart Claude Code after adding.
-
-{: .tip }
-Use `claude mcp list` to verify CRW is registered, and `claude mcp remove crw` to uninstall.
-
----
+Use `claude mcp list` to verify, `claude mcp remove crw` to uninstall.
 
 ### Claude Desktop
 
 Edit the config file for your OS:
 
 | OS | Path |
-|:---|:-----|
+|----|------|
 | macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
 | Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
 | Linux | `~/.config/Claude/claude_desktop_config.json` |
-
-Add:
 
 ```json
 {
@@ -183,8 +135,6 @@ Add:
 ```
 
 Fully quit and restart Claude Desktop.
-
----
 
 ### Cursor
 
@@ -205,10 +155,6 @@ Create or edit `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project-leve
 
 Or use the GUI: **Settings → Developer → MCP Tools → Add Custom MCP**.
 
-Cursor supports stdio and streamable HTTP transports.
-
----
-
 ### Windsurf
 
 Edit `~/.codeium/windsurf/mcp_config.json`:
@@ -226,19 +172,12 @@ Edit `~/.codeium/windsurf/mcp_config.json`:
 }
 ```
 
-Or use the GUI: **Windsurf Settings → Cascade → MCP Servers**.
-
-{: .note }
-Windsurf has a limit of 100 total tools across all MCP servers. CRW uses only 4.
-
----
+Windsurf has a limit of 100 total tools across all MCP servers. crw uses only 4.
 
 ### Cline (VS Code Extension)
 
-Config file location depends on your OS:
-
 | OS | Path |
-|:---|:-----|
+|----|------|
 | macOS | `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` |
 | Windows | `%APPDATA%/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` |
 | Linux | `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` |
@@ -258,12 +197,7 @@ Config file location depends on your OS:
 }
 ```
 
-Or use the GUI: click the **MCP Servers** icon in Cline's top bar → Configure → "Configure MCP Servers".
-
-{: .tip }
-Set `alwaysAllow` for tools you trust to skip the approval prompt every time.
-
----
+Set `alwaysAllow` for tools you trust to skip the approval prompt.
 
 ### Continue.dev (VS Code / JetBrains)
 
@@ -277,25 +211,7 @@ mcpServers:
       CRW_API_URL: http://localhost:3000
 ```
 
-Or drop a JSON file at `.continue/mcpServers/crw.json` in your project:
-
-```json
-{
-  "mcpServers": {
-    "crw": {
-      "command": "/absolute/path/to/crw-mcp",
-      "env": {
-        "CRW_API_URL": "http://localhost:3000"
-      }
-    }
-  }
-}
-```
-
-{: .note }
 MCP tools only work in Continue's **Agent mode**, not in regular chat.
-
----
 
 ### OpenAI Codex CLI
 
@@ -309,13 +225,7 @@ command = "/absolute/path/to/crw-mcp"
 CRW_API_URL = "http://localhost:3000"
 ```
 
-Or use the CLI:
-
-```bash
-codex mcp add crw -- /absolute/path/to/crw-mcp
-```
-
----
+Or: `codex mcp add crw -- /absolute/path/to/crw-mcp`
 
 ### Gemini CLI
 
@@ -334,8 +244,6 @@ Edit `~/.gemini/settings.json`:
 }
 ```
 
----
-
 ### Roo Code (VS Code Extension)
 
 Create or edit `~/.roo/mcp.json` (global) or `.roo/mcp.json` (project-level):
@@ -352,8 +260,6 @@ Create or edit `~/.roo/mcp.json` (global) or `.roo/mcp.json` (project-level):
   }
 }
 ```
-
----
 
 ### VS Code (GitHub Copilot Agent)
 
@@ -372,20 +278,12 @@ Add to your VS Code `settings.json` or `.vscode/mcp.json`:
 }
 ```
 
----
-
-### Other MCP Clients
-
-CRW follows the standard MCP protocol. Any MCP-compatible client can connect using the JSON format above (stdio) or the HTTP endpoint at `http://localhost:3000/mcp`.
-
----
-
 ## Platform Comparison
 
 | Platform | Config Format | Config Path | One-liner |
-|:---------|:-------------|:------------|:----------|
+|----------|-------------|------------|-----------|
 | Claude Code | JSON | `~/.claude.json` | `claude mcp add --transport http crw http://localhost:3000/mcp` |
-| Claude Desktop | JSON | OS-specific (see above) | — |
+| Claude Desktop | JSON | OS-specific | — |
 | Cursor | JSON | `~/.cursor/mcp.json` | — |
 | Windsurf | JSON | `~/.codeium/windsurf/mcp_config.json` | — |
 | Cline | JSON | VS Code globalStorage | — |
@@ -395,11 +293,9 @@ CRW follows the standard MCP protocol. Any MCP-compatible client can connect usi
 | Roo Code | JSON | `~/.roo/mcp.json` | — |
 | VS Code (Copilot) | JSON | `.vscode/mcp.json` | — |
 
----
-
 ## With Authentication
 
-If your CRW server has auth enabled, add the `CRW_API_KEY` env var to any config above:
+If your crw server has auth enabled, add `CRW_API_KEY` to any config:
 
 ```json
 {
@@ -415,11 +311,7 @@ If your CRW server has auth enabled, add the `CRW_API_KEY` env var to any config
 }
 ```
 
----
-
 ## Verify Installation
-
-Test the MCP server directly:
 
 ```bash
 echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"test"},"protocolVersion":"2024-11-05"}}' \
@@ -442,26 +334,18 @@ Expected:
 
 ## How It Works
 
-**HTTP transport (recommended):**
+**HTTP transport:**
 
 ```
-AI Assistant (Claude, Cursor, Codex, ...)
-    ↓ HTTP POST (JSON-RPC 2.0)
-  crw-server /mcp endpoint (localhost:3000)
-    ↓ direct function calls
-  Web pages
+AI Assistant → HTTP POST (JSON-RPC 2.0) → crw-server /mcp → Web pages
 ```
 
 **Stdio transport:**
 
 ```
-AI Assistant (Claude, Cursor, Codex, ...)
-    ↓ stdin (JSON-RPC 2.0)
-  crw-mcp binary
-    ↓ HTTP (POST/GET)
-  crw-server (localhost:3000)
-    ↓
-  Web pages
+AI Assistant → stdin (JSON-RPC 2.0) → crw-mcp → HTTP → crw-server → Web pages
 ```
 
-The HTTP transport calls internal functions directly with zero overhead. The stdio transport is a pure JSON proxy that works with any Firecrawl-compatible API backend.
+The HTTP transport calls internal functions directly with zero overhead. The stdio transport is a pure JSON proxy.
+
+Protocol version: `2024-11-05`

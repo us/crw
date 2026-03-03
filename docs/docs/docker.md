@@ -1,27 +1,8 @@
----
-title: Docker
-layout: default
-nav_order: 6
-description: "Deploy CRW with Docker. Docker Compose setup with LightPanda JS rendering, custom configuration, and production tips."
----
+# Docker
 
-# Docker Deployment
-{: .no_toc }
-
-Run CRW with Docker Compose for the easiest setup with JS rendering included.
-{: .fs-6 .fw-300 }
-
-## Table of Contents
-{: .no_toc .text-delta }
-
-1. TOC
-{:toc}
-
----
+Run crw with Docker Compose for the easiest setup with JS rendering included.
 
 ## Pre-built Image
-
-Pull and run the pre-built image from GitHub Container Registry:
 
 ```bash
 docker pull ghcr.io/us/crw:latest
@@ -30,7 +11,7 @@ docker run -p 3000:3000 ghcr.io/us/crw:latest
 
 Available tags: `latest`, `0.0.1`, `0.0`
 
-## Quick Start (Docker Compose)
+## Docker Compose
 
 ```bash
 git clone https://github.com/us/crw.git
@@ -41,19 +22,11 @@ docker compose up
 This starts two services:
 
 | Service | Port | Description |
-|:--------|:-----|:------------|
+|---------|------|-------------|
 | **crw** | 3000 | API server with CDP enabled |
 | **lightpanda** | 9222 | Headless browser for JS rendering |
 
-Verify:
-
-```bash
-curl http://localhost:3000/health
-```
-
-## Docker Compose
-
-`docker-compose.yml`:
+### docker-compose.yml
 
 ```yaml
 services:
@@ -75,8 +48,6 @@ services:
 
 ### Add Playwright (optional)
 
-Uncomment in `docker-compose.yml` or add:
-
 ```yaml
   playwright:
     image: mcr.microsoft.com/playwright:v1.49.0-noble
@@ -85,7 +56,7 @@ Uncomment in `docker-compose.yml` or add:
       - "9223:9223"
 ```
 
-Then add the env var to the `crw` service:
+Then add to the crw service:
 
 ```yaml
     environment:
@@ -111,16 +82,9 @@ EXPOSE 3000
 CMD ["crw-server"]
 ```
 
-Build standalone:
-
-```bash
-docker build -t crw .
-docker run -p 3000:3000 crw
-```
-
 ## Custom Configuration
 
-Override any setting via environment variables:
+Override settings via environment variables:
 
 ```yaml
 services:
@@ -144,7 +108,6 @@ services:
 ```yaml
 services:
   crw:
-    build: .
     deploy:
       resources:
         limits:
@@ -152,14 +115,13 @@ services:
           cpus: "1.0"
 ```
 
-CRW uses ~3 MB idle and ~66 MB under heavy load (50 concurrent requests), so 256 MB is generous.
+crw uses ~3 MB idle and ~66 MB under heavy load (50 concurrent requests), so 256 MB is generous.
 
 ### Health Check
 
 ```yaml
 services:
   crw:
-    build: .
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
@@ -169,12 +131,9 @@ services:
 
 ### Persistent Config
 
-Mount a custom config file:
-
 ```yaml
 services:
   crw:
-    build: .
     volumes:
       - ./my-config.toml:/app/config.default.toml:ro
 ```
@@ -184,7 +143,6 @@ services:
 ```yaml
 services:
   crw:
-    build: .
     environment:
       - RUST_LOG=crw_server=info,crw_renderer=warn
     logging:
