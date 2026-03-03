@@ -140,7 +140,9 @@ a{color:inherit;text-decoration:none;}
 .search-empty{padding:32px 16px;text-align:center;color:var(--ink-4);font-family:var(--mono);font-size:11px;letter-spacing:.04em;}
 
 /* ========== Footer ========== */
-.footer{background:#080808;padding:52px 60px;display:flex;justify-content:space-between;align-items:center;color:rgba(255,255,255,.20);font-family:var(--mono);font-size:10px;letter-spacing:.06em;}
+.footer{background:var(--ink);color:rgba(255,255,255,.20);padding:52px 60px;display:flex;justify-content:space-between;align-items:flex-end;}
+.footer-brand{font-family:var(--sans);font-size:34px;font-weight:700;color:rgba(255,255,255,.07);letter-spacing:-.025em;line-height:1;}
+.footer-meta{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-align:right;line-height:2.0;color:rgba(255,255,255,.20);}
 .footer a{color:rgba(255,255,255,.40);transition:color var(--t-fast);}
 .footer a:hover{color:rgba(255,255,255,.70);}
 
@@ -582,10 +584,6 @@ canvas{display:block;}
 .popover-title{font-family:var(--mono);font-size:11px;font-weight:500;color:var(--ui-text-2);margin-bottom:8px;}
 .popover-body{font-family:var(--sans);font-size:12px;color:var(--ui-text-3);line-height:1.65;font-weight:300;}
 
-/* FOOTER */
-.footer{background:var(--ink);color:rgba(255,255,255,.20);padding:52px 60px;display:flex;justify-content:space-between;align-items:flex-end;}
-.footer-brand{font-family:var(--sans);font-size:34px;font-weight:700;color:rgba(255,255,255,.07);letter-spacing:-.025em;}
-.footer-meta{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-align:right;line-height:2.0;}
 
 
 
@@ -598,7 +596,8 @@ canvas{display:block;}
   .sidebar{position:fixed;top:var(--nav-h);left:0;bottom:0;z-index:90;background:var(--paper);transform:translateX(-100%);transition:transform var(--t-slow);}
   .sidebar.open{transform:translateX(0);}
   .content{padding:0;}
-  .footer{flex-direction:column;gap:8px;padding:32px 20px;text-align:center;}
+  .footer{flex-direction:column;gap:12px;padding:32px 20px;text-align:center;align-items:center;}
+  .footer-meta{text-align:center;}
   .hero{grid-template-columns:1fr!important;min-height:auto!important;}
   .hero-l,.hero-r{padding:40px 20px!important;}
   .section{grid-template-columns:1fr!important;}
