@@ -25,10 +25,10 @@ CRW is a **drop-in replacement** for [Firecrawl](https://firecrawl.dev) that you
 
 | | CRW | Firecrawl |
 |---|---|---|
-| **Coverage (1K URLs)** | **91.5%** | 77.2% |
+| **Coverage (1K URLs)** | **92.0%** | 77.2% |
 | **Avg Latency** | **833ms** | 4,600ms |
 | **P50 Latency** | **446ms** | — |
-| **Noise Rejection** | **89.1%** | — |
+| **Noise Rejection** | **88.4%** | — |
 | **Idle RAM** | 6.6 MB | ~500 MB+ |
 | **Cold start** | 85 ms | seconds |
 | **HTTP scrape** | ~30 ms | ~200 ms+ |
