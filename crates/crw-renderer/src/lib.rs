@@ -98,18 +98,20 @@ impl FallbackRenderer {
         headers: &HashMap<String, String>,
         wait_for_ms: Option<u64>,
     ) -> CrwResult<FetchResult> {
+        let mut last_error = None;
         for renderer in &self.js_renderers {
             match renderer.fetch(url, headers, wait_for_ms).await {
                 Ok(result) => return Ok(result),
                 Err(e) => {
                     tracing::warn!(renderer = renderer.name(), "JS renderer failed: {e}");
+                    last_error = Some(e);
                     continue;
                 }
             }
         }
-        Err(CrwError::RendererError(
-            "No JS renderer available".to_string(),
-        ))
+        Err(last_error.unwrap_or_else(|| {
+            CrwError::RendererError("No JS renderer available".to_string())
+        }))
     }
 
     /// Check availability of all renderers.

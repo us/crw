@@ -121,6 +121,15 @@ impl PageFetcher for CdpRenderer {
             ));
         }
 
+        // Detect navigation error pages returned by LightPanda/Chrome.
+        // LightPanda returns HTML like <h1>Navigation failed</h1><p>Reason: CouldntResolveHost</p>
+        // instead of raising a CDP error.
+        if let Some(reason) = detect_navigation_error(&html) {
+            return Err(CrwError::RendererError(format!(
+                "Navigation failed: {reason}"
+            )));
+        }
+
         Ok(FetchResult {
             url: url.to_string(),
             status_code: 200,
@@ -141,6 +150,30 @@ impl PageFetcher for CdpRenderer {
     async fn is_available(&self) -> bool {
         connect_async(&self.ws_url).await.is_ok()
     }
+}
+
+/// Detect LightPanda/Chrome navigation error pages.
+/// These are rendered as normal HTML instead of CDP-level errors.
+fn detect_navigation_error(html: &str) -> Option<String> {
+    // Only check short HTML — real pages are much larger than error pages.
+    if html.len() > 2000 {
+        return None;
+    }
+    let lower = html.to_lowercase();
+    if lower.contains("navigation failed") || lower.contains("navigationerror") {
+        // Try to extract the reason
+        if let Some(start) = lower.find("reason:") {
+            let after = &html[start + 7..];
+            let reason = after
+                .split(&['<', '\n'][..])
+                .next()
+                .unwrap_or("unknown")
+                .trim();
+            return Some(reason.to_string());
+        }
+        return Some("unknown".to_string());
+    }
+    None
 }
 
 impl CdpRenderer {
