@@ -20,7 +20,10 @@ function renderNavbar() {
 
   // Footer
   const footer = document.querySelector(".footer");
-  footer.innerHTML = `<span>${config.footer.left}</span><span>${config.footer.right}</span>`;
+  const footerBrand = footer.querySelector(".footer-brand");
+  const footerMeta = footer.querySelector(".footer-meta");
+  footerBrand.textContent = config.name;
+  footerMeta.innerHTML = `<div>${config.footer.left}</div><div>${config.footer.right}</div>`;
 }
 
 // ========== Apply Custom Theme ==========
