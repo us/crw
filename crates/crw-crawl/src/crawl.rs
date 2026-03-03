@@ -400,7 +400,9 @@ mod tests {
 
     #[test]
     fn is_safe_url_https() {
-        assert!(is_safe_url(&url::Url::parse("https://example.com").unwrap()));
+        assert!(is_safe_url(
+            &url::Url::parse("https://example.com").unwrap()
+        ));
     }
 
     #[test]
@@ -410,7 +412,9 @@ mod tests {
 
     #[test]
     fn is_safe_url_file_blocked() {
-        assert!(!is_safe_url(&url::Url::parse("file:///etc/passwd").unwrap()));
+        assert!(!is_safe_url(
+            &url::Url::parse("file:///etc/passwd").unwrap()
+        ));
     }
 
     #[test]
@@ -425,16 +429,12 @@ mod tests {
         assert!(!is_safe_url(
             &url::Url::parse("http://localhost:8080").unwrap()
         ));
-        assert!(!is_safe_url(
-            &url::Url::parse("http://127.0.0.1").unwrap()
-        ));
+        assert!(!is_safe_url(&url::Url::parse("http://127.0.0.1").unwrap()));
     }
 
     #[test]
     fn is_safe_url_private_ip_blocked() {
-        assert!(!is_safe_url(
-            &url::Url::parse("http://10.0.0.1").unwrap()
-        ));
+        assert!(!is_safe_url(&url::Url::parse("http://10.0.0.1").unwrap()));
         assert!(!is_safe_url(
             &url::Url::parse("http://192.168.1.1").unwrap()
         ));
