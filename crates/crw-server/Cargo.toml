@@ -30,6 +30,7 @@ tracing-subscriber = { workspace = true }
 uuid = { workspace = true }
 url = { workspace = true }
 reqwest = { workspace = true }
+clap = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
