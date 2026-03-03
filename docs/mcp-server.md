@@ -317,6 +317,69 @@ codex mcp add crw -- /absolute/path/to/crw-mcp
 
 ---
 
+### Gemini CLI
+
+Edit `~/.gemini/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "crw": {
+      "command": "/absolute/path/to/crw-mcp",
+      "env": {
+        "CRW_API_URL": "http://localhost:3000"
+      }
+    }
+  }
+}
+```
+
+---
+
+### Roo Code (VS Code Extension)
+
+Create or edit `~/.roo/mcp.json` (global) or `.roo/mcp.json` (project-level):
+
+```json
+{
+  "mcpServers": {
+    "crw": {
+      "command": "/absolute/path/to/crw-mcp",
+      "env": {
+        "CRW_API_URL": "http://localhost:3000"
+      }
+    }
+  }
+}
+```
+
+---
+
+### VS Code (GitHub Copilot Agent)
+
+Add to your VS Code `settings.json` or `.vscode/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "crw": {
+      "command": "/absolute/path/to/crw-mcp",
+      "env": {
+        "CRW_API_URL": "http://localhost:3000"
+      }
+    }
+  }
+}
+```
+
+---
+
+### Other MCP Clients
+
+CRW follows the standard MCP protocol. Any MCP-compatible client can connect using the JSON format above (stdio) or the HTTP endpoint at `http://localhost:3000/mcp`.
+
+---
+
 ## Platform Comparison
 
 | Platform | Config Format | Config Path | One-liner |
@@ -328,6 +391,9 @@ codex mcp add crw -- /absolute/path/to/crw-mcp
 | Cline | JSON | VS Code globalStorage | — |
 | Continue.dev | YAML | `~/.continue/config.yaml` | — |
 | OpenAI Codex | TOML | `~/.codex/config.toml` | `codex mcp add crw -- /path/to/crw-mcp` |
+| Gemini CLI | JSON | `~/.gemini/settings.json` | — |
+| Roo Code | JSON | `~/.roo/mcp.json` | — |
+| VS Code (Copilot) | JSON | `.vscode/mcp.json` | — |
 
 ---
 

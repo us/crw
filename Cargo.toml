@@ -56,8 +56,11 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 # Misc
 uuid = { version = "1", features = ["v4", "serde"] }
 url = { version = "2", features = ["serde"] }
-axum-test = "16"
+
+# Test dependencies
+tokio-test = "0.4"
 wiremock = "0.6"
+axum-test = "19"
 
 [profile.release]
 lto = true

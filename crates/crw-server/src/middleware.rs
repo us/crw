@@ -21,7 +21,7 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 }
 
 /// Exposed for integration tests only.
-#[cfg(any(test, feature = "test-utils"))]
+#[cfg(feature = "test-utils")]
 pub fn constant_time_eq_pub(a: &[u8], b: &[u8]) -> bool {
     constant_time_eq(a, b)
 }

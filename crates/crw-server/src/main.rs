@@ -1,11 +1,5 @@
-mod app;
-mod error;
-mod middleware;
-mod routes;
-mod state;
-
 use crw_core::config::AppConfig;
-use state::AppState;
+use crw_server::state::AppState;
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -40,7 +34,7 @@ async fn main() {
     }
 
     let state = AppState::new(config);
-    let app = app::create_app(state);
+    let app = crw_server::app::create_app(state);
 
     let listener = match tokio::net::TcpListener::bind(&addr).await {
         Ok(l) => l,
