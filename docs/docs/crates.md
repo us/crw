@@ -1,10 +1,10 @@
-# CRW Crates
+# Crates
 
-CRW is split into focused crates that can be used independently or together.
+crw is split into focused crates that can be used independently or together as libraries.
 
 ## crw-core
 
-Core types, configuration, and error handling shared by all CRW crates.
+Core types, configuration, and error handling shared by all crw crates.
 
 ```bash
 cargo add crw-core
@@ -107,17 +107,16 @@ use crw_core::AppConfig;
 let config = AppConfig::load()?;
 let app = app::build_app(config).await;
 
-// Serve on 0.0.0.0:3000
 let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
 axum::serve(listener, app).await?;
 ```
 
 ## crw-mcp
 
-MCP stdio proxy binary — connects AI assistants (Claude, Cursor, etc.) to a running CRW server.
+MCP stdio proxy binary — connects AI assistants to a running crw server.
 
 ```bash
 cargo install crw-mcp
 ```
 
-This is a standalone binary, not a library. See the [MCP Server guide](mcp-server.md) for setup instructions.
+This is a standalone binary, not a library. See [MCP Server](#mcp) for setup instructions.
