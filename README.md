@@ -49,6 +49,14 @@ cargo install crw-server
 crw-server
 ```
 
+**Enable JS rendering (optional):**
+
+```bash
+crw-server setup
+```
+
+This downloads [LightPanda](https://github.com/lightpanda-io/browser) and creates a `config.local.toml` for JS rendering. See [JS Rendering](#js-rendering) for details.
+
 **Docker (pre-built image):**
 
 ```bash
@@ -266,6 +274,19 @@ See the full [MCP setup guide](docs/mcp-server.md) for detailed instructions, au
 ## JS Rendering
 
 CRW auto-detects SPAs by analyzing the initial HTML response for shell heuristics (empty body, framework markers). When a SPA is detected, it renders the page via a headless browser.
+
+**Quick setup (recommended):**
+
+```bash
+crw-server setup
+```
+
+This automatically downloads the LightPanda binary to `~/.local/bin/` and creates a `config.local.toml` with the correct renderer settings. Then start LightPanda and CRW:
+
+```bash
+lightpanda serve --host 127.0.0.1 --port 9222 &
+crw-server
+```
 
 **Supported renderers:**
 

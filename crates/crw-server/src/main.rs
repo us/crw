@@ -1,9 +1,36 @@
+use clap::{Parser, Subcommand};
 use crw_core::config::AppConfig;
 use crw_server::state::AppState;
 use tracing_subscriber::EnvFilter;
 
+#[derive(Parser)]
+#[command(name = "crw-server", about = "CRW web scraper API server")]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Download LightPanda and create a local config for JS rendering
+    Setup,
+}
+
 #[tokio::main]
 async fn main() {
+    let cli = Cli::parse();
+
+    match cli.command {
+        Some(Commands::Setup) => {
+            crw_server::setup::run_setup().await;
+        }
+        None => {
+            run_server().await;
+        }
+    }
+}
+
+async fn run_server() {
     // Initialize tracing.
     tracing_subscriber::fmt()
         .with_env_filter(

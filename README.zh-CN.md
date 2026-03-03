@@ -42,6 +42,21 @@ CRW 提供 Firecrawl 的 API，但资源占用极低。无运行时依赖，无 
 
 ## 快速开始
 
+**从 crates.io 安装：**
+
+```bash
+cargo install crw-server
+crw-server
+```
+
+**启用 JS 渲染（可选）：**
+
+```bash
+crw-server setup
+```
+
+自动下载 [LightPanda](https://github.com/lightpanda-io/browser) 并创建 `config.local.toml` 配置文件。详见 [JS 渲染](#js-渲染)。
+
 **从源码构建：**
 
 ```bash
@@ -167,6 +182,19 @@ cargo build --release --bin crw-mcp
 ## JS 渲染
 
 CRW 通过分析初始 HTML 响应的 Shell 启发式方法（空 body、框架标记）自动检测 SPA。检测到 SPA 时，会通过无头浏览器渲染页面。
+
+**快速设置（推荐）：**
+
+```bash
+crw-server setup
+```
+
+自动下载 LightPanda 二进制文件到 `~/.local/bin/` 并创建正确的渲染器配置。然后启动 LightPanda 和 CRW：
+
+```bash
+lightpanda serve --host 127.0.0.1 --port 9222 &
+crw-server
+```
 
 **支持的渲染器：**
 
