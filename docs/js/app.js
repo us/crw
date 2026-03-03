@@ -59,15 +59,32 @@ function parseMarkdown(md) {
 
   let html = md;
 
-  // Code blocks (fenced)
+  // Code blocks (fenced) — extract and replace with placeholders
+  const codeBlocks = [];
   html = html.replace(
     /```(\w*)\n([\s\S]*?)```/g,
-    (_, lang, code) =>
-      `<pre><code class="language-${lang}">${code.trim()}</code></pre>`
+    (_, lang, code) => {
+      const escaped = code.trim()
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      const index = codeBlocks.length;
+      codeBlocks.push(`<pre><code class="language-${lang}">${escaped}</code></pre>`);
+      return `\n%%CODEBLOCK_${index}%%\n`;
+    }
   );
 
-  // Inline code
-  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+  // Inline code — extract and replace with placeholders
+  const inlineCode = [];
+  html = html.replace(/`([^`]+)`/g, (_, code) => {
+    const escaped = code
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    const index = inlineCode.length;
+    inlineCode.push(`<code>${escaped}</code>`);
+    return `%%INLINECODE_${index}%%`;
+  });
 
   // Headings
   html = html.replace(/^#### (.+)$/gm, "<h4>$1</h4>");
@@ -143,9 +160,18 @@ function parseMarkdown(md) {
       const trimmed = block.trim();
       if (!trimmed) return "";
       if (/^</.test(trimmed)) return trimmed;
+      if (/^%%CODEBLOCK_/.test(trimmed)) return trimmed;
       return `<p>${trimmed.replace(/\n/g, "<br>")}</p>`;
     })
     .join("\n");
+
+  // Restore code blocks and inline code from placeholders
+  codeBlocks.forEach((block, i) => {
+    html = html.replace(`%%CODEBLOCK_${i}%%`, block);
+  });
+  inlineCode.forEach((code, i) => {
+    html = html.replace(`%%INLINECODE_${i}%%`, code);
+  });
 
   return html;
 }
