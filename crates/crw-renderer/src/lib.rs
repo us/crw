@@ -1,3 +1,35 @@
+//! HTTP and headless-browser rendering engine for the CRW web scraper.
+//!
+//! Provides a [`FallbackRenderer`] that fetches pages via plain HTTP and optionally
+//! re-renders them through a CDP-based headless browser when SPA content is detected.
+//!
+//! - [`http_only`] — Simple HTTP fetcher using `reqwest`
+//! - [`detector`] — Heuristic SPA shell detection (empty body, framework markers)
+//! - `cdp` — Chrome DevTools Protocol renderer (LightPanda, Playwright, Chrome) *(requires `cdp` feature)*
+//! - [`traits`] — [`PageFetcher`] trait for pluggable backends
+//!
+//! # Feature flags
+//!
+//! | Flag  | Description |
+//! |-------|-------------|
+//! | `cdp` | Enables CDP WebSocket rendering via `tokio-tungstenite` |
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! use crw_core::config::RendererConfig;
+//! use crw_renderer::FallbackRenderer;
+//! use std::collections::HashMap;
+//!
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! let config = RendererConfig::default();
+//! let renderer = FallbackRenderer::new(&config, "crw/0.1", None);
+//! let result = renderer.fetch("https://example.com", &HashMap::new(), None, None).await?;
+//! println!("status: {}", result.status_code);
+//! # Ok(())
+//! # }
+//! ```
+
 #[cfg(feature = "cdp")]
 pub mod cdp;
 pub mod detector;

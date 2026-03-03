@@ -1,3 +1,30 @@
+//! MCP (Model Context Protocol) stdio proxy for the CRW web scraper.
+//!
+//! This binary reads JSON-RPC requests from stdin and forwards them to a running
+//! CRW server instance over HTTP. It exposes four tools to MCP-compatible AI clients:
+//!
+//! - `crw_scrape` — scrape a single URL
+//! - `crw_crawl` — start an async BFS crawl
+//! - `crw_check_crawl_status` — poll crawl job status
+//! - `crw_map` — discover URLs on a website
+//!
+//! # Environment variables
+//!
+//! | Variable | Default | Description |
+//! |----------|---------|-------------|
+//! | `CRW_API_URL` | `http://localhost:3000` | CRW server base URL |
+//! | `CRW_API_KEY` | *(none)* | Optional Bearer token for auth |
+//!
+//! # Usage
+//!
+//! ```bash
+//! # Start with default settings
+//! crw-mcp
+//!
+//! # Point to a remote server
+//! CRW_API_URL=https://crw.example.com crw-mcp
+//! ```
+
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::io::BufRead;
