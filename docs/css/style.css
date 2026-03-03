@@ -98,6 +98,7 @@ a{color:inherit;text-decoration:none;}
 .content{flex:1;min-width:0;padding:0;}
 
 /* ========== Article Prose ========== */
+#article{padding:48px 52px 68px 44px;}
 #article .eyebrow{font-family:var(--mono);font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.22em;color:var(--ink-3);margin-bottom:12px;}
 #article h1{font-size:clamp(36px,5.2vw,66px);font-weight:700;line-height:1.06;letter-spacing:-.025em;margin-bottom:22px;color:var(--ink);}
 #article h2{font-size:clamp(22px,3.6vw,36px);font-weight:700;line-height:1.14;letter-spacing:-.02em;margin-top:52px;margin-bottom:22px;color:var(--ink);}
@@ -140,9 +141,9 @@ a{color:inherit;text-decoration:none;}
 .search-empty{padding:32px 16px;text-align:center;color:var(--ink-4);font-family:var(--mono);font-size:11px;letter-spacing:.04em;}
 
 /* ========== Footer ========== */
-.footer{background:var(--ink);color:rgba(255,255,255,.20);padding:52px 60px;display:flex;justify-content:space-between;align-items:flex-end;}
-.footer-brand{font-family:var(--sans);font-size:34px;font-weight:700;color:rgba(255,255,255,.07);letter-spacing:-.025em;line-height:1;}
-.footer-meta{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-align:right;line-height:2.0;color:rgba(255,255,255,.20);}
+.footer{background:#080808;color:rgba(255,255,255,.20);padding:52px 60px;display:flex;justify-content:space-between;align-items:flex-end;}
+.footer-brand{font-family:var(--sans);font-size:34px;font-weight:700;color:rgba(255,255,255,.12);letter-spacing:-.025em;line-height:1;}
+.footer-meta{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-align:right;line-height:2.0;color:rgba(255,255,255,.30);}
 .footer a{color:rgba(255,255,255,.40);transition:color var(--t-fast);}
 .footer a:hover{color:rgba(255,255,255,.70);}
 
@@ -596,7 +597,9 @@ canvas{display:block;}
   .sidebar{position:fixed;top:var(--nav-h);left:0;bottom:0;z-index:90;background:var(--paper);transform:translateX(-100%);transition:transform var(--t-slow);}
   .sidebar.open{transform:translateX(0);}
   .content{padding:0;}
+  #article{padding:32px 20px 48px;}
   .footer{flex-direction:column;gap:12px;padding:32px 20px;text-align:center;align-items:center;}
+  .footer-brand{font-size:24px;}
   .footer-meta{text-align:center;}
   .hero{grid-template-columns:1fr!important;min-height:auto!important;}
   .hero-l,.hero-r{padding:40px 20px!important;}
