@@ -105,6 +105,9 @@ pub fn extract_links(html: &str, base_url: &str) -> Vec<String> {
             if href.starts_with('#')
                 || href.starts_with("javascript:")
                 || href.starts_with("mailto:")
+                || href.starts_with("data:")
+                || href.starts_with("tel:")
+                || href.starts_with("blob:")
             {
                 return None;
             }

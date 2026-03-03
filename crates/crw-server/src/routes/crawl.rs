@@ -17,9 +17,8 @@ pub async fn start_crawl(
 ) -> Result<Json<CrawlStartResponse>, AppError> {
     let parsed_url = url::Url::parse(&req.url)
         .map_err(|e| CrwError::InvalidRequest(format!("Invalid URL: {e}")))?;
-    if !matches!(parsed_url.scheme(), "http" | "https") {
-        return Err(CrwError::InvalidRequest("Only http/https URLs are allowed".into()).into());
-    }
+    crw_core::url_safety::validate_safe_url(&parsed_url)
+        .map_err(CrwError::InvalidRequest)?;
 
     let id = Uuid::new_v4();
     let initial = CrawlState {

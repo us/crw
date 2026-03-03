@@ -12,6 +12,7 @@ description = "Firecrawl-compatible API server for the CRW web scraper"
 [features]
 default = []
 cdp = ["crw-renderer/cdp"]
+test-utils = []
 
 [dependencies]
 crw-core = { path = "../crw-core", version = "0.0.1" }
@@ -29,3 +30,11 @@ tracing-subscriber = { workspace = true }
 uuid = { workspace = true }
 url = { workspace = true }
 reqwest = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+axum-test = { workspace = true }
+wiremock = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+crw-server = { path = ".", features = ["test-utils"] }

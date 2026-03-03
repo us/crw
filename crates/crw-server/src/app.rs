@@ -22,7 +22,8 @@ pub fn create_app(state: AppState) -> Router {
         .route("/v1/scrape", post(routes::scrape::scrape))
         .route("/v1/crawl", post(routes::crawl::start_crawl))
         .route("/v1/crawl/{id}", get(routes::crawl::get_crawl))
-        .route("/v1/map", post(routes::map::map));
+        .route("/v1/map", post(routes::map::map))
+        .route("/mcp", post(routes::mcp::mcp_handler));
 
     let api_routes = if api_keys.is_empty() {
         api_routes.with_state(state.clone())
@@ -37,7 +38,6 @@ pub fn create_app(state: AppState) -> Router {
 
     Router::new()
         .route("/health", get(routes::health::health))
-        .route("/mcp", post(routes::mcp::mcp_handler))
         .with_state(state)
         .merge(api_routes)
         .layer(DefaultBodyLimit::max(MAX_BODY_SIZE))

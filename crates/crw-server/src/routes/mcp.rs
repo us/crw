@@ -137,11 +137,18 @@ fn tool_definitions() -> Value {
     })
 }
 
+/// Validate URL safety for MCP tool calls (same checks as REST API routes).
+fn validate_url(url: &str) -> Result<(), String> {
+    let parsed = url::Url::parse(url).map_err(|e| format!("Invalid URL: {e}"))?;
+    crw_core::url_safety::validate_safe_url(&parsed)
+}
+
 async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result<Value, String> {
     match tool_name {
         "crw_scrape" => {
             let req: ScrapeRequest =
                 serde_json::from_value(args).map_err(|e| format!("invalid arguments: {e}"))?;
+            validate_url(&req.url)?;
             let llm_config = state.config.extraction.llm.as_ref();
             let data = scrape_url(&req, &state.renderer, llm_config)
                 .await
@@ -151,6 +158,7 @@ async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result<Val
         "crw_crawl" => {
             let req: CrawlRequest =
                 serde_json::from_value(args).map_err(|e| format!("invalid arguments: {e}"))?;
+            validate_url(&req.url)?;
             let id = Uuid::new_v4();
             let initial = crw_core::types::CrawlState {
                 id,
@@ -211,6 +219,7 @@ async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result<Val
         "crw_map" => {
             let req: MapRequest =
                 serde_json::from_value(args).map_err(|e| format!("invalid arguments: {e}"))?;
+            validate_url(&req.url)?;
             let max_depth = req
                 .max_depth
                 .unwrap_or(state.config.crawler.default_max_depth);

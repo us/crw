@@ -23,6 +23,12 @@ struct RateLimiter {
 
 impl RateLimiter {
     fn new(requests_per_second: f64) -> Self {
+        if requests_per_second < 0.0 {
+            tracing::warn!(
+                requests_per_second,
+                "Negative requests_per_second value, treating as unlimited"
+            );
+        }
         let min_interval = if requests_per_second > 0.0 {
             Duration::from_secs_f64(1.0 / requests_per_second)
         } else {
@@ -43,9 +49,9 @@ impl RateLimiter {
     }
 }
 
-/// Validate that a URL uses an allowed scheme (http/https only, prevents SSRF).
-fn is_allowed_scheme(url: &url::Url) -> bool {
-    matches!(url.scheme(), "http" | "https")
+/// Validate that a URL is safe to fetch (scheme + host check).
+fn is_safe_url(url: &url::Url) -> bool {
+    crw_core::url_safety::validate_safe_url(url).is_ok()
 }
 
 /// Run a BFS crawl starting from a URL.
@@ -65,7 +71,7 @@ pub async fn run_crawl(
     let max_pages = req.max_pages.unwrap_or(100).min(1000) as usize;
 
     let base_url = match url::Url::parse(&req.url) {
-        Ok(u) if is_allowed_scheme(&u) => u,
+        Ok(u) if is_safe_url(&u) => u,
         Ok(_) => {
             let _ = state_tx.send(CrawlState {
                 id,
@@ -161,7 +167,7 @@ pub async fn run_crawl(
             let page_links = extract_links(&fetch_result.html, &url);
             for link in page_links {
                 if let Ok(link_url) = url::Url::parse(&link) {
-                    if !is_allowed_scheme(&link_url) {
+                    if !is_safe_url(&link_url) {
                         continue;
                     }
                     let link_host = link_url.host_str().unwrap_or("");
@@ -238,7 +244,7 @@ pub async fn discover_urls(
     let parsed = url::Url::parse(base_url)
         .map_err(|e| crw_core::error::CrwError::InvalidRequest(format!("Invalid URL: {e}")))?;
 
-    if !is_allowed_scheme(&parsed) {
+    if !is_safe_url(&parsed) {
         return Err(crw_core::error::CrwError::InvalidRequest(
             "Only http/https URLs are allowed".into(),
         ));
@@ -272,7 +278,12 @@ pub async fn discover_urls(
 
         for sm_url in sitemap_urls {
             if let Ok(urls) = crate::sitemap::fetch_sitemap(&sm_url, &client).await {
-                all_urls.extend(urls);
+                for u in urls {
+                    if all_urls.len() >= MAX_DISCOVERED_URLS {
+                        break;
+                    }
+                    all_urls.insert(u);
+                }
             }
         }
     }
@@ -305,7 +316,7 @@ pub async fn discover_urls(
             let links = extract_links(&result.html, &url);
             for link in links {
                 if let Ok(link_url) = url::Url::parse(&link) {
-                    if !is_allowed_scheme(&link_url) {
+                    if !is_safe_url(&link_url) {
                         continue;
                     }
                     let link_host = link_url.host_str().unwrap_or("");
@@ -317,7 +328,7 @@ pub async fn discover_urls(
                     if !visited.contains(&normalized) {
                         visited.insert(normalized);
                         all_urls.insert(link.clone());
-                        if depth + 1 < max_depth {
+                        if depth < max_depth {
                             queue.push_back((link, depth + 1));
                         }
                     }
@@ -336,4 +347,175 @@ pub async fn discover_urls(
 fn normalize_url(url: &str) -> String {
     let without_fragment = url.split('#').next().unwrap_or(url);
     without_fragment.trim_end_matches('/').to_lowercase()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_url_strips_fragment() {
+        assert_eq!(
+            normalize_url("https://example.com/page#section"),
+            "https://example.com/page"
+        );
+    }
+
+    #[test]
+    fn normalize_url_strips_trailing_slash() {
+        assert_eq!(
+            normalize_url("https://example.com/page/"),
+            "https://example.com/page"
+        );
+    }
+
+    #[test]
+    fn normalize_url_lowercase() {
+        assert_eq!(
+            normalize_url("HTTPS://EXAMPLE.COM/Page"),
+            "https://example.com/page"
+        );
+    }
+
+    #[test]
+    fn normalize_url_combined() {
+        assert_eq!(
+            normalize_url("https://Example.Com/Path/#fragment"),
+            "https://example.com/path"
+        );
+    }
+
+    #[test]
+    fn normalize_url_no_changes_needed() {
+        assert_eq!(
+            normalize_url("https://example.com/page"),
+            "https://example.com/page"
+        );
+    }
+
+    #[test]
+    fn is_safe_url_http() {
+        assert!(is_safe_url(&url::Url::parse("http://example.com").unwrap()));
+    }
+
+    #[test]
+    fn is_safe_url_https() {
+        assert!(is_safe_url(&url::Url::parse("https://example.com").unwrap()));
+    }
+
+    #[test]
+    fn is_safe_url_ftp_blocked() {
+        assert!(!is_safe_url(&url::Url::parse("ftp://example.com").unwrap()));
+    }
+
+    #[test]
+    fn is_safe_url_file_blocked() {
+        assert!(!is_safe_url(&url::Url::parse("file:///etc/passwd").unwrap()));
+    }
+
+    #[test]
+    fn is_safe_url_data_blocked() {
+        assert!(!is_safe_url(
+            &url::Url::parse("data:text/html,<h1>x</h1>").unwrap()
+        ));
+    }
+
+    #[test]
+    fn is_safe_url_localhost_blocked() {
+        assert!(!is_safe_url(
+            &url::Url::parse("http://localhost:8080").unwrap()
+        ));
+        assert!(!is_safe_url(
+            &url::Url::parse("http://127.0.0.1").unwrap()
+        ));
+    }
+
+    #[test]
+    fn is_safe_url_private_ip_blocked() {
+        assert!(!is_safe_url(
+            &url::Url::parse("http://10.0.0.1").unwrap()
+        ));
+        assert!(!is_safe_url(
+            &url::Url::parse("http://192.168.1.1").unwrap()
+        ));
+        assert!(!is_safe_url(
+            &url::Url::parse("http://169.254.169.254").unwrap()
+        ));
+    }
+
+    #[test]
+    fn rate_limiter_zero_rps_no_delay() {
+        let limiter = RateLimiter::new(0.0);
+        assert_eq!(limiter.min_interval, Duration::ZERO);
+    }
+
+    #[test]
+    fn rate_limiter_negative_rps_no_panic() {
+        // Negative RPS should not panic
+        let limiter = RateLimiter::new(-1.0);
+        assert_eq!(limiter.min_interval, Duration::ZERO);
+    }
+
+    #[test]
+    fn rate_limiter_normal_rps() {
+        let limiter = RateLimiter::new(10.0);
+        assert_eq!(limiter.min_interval, Duration::from_millis(100));
+    }
+
+    #[tokio::test]
+    async fn rate_limiter_first_call_no_wait() {
+        let mut limiter = RateLimiter::new(10.0);
+        let start = Instant::now();
+        limiter.wait().await;
+        let elapsed = start.elapsed();
+        // First call should return almost immediately (< 10ms)
+        assert!(
+            elapsed.as_millis() < 10,
+            "First call should not wait, took {elapsed:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn rate_limiter_enforces_interval() {
+        let mut limiter = RateLimiter::new(10.0); // 100ms interval
+        // First call — no wait
+        limiter.wait().await;
+        let start = Instant::now();
+        // Second call — should wait ~100ms
+        limiter.wait().await;
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed.as_millis() >= 80,
+            "Second call should wait ~100ms, took {elapsed:?}"
+        );
+    }
+
+    /// Simulate the clamping logic from run_crawl
+    fn clamp_depth(max_depth: Option<u32>) -> u32 {
+        max_depth.unwrap_or(2).min(10)
+    }
+
+    fn clamp_pages(max_pages: Option<u32>) -> usize {
+        max_pages.unwrap_or(100).min(1000) as usize
+    }
+
+    #[test]
+    fn crawl_max_depth_capped_at_10() {
+        assert_eq!(clamp_depth(Some(100)), 10);
+    }
+
+    #[test]
+    fn crawl_max_pages_capped_at_1000() {
+        assert_eq!(clamp_pages(Some(5000)), 1000);
+    }
+
+    #[test]
+    fn crawl_default_depth() {
+        assert_eq!(clamp_depth(None), 2);
+    }
+
+    #[test]
+    fn crawl_default_pages() {
+        assert_eq!(clamp_pages(None), 100);
+    }
 }

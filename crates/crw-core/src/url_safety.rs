@@ -1,0 +1,140 @@
+use std::net::IpAddr;
+
+/// Validate that a URL is safe to fetch (not targeting internal/private networks).
+///
+/// Blocks:
+/// - Non-http(s) schemes
+/// - Loopback addresses (127.x, ::1, localhost)
+/// - Private IP ranges (10.x, 172.16-31.x, 192.168.x)
+/// - Link-local addresses (169.254.x — e.g. AWS metadata endpoint)
+/// - 0.0.0.0
+pub fn validate_safe_url(url: &url::Url) -> Result<(), String> {
+    // Scheme check
+    if !matches!(url.scheme(), "http" | "https") {
+        return Err("Only http/https URLs are allowed".into());
+    }
+
+    // Host check
+    let host = url
+        .host_str()
+        .ok_or_else(|| "URL has no host".to_string())?;
+
+    // Block localhost by name
+    let host_lower = host.to_lowercase();
+    if host_lower == "localhost" || host_lower.ends_with(".localhost") {
+        return Err("Localhost URLs are not allowed".into());
+    }
+
+    // Parse as IP if possible and check ranges
+    if let Ok(ip) = host.parse::<IpAddr>()
+        && is_blocked_ip(&ip)
+    {
+        return Err(format!("Access to {ip} is not allowed"));
+    }
+
+    // Also check bracket-stripped IPv6 (e.g. [::1])
+    let stripped = host.trim_start_matches('[').trim_end_matches(']');
+    if let Ok(ip) = stripped.parse::<IpAddr>()
+        && is_blocked_ip(&ip)
+    {
+        return Err(format!("Access to {ip} is not allowed"));
+    }
+
+    Ok(())
+}
+
+fn is_blocked_ipv4(v4: &std::net::Ipv4Addr) -> bool {
+    v4.is_loopback()                       // 127.0.0.0/8
+        || v4.is_private()                  // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+        || v4.is_link_local()               // 169.254.0.0/16 (AWS metadata)
+        || v4.is_unspecified()              // 0.0.0.0
+        || v4.is_broadcast()                // 255.255.255.255
+}
+
+fn is_blocked_ip(ip: &IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => is_blocked_ipv4(v4),
+        IpAddr::V6(v6) => {
+            v6.is_loopback()                       // ::1
+                || v6.is_unspecified()              // ::
+                // IPv4-mapped IPv6 (::ffff:127.0.0.1, ::ffff:10.x.x.x, etc.)
+                || v6.to_ipv4_mapped().is_some_and(|v4| is_blocked_ipv4(&v4))
+                // IPv6 link-local (fe80::/10)
+                || (v6.segments()[0] & 0xffc0) == 0xfe80
+                // IPv6 unique-local / ULA (fc00::/7) — private network equivalent
+                || (v6.segments()[0] & 0xfe00) == 0xfc00
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn url(s: &str) -> url::Url {
+        url::Url::parse(s).unwrap()
+    }
+
+    #[test]
+    fn allows_normal_urls() {
+        assert!(validate_safe_url(&url("https://example.com")).is_ok());
+        assert!(validate_safe_url(&url("http://example.com/path")).is_ok());
+    }
+
+    #[test]
+    fn blocks_non_http_schemes() {
+        assert!(validate_safe_url(&url("ftp://example.com")).is_err());
+        assert!(validate_safe_url(&url("file:///etc/passwd")).is_err());
+    }
+
+    #[test]
+    fn blocks_localhost() {
+        assert!(validate_safe_url(&url("http://localhost")).is_err());
+        assert!(validate_safe_url(&url("http://localhost:8080")).is_err());
+        assert!(validate_safe_url(&url("http://127.0.0.1")).is_err());
+        assert!(validate_safe_url(&url("http://127.0.0.1:9999")).is_err());
+    }
+
+    #[test]
+    fn blocks_private_ips() {
+        assert!(validate_safe_url(&url("http://10.0.0.1")).is_err());
+        assert!(validate_safe_url(&url("http://172.16.0.1")).is_err());
+        assert!(validate_safe_url(&url("http://192.168.1.1")).is_err());
+    }
+
+    #[test]
+    fn blocks_link_local() {
+        assert!(validate_safe_url(&url("http://169.254.169.254/latest/meta-data/")).is_err());
+    }
+
+    #[test]
+    fn blocks_zero_ip() {
+        assert!(validate_safe_url(&url("http://0.0.0.0")).is_err());
+    }
+
+    #[test]
+    fn blocks_ipv6_loopback() {
+        assert!(validate_safe_url(&url("http://[::1]")).is_err());
+    }
+
+    #[test]
+    fn blocks_ipv4_mapped_ipv6() {
+        // ::ffff:127.0.0.1 — IPv4-mapped loopback
+        assert!(validate_safe_url(&url("http://[::ffff:127.0.0.1]")).is_err());
+        // ::ffff:169.254.169.254 — IPv4-mapped AWS metadata
+        assert!(validate_safe_url(&url("http://[::ffff:169.254.169.254]")).is_err());
+        // ::ffff:10.0.0.1 — IPv4-mapped private
+        assert!(validate_safe_url(&url("http://[::ffff:10.0.0.1]")).is_err());
+    }
+
+    #[test]
+    fn blocks_ipv6_link_local() {
+        assert!(validate_safe_url(&url("http://[fe80::1]")).is_err());
+    }
+
+    #[test]
+    fn blocks_ipv6_ula() {
+        assert!(validate_safe_url(&url("http://[fc00::1]")).is_err());
+        assert!(validate_safe_url(&url("http://[fd00::1]")).is_err());
+    }
+}

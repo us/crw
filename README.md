@@ -37,7 +37,7 @@ Benchmark: [Firecrawl scrape-content-dataset-v1](https://huggingface.co/datasets
 - **🌐 JS rendering** — auto-detect SPAs with shell heuristics, render via LightPanda, Playwright, or Chrome (CDP)
 - **🕷️ BFS crawler** — async crawl with rate limiting, robots.txt, sitemap support, concurrent jobs
 - **🔧 MCP server** — built-in stdio + HTTP transport for Claude Code and Claude Desktop
-- **🔒 Auth** — optional Bearer token with constant-time comparison
+- **🔒 Security** — SSRF protection (private IPs, cloud metadata, IPv6), constant-time auth, dangerous URI filtering
 - **🐳 Docker ready** — multi-stage build with LightPanda sidecar
 
 ## Quick Start
@@ -338,6 +338,21 @@ Full documentation: **[docs/index.md](docs/index.md)**
 - [MCP Server](docs/index.md#mcp-server)
 - [JS Rendering](docs/index.md#js-rendering)
 - [Architecture](docs/index.md#architecture)
+
+## Security
+
+CRW includes built-in protections against common web scraping attack vectors:
+
+- **SSRF protection** — all URL inputs (REST API + MCP) are validated against private/internal networks:
+  - Loopback (`127.0.0.0/8`, `::1`, `localhost`)
+  - Private IPs (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`)
+  - Link-local / cloud metadata (`169.254.0.0/16` — blocks AWS/GCP metadata endpoints)
+  - IPv6 mapped addresses (`::ffff:127.0.0.1`), link-local (`fe80::`), ULA (`fc00::/7`)
+  - Non-HTTP schemes (`file://`, `ftp://`, `gopher://`, `data:`)
+- **Auth** — optional Bearer token with constant-time comparison (no length or key-index leakage)
+- **robots.txt** — respects `Allow`/`Disallow` with wildcard patterns (`*`, `$`) and RFC 9309 specificity
+- **Rate limiting** — configurable per-second request cap
+- **Resource limits** — max body size (1 MB), max crawl depth (10), max pages (1000), max discovered URLs (5000)
 
 ## Contributing
 

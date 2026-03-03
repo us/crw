@@ -282,14 +282,46 @@ RUST_LOG=crw_server=debug,crw_renderer=info ./target/release/crw-server
 
 ---
 
-## Security Limits
+## Security
 
-CRW enforces these limits to prevent abuse:
+### SSRF Protection
+
+All URL inputs — REST API endpoints and MCP tool calls — are validated before any outbound request:
+
+| Blocked Target | Examples |
+|:---------------|:---------|
+| Loopback | `127.0.0.0/8`, `::1`, `localhost` |
+| Private IPs | `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16` |
+| Link-local / Cloud metadata | `169.254.0.0/16` (AWS/GCP metadata endpoint) |
+| IPv4-mapped IPv6 | `::ffff:127.0.0.1`, `::ffff:169.254.169.254` |
+| IPv6 link-local | `fe80::/10` |
+| IPv6 unique-local (ULA) | `fc00::/7` |
+| Non-HTTP schemes | `file://`, `ftp://`, `gopher://`, `data:`, `blob:`, `tel:` |
+| Zero/broadcast | `0.0.0.0`, `255.255.255.255` |
+
+### Authentication
+
+When `api_keys` is configured, **all endpoints except `/health` require a valid Bearer token** — including the `/mcp` endpoint. Token comparison uses constant-time equality that does not leak key length or key index via timing side-channels.
+
+### robots.txt
+
+The crawler respects robots.txt with:
+- `Allow` and `Disallow` directives
+- Wildcard patterns (`*` matches any character sequence, `$` anchors to end of path)
+- RFC 9309 specificity-based matching (longest effective pattern wins; equal length: Allow wins)
+- Inline comment stripping
+
+### Resource Limits
 
 | Limit | Value |
 |:------|:------|
-| Max response body | 10 MB |
+| Max request body | 1 MB |
 | Max crawl depth | 10 |
-| Max pages per crawl | 1000 |
+| Max pages per crawl | 1,000 |
+| Max discovered URLs | 5,000 |
 | URL schemes allowed | `http`, `https` only |
 | robots.txt | Respected by default |
+
+### Link Extraction
+
+Extracted links are filtered to remove dangerous URI schemes (`javascript:`, `mailto:`, `data:`, `tel:`, `blob:`) before being used in crawling or returned in API responses.

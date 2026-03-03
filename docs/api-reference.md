@@ -25,7 +25,7 @@ All endpoints, request/response schemas, and examples.
 http://localhost:3000
 ```
 
-All `/v1/*` endpoints require authentication when API keys are configured. The `/health` endpoint is always public.
+All `/v1/*` and `/mcp` endpoints require authentication when API keys are configured. The `/health` endpoint is always public.
 
 ---
 

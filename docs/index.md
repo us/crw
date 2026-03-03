@@ -47,7 +47,7 @@ Benchmark: [Firecrawl scrape-content-dataset-v1](https://huggingface.co/datasets
 - **🌐 JS rendering** — auto-detect SPAs with shell heuristics, render via LightPanda, Playwright, or Chrome (CDP)
 - **🕷️ BFS crawler** — async crawl with rate limiting, robots.txt, sitemap support, concurrent jobs
 - **🔧 MCP server** — built-in stdio + HTTP transport for Claude Code and Claude Desktop
-- **🔒 Auth** — optional Bearer token with constant-time comparison
+- **🔒 Security** — SSRF protection (private IPs, cloud metadata, IPv6), constant-time auth, dangerous URI filtering
 - **🐳 Docker ready** — multi-stage build with LightPanda sidecar
 
 ## Use Cases
