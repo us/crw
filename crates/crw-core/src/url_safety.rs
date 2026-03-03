@@ -48,7 +48,7 @@ fn is_blocked_ipv4(v4: &std::net::Ipv4Addr) -> bool {
         || v4.is_private()                  // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
         || v4.is_link_local()               // 169.254.0.0/16 (AWS metadata)
         || v4.is_unspecified()              // 0.0.0.0
-        || v4.is_broadcast()                // 255.255.255.255
+        || v4.is_broadcast() // 255.255.255.255
 }
 
 fn is_blocked_ip(ip: &IpAddr) -> bool {

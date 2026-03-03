@@ -64,8 +64,7 @@ pub fn extract(
                 markdown::html_to_markdown(raw_html)
             };
 
-            let fallback_too_short =
-                fallback_md.trim().len() < 100 && raw_html.len() > 5000;
+            let fallback_too_short = fallback_md.trim().len() < 100 && raw_html.len() > 5000;
             if fallback_too_short {
                 // Last resort: extract plain text as markdown
                 let text = plaintext::html_to_plaintext(&content_html);

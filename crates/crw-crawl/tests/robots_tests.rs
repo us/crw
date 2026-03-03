@@ -56,7 +56,10 @@ User-agent: *
 Disallow: /*.pdf
 "#;
     let robots = RobotsTxt::parse(text);
-    assert!(!robots.is_allowed("/document.pdf"), "Wildcard patterns should block .pdf URLs");
+    assert!(
+        !robots.is_allowed("/document.pdf"),
+        "Wildcard patterns should block .pdf URLs"
+    );
     assert!(!robots.is_allowed("/path/to/file.pdf"));
     assert!(robots.is_allowed("/document.html"));
 }

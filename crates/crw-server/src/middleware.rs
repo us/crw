@@ -46,10 +46,9 @@ pub async fn auth_middleware(
             let token = &header[7..];
             // Compare against all keys without short-circuiting to avoid
             // leaking which key index matched via timing.
-            if api_keys
-                .iter()
-                .fold(false, |found, k| constant_time_eq(k.as_bytes(), token.as_bytes()) || found)
-            {
+            if api_keys.iter().fold(false, |found, k| {
+                constant_time_eq(k.as_bytes(), token.as_bytes()) || found
+            }) {
                 next.run(req).await
             } else {
                 let body = ApiResponse::<()>::err("Invalid API key");

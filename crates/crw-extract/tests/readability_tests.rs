@@ -68,10 +68,7 @@ fn extract_metadata_populated() {
     assert_eq!(meta.description.as_deref(), Some("A test page"));
     assert_eq!(meta.og_title.as_deref(), Some("OG Test"));
     assert_eq!(meta.og_description.as_deref(), Some("OG Desc"));
-    assert_eq!(
-        meta.og_image.as_deref(),
-        Some("https://img.com/pic.jpg")
-    );
+    assert_eq!(meta.og_image.as_deref(), Some("https://img.com/pic.jpg"));
     assert_eq!(
         meta.canonical_url.as_deref(),
         Some("https://example.com/canonical")

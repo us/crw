@@ -109,9 +109,8 @@ impl FallbackRenderer {
                 }
             }
         }
-        Err(last_error.unwrap_or_else(|| {
-            CrwError::RendererError("No JS renderer available".to_string())
-        }))
+        Err(last_error
+            .unwrap_or_else(|| CrwError::RendererError("No JS renderer available".to_string())))
     }
 
     /// Check availability of all renderers.

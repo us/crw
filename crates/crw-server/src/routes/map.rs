@@ -15,8 +15,7 @@ pub async fn map(
 ) -> Result<Json<MapResponse>, AppError> {
     let parsed_url = url::Url::parse(&req.url)
         .map_err(|e| CrwError::InvalidRequest(format!("Invalid URL: {e}")))?;
-    crw_core::url_safety::validate_safe_url(&parsed_url)
-        .map_err(CrwError::InvalidRequest)?;
+    crw_core::url_safety::validate_safe_url(&parsed_url).map_err(CrwError::InvalidRequest)?;
 
     let max_depth = req
         .max_depth
