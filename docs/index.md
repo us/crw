@@ -35,7 +35,7 @@ CRW is a **drop-in replacement** for [Firecrawl](https://firecrawl.dev) that you
 | **Binary size** | ~8 MB | Node.js runtime |
 | **Cost / 1K scrapes** | **$0** | $0.83–5.33 |
 | **Dependencies** | single binary | Node + Redis |
-| **License** | MIT | AGPL |
+| **License** | AGPL-3.0 | AGPL |
 
 Benchmark: [Firecrawl scrape-content-dataset-v1](https://huggingface.co/datasets/firecrawl/scrape-content-dataset-v1) — 1,000 real-world URLs.
 

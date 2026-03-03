@@ -25,7 +25,7 @@ search.heading_level: 3
 back_to_top: true
 back_to_top_text: "Back to top"
 
-footer_content: 'CRW is released under the <a href="https://github.com/us/crw/blob/main/LICENSE-MIT">MIT License</a>.'
+footer_content: 'CRW is released under the <a href="https://github.com/us/crw/blob/main/LICENSE">AGPL-3.0 License</a>.'
 
 last_edit_timestamp: true
 last_edit_time_format: "%b %e %Y at %I:%M %p"
