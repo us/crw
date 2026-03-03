@@ -1,20 +1,32 @@
 {
-  "benchmark": "Firecrawl scrape-content-dataset-v1 (HuggingFace)",
-  "dataset_size": 1000,
+  "server": "http://localhost:3000",
+  "total": 1000,
   "concurrency": 10,
   "timeout_s": 30,
-  "js_rendering": true,
-  "renderer": "LightPanda",
   "coverage": {
-    "success": 915,
-    "failed": 85,
-    "success_rate_pct": 91.5
+    "success": 920,
+    "failed": 80,
+    "success_rate": 92.0
   },
   "latency_ms": {
-    "avg": 833,
-    "p50": 446,
-    "p95": 2570,
-    "p99": 5505
+    "avg": 1204.6,
+    "p50": 748.2,
+    "p95": 3708.8,
+    "p99": 6856.1
   },
-  "noise_rejection_pct": 89.1
+  "quality": {
+    "truth_recall": 43.59,
+    "noise_rejection": 88.37,
+    "truth_hits": 401,
+    "noise_leaks": 107
+  },
+  "errors": {
+    "HTTP request failed: error sending reque": 41,
+    "no markdown": 30,
+    "Server disconnected": 4,
+    "HTTP request failed: error following red": 2,
+    "HTTP request failed: Response too large:": 1,
+    "HTTP request failed: error decoding resp": 1,
+    "timeout": 1
+  }
 }

@@ -27,15 +27,62 @@ pub fn extract(
         .unwrap_or_else(|_| raw_html.to_string());
 
     // Step 3: If only_main_content, try to narrow down to main element.
-    let content_html = if only_main_content {
-        readability::extract_main_content(&cleaned)
+    let (content_html, cleaned_ref) = if only_main_content {
+        let main = readability::extract_main_content(&cleaned);
+        (main, Some(cleaned))
     } else {
-        cleaned
+        (cleaned, None)
     };
 
     // Step 4: Produce requested formats.
     let md = if formats.contains(&OutputFormat::Markdown) || formats.contains(&OutputFormat::Json) {
-        Some(markdown::html_to_markdown(&content_html))
+        let md = markdown::html_to_markdown(&content_html);
+        // Trigger fallback if markdown is empty OR suspiciously short relative to HTML.
+        // html2md can silently discard content for certain HTML structures.
+        let md_too_short = md.trim().len() < 100 && raw_html.len() > 5000;
+        if md_too_short {
+            // html2md can fail on certain HTML structures (Framer, complex SPAs, etc.)
+            // Fallback chain: try progressively less aggressive extraction.
+            let fallback_md = if only_main_content {
+                // Fallback 1: cleaned HTML without main-content narrowing
+                let from_cleaned = if let Some(ref cleaned) = cleaned_ref {
+                    markdown::html_to_markdown(cleaned)
+                } else {
+                    String::new()
+                };
+                if from_cleaned.trim().is_empty() {
+                    // Fallback 2: basic clean (no only_main_content stripping)
+                    let basic_cleaned =
+                        clean::clean_html(raw_html, false, include_tags, exclude_tags)
+                            .unwrap_or_else(|_| raw_html.to_string());
+                    markdown::html_to_markdown(&basic_cleaned)
+                } else {
+                    from_cleaned
+                }
+            } else {
+                // Already not using only_main_content, try raw html directly
+                markdown::html_to_markdown(raw_html)
+            };
+
+            let fallback_too_short =
+                fallback_md.trim().len() < 100 && raw_html.len() > 5000;
+            if fallback_too_short {
+                // Last resort: extract plain text as markdown
+                let text = plaintext::html_to_plaintext(&content_html);
+                if text.trim().is_empty() {
+                    let basic_cleaned =
+                        clean::clean_html(raw_html, false, include_tags, exclude_tags)
+                            .unwrap_or_else(|_| raw_html.to_string());
+                    Some(plaintext::html_to_plaintext(&basic_cleaned))
+                } else {
+                    Some(text)
+                }
+            } else {
+                Some(fallback_md)
+            }
+        } else {
+            Some(md)
+        }
     } else {
         None
     };

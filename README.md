@@ -15,10 +15,10 @@ CRW gives you Firecrawl's API with a fraction of the resource usage. No runtime 
 
 | | CRW | Firecrawl |
 |---|---|---|
-| **Coverage (1K URLs)** | **91.5%** | 77.2% |
+| **Coverage (1K URLs)** | **92.0%** | 77.2% |
 | **Avg Latency** | **833ms** | 4,600ms |
 | **P50 Latency** | **446ms** | — |
-| **Noise Rejection** | **89.1%** | — |
+| **Noise Rejection** | **88.4%** | — |
 | **Idle RAM** | 6.6 MB | ~500 MB+ |
 | **Cold start** | 85 ms | seconds |
 | **HTTP scrape** | ~30 ms | ~200 ms+ |
@@ -314,10 +314,10 @@ Tested on [Firecrawl's scrape-content-dataset-v1](https://huggingface.co/dataset
 
 | | CRW | Firecrawl v2.5 |
 |---|---|---|
-| **Coverage** | **91.5%** | 77.2% |
+| **Coverage** | **92.0%** | 77.2% |
 | **Avg Latency** | **833ms** | 4,600ms |
 | **P50 Latency** | **446ms** | — |
-| **Noise Rejection** | **89.1%** | — |
+| **Noise Rejection** | **88.4%** | — |
 | **Cost / 1,000 scrapes** | **$0** (self-hosted) | $0.83–5.33 |
 | **Idle RAM** | **6.6 MB** | ~500 MB+ |
 
