@@ -6,7 +6,7 @@ CRW is a self-hosted web scraper and web crawler built in Rust — a fast, light
 
 **English** | [中文](README.zh-CN.md)
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE-MIT)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-2024_edition-orange.svg)](https://www.rust-lang.org/)
 
 ## Why CRW?
@@ -25,7 +25,7 @@ CRW gives you Firecrawl's API with a fraction of the resource usage. No runtime 
 | **Binary size** | ~8 MB | Node.js runtime |
 | **Cost / 1K scrapes** | **$0** (self-hosted) | $0.83–5.33 |
 | **Dependencies** | single binary | Node + Redis |
-| **License** | MIT | AGPL |
+| **License** | AGPL-3.0 | AGPL |
 
 Benchmark: [Firecrawl scrape-content-dataset-v1](https://huggingface.co/datasets/firecrawl/scrape-content-dataset-v1) — 1,000 real-world URLs with JS rendering enabled.
 
@@ -452,4 +452,4 @@ Contributions are welcome! Please open an issue or submit a pull request.
 
 ## License
 
-[MIT](LICENSE-MIT)
+[AGPL-3.0](LICENSE)

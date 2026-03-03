@@ -35,7 +35,7 @@ CRW 是 [Firecrawl](https://firecrawl.dev) 的**直接替代品**，可自行托
 | **二进制大小** | ~8 MB | Node.js 运行时 |
 | **每千次成本** | **$0** | $0.83–5.33 |
 | **依赖** | 单一二进制 | Node + Redis |
-| **许可证** | MIT | AGPL |
+| **许可证** | AGPL-3.0 | AGPL |
 
 基准测试：[Firecrawl scrape-content-dataset-v1](https://huggingface.co/datasets/firecrawl/scrape-content-dataset-v1) — 1,000 个真实 URL。
 
