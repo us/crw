@@ -268,9 +268,39 @@ async function loadPage(slug) {
     `;
   }
 
-  document.title = `${getPageTitle(slug)} — ${config.name}`;
+  const pageTitle = getPageTitle(slug);
+  document.title = `${pageTitle} — ${config.name}`;
+  updatePageSeo(slug, pageTitle);
   renderSidebar();
   window.scrollTo(0, 0);
+}
+
+// ========== Dynamic SEO ==========
+function updatePageSeo(slug, pageTitle) {
+  const setMeta = (attr, key, content) => {
+    let el = document.querySelector(`meta[${attr}="${key}"]`);
+    if (!el) {
+      el = document.createElement('meta');
+      el.setAttribute(attr, key);
+      document.head.appendChild(el);
+    }
+    el.setAttribute('content', content);
+  };
+
+  const baseUrl = window.location.origin + window.location.pathname;
+  const pageUrl = `${baseUrl}#${slug}`;
+  const fullTitle = `${pageTitle} — ${config.name}`;
+  const desc = config.description;
+
+  setMeta('name', 'description', `${pageTitle} — ${desc}`);
+  setMeta('property', 'og:title', fullTitle);
+  setMeta('property', 'og:description', desc);
+  setMeta('property', 'og:url', pageUrl);
+  setMeta('name', 'twitter:title', fullTitle);
+  setMeta('name', 'twitter:description', desc);
+
+  let canonical = document.querySelector('link[rel="canonical"]');
+  if (canonical) canonical.href = pageUrl;
 }
 
 // ========== Mobile Sidebar ==========
