@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/logo.svg" alt="CRW" height="52" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/logo-white.svg">
+    <img src="docs/logo.svg" alt="CRW" height="52" />
+  </picture>
   <p align="center">Lightweight, Firecrawl-compatible web scraper and crawler for AI</p>
   <p align="center">
     <a href="docs/docs/installation.md">Installation</a> &bull;
