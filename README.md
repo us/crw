@@ -1,5 +1,5 @@
 <p align="center">
-  <h1 align="center">CRW</h1>
+  <img src="docs/logo.svg" alt="CRW" height="52" />
   <p align="center">Lightweight, Firecrawl-compatible web scraper and crawler for AI</p>
   <p align="center">
     <a href="docs/docs/installation.md">Installation</a> &bull;

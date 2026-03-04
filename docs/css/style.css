@@ -48,7 +48,9 @@ a{color:inherit;text-decoration:none;}
 /* ========== Navbar ========== */
 .navbar{position:fixed;top:0;left:0;right:0;height:var(--nav-h);background:var(--nav-bg);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 20px;z-index:200;gap:20px;transition:background var(--t-base),border-color var(--t-base);}
 .navbar-left{display:flex;align-items:center;gap:12px;flex-shrink:0;}
-.logo{font-size:13px;font-weight:600;letter-spacing:-.01em;color:var(--ink);white-space:nowrap;}
+.logo{font-size:13px;font-weight:600;letter-spacing:-.01em;color:var(--ink);white-space:nowrap;display:flex;align-items:center;}
+.logo-img{display:block;height:24px;width:auto;}
+[data-theme="light"] .logo-img{filter:invert(1);}
 .navbar-links{display:flex;align-items:center;overflow-x:auto;scrollbar-width:none;}
 .navbar-links::-webkit-scrollbar{display:none;}
 .navbar-links a{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.10em;color:var(--ink-3);padding:0 13px;height:var(--nav-h);display:flex;align-items:center;border-bottom:2px solid transparent;transition:color var(--t-fast);white-space:nowrap;}
