@@ -3,7 +3,7 @@ import config from "../site.config.js";
 
 // ========== Render Navbar ==========
 function renderNavbar() {
-  document.querySelector(".logo").textContent = config.name;
+  document.querySelector(".logo").innerHTML = '<img src="logo-white.svg" alt="' + config.name + '" height="24" class="logo-img" />';
   document.title = config.description
     ? `${config.name} — ${config.description}`
     : config.name;
