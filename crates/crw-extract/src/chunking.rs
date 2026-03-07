@@ -15,14 +15,31 @@ fn chunk_by_sentence(text: &str, max_chars: Option<usize>) -> Vec<String> {
     let max = max_chars.unwrap_or(1000);
     let min_merge = max / 4; // Merge if a chunk is shorter than 25% of max.
 
-    // Split on sentence-ending punctuation followed by whitespace or end.
-    let re = Regex::new(r"(?<=[.!?])\s+").unwrap_or_else(|_| Regex::new(r"\s{2,}").unwrap());
-    let raw: Vec<&str> = re.split(text).collect();
+    // Split on sentence boundaries: find [.!?] followed by whitespace, keep punctuation
+    // with the preceding sentence. Rust regex doesn't support lookbehind.
+    let boundary = Regex::new(r"[.!?]+\s+").unwrap();
+    let mut raw: Vec<String> = Vec::new();
+    let mut last = 0;
+    for m in boundary.find_iter(text) {
+        // include the punctuation (everything up to the trailing whitespace)
+        let end = m.start() + m.as_str().trim_end().len();
+        let fragment = text[last..end].trim();
+        if !fragment.is_empty() {
+            raw.push(fragment.to_string());
+        }
+        last = m.end();
+    }
+    if last < text.len() {
+        let tail = text[last..].trim();
+        if !tail.is_empty() {
+            raw.push(tail.to_string());
+        }
+    }
 
     let mut chunks: Vec<String> = Vec::new();
     let mut current = String::new();
 
-    for sentence in raw {
+    for sentence in &raw {
         let sentence = sentence.trim();
         if sentence.is_empty() {
             continue;
@@ -30,7 +47,7 @@ fn chunk_by_sentence(text: &str, max_chars: Option<usize>) -> Vec<String> {
 
         if current.is_empty() {
             current.push_str(sentence);
-        } else if current.len() + sentence.len() + 1 <= max {
+        } else if current.len() + sentence.len() + 1 < max {
             current.push(' ');
             current.push_str(sentence);
         } else {

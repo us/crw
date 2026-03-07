@@ -403,10 +403,10 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<Vec<String>> 
     let mut discover_client_builder = reqwest::Client::builder()
         .user_agent(user_agent)
         .redirect(crw_core::url_safety::safe_redirect_policy());
-    if let Some(ref proxy_url) = proxy {
-        if let Ok(p) = reqwest::Proxy::all(proxy_url) {
-            discover_client_builder = discover_client_builder.proxy(p);
-        }
+    if let Some(ref proxy_url) = proxy
+        && let Ok(p) = reqwest::Proxy::all(proxy_url)
+    {
+        discover_client_builder = discover_client_builder.proxy(p);
     }
     let client = discover_client_builder
         .build()
