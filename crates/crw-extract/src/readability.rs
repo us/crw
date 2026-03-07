@@ -51,7 +51,7 @@ pub fn extract_main_content(html: &str) -> String {
                 continue;
             }
             let score = text_density(&content) * (content.len() as f64).ln();
-            if best.as_ref().map_or(true, |(_, s)| score > *s) {
+            if best.as_ref().is_none_or(|(_, s)| score > *s) {
                 best = Some((content, score));
             }
         }
