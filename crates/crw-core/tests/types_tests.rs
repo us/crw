@@ -138,6 +138,7 @@ fn scrape_data_skip_serializing_none() {
         plain_text: None,
         links: None,
         json: None,
+        chunks: None,
         metadata: PageMetadata {
             title: None,
             description: None,

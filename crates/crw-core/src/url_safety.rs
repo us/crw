@@ -1,5 +1,20 @@
 use std::net::IpAddr;
 
+/// Build a reqwest redirect policy that validates each redirect target
+/// against the SSRF safety checks. This prevents attackers from using
+/// `https://evil.com` → 302 → `http://169.254.169.254/metadata` bypasses.
+pub fn safe_redirect_policy() -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(|attempt| {
+        if attempt.previous().len() >= 10 {
+            attempt.error("too many redirects")
+        } else if let Err(e) = validate_safe_url(attempt.url()) {
+            attempt.error(format!("redirect blocked: {e}"))
+        } else {
+            attempt.follow()
+        }
+    })
+}
+
 /// Validate that a URL is safe to fetch (not targeting internal/private networks).
 ///
 /// Blocks:
@@ -136,5 +151,12 @@ mod tests {
     fn blocks_ipv6_ula() {
         assert!(validate_safe_url(&url("http://[fc00::1]")).is_err());
         assert!(validate_safe_url(&url("http://[fd00::1]")).is_err());
+    }
+
+    #[test]
+    fn safe_redirect_policy_exists() {
+        // Verify the policy is constructible (runtime redirect validation
+        // is tested via integration tests with actual HTTP redirects).
+        let _policy = super::safe_redirect_policy();
     }
 }

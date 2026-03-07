@@ -13,7 +13,8 @@ description = "HTML extraction and markdown conversion engine for the CRW web sc
 crw-core = { path = "../crw-core", version = "0.0.1" }
 lol_html = { workspace = true }
 scraper = { workspace = true }
-fast_html2md = { workspace = true }
+htmd = { workspace = true }
+regex = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 url = { workspace = true }
@@ -22,3 +23,6 @@ serde_json = { workspace = true }
 reqwest = { workspace = true }
 tokio = { workspace = true }
 jsonschema = "0.28"
+sxd-xpath = "0.4"
+sxd-document = "0.3"
+sxd_html = "0.1"

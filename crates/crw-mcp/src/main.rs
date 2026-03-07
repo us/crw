@@ -25,165 +25,14 @@
 //! CRW_API_URL=https://crw.example.com crw-mcp
 //! ```
 
-use serde::{Deserialize, Serialize};
+use crw_core::mcp::{
+    JsonRpcRequest, JsonRpcResponse, ProtocolResult, handle_protocol_method, tool_result_response,
+};
 use serde_json::{Value, json};
-use std::io::BufRead;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 const SERVER_NAME: &str = "crw-mcp";
 const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
-const PROTOCOL_VERSION: &str = "2024-11-05";
-
-// --- JSON-RPC types ---
-
-#[derive(Deserialize)]
-struct JsonRpcRequest {
-    jsonrpc: String,
-    id: Option<Value>,
-    method: String,
-    #[serde(default)]
-    params: Value,
-}
-
-#[derive(Serialize)]
-struct JsonRpcResponse {
-    jsonrpc: String,
-    id: Value,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    result: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<JsonRpcError>,
-}
-
-#[derive(Serialize)]
-struct JsonRpcError {
-    code: i64,
-    message: String,
-}
-
-impl JsonRpcResponse {
-    fn success(id: Value, result: Value) -> Self {
-        Self {
-            jsonrpc: "2.0".into(),
-            id,
-            result: Some(result),
-            error: None,
-        }
-    }
-
-    fn error(id: Value, code: i64, message: String) -> Self {
-        Self {
-            jsonrpc: "2.0".into(),
-            id,
-            result: None,
-            error: Some(JsonRpcError { code, message }),
-        }
-    }
-}
-
-// --- Tool definitions ---
-
-fn tool_definitions() -> Value {
-    json!({
-        "tools": [
-            {
-                "name": "crw_scrape",
-                "description": "Scrape a single URL and return its content as markdown, HTML, or links. Use this to extract content from any web page.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "url": {
-                            "type": "string",
-                            "description": "The URL to scrape"
-                        },
-                        "formats": {
-                            "type": "array",
-                            "items": { "type": "string", "enum": ["markdown", "html", "links"] },
-                            "description": "Output formats (default: [\"markdown\"])"
-                        },
-                        "onlyMainContent": {
-                            "type": "boolean",
-                            "description": "Extract only the main content, removing nav/footer/etc (default: true)"
-                        },
-                        "includeTags": {
-                            "type": "array",
-                            "items": { "type": "string" },
-                            "description": "CSS selectors to include (only content matching these selectors)"
-                        },
-                        "excludeTags": {
-                            "type": "array",
-                            "items": { "type": "string" },
-                            "description": "CSS selectors to exclude from output"
-                        }
-                    },
-                    "required": ["url"]
-                }
-            },
-            {
-                "name": "crw_crawl",
-                "description": "Start an async crawl of a website. Returns a job ID that can be polled with crw_check_crawl_status.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "url": {
-                            "type": "string",
-                            "description": "The starting URL to crawl"
-                        },
-                        "maxDepth": {
-                            "type": "integer",
-                            "description": "Maximum crawl depth (default: 2)"
-                        },
-                        "maxPages": {
-                            "type": "integer",
-                            "description": "Maximum number of pages to crawl (default: 10)"
-                        },
-                        "jsonSchema": {
-                            "type": "object",
-                            "description": "JSON schema for LLM-based structured data extraction on each crawled page"
-                        }
-                    },
-                    "required": ["url"]
-                }
-            },
-            {
-                "name": "crw_check_crawl_status",
-                "description": "Check the status of an async crawl job and retrieve results.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "id": {
-                            "type": "string",
-                            "description": "The crawl job ID returned by crw_crawl"
-                        }
-                    },
-                    "required": ["id"]
-                }
-            },
-            {
-                "name": "crw_map",
-                "description": "Discover URLs on a website by crawling and/or reading its sitemap.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "url": {
-                            "type": "string",
-                            "description": "The URL to map"
-                        },
-                        "maxDepth": {
-                            "type": "integer",
-                            "description": "Maximum crawl depth for discovery (default: 2)"
-                        },
-                        "useSitemap": {
-                            "type": "boolean",
-                            "description": "Whether to use the site's sitemap.xml (default: true)"
-                        }
-                    },
-                    "required": ["url"]
-                }
-            }
-        ]
-    })
-}
 
 // --- HTTP dispatch ---
 
@@ -268,7 +117,13 @@ async fn parse_response(resp: reqwest::Response) -> Result<Value, String> {
 }
 
 fn truncate(s: &str, max: usize) -> &str {
-    if s.len() <= max { s } else { &s[..max] }
+    if s.len() <= max {
+        s
+    } else {
+        // Find the last char boundary at or before `max` to avoid UTF-8 panic.
+        let end = s.floor_char_boundary(max);
+        &s[..end]
+    }
 }
 
 // --- Request handling ---
@@ -279,43 +134,15 @@ async fn handle_request(
     api_key: &Option<String>,
     req: JsonRpcRequest,
 ) -> Option<JsonRpcResponse> {
-    if req.jsonrpc != "2.0" {
-        if let Some(id) = req.id {
-            return Some(JsonRpcResponse::error(
-                id,
-                -32600,
-                "invalid jsonrpc version".into(),
-            ));
-        }
-        return None;
+    // Handle common protocol methods via shared logic.
+    match handle_protocol_method(SERVER_NAME, SERVER_VERSION, &req) {
+        ProtocolResult::Response(resp) => return Some(resp),
+        ProtocolResult::Notification => return None,
+        ProtocolResult::NotHandled => {}
     }
 
+    // Only remaining method: tools/call
     match req.method.as_str() {
-        // Notifications (no id = no response)
-        "notifications/initialized" | "notifications/cancelled" => None,
-
-        "initialize" => {
-            let id = req.id.unwrap_or(Value::Null);
-            Some(JsonRpcResponse::success(
-                id,
-                json!({
-                    "protocolVersion": PROTOCOL_VERSION,
-                    "capabilities": {
-                        "tools": {}
-                    },
-                    "serverInfo": {
-                        "name": SERVER_NAME,
-                        "version": SERVER_VERSION
-                    }
-                }),
-            ))
-        }
-
-        "tools/list" => {
-            let id = req.id.unwrap_or(Value::Null);
-            Some(JsonRpcResponse::success(id, tool_definitions()))
-        }
-
         "tools/call" => {
             let id = req.id.unwrap_or(Value::Null);
             let tool_name = req
@@ -325,39 +152,8 @@ async fn handle_request(
                 .unwrap_or("");
             let arguments = req.params.get("arguments").cloned().unwrap_or(json!({}));
 
-            match call_tool(client, base_url, api_key, tool_name, arguments).await {
-                Ok(result) => {
-                    let text = serde_json::to_string_pretty(&result).unwrap_or_default();
-                    Some(JsonRpcResponse::success(
-                        id,
-                        json!({
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": text
-                                }
-                            ]
-                        }),
-                    ))
-                }
-                Err(e) => Some(JsonRpcResponse::success(
-                    id,
-                    json!({
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": e
-                            }
-                        ],
-                        "isError": true
-                    }),
-                )),
-            }
-        }
-
-        "ping" => {
-            let id = req.id.unwrap_or(Value::Null);
-            Some(JsonRpcResponse::success(id, json!({})))
+            let result = call_tool(client, base_url, api_key, tool_name, arguments).await;
+            Some(tool_result_response(id, result))
         }
 
         _ => {
@@ -393,29 +189,38 @@ async fn main() {
     tracing::info!("Starting {SERVER_NAME} v{SERVER_VERSION}");
     tracing::info!("API URL: {base_url}");
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .redirect(crw_core::url_safety::safe_redirect_policy())
+        .timeout(std::time::Duration::from_secs(120))
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .build()
+        .expect("reqwest client build failed");
     let mut stdout = tokio::io::stdout();
 
-    let stdin = std::io::stdin();
-    let reader = stdin.lock();
+    // Use tokio async stdin to avoid blocking the async runtime.
+    let stdin = tokio::io::stdin();
+    let mut reader = BufReader::new(stdin);
+    let mut line = String::new();
 
-    for line in reader.lines() {
-        let line = match line {
-            Ok(l) => l,
+    loop {
+        line.clear();
+        match reader.read_line(&mut line).await {
+            Ok(0) => break, // EOF
+            Ok(_) => {}
             Err(e) => {
                 tracing::error!("stdin read error: {e}");
                 break;
             }
-        };
+        }
 
-        let line = line.trim().to_string();
-        if line.is_empty() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
             continue;
         }
 
-        tracing::debug!("← {line}");
+        tracing::debug!("← {trimmed}");
 
-        let req: JsonRpcRequest = match serde_json::from_str(&line) {
+        let req: JsonRpcRequest = match serde_json::from_str(trimmed) {
             Ok(r) => r,
             Err(e) => {
                 let err = JsonRpcResponse::error(Value::Null, -32700, format!("parse error: {e}"));

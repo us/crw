@@ -14,6 +14,32 @@ pub enum OutputFormat {
     Json,
 }
 
+/// Strategy for chunking text content.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum ChunkStrategy {
+    /// Split on sentence boundaries (.!?). Merges short chunks up to max_chars.
+    #[serde(rename = "sentence")]
+    Sentence {
+        #[serde(default, alias = "maxChars")]
+        max_chars: Option<usize>,
+    },
+    /// Split on a regex pattern.
+    #[serde(rename = "regex")]
+    Regex { pattern: String },
+    /// Split on markdown headings (h1-h6).
+    #[serde(rename = "topic")]
+    Topic,
+}
+
+/// Filtering mode for ranked chunk retrieval.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FilterMode {
+    Bm25,
+    Cosine,
+}
+
 /// POST /v1/scrape request body.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -37,6 +63,30 @@ pub struct ScrapeRequest {
     pub json_schema: Option<serde_json::Value>,
     #[serde(default)]
     pub headers: HashMap<String, String>,
+    /// CSS selector to narrow content before extraction.
+    #[serde(default, alias = "css_selector")]
+    pub css_selector: Option<String>,
+    /// XPath expression to narrow content before extraction.
+    #[serde(default)]
+    pub xpath: Option<String>,
+    /// Strategy for chunking the extracted markdown.
+    #[serde(default, alias = "chunk_strategy")]
+    pub chunk_strategy: Option<ChunkStrategy>,
+    /// Query string for BM25/cosine chunk filtering.
+    #[serde(default)]
+    pub query: Option<String>,
+    /// Filtering algorithm to rank chunks against query.
+    #[serde(default, alias = "filter_mode")]
+    pub filter_mode: Option<FilterMode>,
+    /// Number of top chunks to return (default: 5).
+    #[serde(default)]
+    pub top_k: Option<usize>,
+    /// Per-request HTTP proxy URL (overrides global config).
+    #[serde(default)]
+    pub proxy: Option<String>,
+    /// Override stealth mode for this request (None = use global config).
+    #[serde(default)]
+    pub stealth: Option<bool>,
 }
 
 fn default_formats() -> Vec<OutputFormat> {
@@ -87,6 +137,8 @@ pub struct ScrapeData {
     pub links: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub json: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chunks: Option<Vec<String>>,
     pub metadata: PageMetadata,
 }
 

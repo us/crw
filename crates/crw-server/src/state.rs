@@ -1,5 +1,6 @@
 use crw_core::config::AppConfig;
-use crw_core::types::{CrawlState, CrawlStatus};
+use crw_core::types::{CrawlRequest, CrawlState, CrawlStatus};
+use crw_crawl::crawl::{CrawlOptions, run_crawl};
 use crw_renderer::FallbackRenderer;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -15,6 +16,8 @@ pub struct CrawlJob {
 
 /// Maximum number of concurrent crawl jobs.
 const MAX_CONCURRENT_CRAWLS: usize = 10;
+/// Interval between expired crawl job cleanup runs.
+const JOB_CLEANUP_INTERVAL: Duration = Duration::from_secs(60);
 
 /// Shared application state.
 #[derive(Clone)]
@@ -28,7 +31,12 @@ pub struct AppState {
 impl AppState {
     pub fn new(config: AppConfig) -> Self {
         let proxy = config.crawler.proxy.as_deref();
-        let renderer = FallbackRenderer::new(&config.renderer, &config.crawler.user_agent, proxy);
+        let renderer = FallbackRenderer::new(
+            &config.renderer,
+            &config.crawler.user_agent,
+            proxy,
+            &config.crawler.stealth,
+        );
 
         let state = Self {
             config: Arc::new(config),
@@ -42,7 +50,7 @@ impl AppState {
         tokio::spawn(async move {
             let ttl = Duration::from_secs(cleanup_state.config.crawler.job_ttl_secs);
             loop {
-                tokio::time::sleep(Duration::from_secs(60)).await;
+                tokio::time::sleep(JOB_CLEANUP_INTERVAL).await;
                 let mut jobs = cleanup_state.crawl_jobs.write().await;
                 let before = jobs.len();
                 jobs.retain(|_id, job| {
@@ -65,5 +73,75 @@ impl AppState {
         });
 
         state
+    }
+
+    /// Start a new crawl job and return its UUID.
+    /// Spawns a background task that acquires the crawl semaphore before running.
+    pub async fn start_crawl_job(&self, req: CrawlRequest) -> Uuid {
+        let id = Uuid::new_v4();
+        let initial = CrawlState {
+            id,
+            status: CrawlStatus::InProgress,
+            total: 0,
+            completed: 0,
+            data: vec![],
+            error: None,
+        };
+
+        let (tx, rx) = watch::channel(initial);
+
+        {
+            let mut jobs = self.crawl_jobs.write().await;
+            jobs.insert(
+                id,
+                CrawlJob {
+                    rx,
+                    created_at: Instant::now(),
+                },
+            );
+        }
+
+        let renderer = self.renderer.clone();
+        let max_concurrency = self.config.crawler.max_concurrency;
+        let respect_robots = self.config.crawler.respect_robots_txt;
+        let rps = self.config.crawler.requests_per_second;
+        let user_agent = self.config.crawler.user_agent.clone();
+        let crawl_semaphore = self.crawl_semaphore.clone();
+        let llm_config = self.config.extraction.llm.clone();
+        let proxy = self.config.crawler.proxy.clone();
+        let jitter_factor = self.config.crawler.stealth.jitter_factor;
+
+        tokio::spawn(async move {
+            let _permit = match crawl_semaphore.acquire().await {
+                Ok(p) => p,
+                Err(_) => {
+                    let _ = tx.send(CrawlState {
+                        id,
+                        status: CrawlStatus::Failed,
+                        total: 0,
+                        completed: 0,
+                        data: vec![],
+                        error: Some("Server is overloaded, try again later".into()),
+                    });
+                    return;
+                }
+            };
+            run_crawl(CrawlOptions {
+                id,
+                req,
+                renderer,
+                max_concurrency,
+                respect_robots,
+                requests_per_second: rps,
+                user_agent: &user_agent,
+                state_tx: tx,
+                llm_config: llm_config.as_ref(),
+                proxy,
+                jitter_factor,
+            })
+            .await;
+        });
+
+        id
     }
 }

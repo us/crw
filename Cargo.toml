@@ -38,10 +38,17 @@ toml = "0.8"
 # HTML processing
 lol_html = "2"
 scraper = "0.25"
-fast_html2md = "0.0.58"
+htmd = "0.5"
+
+# Text processing
+regex = "1"
+
+# Randomness
+rand = "0.8"
 
 # Async utilities
 futures = "0.3"
+dashmap = "6"
 
 # Config
 config = "0.15"
@@ -59,6 +66,8 @@ clap = { version = "4", features = ["derive"] }
 # Misc
 uuid = { version = "1", features = ["v4", "serde"] }
 url = { version = "2", features = ["serde"] }
+sha2 = "0.10"
+hex = "0.4"
 
 # Test dependencies
 tokio-test = "0.4"

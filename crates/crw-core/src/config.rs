@@ -88,6 +88,47 @@ pub struct CdpEndpoint {
     pub ws_url: String,
 }
 
+/// Stealth mode configuration for evading bot detection.
+#[derive(Debug, Clone, Deserialize)]
+pub struct StealthConfig {
+    /// Enable stealth mode globally.
+    #[serde(default)]
+    pub enabled: bool,
+    /// Custom user-agent pool. Empty = use built-in pool.
+    #[serde(default)]
+    pub user_agents: Vec<String>,
+    /// Jitter factor for rate limiting (0.0–1.0, default 0.2 = ±20%).
+    #[serde(default = "default_jitter")]
+    pub jitter_factor: f64,
+    /// Inject realistic browser headers (Accept, Sec-Fetch-*, etc.).
+    #[serde(default = "default_true")]
+    pub inject_headers: bool,
+}
+
+impl Default for StealthConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            user_agents: vec![],
+            jitter_factor: default_jitter(),
+            inject_headers: true,
+        }
+    }
+}
+
+fn default_jitter() -> f64 {
+    0.2
+}
+
+/// Built-in realistic user-agent pool used when stealth is enabled.
+pub const BUILTIN_UA_POOL: &[&str] = &[
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_2) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Safari/605.1.15",
+];
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct CrawlerConfig {
     #[serde(default = "default_concurrency")]
@@ -108,6 +149,8 @@ pub struct CrawlerConfig {
     /// TTL in seconds for completed crawl jobs before cleanup (default: 3600)
     #[serde(default = "default_job_ttl")]
     pub job_ttl_secs: u64,
+    #[serde(default)]
+    pub stealth: StealthConfig,
 }
 
 impl Default for CrawlerConfig {
@@ -121,6 +164,7 @@ impl Default for CrawlerConfig {
             default_max_pages: default_max_pages(),
             proxy: None,
             job_ttl_secs: default_job_ttl(),
+            stealth: StealthConfig::default(),
         }
     }
 }

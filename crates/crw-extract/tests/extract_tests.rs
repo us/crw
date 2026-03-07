@@ -1,19 +1,26 @@
 use crw_core::types::OutputFormat;
+use crw_extract::ExtractOptions;
 
 #[test]
 fn extract_markdown_format() {
     let html = "<html><head><title>Test</title></head><body><article><h1>Hello</h1><p>World</p></article></body></html>";
-    let data = crw_extract::extract(
-        html,
-        "https://example.com",
-        200,
-        None,
-        100,
-        &[OutputFormat::Markdown],
-        true,
-        &[],
-        &[],
-    );
+    let data = crw_extract::extract(ExtractOptions {
+        raw_html: html,
+        source_url: "https://example.com",
+        status_code: 200,
+        rendered_with: None,
+        elapsed_ms: 100,
+        formats: &[OutputFormat::Markdown],
+        only_main_content: true,
+        include_tags: &[],
+        exclude_tags: &[],
+        css_selector: None,
+        xpath: None,
+        chunk_strategy: None,
+        query: None,
+        filter_mode: None,
+        top_k: None,
+    });
 
     assert!(data.markdown.is_some());
     assert!(data.html.is_none());
@@ -36,17 +43,23 @@ fn extract_all_formats() {
         OutputFormat::Links,
     ];
 
-    let data = crw_extract::extract(
-        html,
-        "https://example.com",
-        200,
-        Some("http".into()),
-        50,
-        &formats,
-        false,
-        &[],
-        &[],
-    );
+    let data = crw_extract::extract(ExtractOptions {
+        raw_html: html,
+        source_url: "https://example.com",
+        status_code: 200,
+        rendered_with: Some("http".into()),
+        elapsed_ms: 50,
+        formats: &formats,
+        only_main_content: false,
+        include_tags: &[],
+        exclude_tags: &[],
+        css_selector: None,
+        xpath: None,
+        chunk_strategy: None,
+        query: None,
+        filter_mode: None,
+        top_k: None,
+    });
 
     assert!(data.markdown.is_some(), "markdown should be present");
     assert!(data.html.is_some(), "html should be present");
@@ -67,17 +80,23 @@ fn extract_metadata_populated() {
         <meta name="description" content="A description">
     </head><body><p>Content</p></body></html>"#;
 
-    let data = crw_extract::extract(
-        html,
-        "https://example.com",
-        200,
-        None,
-        10,
-        &[OutputFormat::Markdown],
-        false,
-        &[],
-        &[],
-    );
+    let data = crw_extract::extract(ExtractOptions {
+        raw_html: html,
+        source_url: "https://example.com",
+        status_code: 200,
+        rendered_with: None,
+        elapsed_ms: 10,
+        formats: &[OutputFormat::Markdown],
+        only_main_content: false,
+        include_tags: &[],
+        exclude_tags: &[],
+        css_selector: None,
+        xpath: None,
+        chunk_strategy: None,
+        query: None,
+        filter_mode: None,
+        top_k: None,
+    });
 
     assert_eq!(data.metadata.title.as_deref(), Some("My Page"));
     assert_eq!(data.metadata.description.as_deref(), Some("A description"));
@@ -86,17 +105,23 @@ fn extract_metadata_populated() {
 
 #[test]
 fn extract_empty_html() {
-    let data = crw_extract::extract(
-        "",
-        "https://example.com",
-        200,
-        None,
-        0,
-        &[OutputFormat::Markdown, OutputFormat::PlainText],
-        false,
-        &[],
-        &[],
-    );
+    let data = crw_extract::extract(ExtractOptions {
+        raw_html: "",
+        source_url: "https://example.com",
+        status_code: 200,
+        rendered_with: None,
+        elapsed_ms: 0,
+        formats: &[OutputFormat::Markdown, OutputFormat::PlainText],
+        only_main_content: false,
+        include_tags: &[],
+        exclude_tags: &[],
+        css_selector: None,
+        xpath: None,
+        chunk_strategy: None,
+        query: None,
+        filter_mode: None,
+        top_k: None,
+    });
 
     // Should not crash
     assert!(data.markdown.is_some());
@@ -107,17 +132,23 @@ fn extract_empty_html() {
 fn extract_with_include_exclude_tags() {
     let html =
         r#"<html><body><div class="ad">Ad</div><article><p>Content</p></article></body></html>"#;
-    let data = crw_extract::extract(
-        html,
-        "https://example.com",
-        200,
-        None,
-        0,
-        &[OutputFormat::Markdown],
-        false,
-        &["article".into()],
-        &[],
-    );
+    let data = crw_extract::extract(ExtractOptions {
+        raw_html: html,
+        source_url: "https://example.com",
+        status_code: 200,
+        rendered_with: None,
+        elapsed_ms: 0,
+        formats: &[OutputFormat::Markdown],
+        only_main_content: false,
+        include_tags: &["article".into()],
+        exclude_tags: &[],
+        css_selector: None,
+        xpath: None,
+        chunk_strategy: None,
+        query: None,
+        filter_mode: None,
+        top_k: None,
+    });
 
     let md = data.markdown.unwrap();
     assert!(md.contains("Content"), "Should include article content");
