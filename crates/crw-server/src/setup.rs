@@ -1,5 +1,6 @@
 //! Interactive setup command that downloads LightPanda and creates a local config.
 
+use sha2::{Digest, Sha256};
 use std::env::consts::{ARCH, OS};
 use std::path::PathBuf;
 
@@ -35,6 +36,26 @@ pub async fn run_setup() {
             std::process::exit(1);
         }
     };
+
+    // Verify binary integrity via SHA256 checksum.
+    let actual_hash = sha256_hex(&bytes);
+    let checksum_url = format!("{LIGHTPANDA_BASE_URL}/{binary_name}.sha256");
+    match download_checksum(&checksum_url).await {
+        Ok(expected_hash) => {
+            if actual_hash != expected_hash {
+                eprintln!("  ✗ SHA256 checksum mismatch!");
+                eprintln!("    Expected: {expected_hash}");
+                eprintln!("    Actual:   {actual_hash}");
+                eprintln!("    The downloaded binary may be corrupted or tampered with.");
+                std::process::exit(1);
+            }
+            println!("  ✓ SHA256 checksum verified: {actual_hash}");
+        }
+        Err(_) => {
+            // Checksum file not available — log the hash for manual verification.
+            println!("  ⚠ No checksum file available, SHA256: {actual_hash}");
+        }
+    }
 
     if let Err(e) = std::fs::create_dir_all(&install_dir) {
         eprintln!("  ✗ Failed to create {}: {e}", install_dir.display());
@@ -85,12 +106,52 @@ ws_url = "ws://127.0.0.1:9222/"
 
 async fn download_binary(url: &str) -> Result<Vec<u8>, reqwest::Error> {
     let client = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::limited(10))
+        .redirect(crw_core::url_safety::safe_redirect_policy())
         .build()?;
 
     let resp = client.get(url).send().await?.error_for_status()?;
     let bytes = resp.bytes().await?;
     Ok(bytes.to_vec())
+}
+
+/// Download and parse a .sha256 checksum file (format: "<hash>  <filename>" or just "<hash>").
+async fn download_checksum(url: &str) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .redirect(crw_core::url_safety::safe_redirect_policy())
+        .build()
+        .map_err(|e| format!("client build error: {e}"))?;
+
+    let resp = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("fetch error: {e}"))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status()));
+    }
+
+    let text = resp.text().await.map_err(|e| format!("read error: {e}"))?;
+
+    // Parse checksum file: first token is the hex hash.
+    let hash = text
+        .split_whitespace()
+        .next()
+        .ok_or_else(|| "empty checksum file".to_string())?
+        .to_lowercase();
+
+    // Sanity check: should be 64 hex chars (SHA256).
+    if hash.len() != 64 || !hash.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(format!("invalid checksum format: {hash}"));
+    }
+
+    Ok(hash)
+}
+
+fn sha256_hex(data: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    hex::encode(hasher.finalize())
 }
 
 fn home_local_bin() -> PathBuf {

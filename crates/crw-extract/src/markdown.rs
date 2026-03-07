@@ -1,6 +1,6 @@
-/// Convert HTML to Markdown using fast_html2md (library name: html2md).
+/// Convert HTML to Markdown using htmd (turndown.js-inspired converter).
 pub fn html_to_markdown(html: &str) -> String {
-    html2md::rewrite_html(html, false)
+    htmd::convert(html).unwrap_or_default()
 }
 
 #[cfg(test)]

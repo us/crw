@@ -8,19 +8,32 @@ use crate::traits::PageFetcher;
 
 /// Maximum response body size (10 MB) to prevent memory exhaustion.
 const MAX_RESPONSE_BYTES: usize = 10 * 1024 * 1024;
+/// TCP connect timeout for HTTP requests.
+const HTTP_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+/// Overall request timeout for HTTP requests.
+const HTTP_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Stealth headers injected when stealth mode is enabled.
+/// These mimic a real browser's default request headers.
+const STEALTH_ACCEPT: &str =
+    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8";
+/// Chrome 131 client hint — kept in sync with the UA strings in BUILTIN_UA_POOL.
+const STEALTH_SEC_CH_UA: &str =
+    r#""Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24""#;
 
 /// Simple HTTP fetcher using reqwest. No JS rendering.
 pub struct HttpFetcher {
     client: reqwest::Client,
+    inject_stealth_headers: bool,
 }
 
 impl HttpFetcher {
-    pub fn new(user_agent: &str, proxy: Option<&str>) -> Self {
+    pub fn new(user_agent: &str, proxy: Option<&str>, inject_stealth_headers: bool) -> Self {
         let mut builder = reqwest::Client::builder()
             .user_agent(user_agent)
-            .connect_timeout(std::time::Duration::from_secs(5))
-            .timeout(std::time::Duration::from_secs(30))
-            .redirect(reqwest::redirect::Policy::limited(10));
+            .connect_timeout(HTTP_CONNECT_TIMEOUT)
+            .timeout(HTTP_REQUEST_TIMEOUT)
+            .redirect(crw_core::url_safety::safe_redirect_policy());
 
         if let Some(proxy_url) = proxy {
             match reqwest::Proxy::all(proxy_url) {
@@ -36,7 +49,10 @@ impl HttpFetcher {
                 reqwest::Client::new()
             }
         };
-        Self { client }
+        Self {
+            client,
+            inject_stealth_headers,
+        }
     }
 }
 
@@ -51,6 +67,24 @@ impl PageFetcher for HttpFetcher {
         let start = Instant::now();
 
         let mut req = self.client.get(url);
+
+        // Inject stealth headers before user-supplied headers so users can override.
+        if self.inject_stealth_headers {
+            req = req
+                .header("Accept", STEALTH_ACCEPT)
+                .header("Accept-Language", "en-US,en;q=0.9")
+                .header("Accept-Encoding", "gzip, deflate, br")
+                .header("Sec-Ch-Ua", STEALTH_SEC_CH_UA)
+                .header("Sec-Ch-Ua-Mobile", "?0")
+                .header("Sec-Ch-Ua-Platform", "\"Windows\"")
+                .header("Sec-Fetch-Dest", "document")
+                .header("Sec-Fetch-Mode", "navigate")
+                .header("Sec-Fetch-Site", "none")
+                .header("Sec-Fetch-User", "?1")
+                .header("Upgrade-Insecure-Requests", "1")
+                .header("Priority", "u=0, i");
+        }
+
         for (k, v) in headers {
             req = req.header(k.as_str(), v.as_str());
         }

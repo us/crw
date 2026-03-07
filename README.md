@@ -29,6 +29,19 @@ crw-server
 
 ## What's New
 
+### Extraction & RAG Features
+
+- **CSS selector & XPath** — target specific DOM elements before Markdown conversion (`cssSelector`, `xpath`)
+- **Chunking strategies** — split content into topic, sentence, or regex-delimited chunks for vector databases (`chunkStrategy`)
+- **BM25 & cosine filtering** — rank chunks by relevance to a query and return top-K results (`filterMode`, `topK`)
+- **Better Markdown** — switched to `htmd` (Turndown.js port): tables, code block languages, nested lists all render correctly
+
+### Stealth & Privacy
+
+- **Stealth mode** — rotate User-Agent from a built-in Chrome/Firefox/Safari pool and inject 12 browser-like headers (`stealth: true`)
+- **Per-request proxy** — override the global proxy on a per-request basis (`proxy: "http://..."`)
+- **Rate limit jitter** — randomized delay between requests to avoid uniform traffic fingerprinting
+
 ### `crw-server setup` Command
 
 - **One-command JS rendering setup** — `crw-server setup` downloads LightPanda and creates `config.local.toml` automatically
@@ -76,6 +89,10 @@ Benchmark: [Firecrawl scrape-content-dataset-v1](https://huggingface.co/datasets
 - **🔧 MCP server** — built-in stdio + HTTP transport for Claude Code and Claude Desktop
 - **🔒 Security** — SSRF protection (private IPs, cloud metadata, IPv6), constant-time auth, dangerous URI filtering
 - **🐳 Docker ready** — multi-stage build with LightPanda sidecar
+- **🎯 CSS selector & XPath** — extract specific DOM elements before Markdown conversion
+- **✂️ Chunking & filtering** — split content into topic/sentence/regex chunks; rank by BM25 or cosine similarity
+- **🕵️ Stealth mode** — browser-like UA rotation and header injection to reduce bot detection
+- **🌐 Per-request proxy** — override the global proxy per scrape request
 
 ## Quick Start
 

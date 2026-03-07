@@ -2,7 +2,7 @@ use axum::Json;
 use axum::extract::State;
 use crw_core::error::CrwError;
 use crw_core::types::{MapRequest, MapResponse};
-use crw_crawl::crawl::discover_urls;
+use crw_crawl::crawl::{DiscoverOptions, discover_urls};
 
 use crate::error::AppError;
 use crate::state::AppState;
@@ -21,15 +21,16 @@ pub async fn map(
         .max_depth
         .unwrap_or(state.config.crawler.default_max_depth);
 
-    let urls = discover_urls(
-        &req.url,
+    let urls = discover_urls(DiscoverOptions {
+        base_url: &req.url,
         max_depth,
-        req.use_sitemap,
-        &state.renderer,
-        state.config.crawler.max_concurrency,
-        state.config.crawler.requests_per_second,
-        &state.config.crawler.user_agent,
-    )
+        use_sitemap: req.use_sitemap,
+        renderer: &state.renderer,
+        max_concurrency: state.config.crawler.max_concurrency,
+        requests_per_second: state.config.crawler.requests_per_second,
+        user_agent: &state.config.crawler.user_agent,
+        proxy: state.config.crawler.proxy.clone(),
+    })
     .await?;
 
     Ok(Json(MapResponse {

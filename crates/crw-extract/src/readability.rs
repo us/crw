@@ -1,29 +1,71 @@
 use scraper::{Html, Selector};
 
-/// Extract the "main content" element from HTML using simple heuristics.
-/// Returns the inner HTML of the best candidate, or the full body if no candidate found.
+/// Extract the "main content" element from HTML.
+///
+/// Uses text-density scoring across candidate selectors to pick the richest element.
+/// Falls back to the `<body>` if no scored candidate is found.
 pub fn extract_main_content(html: &str) -> String {
     let document = Html::parse_document(html);
 
-    let selectors = [
+    // Priority candidates in order: well-known semantic selectors first.
+    let priority_selectors = [
         "article",
         "main",
         "[role=\"main\"]",
-        ".post-content",
-        ".article-body",
-        ".entry-content",
-        "#content",
-        ".content",
     ];
 
-    for sel_str in &selectors {
+    // Try priority selectors first (no scoring needed — these are strong signals).
+    for sel_str in &priority_selectors {
         if let Ok(sel) = Selector::parse(sel_str)
             && let Some(el) = document.select(&sel).next()
         {
-            return el.html();
+            let content = el.html();
+            // Only accept if the element has substantial text.
+            if text_density(&content) > 0.1 && content.len() > 200 {
+                return content;
+            }
         }
     }
 
+    // Score all candidate selectors by text density and pick the best.
+    let scored_selectors = [
+        ".post-content",
+        ".article-body",
+        ".entry-content",
+        ".article-content",
+        ".post-body",
+        ".story-body",
+        ".content-body",
+        "#main-content",
+        "#article",
+        "#content",
+        ".content",
+        ".main",
+        "[itemprop=\"articleBody\"]",
+        "[itemprop=\"text\"]",
+    ];
+
+    let mut best: Option<(String, f64)> = None;
+    for sel_str in &scored_selectors {
+        if let Ok(sel) = Selector::parse(sel_str)
+            && let Some(el) = document.select(&sel).next()
+        {
+            let content = el.html();
+            if content.len() < 100 {
+                continue;
+            }
+            let score = text_density(&content) * (content.len() as f64).ln();
+            if best.as_ref().map_or(true, |(_, s)| score > *s) {
+                best = Some((content, score));
+            }
+        }
+    }
+
+    if let Some((content, _)) = best {
+        return content;
+    }
+
+    // Last resort: return full body.
     if let Ok(sel) = Selector::parse("body")
         && let Some(body) = document.select(&sel).next()
     {
@@ -31,6 +73,17 @@ pub fn extract_main_content(html: &str) -> String {
     }
 
     html.to_string()
+}
+
+/// Compute text-to-html ratio as a simple content density signal.
+/// Returns a value in [0, 1]: higher = more text relative to markup.
+fn text_density(html: &str) -> f64 {
+    let doc = Html::parse_fragment(html);
+    let text_len: usize = doc.root_element().text().map(|t| t.len()).sum();
+    if html.is_empty() {
+        return 0.0;
+    }
+    text_len as f64 / html.len() as f64
 }
 
 /// All extracted metadata from a page.

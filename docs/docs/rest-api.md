@@ -48,8 +48,16 @@ POST /v1/scrape
 | `excludeTags` | string[] | no | `[]` | CSS selectors — remove matching elements |
 | `headers` | object | no | `{}` | Custom HTTP request headers |
 | `jsonSchema` | object | no | — | JSON Schema for LLM structured extraction |
+| `cssSelector` | string | no | — | Extract only elements matching this CSS selector |
+| `xpath` | string | no | — | Extract only elements matching this XPath expression |
+| `chunkStrategy` | object | no | — | Split content into chunks (see [Chunking](#chunking)) |
+| `query` | string | no | — | Query for chunk ranking (used with `filterMode`) |
+| `filterMode` | string | no | — | Chunk ranking method: `"bm25"` or `"cosine"` |
+| `topK` | number | no | `5` | Number of top-ranked chunks to return |
+| `proxy` | string | no | — | Per-request proxy URL (e.g. `"http://user:pass@host:port"`) |
+| `stealth` | boolean | no | — | Override global stealth mode for this request |
 
-Snake case aliases are also accepted: `only_main_content`, `render_js`, `wait_for`, `include_tags`, `exclude_tags`, `json_schema`.
+Snake case aliases are also accepted: `only_main_content`, `render_js`, `wait_for`, `include_tags`, `exclude_tags`, `json_schema`, `css_selector`, `chunk_strategy`, `filter_mode`, `top_k`.
 
 **Output formats:**
 
@@ -74,6 +82,7 @@ Snake case aliases are also accepted: `only_main_content`, `render_js`, `wait_fo
     "plainText": "string or null",
     "links": ["string"],
     "json": {},
+    "chunks": ["string or null"],
     "metadata": {
       "title": "string",
       "description": "string",
@@ -91,7 +100,7 @@ Snake case aliases are also accepted: `only_main_content`, `render_js`, `wait_fo
 }
 ```
 
-Only requested formats are populated. Others are `null`.
+Only requested formats are populated. Others are `null`. `chunks` is populated when `chunkStrategy` is provided.
 
 ### Examples
 
@@ -125,6 +134,123 @@ curl -X POST http://localhost:3000/v1/scrape \
     "waitFor": 2000
   }'
 ```
+
+## Chunking
+
+Split scraped content into chunks for RAG pipelines. Set `chunkStrategy` to enable, optionally combined with `query` + `filterMode` to rank the results.
+
+### Chunk strategies
+
+**Topic** — split on Markdown headings (`##`, `###`):
+
+```json
+{
+  "url": "https://en.wikipedia.org/wiki/Rust_(programming_language)",
+  "formats": ["markdown"],
+  "chunkStrategy": { "type": "topic" }
+}
+```
+
+**Sentence** — split on sentence boundaries, merge until `maxChars`:
+
+```json
+{
+  "chunkStrategy": { "type": "sentence", "maxChars": 500 }
+}
+```
+
+**Regex** — split on a custom pattern:
+
+```json
+{
+  "chunkStrategy": { "type": "regex", "pattern": "\\n\\n" }
+}
+```
+
+### BM25 / Cosine filtering
+
+Rank chunks by relevance to a query and return the top K:
+
+```json
+{
+  "url": "https://en.wikipedia.org/wiki/Rust_(programming_language)",
+  "formats": ["markdown"],
+  "chunkStrategy": { "type": "topic" },
+  "query": "memory safety ownership borrow checker",
+  "filterMode": "bm25",
+  "topK": 5
+}
+```
+
+| `filterMode` | Algorithm |
+|---|---|
+| `bm25` | BM25 keyword relevance (fast, no dependencies) |
+| `cosine` | TF-IDF cosine similarity (semantic overlap) |
+
+Chunks are returned in `data.chunks` (array of strings), ordered by relevance score.
+
+## CSS Selector & XPath
+
+Extract a specific part of the page before converting to Markdown.
+
+**CSS selector:**
+
+```json
+{
+  "url": "https://news.ycombinator.com",
+  "formats": ["markdown"],
+  "cssSelector": "td.title",
+  "onlyMainContent": false
+}
+```
+
+**XPath:**
+
+```json
+{
+  "url": "https://news.ycombinator.com",
+  "formats": ["markdown"],
+  "xpath": "//span[@class='titleline']/a",
+  "onlyMainContent": false
+}
+```
+
+When a selector is provided, only the matching HTML is converted to Markdown. `onlyMainContent` and readability filtering are skipped.
+
+## Stealth Mode & Proxy
+
+### Stealth mode
+
+Inject browser-like headers to reduce bot-detection fingerprinting. Enable per-request:
+
+```json
+{
+  "url": "https://example.com",
+  "stealth": true
+}
+```
+
+When `stealth` is `true`, CRW:
+- Rotates User-Agent from a built-in pool of realistic Chrome, Firefox, and Safari strings
+- Injects `Accept`, `Accept-Language`, `Accept-Encoding`, `Sec-Ch-Ua`, `Sec-Ch-Ua-Mobile`, `Sec-Ch-Ua-Platform`, `Sec-Fetch-*`, `Priority`, and `Upgrade-Insecure-Requests` headers
+
+Enable globally in config:
+
+```toml
+[crawler]
+stealth = true
+```
+
+### Per-request proxy
+
+```json
+{
+  "url": "https://example.com",
+  "proxy": "http://user:pass@proxy-host:8080"
+}
+```
+
+The global proxy (`crawler.proxy` in config) is used when no per-request proxy is set.
 
 ## Crawl
 

@@ -40,7 +40,8 @@ user_agent = "CRW/0.0.1"
 default_max_depth = 2
 default_max_pages = 100
 job_ttl_secs = 3600
-# proxy = "http://proxy:8080"
+# proxy = "http://proxy:8080"   # global proxy for all requests
+# stealth = false               # inject browser-like headers + rotate UA globally
 
 [extraction]
 default_format = "markdown"
@@ -57,6 +58,21 @@ max_tokens = 4096
 # api_keys = ["fc-key-1234"]
 ```
 
+## Stealth mode
+
+Enable globally to make CRW look like a real browser on every HTTP request:
+
+```toml
+[crawler]
+stealth = true
+```
+
+When enabled:
+- User-Agent is rotated from a built-in pool of Chrome 131, Firefox 133, and Safari 18 strings
+- 12 browser-like headers are injected: `Accept`, `Accept-Language`, `Accept-Encoding`, `Sec-Ch-Ua`, `Sec-Ch-Ua-Mobile`, `Sec-Ch-Ua-Platform`, `Sec-Fetch-Dest`, `Sec-Fetch-Mode`, `Sec-Fetch-Site`, `Sec-Fetch-User`, `Priority`, `Upgrade-Insecure-Requests`
+
+Override per-request by setting `stealth: true/false` in the scrape payload.
+
 ## Environment variables
 
 Use the `CRW_` prefix with `__` as a nesting separator:
@@ -68,6 +84,8 @@ Use the `CRW_` prefix with `__` as a nesting separator:
 | `renderer.mode` | `CRW_RENDERER__MODE` |
 | `crawler.max_concurrency` | `CRW_CRAWLER__MAX_CONCURRENCY` |
 | `crawler.requests_per_second` | `CRW_CRAWLER__REQUESTS_PER_SECOND` |
+| `crawler.stealth` | `CRW_CRAWLER__STEALTH` |
+| `crawler.proxy` | `CRW_CRAWLER__PROXY` |
 | `extraction.llm.api_key` | `CRW_EXTRACTION__LLM__API_KEY` |
 | `extraction.llm.provider` | `CRW_EXTRACTION__LLM__PROVIDER` |
 

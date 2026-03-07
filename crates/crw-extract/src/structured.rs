@@ -3,12 +3,15 @@ use crw_core::error::{CrwError, CrwResult};
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 
+/// Request timeout for LLM API calls.
+const LLM_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
 /// Shared HTTP client for LLM API calls (avoids per-request connection overhead).
 fn shared_client() -> &'static reqwest::Client {
     static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
     CLIENT.get_or_init(|| {
         reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(60))
+            .timeout(LLM_REQUEST_TIMEOUT)
             .build()
             .unwrap_or_default()
     })
@@ -336,7 +339,11 @@ fn parse_json_response(text: &str) -> CrwResult<serde_json::Value> {
 
 /// Truncate text for error messages to avoid leaking large responses.
 fn truncate_for_error(text: &str) -> &str {
-    if text.len() > 200 { &text[..200] } else { text }
+    if text.len() > 200 {
+        &text[..text.floor_char_boundary(200)]
+    } else {
+        text
+    }
 }
 
 #[cfg(test)]

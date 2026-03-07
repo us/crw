@@ -31,6 +31,8 @@ uuid = { workspace = true }
 url = { workspace = true }
 reqwest = { workspace = true }
 clap = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

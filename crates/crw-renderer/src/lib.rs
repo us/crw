@@ -22,8 +22,10 @@
 //! use std::collections::HashMap;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! use crw_core::config::StealthConfig;
 //! let config = RendererConfig::default();
-//! let renderer = FallbackRenderer::new(&config, "crw/0.1", None);
+//! let stealth = StealthConfig::default();
+//! let renderer = FallbackRenderer::new(&config, "crw/0.1", None, &stealth);
 //! let result = renderer.fetch("https://example.com", &HashMap::new(), None, None).await?;
 //! println!("status: {}", result.status_code);
 //! # Ok(())
@@ -36,12 +38,29 @@ pub mod detector;
 pub mod http_only;
 pub mod traits;
 
-use crw_core::config::RendererConfig;
+use crw_core::config::{RendererConfig, StealthConfig, BUILTIN_UA_POOL};
 use crw_core::error::{CrwError, CrwResult};
 use crw_core::types::FetchResult;
 use std::collections::HashMap;
 use std::sync::Arc;
 use traits::PageFetcher;
+
+/// Pick a user-agent: rotate from stealth pool when stealth is enabled.
+fn pick_ua<'a>(default_ua: &'a str, stealth: &'a StealthConfig) -> String {
+    if stealth.enabled {
+        let pool: &[&str] = if stealth.user_agents.is_empty() {
+            BUILTIN_UA_POOL
+        } else {
+            // Safe: user_agents is non-empty in this branch.
+            return stealth.user_agents
+                [rand::random::<usize>() % stealth.user_agents.len()]
+            .clone();
+        };
+        pool[rand::random::<usize>() % pool.len()].to_string()
+    } else {
+        default_ua.to_string()
+    }
+}
 
 /// Composite renderer that tries multiple backends in order.
 pub struct FallbackRenderer {
@@ -50,8 +69,16 @@ pub struct FallbackRenderer {
 }
 
 impl FallbackRenderer {
-    pub fn new(config: &RendererConfig, user_agent: &str, proxy: Option<&str>) -> Self {
-        let http = Arc::new(http_only::HttpFetcher::new(user_agent, proxy)) as Arc<dyn PageFetcher>;
+    pub fn new(
+        config: &RendererConfig,
+        user_agent: &str,
+        proxy: Option<&str>,
+        stealth: &StealthConfig,
+    ) -> Self {
+        let effective_ua = pick_ua(user_agent, stealth);
+        let inject_headers = stealth.enabled && stealth.inject_headers;
+        let http = Arc::new(http_only::HttpFetcher::new(&effective_ua, proxy, inject_headers))
+            as Arc<dyn PageFetcher>;
 
         #[allow(unused_mut)]
         let mut js_renderers: Vec<Arc<dyn PageFetcher>> = Vec::new();
@@ -67,6 +94,7 @@ impl FallbackRenderer {
                     "lightpanda",
                     &lp.ws_url,
                     config.page_timeout_ms,
+                    config.pool_size,
                 )));
             }
             if let Some(pw) = &config.playwright {
@@ -74,6 +102,7 @@ impl FallbackRenderer {
                     "playwright",
                     &pw.ws_url,
                     config.page_timeout_ms,
+                    config.pool_size,
                 )));
             }
             if let Some(ch) = &config.chrome {
@@ -81,6 +110,7 @@ impl FallbackRenderer {
                     "chrome",
                     &ch.ws_url,
                     config.page_timeout_ms,
+                    config.pool_size,
                 )));
             }
         }

@@ -3,10 +3,11 @@ use crw_core::error::CrwResult;
 use crw_core::types::{CrawlRequest, CrawlState, CrawlStatus, ScrapeData};
 use crw_extract::readability::extract_links;
 use crw_renderer::FallbackRenderer;
+use dashmap::DashMap;
 use std::collections::{HashSet, VecDeque};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::Duration;
-use tokio::sync::Semaphore;
+use tokio::sync::{Mutex, Semaphore};
 use tokio::time::Instant;
 use uuid::Uuid;
 
@@ -14,6 +15,76 @@ use crate::robots::RobotsTxt;
 
 /// Maximum URL discovery limit to prevent memory exhaustion.
 const MAX_DISCOVERED_URLS: usize = 5000;
+
+/// Options for running a BFS crawl job.
+pub struct CrawlOptions<'a> {
+    pub id: Uuid,
+    pub req: CrawlRequest,
+    pub renderer: Arc<FallbackRenderer>,
+    pub max_concurrency: usize,
+    pub respect_robots: bool,
+    pub requests_per_second: f64,
+    pub user_agent: &'a str,
+    pub state_tx: tokio::sync::watch::Sender<CrawlState>,
+    pub llm_config: Option<&'a LlmConfig>,
+    /// HTTP proxy URL for the crawler's reqwest client (robots.txt fetching).
+    pub proxy: Option<String>,
+    /// Jitter factor for rate limiting (0.0–1.0). 0.2 = ±20% of sleep duration.
+    pub jitter_factor: f64,
+}
+
+/// Stale rate limiter entries are cleaned up after this duration.
+const RATE_LIMITER_TTL: Duration = Duration::from_secs(3600);
+
+/// A rate limiter entry with its last-used timestamp.
+type RateLimiterEntry = (Arc<Mutex<RateLimiter>>, Instant);
+
+/// Global domain-based rate limiter.
+/// Shared across all crawl jobs to prevent 10 concurrent crawls
+/// from sending 10x the intended rate to the same domain.
+static DOMAIN_RATE_LIMITERS: LazyLock<DashMap<String, RateLimiterEntry>> =
+    LazyLock::new(DashMap::new);
+
+/// Counter for periodic cleanup of stale rate limiter entries.
+static LIMITER_CALL_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Get or create a rate limiter for a given domain, updating last-used timestamp.
+fn get_domain_limiter(domain: &str, rps: f64) -> Arc<Mutex<RateLimiter>> {
+    let now = Instant::now();
+    // Clean up stale entries every 64 calls (cheap amortized cost).
+    if LIMITER_CALL_COUNT
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        .is_multiple_of(64)
+    {
+        DOMAIN_RATE_LIMITERS
+            .retain(|_, (_, last_used)| now.duration_since(*last_used) < RATE_LIMITER_TTL);
+    }
+    DOMAIN_RATE_LIMITERS
+        .entry(domain.to_string())
+        .and_modify(|entry| {
+            entry.1 = now;
+            // Warn if a different RPS value is requested for the same domain.
+            let existing_interval = entry.0.try_lock().map(|l| l.min_interval).ok();
+            let new_interval = if rps > 0.0 {
+                Duration::from_secs_f64(1.0 / rps)
+            } else {
+                Duration::ZERO
+            };
+            if let Some(existing) = existing_interval
+                && existing != new_interval
+            {
+                tracing::warn!(
+                    domain,
+                    existing_rps = ?existing,
+                    requested_rps = rps,
+                    "Rate limiter RPS mismatch for domain; using existing limiter"
+                );
+            }
+        })
+        .or_insert_with(|| (Arc::new(Mutex::new(RateLimiter::new(rps))), now))
+        .0
+        .clone()
+}
 
 /// Simple rate limiter: ensures minimum interval between requests.
 struct RateLimiter {
@@ -40,13 +111,34 @@ impl RateLimiter {
         }
     }
 
-    async fn wait(&mut self) {
+    /// Compute how long to sleep and update the last_request timestamp.
+    /// The caller must sleep **outside** the mutex lock to avoid holding
+    /// the lock during async sleep (which would starve other crawl jobs
+    /// on the same domain).
+    fn next_sleep(&mut self) -> Duration {
         let elapsed = self.last_request.elapsed();
-        if elapsed < self.min_interval {
-            tokio::time::sleep(self.min_interval - elapsed).await;
-        }
-        self.last_request = Instant::now();
+        let sleep = if elapsed < self.min_interval {
+            self.min_interval - elapsed
+        } else {
+            Duration::ZERO
+        };
+        self.last_request = Instant::now() + sleep;
+        sleep
     }
+}
+
+/// Apply a random jitter to a sleep duration.
+/// `factor` is the maximum fractional deviation (e.g. 0.2 = ±20%).
+fn jittered_sleep(base: Duration, factor: f64) -> Duration {
+    if factor <= 0.0 || base.is_zero() {
+        return base;
+    }
+    let factor = factor.min(1.0);
+    // Random value in [-1, 1]
+    let rng: f64 = (rand::random::<f64>() - 0.5) * 2.0;
+    let delta = base.as_secs_f64() * factor * rng;
+    let secs = (base.as_secs_f64() + delta).max(0.0);
+    Duration::from_secs_f64(secs)
 }
 
 /// Validate that a URL is safe to fetch (scheme + host check).
@@ -54,44 +146,75 @@ fn is_safe_url(url: &url::Url) -> bool {
     crw_core::url_safety::validate_safe_url(url).is_ok()
 }
 
-/// Run a BFS crawl starting from a URL.
-#[allow(clippy::too_many_arguments)]
-pub async fn run_crawl(
-    id: Uuid,
-    req: CrawlRequest,
-    renderer: Arc<FallbackRenderer>,
-    max_concurrency: usize,
-    respect_robots: bool,
-    requests_per_second: f64,
-    user_agent: &str,
-    state_tx: tokio::sync::watch::Sender<CrawlState>,
-    llm_config: Option<&LlmConfig>,
+/// Send a failed crawl state.
+fn send_failed(id: Uuid, state_tx: &tokio::sync::watch::Sender<CrawlState>, error: String) {
+    let _ = state_tx.send(CrawlState {
+        id,
+        status: CrawlStatus::Failed,
+        total: 0,
+        completed: 0,
+        data: vec![],
+        error: Some(error),
+    });
+}
+
+/// Extract same-origin links from a page and enqueue new ones for crawling.
+fn enqueue_discovered_links(
+    html: &str,
+    page_url: &str,
+    origin: &str,
+    max_pages: usize,
+    visited: &mut HashSet<String>,
+    queue: &mut VecDeque<(String, u32)>,
+    depth: u32,
 ) {
+    let page_links = extract_links(html, page_url);
+    for link in page_links {
+        if let Ok(link_url) = url::Url::parse(&link) {
+            if !is_safe_url(&link_url) {
+                continue;
+            }
+            let link_host = link_url.host_str().unwrap_or("");
+            let link_origin = format!("{}://{}", link_url.scheme(), link_host);
+            if link_origin != origin {
+                continue;
+            }
+            let normalized = normalize_url(&link);
+            if !visited.contains(&normalized) && visited.len() < max_pages {
+                visited.insert(normalized.clone());
+                queue.push_back((normalized, depth + 1));
+            }
+        }
+    }
+}
+
+/// Run a BFS crawl starting from a URL.
+pub async fn run_crawl(opts: CrawlOptions<'_>) {
+    let CrawlOptions {
+        id,
+        req,
+        renderer,
+        max_concurrency,
+        respect_robots,
+        requests_per_second,
+        user_agent,
+        state_tx,
+        llm_config,
+        proxy,
+        jitter_factor,
+    } = opts;
+
     let max_depth = req.max_depth.unwrap_or(2).min(10);
     let max_pages = req.max_pages.unwrap_or(100).min(1000) as usize;
 
     let base_url = match url::Url::parse(&req.url) {
         Ok(u) if is_safe_url(&u) => u,
         Ok(_) => {
-            let _ = state_tx.send(CrawlState {
-                id,
-                status: CrawlStatus::Failed,
-                total: 0,
-                completed: 0,
-                data: vec![],
-                error: Some("Only http/https URLs are allowed".into()),
-            });
+            send_failed(id, &state_tx, "Only http/https URLs are allowed".into());
             return;
         }
         Err(e) => {
-            let _ = state_tx.send(CrawlState {
-                id,
-                status: CrawlStatus::Failed,
-                total: 0,
-                completed: 0,
-                data: vec![],
-                error: Some(format!("Invalid URL: {e}")),
-            });
+            send_failed(id, &state_tx, format!("Invalid URL: {e}"));
             return;
         }
     };
@@ -99,22 +222,24 @@ pub async fn run_crawl(
     let origin = match base_url.host_str() {
         Some(host) => format!("{}://{}", base_url.scheme(), host),
         None => {
-            let _ = state_tx.send(CrawlState {
-                id,
-                status: CrawlStatus::Failed,
-                total: 0,
-                completed: 0,
-                data: vec![],
-                error: Some("URL has no host".into()),
-            });
+            send_failed(id, &state_tx, "URL has no host".into());
             return;
         }
     };
 
-    let client = reqwest::Client::builder()
+    let mut client_builder = reqwest::Client::builder()
         .user_agent(user_agent)
+        .redirect(crw_core::url_safety::safe_redirect_policy());
+    if let Some(ref proxy_url) = proxy {
+        if let Ok(p) = reqwest::Proxy::all(proxy_url) {
+            client_builder = client_builder.proxy(p);
+        } else {
+            tracing::warn!("Invalid crawl proxy URL: {proxy_url}");
+        }
+    }
+    let client = client_builder
         .build()
-        .unwrap_or_default();
+        .expect("reqwest client build should not fail");
 
     let robots = if respect_robots {
         RobotsTxt::fetch(&origin, &client)
@@ -125,7 +250,8 @@ pub async fn run_crawl(
     };
 
     let semaphore = Arc::new(Semaphore::new(max_concurrency));
-    let mut rate_limiter = RateLimiter::new(requests_per_second);
+    let domain = base_url.host_str().unwrap_or("unknown").to_string();
+    let rate_limiter = get_domain_limiter(&domain, requests_per_second);
     let mut visited: HashSet<String> = HashSet::new();
     let mut queue: VecDeque<(String, u32)> = VecDeque::new();
     let mut results: Vec<ScrapeData> = Vec::new();
@@ -152,7 +278,10 @@ pub async fn run_crawl(
                 break;
             }
         };
-        rate_limiter.wait().await;
+        let sleep_dur = jittered_sleep(rate_limiter.lock().await.next_sleep(), jitter_factor);
+        if !sleep_dur.is_zero() {
+            tokio::time::sleep(sleep_dur).await;
+        }
 
         let fetch_result = match renderer.fetch(&url, &Default::default(), None, None).await {
             Ok(r) => r,
@@ -164,37 +293,34 @@ pub async fn run_crawl(
 
         // Extract links for further crawling.
         if depth < max_depth {
-            let page_links = extract_links(&fetch_result.html, &url);
-            for link in page_links {
-                if let Ok(link_url) = url::Url::parse(&link) {
-                    if !is_safe_url(&link_url) {
-                        continue;
-                    }
-                    let link_host = link_url.host_str().unwrap_or("");
-                    let link_origin = format!("{}://{}", link_url.scheme(), link_host);
-                    if link_origin != origin {
-                        continue;
-                    }
-                    let normalized = normalize_url(&link);
-                    if !visited.contains(&normalized) && visited.len() < max_pages {
-                        visited.insert(normalized);
-                        queue.push_back((link, depth + 1));
-                    }
-                }
-            }
+            enqueue_discovered_links(
+                &fetch_result.html,
+                &url,
+                &origin,
+                max_pages,
+                &mut visited,
+                &mut queue,
+                depth,
+            );
         }
 
-        let mut data = crw_extract::extract(
-            &fetch_result.html,
-            &fetch_result.url,
-            fetch_result.status_code,
-            fetch_result.rendered_with,
-            fetch_result.elapsed_ms,
-            &req.formats,
-            req.only_main_content,
-            &[],
-            &[],
-        );
+        let mut data = crw_extract::extract(crw_extract::ExtractOptions {
+            raw_html: &fetch_result.html,
+            source_url: &fetch_result.url,
+            status_code: fetch_result.status_code,
+            rendered_with: fetch_result.rendered_with,
+            elapsed_ms: fetch_result.elapsed_ms,
+            formats: &req.formats,
+            only_main_content: req.only_main_content,
+            include_tags: &[],
+            exclude_tags: &[],
+            css_selector: None,
+            xpath: None,
+            chunk_strategy: None,
+            query: None,
+            filter_mode: None,
+            top_k: None,
+        });
 
         if let (Some(schema), Some(llm)) = (&req.json_schema, llm_config)
             && let Some(md) = &data.markdown
@@ -231,16 +357,31 @@ pub async fn run_crawl(
     });
 }
 
+/// Options for URL discovery (map endpoint).
+pub struct DiscoverOptions<'a> {
+    pub base_url: &'a str,
+    pub max_depth: u32,
+    pub use_sitemap: bool,
+    pub renderer: &'a Arc<FallbackRenderer>,
+    pub max_concurrency: usize,
+    pub requests_per_second: f64,
+    pub user_agent: &'a str,
+    /// HTTP proxy URL for the discovery client.
+    pub proxy: Option<String>,
+}
+
 /// Discover URLs from a site (map endpoint).
-pub async fn discover_urls(
-    base_url: &str,
-    max_depth: u32,
-    use_sitemap: bool,
-    renderer: &Arc<FallbackRenderer>,
-    max_concurrency: usize,
-    requests_per_second: f64,
-    user_agent: &str,
-) -> CrwResult<Vec<String>> {
+pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<Vec<String>> {
+    let DiscoverOptions {
+        base_url,
+        max_depth,
+        use_sitemap,
+        renderer,
+        max_concurrency,
+        requests_per_second,
+        user_agent,
+        proxy,
+    } = opts;
     let parsed = url::Url::parse(base_url)
         .map_err(|e| crw_core::error::CrwError::InvalidRequest(format!("Invalid URL: {e}")))?;
 
@@ -259,10 +400,17 @@ pub async fn discover_urls(
         }
     };
 
-    let client = reqwest::Client::builder()
+    let mut discover_client_builder = reqwest::Client::builder()
         .user_agent(user_agent)
+        .redirect(crw_core::url_safety::safe_redirect_policy());
+    if let Some(ref proxy_url) = proxy {
+        if let Ok(p) = reqwest::Proxy::all(proxy_url) {
+            discover_client_builder = discover_client_builder.proxy(p);
+        }
+    }
+    let client = discover_client_builder
         .build()
-        .unwrap_or_default();
+        .expect("reqwest client build should not fail");
 
     let mut all_urls: HashSet<String> = HashSet::new();
 
@@ -282,7 +430,12 @@ pub async fn discover_urls(
                     if all_urls.len() >= MAX_DISCOVERED_URLS {
                         break;
                     }
-                    all_urls.insert(u);
+                    // Validate sitemap URLs to prevent SSRF via crafted sitemaps.
+                    if let Ok(parsed) = url::Url::parse(&u)
+                        && is_safe_url(&parsed)
+                    {
+                        all_urls.insert(u);
+                    }
                 }
             }
         }
@@ -290,7 +443,8 @@ pub async fn discover_urls(
 
     let max_depth = max_depth.min(10);
     let semaphore = Arc::new(Semaphore::new(max_concurrency));
-    let mut rate_limiter = RateLimiter::new(requests_per_second);
+    let discover_domain = parsed.host_str().unwrap_or("unknown").to_string();
+    let rate_limiter = get_domain_limiter(&discover_domain, requests_per_second);
     let mut visited: HashSet<String> = HashSet::new();
     let mut queue: VecDeque<(String, u32)> = VecDeque::new();
 
@@ -306,7 +460,10 @@ pub async fn discover_urls(
             Ok(p) => p,
             Err(_) => break,
         };
-        rate_limiter.wait().await;
+        let sleep_dur = rate_limiter.lock().await.next_sleep();
+        if !sleep_dur.is_zero() {
+            tokio::time::sleep(sleep_dur).await;
+        }
 
         let fetch = renderer
             .fetch(&url, &Default::default(), Some(false), None)
@@ -326,10 +483,10 @@ pub async fn discover_urls(
                     }
                     let normalized = normalize_url(&link);
                     if !visited.contains(&normalized) {
-                        visited.insert(normalized);
-                        all_urls.insert(link.clone());
+                        visited.insert(normalized.clone());
+                        all_urls.insert(normalized.clone());
                         if depth < max_depth {
-                            queue.push_back((link, depth + 1));
+                            queue.push_back((normalized, depth + 1));
                         }
                     }
                 }
@@ -465,28 +622,21 @@ mod tests {
     #[tokio::test]
     async fn rate_limiter_first_call_no_wait() {
         let mut limiter = RateLimiter::new(10.0);
-        let start = Instant::now();
-        limiter.wait().await;
-        let elapsed = start.elapsed();
-        // First call should return almost immediately (< 10ms)
-        assert!(
-            elapsed.as_millis() < 10,
-            "First call should not wait, took {elapsed:?}"
-        );
+        let sleep = limiter.next_sleep();
+        // First call should return zero sleep
+        assert!(sleep.is_zero(), "First call should not wait, got {sleep:?}");
     }
 
     #[tokio::test]
     async fn rate_limiter_enforces_interval() {
         let mut limiter = RateLimiter::new(10.0); // 100ms interval
         // First call — no wait
-        limiter.wait().await;
-        let start = Instant::now();
-        // Second call — should wait ~100ms
-        limiter.wait().await;
-        let elapsed = start.elapsed();
+        let _ = limiter.next_sleep();
+        // Second call immediately — should require ~100ms sleep
+        let sleep = limiter.next_sleep();
         assert!(
-            elapsed.as_millis() >= 80,
-            "Second call should wait ~100ms, took {elapsed:?}"
+            sleep.as_millis() >= 80,
+            "Second call should wait ~100ms, got {sleep:?}"
         );
     }
 

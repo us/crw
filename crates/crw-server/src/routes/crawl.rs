@@ -1,13 +1,11 @@
 use axum::Json;
 use axum::extract::{Path, State};
 use crw_core::error::CrwError;
-use crw_core::types::{CrawlRequest, CrawlStartResponse, CrawlState, CrawlStatus};
-use crw_crawl::crawl::run_crawl;
-use std::time::Instant;
+use crw_core::types::{CrawlRequest, CrawlStartResponse, CrawlState};
 use uuid::Uuid;
 
 use crate::error::AppError;
-use crate::state::{AppState, CrawlJob};
+use crate::state::AppState;
 
 /// POST /v1/crawl — start a crawl job.
 /// Response format matches Firecrawl: { success: true, id: "..." }
@@ -19,66 +17,7 @@ pub async fn start_crawl(
         .map_err(|e| CrwError::InvalidRequest(format!("Invalid URL: {e}")))?;
     crw_core::url_safety::validate_safe_url(&parsed_url).map_err(CrwError::InvalidRequest)?;
 
-    let id = Uuid::new_v4();
-    let initial = CrawlState {
-        id,
-        status: CrawlStatus::InProgress,
-        total: 0,
-        completed: 0,
-        data: vec![],
-        error: None,
-    };
-
-    let (tx, rx) = tokio::sync::watch::channel(initial);
-
-    {
-        let mut jobs = state.crawl_jobs.write().await;
-        jobs.insert(
-            id,
-            CrawlJob {
-                rx,
-                created_at: Instant::now(),
-            },
-        );
-    }
-
-    let renderer = state.renderer.clone();
-    let max_concurrency = state.config.crawler.max_concurrency;
-    let respect_robots = state.config.crawler.respect_robots_txt;
-    let rps = state.config.crawler.requests_per_second;
-    let user_agent = state.config.crawler.user_agent.clone();
-    let crawl_semaphore = state.crawl_semaphore.clone();
-    let llm_config = state.config.extraction.llm.clone();
-
-    tokio::spawn(async move {
-        // Limit concurrent crawl jobs to prevent resource exhaustion.
-        let _permit = match crawl_semaphore.acquire().await {
-            Ok(p) => p,
-            Err(_) => {
-                let _ = tx.send(CrawlState {
-                    id,
-                    status: CrawlStatus::Failed,
-                    total: 0,
-                    completed: 0,
-                    data: vec![],
-                    error: Some("Server is overloaded, try again later".into()),
-                });
-                return;
-            }
-        };
-        run_crawl(
-            id,
-            req,
-            renderer,
-            max_concurrency,
-            respect_robots,
-            rps,
-            &user_agent,
-            tx,
-            llm_config.as_ref(),
-        )
-        .await;
-    });
+    let id = state.start_crawl_job(req).await;
 
     Ok(Json(CrawlStartResponse {
         success: true,
