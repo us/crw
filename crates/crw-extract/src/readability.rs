@@ -8,11 +8,7 @@ pub fn extract_main_content(html: &str) -> String {
     let document = Html::parse_document(html);
 
     // Priority candidates in order: well-known semantic selectors first.
-    let priority_selectors = [
-        "article",
-        "main",
-        "[role=\"main\"]",
-    ];
+    let priority_selectors = ["article", "main", "[role=\"main\"]"];
 
     // Try priority selectors first (no scoring needed — these are strong signals).
     for sel_str in &priority_selectors {

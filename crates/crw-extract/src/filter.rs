@@ -61,13 +61,16 @@ fn filter_bm25(chunks: &[String], query: &str, top_k: usize) -> Vec<String> {
                 *tf_map.entry(term.as_str()).or_insert(0) += 1;
             }
 
-            let score = query_terms.iter().map(|term| {
-                let tf = *tf_map.get(term.as_str()).unwrap_or(&0) as f64;
-                let df_t = *df.get(term.as_str()).unwrap_or(&0) as f64;
-                let idf = ((n - df_t + 0.5) / (df_t + 0.5) + 1.0).ln();
-                let tf_norm = (tf * (K1 + 1.0)) / (tf + K1 * (1.0 - B + B * dl / avgdl));
-                idf * tf_norm
-            }).sum::<f64>();
+            let score = query_terms
+                .iter()
+                .map(|term| {
+                    let tf = *tf_map.get(term.as_str()).unwrap_or(&0) as f64;
+                    let df_t = *df.get(term.as_str()).unwrap_or(&0) as f64;
+                    let idf = ((n - df_t + 0.5) / (df_t + 0.5) + 1.0).ln();
+                    let tf_norm = (tf * (K1 + 1.0)) / (tf + K1 * (1.0 - B + B * dl / avgdl));
+                    idf * tf_norm
+                })
+                .sum::<f64>();
 
             (i, score)
         })
@@ -98,18 +101,25 @@ fn filter_cosine(chunks: &[String], query: &str, top_k: usize) -> Vec<String> {
     let n_docs = (1 + chunks.len()) as f64; // query + chunks
 
     // IDF for each term.
-    let idf: Vec<f64> = vocab.iter().map(|term| {
-        let df = all_docs.iter().filter(|doc| doc.contains(term)).count() as f64;
-        ((n_docs - df + 0.5) / (df + 0.5) + 1.0).ln()
-    }).collect();
+    let idf: Vec<f64> = vocab
+        .iter()
+        .map(|term| {
+            let df = all_docs.iter().filter(|doc| doc.contains(term)).count() as f64;
+            ((n_docs - df + 0.5) / (df + 0.5) + 1.0).ln()
+        })
+        .collect();
 
     // TF-IDF vector for a token list.
     let tfidf = |tokens: &[String]| -> Vec<f64> {
         let len = tokens.len().max(1) as f64;
-        vocab.iter().enumerate().map(|(i, term)| {
-            let tf = tokens.iter().filter(|t| *t == term).count() as f64 / len;
-            tf * idf[i]
-        }).collect()
+        vocab
+            .iter()
+            .enumerate()
+            .map(|(i, term)| {
+                let tf = tokens.iter().filter(|t| *t == term).count() as f64 / len;
+                tf * idf[i]
+            })
+            .collect()
     };
 
     let q_vec = tfidf(query_tokens);
@@ -163,7 +173,11 @@ mod tests {
         let result = filter_chunks(&chunks, "machine learning AI", &FilterMode::Bm25, 2);
         assert_eq!(result.len(), 2);
         // The ML chunk should be ranked high (case-insensitive check)
-        assert!(result.iter().any(|c| c.to_lowercase().contains("machine learning")));
+        assert!(
+            result
+                .iter()
+                .any(|c| c.to_lowercase().contains("machine learning"))
+        );
     }
 
     #[test]
@@ -171,7 +185,11 @@ mod tests {
         let chunks = sample_chunks();
         let result = filter_chunks(&chunks, "programming language Rust", &FilterMode::Cosine, 2);
         assert_eq!(result.len(), 2);
-        assert!(result.iter().any(|c| c.contains("Rust") || c.contains("language")));
+        assert!(
+            result
+                .iter()
+                .any(|c| c.contains("Rust") || c.contains("language"))
+        );
     }
 
     #[test]

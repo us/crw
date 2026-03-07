@@ -11,8 +11,8 @@
 //! - **Filtering** — BM25 or cosine-similarity ranking of chunks
 //! - **Structured JSON** — LLM-based extraction with JSON Schema validation
 
-pub mod clean;
 pub mod chunking;
+pub mod clean;
 pub mod filter;
 pub mod markdown;
 pub mod plaintext;
@@ -91,9 +91,8 @@ pub fn extract(opts: ExtractOptions<'_>) -> ScrapeData {
         let md = markdown::html_to_markdown(&content_html);
         // Trigger fallback if markdown is empty OR suspiciously short relative to HTML.
         // Skip fallback when a CSS/XPath selector was explicitly used — short output is intentional.
-        let md_too_short = selected_html.is_none()
-            && md.trim().len() < 100
-            && raw_html.len() > 5000;
+        let md_too_short =
+            selected_html.is_none() && md.trim().len() < 100 && raw_html.len() > 5000;
         if md_too_short {
             let fallback_md = if only_main_content && selected_html.is_none() {
                 // Fallback 1: cleaned HTML without main-content narrowing
