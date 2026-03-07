@@ -17,8 +17,15 @@ pub async fn scrape(
 
     let llm_config = state.config.extraction.llm.as_ref();
     let user_agent = &state.config.crawler.user_agent;
-    let default_stealth = state.config.crawler.stealth.enabled
-        && state.config.crawler.stealth.inject_headers;
-    let data = scrape_url(&req, &state.renderer, llm_config, user_agent, default_stealth).await?;
+    let default_stealth =
+        state.config.crawler.stealth.enabled && state.config.crawler.stealth.inject_headers;
+    let data = scrape_url(
+        &req,
+        &state.renderer,
+        llm_config,
+        user_agent,
+        default_stealth,
+    )
+    .await?;
     Ok(Json(ApiResponse::ok(data)))
 }

@@ -38,7 +38,7 @@ pub mod detector;
 pub mod http_only;
 pub mod traits;
 
-use crw_core::config::{RendererConfig, StealthConfig, BUILTIN_UA_POOL};
+use crw_core::config::{BUILTIN_UA_POOL, RendererConfig, StealthConfig};
 use crw_core::error::{CrwError, CrwResult};
 use crw_core::types::FetchResult;
 use std::collections::HashMap;
@@ -52,9 +52,8 @@ fn pick_ua<'a>(default_ua: &'a str, stealth: &'a StealthConfig) -> String {
             BUILTIN_UA_POOL
         } else {
             // Safe: user_agents is non-empty in this branch.
-            return stealth.user_agents
-                [rand::random::<usize>() % stealth.user_agents.len()]
-            .clone();
+            return stealth.user_agents[rand::random::<usize>() % stealth.user_agents.len()]
+                .clone();
         };
         pool[rand::random::<usize>() % pool.len()].to_string()
     } else {
@@ -77,8 +76,11 @@ impl FallbackRenderer {
     ) -> Self {
         let effective_ua = pick_ua(user_agent, stealth);
         let inject_headers = stealth.enabled && stealth.inject_headers;
-        let http = Arc::new(http_only::HttpFetcher::new(&effective_ua, proxy, inject_headers))
-            as Arc<dyn PageFetcher>;
+        let http = Arc::new(http_only::HttpFetcher::new(
+            &effective_ua,
+            proxy,
+            inject_headers,
+        )) as Arc<dyn PageFetcher>;
 
         #[allow(unused_mut)]
         let mut js_renderers: Vec<Arc<dyn PageFetcher>> = Vec::new();

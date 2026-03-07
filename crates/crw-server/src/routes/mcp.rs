@@ -29,11 +29,17 @@ async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result<Val
             validate_url(&req.url)?;
             let llm_config = state.config.extraction.llm.as_ref();
             let user_agent = &state.config.crawler.user_agent;
-            let default_stealth = state.config.crawler.stealth.enabled
-                && state.config.crawler.stealth.inject_headers;
-            let data = scrape_url(&req, &state.renderer, llm_config, user_agent, default_stealth)
-                .await
-                .map_err(|e| format!("{e}"))?;
+            let default_stealth =
+                state.config.crawler.stealth.enabled && state.config.crawler.stealth.inject_headers;
+            let data = scrape_url(
+                &req,
+                &state.renderer,
+                llm_config,
+                user_agent,
+                default_stealth,
+            )
+            .await
+            .map_err(|e| format!("{e}"))?;
             serde_json::to_value(&data).map_err(|e| format!("serialize error: {e}"))
         }
         "crw_crawl" => {

@@ -99,7 +99,12 @@ mod tests {
     #[test]
     fn sentence_chunks_basic() {
         let text = "Hello world. This is sentence two. And sentence three.";
-        let chunks = chunk_text(text, &ChunkStrategy::Sentence { max_chars: Some(30) });
+        let chunks = chunk_text(
+            text,
+            &ChunkStrategy::Sentence {
+                max_chars: Some(30),
+            },
+        );
         assert!(!chunks.is_empty());
         // Each chunk should not exceed max_chars significantly
         for chunk in &chunks {
@@ -109,7 +114,8 @@ mod tests {
 
     #[test]
     fn topic_chunks_on_headings() {
-        let text = "# Title\nContent under title.\n## Section\nSection content.\n### Sub\nSub content.";
+        let text =
+            "# Title\nContent under title.\n## Section\nSection content.\n### Sub\nSub content.";
         let chunks = chunk_text(text, &ChunkStrategy::Topic);
         assert_eq!(chunks.len(), 3);
         assert!(chunks[0].starts_with("# Title"));
@@ -119,14 +125,24 @@ mod tests {
     #[test]
     fn regex_chunk_on_double_newline() {
         let text = "Para one.\n\nPara two.\n\nPara three.";
-        let chunks = chunk_text(text, &ChunkStrategy::Regex { pattern: r"\n\n".to_string() });
+        let chunks = chunk_text(
+            text,
+            &ChunkStrategy::Regex {
+                pattern: r"\n\n".to_string(),
+            },
+        );
         assert_eq!(chunks.len(), 3);
     }
 
     #[test]
     fn regex_invalid_pattern_returns_whole_text() {
         let text = "some text";
-        let chunks = chunk_text(text, &ChunkStrategy::Regex { pattern: "[invalid".to_string() });
+        let chunks = chunk_text(
+            text,
+            &ChunkStrategy::Regex {
+                pattern: "[invalid".to_string(),
+            },
+        );
         assert_eq!(chunks.len(), 1);
         assert_eq!(chunks[0], text);
     }

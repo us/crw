@@ -1,4 +1,4 @@
-use crw_core::config::{LlmConfig, BUILTIN_UA_POOL};
+use crw_core::config::{BUILTIN_UA_POOL, LlmConfig};
 use crw_core::error::CrwResult;
 use crw_core::types::{OutputFormat, ScrapeData, ScrapeRequest};
 use crw_renderer::FallbackRenderer;
@@ -23,8 +23,8 @@ pub async fn scrape_url(
     // Use a temporary HttpFetcher when:
     // (a) per-request proxy overrides global proxy, OR
     // (b) per-request stealth differs from what the shared renderer was built with.
-    let needs_temp_fetcher = req.proxy.is_some()
-        || req.stealth.map_or(false, |s| s != default_stealth);
+    let needs_temp_fetcher =
+        req.proxy.is_some() || req.stealth.map_or(false, |s| s != default_stealth);
 
     let fetch_result = if needs_temp_fetcher {
         let proxy = req.proxy.as_deref();
