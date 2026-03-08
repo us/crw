@@ -1,0 +1,19 @@
+#!/bin/sh
+# Pre-commit hook — mirrors CI checks (ci.yml)
+# Install: git config core.hooksPath .githooks
+
+set -e
+
+echo "🔍 cargo fmt --check..."
+cargo fmt --all -- --check
+
+echo "📎 cargo clippy..."
+cargo clippy --workspace --all-targets -- -D warnings
+
+echo "🔨 cargo build..."
+cargo build --workspace --all-targets
+
+echo "🧪 cargo test..."
+cargo test --workspace
+
+echo "✅ All checks passed."

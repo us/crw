@@ -69,7 +69,9 @@ async fn main() {
         if let Ok(ws_url) = std::env::var("CRW_CDP_URL") {
             renderer_config.lightpanda = Some(crw_core::config::CdpEndpoint { ws_url });
         } else {
-            eprintln!("warning: --js requires CRW_CDP_URL env var (e.g. ws://localhost:9222). Falling back to HTTP.");
+            eprintln!(
+                "warning: --js requires CRW_CDP_URL env var (e.g. ws://localhost:9222). Falling back to HTTP."
+            );
         }
     } else {
         // HTTP-only — no CDP
@@ -138,10 +140,7 @@ async fn main() {
         Format::Html => data.html.unwrap_or_default(),
         Format::Rawhtml => data.raw_html.unwrap_or_default(),
         Format::Text => data.plain_text.unwrap_or_default(),
-        Format::Links => data
-            .links
-            .unwrap_or_default()
-            .join("\n"),
+        Format::Links => data.links.unwrap_or_default().join("\n"),
     };
 
     match cli.output {
