@@ -111,6 +111,22 @@ let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
 axum::serve(listener, app).await?;
 ```
 
+## crw-cli
+
+Standalone CLI binary — scrape any URL to markdown, JSON, or plain text without a server.
+
+```bash
+cargo install crw-cli
+```
+
+```bash
+crw https://example.com              # markdown to stdout
+crw https://example.com --format json
+crw https://example.com -o page.md
+```
+
+This is a standalone binary, not a library. See [Quick Start](#quick-start) for usage examples.
+
 ## crw-mcp
 
 MCP stdio proxy binary — connects AI assistants to a running crw server.

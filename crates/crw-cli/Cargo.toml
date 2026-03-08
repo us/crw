@@ -1,0 +1,24 @@
+[package]
+name = "crw-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "crw — CLI tool for scraping URLs to markdown/JSON without a server"
+
+[[bin]]
+name = "crw"
+path = "src/main.rs"
+
+[dependencies]
+crw-core = { path = "../crw-core" }
+crw-renderer = { path = "../crw-renderer" }
+crw-extract = { path = "../crw-extract" }
+crw-crawl = { path = "../crw-crawl" }
+
+tokio = { workspace = true }
+clap = { workspace = true }
+serde_json = { workspace = true }

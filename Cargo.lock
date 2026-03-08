@@ -542,6 +542,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
+name = "crw-cli"
+version = "0.0.2"
+dependencies = [
+ "clap",
+ "crw-core",
+ "crw-crawl",
+ "crw-extract",
+ "crw-renderer",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "crw-core"
 version = "0.0.2"
 dependencies = [

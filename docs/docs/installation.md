@@ -3,6 +3,10 @@
 ## From crates.io
 
 ```bash
+# CLI tool (no server required)
+cargo install crw-cli
+
+# REST API server
 cargo install crw-server
 ```
 
@@ -12,10 +16,13 @@ cargo install crw-server
 git clone https://github.com/us/crw.git
 cd crw
 
-# Without JS rendering
+# CLI tool (no server, no setup)
+cargo build --release --bin crw
+
+# REST API server (without JS rendering)
 cargo build --release --bin crw-server
 
-# With CDP (JS rendering)
+# REST API server (with CDP/JS rendering)
 cargo build --release --bin crw-server --features crw-server/cdp
 
 # MCP stdio binary

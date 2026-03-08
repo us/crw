@@ -1,6 +1,35 @@
 # Quick Start
 
-## Start the server
+## CLI (no server needed)
+
+The `crw` binary lets you scrape any URL directly from the terminal — no server, no config file, no setup:
+
+```bash
+# Markdown to stdout (default)
+crw https://example.com
+
+# JSON output
+crw https://example.com --format json
+
+# Save to file
+crw https://example.com -o page.md
+
+# Plain text
+crw https://example.com --format text
+
+# Extract all links
+crw https://example.com --format links
+
+# Keep full page (skip main-content extraction)
+crw https://example.com --raw
+
+# Narrow with CSS selector
+crw https://example.com --css 'article.content'
+```
+
+---
+
+## REST API server
 
 ```bash
 crw-server

@@ -6,6 +6,7 @@ members = [
     "crates/crw-crawl",
     "crates/crw-server",
     "crates/crw-mcp",
+    "crates/crw-cli",
 ]
 resolver = "2"
 

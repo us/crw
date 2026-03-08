@@ -50,7 +50,7 @@ POST /v1/scrape
 | `jsonSchema` | object | no | — | JSON Schema for LLM structured extraction |
 | `cssSelector` | string | no | — | Extract only elements matching this CSS selector |
 | `xpath` | string | no | — | Extract only elements matching this XPath expression |
-| `chunkStrategy` | object | no | — | Split content into chunks (see [Chunking](#chunking)) |
+| `chunkStrategy` | object | no | — | Split content into chunks (see [Chunking](#scraping)) |
 | `query` | string | no | — | Query for chunk ranking (used with `filterMode`) |
 | `filterMode` | string | no | — | Chunk ranking method: `"bm25"` or `"cosine"` |
 | `topK` | number | no | `5` | Number of top-ranked chunks to return |
