@@ -29,24 +29,16 @@ crw-server
 
 ## What's New
 
-### Extraction & RAG Features
+### v0.0.2
 
 - **CSS selector & XPath** — target specific DOM elements before Markdown conversion (`cssSelector`, `xpath`)
-- **Chunking strategies** — split content into topic, sentence, or regex-delimited chunks for vector databases (`chunkStrategy`)
+- **Chunking strategies** — split content into topic, sentence, or regex-delimited chunks for RAG pipelines (`chunkStrategy`)
 - **BM25 & cosine filtering** — rank chunks by relevance to a query and return top-K results (`filterMode`, `topK`)
 - **Better Markdown** — switched to `htmd` (Turndown.js port): tables, code block languages, nested lists all render correctly
-
-### Stealth & Privacy
-
 - **Stealth mode** — rotate User-Agent from a built-in Chrome/Firefox/Safari pool and inject 12 browser-like headers (`stealth: true`)
 - **Per-request proxy** — override the global proxy on a per-request basis (`proxy: "http://..."`)
 - **Rate limit jitter** — randomized delay between requests to avoid uniform traffic fingerprinting
-
-### `crw-server setup` Command
-
-- **One-command JS rendering setup** — `crw-server setup` downloads LightPanda and creates `config.local.toml` automatically
-- **Platform detection** — detects OS/arch and downloads the correct binary (Linux x86_64, macOS aarch64)
-- **CLI subcommands** — crw-server now uses clap for extensible subcommand support
+- **`crw-server setup`** — one-command JS rendering setup: downloads LightPanda, creates `config.local.toml`
 
 ### v0.0.1
 

@@ -26,11 +26,16 @@ crw-server
 
 ## 最新动态
 
-### `crw-server setup` 命令
+### v0.0.2
 
-- **一键 JS 渲染设置** — `crw-server setup` 自动下载 LightPanda 并创建 `config.local.toml`
-- **平台检测** — 检测操作系统和架构，下载正确的二进制文件（Linux x86_64、macOS aarch64）
-- **CLI 子命令** — crw-server 现在使用 clap 支持可扩展的子命令
+- **CSS 选择器 & XPath** — Markdown 转换前提取特定 DOM 元素（`cssSelector`、`xpath`）
+- **分块策略** — 按主题、句子或正则表达式将内容切分为 RAG 流水线所需的块（`chunkStrategy`）
+- **BM25 & 余弦过滤** — 按查询相关性对块排序，返回前 K 个结果（`filterMode`、`topK`）
+- **更好的 Markdown** — 切换到 `htmd`（Turndown.js 移植版）：表格、代码块语言、嵌套列表均正确渲染
+- **隐身模式** — 从内置 Chrome/Firefox/Safari 池轮换 User-Agent，注入 12 个浏览器同款请求头（`stealth: true`）
+- **单请求代理** — 每次请求可单独覆盖全局代理（`proxy: "http://..."`）
+- **速率限制抖动** — 请求间随机延迟，避免均匀流量指纹
+- **`crw-server setup`** — 一键 JS 渲染设置：自动下载 LightPanda，创建 `config.local.toml`
 
 ### v0.0.1
 
