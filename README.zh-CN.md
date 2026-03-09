@@ -64,7 +64,7 @@ crw-server
 
 CRW 提供 Firecrawl 的 API，但资源占用极低。无运行时依赖，无 Redis，无 Node.js — 只需一个二进制文件即可部署到任何地方。
 
-| | CRW（自托管） | fastcrw.com（云服务） | Firecrawl | Crawl4AI | Spider |
+| 指标 | CRW（自托管） | fastcrw.com（云服务） | Firecrawl | Crawl4AI | Spider |
 |---|---|---|---|---|---|
 | **覆盖率（1K URL）** | **92.0%** | **92.0%** | 77.2% | — | 99.9% |
 | **平均延迟** | **833ms** | **833ms** | 4,600ms | — | — |
@@ -100,7 +100,7 @@ CRW 提供 Firecrawl 的 API，但资源占用极低。无运行时依赖，无 
 
 **资源对比：**
 
-| | CRW | Firecrawl |
+| 指标 | CRW | Firecrawl |
 |---|---|---|
 | 最低内存 | ~7 MB | 4 GB |
 | 推荐内存 | ~64 MB（负载下） | 8–16 GB |
@@ -123,7 +123,7 @@ CRW 提供 Firecrawl 的 API，但资源占用极低。无运行时依赖，无 
 
 ## 云服务 vs 自托管
 
-| | 自托管 | 云服务（[fastcrw.com](https://fastcrw.com)） |
+| 特性 | 自托管 | 云服务（[fastcrw.com](https://fastcrw.com)） |
 |---|---|---|
 | **部署** | `cargo install crw-server` | 注册 → 获取 API 密钥 |
 | **基础设施** | 自行管理 | 完全托管 |

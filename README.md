@@ -64,7 +64,7 @@ crw-server
 
 CRW gives you Firecrawl's API with a fraction of the resource usage. No runtime dependencies, no Redis, no Node.js — just a single binary you can deploy anywhere.
 
-| | CRW (self-hosted) | fastcrw.com (cloud) | Firecrawl | Crawl4AI | Spider |
+| Metric | CRW (self-hosted) | fastcrw.com (cloud) | Firecrawl | Crawl4AI | Spider |
 |---|---|---|---|---|---|
 | **Coverage (1K URLs)** | **92.0%** | **92.0%** | 77.2% | — | 99.9% |
 | **Avg Latency** | **833ms** | **833ms** | 4,600ms | — | — |
@@ -102,7 +102,7 @@ CRW gives you Firecrawl's API with a fraction of the resource usage. No runtime 
 
 **Resource comparison:**
 
-| | CRW | Firecrawl |
+| Metric | CRW | Firecrawl |
 |---|---|---|
 | Min RAM | ~7 MB | 4 GB |
 | Recommended RAM | ~64 MB (under load) | 8–16 GB |
@@ -129,7 +129,7 @@ CRW gives you Firecrawl's API with a fraction of the resource usage. No runtime 
 
 ## Cloud vs Self-Hosted
 
-| | Self-hosted | Cloud ([fastcrw.com](https://fastcrw.com)) |
+| Feature | Self-hosted | Cloud ([fastcrw.com](https://fastcrw.com)) |
 |---|---|---|
 | **Setup** | `cargo install crw-server` | Sign up → get API key |
 | **Infrastructure** | You manage | Fully managed |
@@ -529,7 +529,7 @@ This starts CRW on port `3000` with LightPanda as a JS rendering sidecar on port
 
 Tested on [Firecrawl's scrape-content-dataset-v1](https://huggingface.co/datasets/firecrawl/scrape-content-dataset-v1) (1,000 real-world URLs, JS rendering enabled):
 
-| | CRW | Firecrawl v2.5 | Crawl4AI | Spider |
+| Metric | CRW | Firecrawl v2.5 | Crawl4AI | Spider |
 |---|---|---|---|---|
 | **Coverage** | **92.0%** | 77.2% | — | 99.9% |
 | **Avg Latency** | **833ms** | 4,600ms | — | — |

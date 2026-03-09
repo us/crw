@@ -6,7 +6,7 @@ CRW is an open-source, lightweight, self-hosted web scraper and web crawler writ
 
 Tested against [Firecrawl scrape-content-dataset-v1](https://huggingface.co/datasets/firecrawl/scrape-content-dataset-v1) — 1,000 real-world URLs:
 
-| | CRW (self-hosted) | fastcrw.com (cloud) | Firecrawl | Crawl4AI | Spider |
+| Metric | CRW (self-hosted) | fastcrw.com (cloud) | Firecrawl | Crawl4AI | Spider |
 |---|---|---|---|---|---|
 | **Coverage (1K URLs)** | **92.0%** | **92.0%** | 77.2% | — | 99.9% |
 | **Avg Latency** | **833ms** | **833ms** | 4,600ms | — | — |
