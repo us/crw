@@ -1,6 +1,6 @@
 export default {
-  name: "crw",
-  description: "Lightweight Firecrawl alternative — web scraper & crawler + MCP server",
+  name: "CRW",
+  description: "Open-source Firecrawl alternative — self-hosted web scraper & crawler in Rust with MCP server for AI agents",
 
   navLinks: [
     { label: "Docs", href: "#introduction" },
@@ -54,6 +54,6 @@ export default {
 
   footer: {
     left: "Released under the AGPL-3.0 License",
-    right: "crw — Lightweight Firecrawl alternative in Rust",
+    right: "CRW — Open-source Firecrawl alternative | Self-hosted web scraper in Rust",
   },
 };

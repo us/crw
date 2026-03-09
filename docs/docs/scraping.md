@@ -1,6 +1,6 @@
-# Scraping
+# Web Scraping API
 
-crw scrapes single pages via the `POST /v1/scrape` endpoint. It fetches the URL, optionally renders JavaScript, cleans the HTML, and returns content in the requested formats.
+CRW scrapes single pages via the `POST /v1/scrape` endpoint — a Firecrawl-compatible web scraping API. It fetches the URL, optionally renders JavaScript via LightPanda or Chrome, cleans the HTML, and returns content in your requested formats (Markdown, HTML, JSON, plain text).
 
 ## Request
 

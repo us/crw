@@ -1,6 +1,6 @@
-# MCP Server
+# MCP Server for AI Agents
 
-crw includes a built-in MCP server that gives any MCP-compatible AI assistant 4 web scraping tools.
+CRW includes a built-in MCP (Model Context Protocol) server that gives any MCP-compatible AI assistant — Claude Code, Claude Desktop, Cursor, Windsurf, Cline, Continue.dev, OpenAI Codex CLI — 4 web scraping tools. Turn any AI coding agent into a web scraper with a single command.
 
 ## Two Transport Options
 

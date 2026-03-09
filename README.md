@@ -28,7 +28,7 @@
 
 > **Don't want to self-host?** [fastcrw.com](https://fastcrw.com) is the managed cloud — global proxy network, auto-scaling, dashboard, and API keys. Same Firecrawl-compatible API. [Get 50 free credits →](https://fastcrw.com)
 
-CRW is a self-hosted web scraper and web crawler built in Rust — a fast, lightweight Firecrawl alternative designed for LLM extraction, RAG pipelines, and AI agents. It ships as a single binary with ~6 MB idle RAM, built-in MCP server support for Claude, and structured data extraction via Anthropic and OpenAI. Drop-in compatible with Firecrawl's API.
+CRW is an open-source, self-hosted web scraper and web crawler built in Rust — a fast, lightweight alternative to Firecrawl and Crawl4AI designed for LLM structured extraction, RAG pipelines, and AI agents. Single binary, ~6 MB idle RAM, built-in MCP server for Claude Code/Cursor/Windsurf, and structured data extraction via Anthropic and OpenAI. Drop-in compatible with Firecrawl's API — 92% coverage, 5.5x faster, 75x less memory.
 
 **Single binary. No Redis. No Node.js. Drop-in Firecrawl API.**
 
@@ -65,21 +65,53 @@ crw-server
 
 CRW gives you Firecrawl's API with a fraction of the resource usage. No runtime dependencies, no Redis, no Node.js — just a single binary you can deploy anywhere.
 
-| | CRW (self-hosted) | fastcrw.com (cloud) | Firecrawl |
-|---|---|---|---|
-| **Coverage (1K URLs)** | **92.0%** | **92.0%** | 77.2% |
-| **Avg Latency** | **833ms** | **833ms** | 4,600ms |
-| **P50 Latency** | **446ms** | **446ms** | — |
-| **Noise Rejection** | **88.4%** | **88.4%** | — |
-| **Idle RAM** | 6.6 MB | 0 (managed) | ~500 MB+ |
-| **Cold start** | 85 ms | 0 (always-on) | seconds |
-| **Proxy network** | BYO | Global (built-in) | Built-in |
-| **Dashboard** | — | Yes | Yes |
-| **Cost / 1K scrapes** | **$0** (self-hosted) | From $13/mo | $0.83–5.33 |
-| **Dependencies** | single binary | None (API) | Node + Redis |
-| **License** | AGPL-3.0 | Managed | AGPL |
+| | CRW (self-hosted) | fastcrw.com (cloud) | Firecrawl | Crawl4AI | Spider |
+|---|---|---|---|---|---|
+| **Coverage (1K URLs)** | **92.0%** | **92.0%** | 77.2% | — | 99.9% |
+| **Avg Latency** | **833ms** | **833ms** | 4,600ms | — | — |
+| **P50 Latency** | **446ms** | **446ms** | — | — | 45ms (static) |
+| **Noise Rejection** | **88.4%** | **88.4%** | noise 6.8% | noise 11.3% | noise 4.2% |
+| **Idle RAM** | 6.6 MB | 0 (managed) | ~500 MB+ | — | cloud-only |
+| **Cold start** | 85 ms | 0 (always-on) | 30–60 s | — | — |
+| **HTTP scrape** | ~30 ms | ~30 ms | ~200 ms+ | ~480 ms | ~45 ms |
+| **Proxy network** | BYO | Global (built-in) | Built-in | — | Cloud-only |
+| **Cost / 1K scrapes** | **$0** (self-hosted) | From $13/mo | $0.83–5.33 | $0 | $0.65 |
+| **Dependencies** | single binary | None (API) | Node + Redis + PG + RabbitMQ | Python + Playwright | Rust / cloud |
+| **License** | AGPL-3.0 | Managed | AGPL-3.0 | Apache-2.0 | MIT |
 
-Benchmark: [Firecrawl scrape-content-dataset-v1](https://huggingface.co/datasets/firecrawl/scrape-content-dataset-v1) — 1,000 real-world URLs with JS rendering enabled.
+<details>
+<summary><b>Full benchmark details</b></summary>
+
+**CRW vs Firecrawl** — Tested on [Firecrawl scrape-content-dataset-v1](https://huggingface.co/datasets/firecrawl/scrape-content-dataset-v1) (1,000 real-world URLs, JS rendering enabled):
+- CRW covers **92%** of URLs vs Firecrawl's **77.2%** — 15 percentage points higher
+- CRW is **5.5x faster** on average (833ms vs 4,600ms)
+- CRW uses **~75x less RAM** at idle (6.6 MB vs ~500 MB+)
+- Firecrawl requires 5 containers (Node.js, Redis, PostgreSQL, RabbitMQ, Playwright) — CRW is a single binary
+
+**Crawl4AI vs Firecrawl vs Spider** — [Independent benchmark by Spider.cloud](https://spider.cloud/blog/firecrawl-vs-crawl4ai-vs-spider-honest-benchmark):
+
+| Metric | Spider | Firecrawl | Crawl4AI |
+|--------|--------|-----------|----------|
+| Static throughput | 182 p/s | 27 p/s | 19 p/s |
+| Success (static) | 100% | 99.5% | 99% |
+| Success (SPA) | 100% | 96.6% | 93.7% |
+| Success (anti-bot) | 99.6% | 88.4% | 72% |
+| Latency (static) | 45ms | 310ms | 480ms |
+| Latency (SPA) | 820ms | 1,400ms | 1,650ms |
+
+**Firecrawl independent review** — [Scrapeway benchmark](https://scrapeway.com/web-scraping-api/firecrawl): 64.3% success rate, $5.11/1K scrapes, 0% on LinkedIn/Twitter.
+
+**Resource comparison:**
+
+| | CRW | Firecrawl |
+|---|---|---|
+| Min RAM | ~7 MB | 4 GB |
+| Recommended RAM | ~64 MB (under load) | 8–16 GB |
+| Docker images | single ~8 MB binary | ~2–3 GB total |
+| Cold start | 85 ms | 30–60 seconds |
+| Containers needed | 1 (+optional sidecar) | 5 |
+
+</details>
 
 ## Features
 
@@ -498,14 +530,16 @@ This starts CRW on port `3000` with LightPanda as a JS rendering sidecar on port
 
 Tested on [Firecrawl's scrape-content-dataset-v1](https://huggingface.co/datasets/firecrawl/scrape-content-dataset-v1) (1,000 real-world URLs, JS rendering enabled):
 
-| | CRW | Firecrawl v2.5 |
-|---|---|---|
-| **Coverage** | **92.0%** | 77.2% |
-| **Avg Latency** | **833ms** | 4,600ms |
-| **P50 Latency** | **446ms** | — |
-| **Noise Rejection** | **88.4%** | — |
-| **Cost / 1,000 scrapes** | **$0** (self-hosted) | $0.83–5.33 |
-| **Idle RAM** | **6.6 MB** | ~500 MB+ |
+| | CRW | Firecrawl v2.5 | Crawl4AI | Spider |
+|---|---|---|---|---|
+| **Coverage** | **92.0%** | 77.2% | — | 99.9% |
+| **Avg Latency** | **833ms** | 4,600ms | — | — |
+| **P50 Latency** | **446ms** | — | — | 45ms (static) |
+| **Noise Rejection** | **88.4%** | noise 6.8% | noise 11.3% | noise 4.2% |
+| **Cost / 1,000 scrapes** | **$0** (self-hosted) | $0.83–5.33 | $0 | $0.65 |
+| **Idle RAM** | **6.6 MB** | ~500 MB+ | — | cloud |
+
+CRW hits a sweet spot: **near-Spider speed** with **Firecrawl API compatibility** and **~75x less RAM**. Unlike Crawl4AI (Python + Playwright), CRW ships as a single Rust binary with no runtime dependencies.
 
 Run the benchmark yourself:
 

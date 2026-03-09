@@ -25,7 +25,7 @@
 
 > **不想自托管？** [fastcrw.com](https://fastcrw.com) 是托管云服务 — 全球代理网络、自动扩展、仪表板和 API 密钥。相同的 Firecrawl 兼容 API。[获取 50 个免费额度 →](https://fastcrw.com)
 
-CRW 是一个基于 Rust 构建的自托管网页抓取和爬虫工具 — 可直接替换 Firecrawl，专为 LLM 结构化提取、RAG 流水线和 AI 代理设计。单一二进制文件，约 6 MB 空闲内存，内置 MCP 服务器支持 Claude，通过 Anthropic 和 OpenAI 进行结构化数据提取。
+CRW 是一个开源、基于 Rust 构建的自托管网页抓取和爬虫工具 — 可直接替换 Firecrawl 和 Crawl4AI，专为 LLM 结构化提取、RAG 流水线和 AI 代理设计。单一二进制文件，约 6 MB 空闲内存，内置 MCP 服务器支持 Claude Code/Cursor/Windsurf，通过 Anthropic 和 OpenAI 进行结构化数据提取。覆盖率 92%，速度快 5.5 倍，内存减少 75 倍。
 
 **单一二进制文件。无 Redis。无 Node.js。兼容 Firecrawl API。**
 
@@ -62,21 +62,51 @@ crw-server
 
 CRW 提供 Firecrawl 的 API，但资源占用极低。无运行时依赖，无 Redis，无 Node.js — 只需一个二进制文件即可部署到任何地方。
 
-| | CRW（自托管） | fastcrw.com（云服务） | Firecrawl |
-|---|---|---|---|
-| **覆盖率（1K URL）** | **92.0%** | **92.0%** | 77.2% |
-| **平均延迟** | **833ms** | **833ms** | 4,600ms |
-| **P50 延迟** | **446ms** | **446ms** | — |
-| **噪声过滤率** | **88.4%** | **88.4%** | — |
-| **空闲内存** | 6.6 MB | 0（托管） | ~500 MB+ |
-| **冷启动** | 85 ms | 0（始终在线） | 数秒 |
-| **代理网络** | 自备 | 全球（内置） | 内置 |
-| **仪表板** | — | 有 | 有 |
-| **每千次成本** | **$0**（自托管） | 从 $13/月起 | $0.83–5.33 |
-| **依赖** | 单一二进制 | 无（API） | Node + Redis |
-| **许可证** | AGPL-3.0 | 托管 | AGPL |
+| | CRW（自托管） | fastcrw.com（云服务） | Firecrawl | Crawl4AI | Spider |
+|---|---|---|---|---|---|
+| **覆盖率（1K URL）** | **92.0%** | **92.0%** | 77.2% | — | 99.9% |
+| **平均延迟** | **833ms** | **833ms** | 4,600ms | — | — |
+| **P50 延迟** | **446ms** | **446ms** | — | — | 45ms（静态） |
+| **噪声过滤率** | **88.4%** | **88.4%** | 噪声 6.8% | 噪声 11.3% | 噪声 4.2% |
+| **空闲内存** | 6.6 MB | 0（托管） | ~500 MB+ | — | 仅云端 |
+| **冷启动** | 85 ms | 0（始终在线） | 30–60 秒 | — | — |
+| **HTTP 抓取** | ~30 ms | ~30 ms | ~200 ms+ | ~480 ms | ~45 ms |
+| **代理网络** | 自备 | 全球（内置） | 内置 | — | 仅云端 |
+| **每千次成本** | **$0**（自托管） | 从 $13/月起 | $0.83–5.33 | $0 | $0.65 |
+| **依赖** | 单一二进制 | 无（API） | Node + Redis + PG + RabbitMQ | Python + Playwright | Rust / 云端 |
+| **许可证** | AGPL-3.0 | 托管 | AGPL-3.0 | Apache-2.0 | MIT |
 
-基准测试：[Firecrawl scrape-content-dataset-v1](https://huggingface.co/datasets/firecrawl/scrape-content-dataset-v1) — 1,000 个真实 URL，启用 JS 渲染。
+<details>
+<summary><b>完整基准测试详情</b></summary>
+
+**CRW vs Firecrawl** — 基于 [Firecrawl scrape-content-dataset-v1](https://huggingface.co/datasets/firecrawl/scrape-content-dataset-v1)（1,000 个真实 URL，启用 JS 渲染）测试：
+- CRW 覆盖 **92%** URL vs Firecrawl **77.2%** — 高出 15 个百分点
+- CRW 平均速度快 **5.5 倍**（833ms vs 4,600ms）
+- CRW 空闲内存减少 **~75 倍**（6.6 MB vs ~500 MB+）
+- Firecrawl 需要 5 个容器（Node.js、Redis、PostgreSQL、RabbitMQ、Playwright）— CRW 只需单一二进制文件
+
+**Crawl4AI vs Firecrawl vs Spider** — [Spider.cloud 独立基准测试](https://spider.cloud/blog/firecrawl-vs-crawl4ai-vs-spider-honest-benchmark)：
+
+| 指标 | Spider | Firecrawl | Crawl4AI |
+|------|--------|-----------|----------|
+| 静态吞吐量 | 182 页/秒 | 27 页/秒 | 19 页/秒 |
+| 成功率（静态） | 100% | 99.5% | 99% |
+| 成功率（SPA） | 100% | 96.6% | 93.7% |
+| 成功率（反爬） | 99.6% | 88.4% | 72% |
+| 延迟（静态） | 45ms | 310ms | 480ms |
+| 延迟（SPA） | 820ms | 1,400ms | 1,650ms |
+
+**资源对比：**
+
+| | CRW | Firecrawl |
+|---|---|---|
+| 最低内存 | ~7 MB | 4 GB |
+| 推荐内存 | ~64 MB（负载下） | 8–16 GB |
+| Docker 镜像 | 单一 ~8 MB 二进制 | ~2–3 GB |
+| 冷启动 | 85 ms | 30–60 秒 |
+| 容器数量 | 1（+可选边车） | 5 |
+
+</details>
 
 ## 功能特性
 

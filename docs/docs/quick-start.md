@@ -1,4 +1,4 @@
-# Quick Start
+# Quick Start — Web Scraping with CRW
 
 ## CLI (no server needed)
 

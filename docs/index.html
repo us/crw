@@ -3,22 +3,56 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>crw — Lightweight Firecrawl alternative in Rust</title>
-  <meta name="description" content="Lightweight Firecrawl alternative — fast web scraper and crawler written in Rust with REST API and MCP server. Markdown, JSON, HTML output formats.">
+  <title>CRW — Open-Source Firecrawl Alternative | Self-Hosted Web Scraper & Crawler in Rust</title>
+  <meta name="description" content="CRW is a fast, open-source Firecrawl alternative written in Rust. Self-hosted web scraper and crawler with MCP server for AI agents, LLM structured extraction, and drop-in Firecrawl API compatibility. 92% coverage, 5.5x faster, 75x less RAM than Firecrawl.">
+  <meta name="keywords" content="web scraper, web crawler, firecrawl alternative, crawl4ai alternative, self-hosted scraper, rust web scraper, mcp server, ai web scraping, rag pipeline, llm extraction, open source crawler, headless browser scraper">
   <link rel="canonical" href="https://us.github.io/crw/">
   <link rel="icon" href="favicon.png" type="image/png">
 
   <!-- Open Graph -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://us.github.io/crw/">
-  <meta property="og:title" content="crw — Lightweight Firecrawl alternative in Rust">
-  <meta property="og:description" content="Lightweight Firecrawl alternative — fast web scraper and crawler written in Rust with REST API and MCP server.">
-  <meta property="og:site_name" content="crw">
+  <meta property="og:title" content="CRW — Open-Source Firecrawl Alternative | Web Scraper in Rust">
+  <meta property="og:description" content="Self-hosted web scraper & crawler. 92% coverage, 5.5x faster than Firecrawl, 6.6 MB idle RAM. Drop-in Firecrawl API, MCP server for Claude, LLM extraction.">
+  <meta property="og:site_name" content="CRW">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="crw — Lightweight Firecrawl alternative in Rust">
-  <meta name="twitter:description" content="Lightweight Firecrawl alternative — fast web scraper and crawler in Rust with REST API and MCP server.">
+  <meta name="twitter:title" content="CRW — Open-Source Firecrawl Alternative | Web Scraper in Rust">
+  <meta name="twitter:description" content="Self-hosted web scraper & crawler. 92% coverage, 5.5x faster than Firecrawl, 6.6 MB RAM. Drop-in API, MCP server, LLM extraction.">
+
+  <!-- Structured Data (JSON-LD) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "CRW",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Linux, macOS, Windows (WSL)",
+    "description": "Open-source, self-hosted web scraper and crawler written in Rust. A fast, lightweight Firecrawl alternative with MCP server support for AI agents, LLM structured extraction, and drop-in Firecrawl API compatibility.",
+    "url": "https://us.github.io/crw/",
+    "downloadUrl": "https://crates.io/crates/crw-server",
+    "softwareVersion": "0.0.2",
+    "license": "https://opensource.org/licenses/AGPL-3.0",
+    "programmingLanguage": "Rust",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "featureList": [
+      "Firecrawl-compatible REST API",
+      "MCP server for Claude Code, Cursor, Windsurf",
+      "LLM structured extraction (Anthropic, OpenAI)",
+      "JavaScript rendering via LightPanda CDP",
+      "BFS web crawler with robots.txt and sitemap support",
+      "6 output formats: Markdown, HTML, JSON, plain text, links",
+      "CSS selector and XPath extraction",
+      "Chunking with BM25 and cosine ranking for RAG pipelines",
+      "Single binary, 6.6 MB idle RAM"
+    ]
+  }
+  </script>
 
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -68,7 +102,40 @@
     </aside>
 
     <main class="content" id="content">
-      <article id="article"></article>
+      <article id="article">
+        <noscript>
+          <h1>CRW — Open-Source Firecrawl Alternative</h1>
+          <p>CRW is a lightweight, self-hosted web scraper and web crawler written in Rust. A fast, open-source alternative to Firecrawl and Crawl4AI designed for LLM extraction, RAG pipelines, and AI agents.</p>
+          <h2>Why CRW over Firecrawl or Crawl4AI?</h2>
+          <ul>
+            <li><strong>92% coverage</strong> on 1,000 real-world URLs (vs Firecrawl 77.2%)</li>
+            <li><strong>5.5x faster</strong> — 833ms avg latency vs Firecrawl's 4,600ms</li>
+            <li><strong>75x less RAM</strong> — 6.6 MB idle vs Firecrawl's 500 MB+</li>
+            <li><strong>Single binary</strong> — no Node.js, no Redis, no PostgreSQL, no Docker required</li>
+            <li><strong>Drop-in Firecrawl API</strong> — same endpoints, same request/response format</li>
+            <li><strong>Built-in MCP server</strong> — works with Claude Code, Claude Desktop, Cursor, Windsurf, Cline, Continue.dev</li>
+            <li><strong>LLM structured extraction</strong> — Anthropic tool_use + OpenAI function calling</li>
+            <li><strong>JS rendering</strong> — auto-detect SPAs, render via LightPanda, Playwright, or Chrome</li>
+          </ul>
+          <h2>Quick Start</h2>
+          <p>Install from crates.io: <code>cargo install crw-server</code>, then run <code>crw-server</code>. Scrape any URL with a single curl command to the Firecrawl-compatible REST API at localhost:3000.</p>
+          <h2>Features</h2>
+          <ul>
+            <li>Firecrawl-compatible REST API — /v1/scrape, /v1/crawl, /v1/map</li>
+            <li>6 output formats — Markdown, HTML, cleaned HTML, raw HTML, plain text, links, JSON</li>
+            <li>MCP server — stdio + HTTP transport for AI coding assistants</li>
+            <li>BFS crawler — async crawl with rate limiting, robots.txt, sitemap support</li>
+            <li>CSS selector &amp; XPath extraction</li>
+            <li>Chunking with BM25 &amp; cosine similarity for RAG pipelines</li>
+            <li>Stealth mode — browser-like User-Agent rotation</li>
+            <li>SSRF protection, constant-time auth</li>
+            <li>Docker ready with LightPanda sidecar</li>
+          </ul>
+          <h2>Benchmark Comparison</h2>
+          <p>Tested on Firecrawl's scrape-content-dataset-v1 (1,000 URLs). CRW: 92% coverage, 833ms latency, 6.6 MB RAM, $0 cost. Firecrawl: 77.2% coverage, 4,600ms latency, 500 MB+ RAM, $0.83-5.33/1K. Crawl4AI: 11.3% noise ratio, 480ms static latency, 72% anti-bot. Spider: 99.9% coverage, 45ms static latency, 4.2% noise.</p>
+          <p>CRW is open-source under AGPL-3.0. Managed cloud available at fastcrw.com.</p>
+        </noscript>
+      </article>
     </main>
   </div>
 

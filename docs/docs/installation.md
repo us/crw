@@ -1,4 +1,4 @@
-# Installation
+# Installation — Self-Hosted Web Scraper
 
 ## Cloud (no installation needed)
 

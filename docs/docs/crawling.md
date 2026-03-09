@@ -1,6 +1,6 @@
-# Crawling
+# Web Crawling API
 
-crw crawls sites using breadth-first search (BFS). Crawl jobs are asynchronous — you start a crawl, get a job ID, and poll for results.
+CRW crawls entire websites using breadth-first search (BFS) — a self-hosted alternative to Firecrawl's crawl endpoint. Crawl jobs are asynchronous — you start a crawl, get a job ID, and poll for results. Includes robots.txt compliance, sitemap discovery, rate limiting, and concurrent page processing.
 
 ## Start a Crawl
 

@@ -1,4 +1,4 @@
-# REST API
+# REST API Reference — Firecrawl-Compatible
 
 Base URL: `http://localhost:3000`
 
