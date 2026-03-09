@@ -1,12 +1,7 @@
 <p align="center">
   <a href="https://fastcrw.com">
-    <img src="docs/fastcrw-banner.png" alt="fastCRW" height="60" />
+    <img src="docs/fastcrw-banner.png" alt="fastCRW" height="120" />
   </a>
-  <br />
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/logo-white.svg">
-    <img src="docs/logo.svg" alt="CRW" height="52" />
-  </picture>
   <p align="center">Lightweight, Firecrawl-compatible web scraper and crawler for AI</p>
   <p align="center">
     <a href="https://crates.io/crates/crw-server"><img src="https://img.shields.io/crates/v/crw-server.svg" alt="crates.io"></a>
