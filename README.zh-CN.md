@@ -1,4 +1,7 @@
 <p align="center">
+  <a href="https://fastcrw.com">
+    <img src="docs/fastcrw-banner.png" alt="fastCRW" height="60" />
+  </a>
   <h1 align="center">CRW</h1>
   <p align="center">轻量级、兼容 Firecrawl 的 AI 网页抓取和爬虫工具</p>
   <p align="center">

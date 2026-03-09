@@ -1,4 +1,8 @@
 <p align="center">
+  <a href="https://fastcrw.com">
+    <img src="docs/fastcrw-banner.png" alt="fastCRW" height="60" />
+  </a>
+  <br />
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/logo-white.svg">
     <img src="docs/logo.svg" alt="CRW" height="52" />
