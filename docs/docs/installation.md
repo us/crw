@@ -1,5 +1,17 @@
 # Installation
 
+## Cloud (no installation needed)
+
+Sign up at [fastcrw.com](https://fastcrw.com) and start using the API immediately.
+Same Firecrawl-compatible endpoints, zero infrastructure.
+
+```bash
+curl -X POST https://fastcrw.com/api/v1/scrape \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com"}'
+```
+
 ## From crates.io
 
 ```bash

@@ -1,4 +1,7 @@
-target/
-.git/
-bench/
-docs/
+target
+.git
+bench
+docs
+*.md
+tests
+.dockerignore

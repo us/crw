@@ -5,6 +5,14 @@
   </picture>
   <p align="center">Lightweight, Firecrawl-compatible web scraper and crawler for AI</p>
   <p align="center">
+    <a href="https://crates.io/crates/crw-server"><img src="https://img.shields.io/crates/v/crw-server.svg" alt="crates.io"></a>
+    <a href="https://github.com/us/crw/actions"><img src="https://github.com/us/crw/workflows/CI/badge.svg" alt="CI"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg" alt="License"></a>
+    <a href="https://github.com/us/crw/stargazers"><img src="https://img.shields.io/github/stars/us/crw?style=social" alt="GitHub Stars"></a>
+    <a href="https://fastcrw.com"><img src="https://img.shields.io/badge/Managed%20Cloud-fastcrw.com-blueviolet" alt="fastcrw.com"></a>
+  </p>
+  <p align="center">
+    <a href="https://fastcrw.com">Cloud</a> &bull;
     <a href="docs/docs/installation.md">Installation</a> &bull;
     <a href="docs/docs/rest-api.md">API Reference</a> &bull;
     <a href="docs/docs/mcp.md">MCP Integration</a> &bull;
@@ -17,6 +25,8 @@
 </p>
 
 ---
+
+> **Don't want to self-host?** [fastcrw.com](https://fastcrw.com) is the managed cloud — global proxy network, auto-scaling, dashboard, and API keys. Same Firecrawl-compatible API. [Get 50 free credits →](https://fastcrw.com)
 
 CRW is a self-hosted web scraper and web crawler built in Rust — a fast, lightweight Firecrawl alternative designed for LLM extraction, RAG pipelines, and AI agents. It ships as a single binary with ~6 MB idle RAM, built-in MCP server support for Claude, and structured data extraction via Anthropic and OpenAI. Drop-in compatible with Firecrawl's API.
 
@@ -55,19 +65,19 @@ crw-server
 
 CRW gives you Firecrawl's API with a fraction of the resource usage. No runtime dependencies, no Redis, no Node.js — just a single binary you can deploy anywhere.
 
-| | CRW | Firecrawl |
-|---|---|---|
-| **Coverage (1K URLs)** | **92.0%** | 77.2% |
-| **Avg Latency** | **833ms** | 4,600ms |
-| **P50 Latency** | **446ms** | — |
-| **Noise Rejection** | **88.4%** | — |
-| **Idle RAM** | 6.6 MB | ~500 MB+ |
-| **Cold start** | 85 ms | seconds |
-| **HTTP scrape** | ~30 ms | ~200 ms+ |
-| **Binary size** | ~8 MB | Node.js runtime |
-| **Cost / 1K scrapes** | **$0** (self-hosted) | $0.83–5.33 |
-| **Dependencies** | single binary | Node + Redis |
-| **License** | AGPL-3.0 | AGPL |
+| | CRW (self-hosted) | fastcrw.com (cloud) | Firecrawl |
+|---|---|---|---|
+| **Coverage (1K URLs)** | **92.0%** | **92.0%** | 77.2% |
+| **Avg Latency** | **833ms** | **833ms** | 4,600ms |
+| **P50 Latency** | **446ms** | **446ms** | — |
+| **Noise Rejection** | **88.4%** | **88.4%** | — |
+| **Idle RAM** | 6.6 MB | 0 (managed) | ~500 MB+ |
+| **Cold start** | 85 ms | 0 (always-on) | seconds |
+| **Proxy network** | BYO | Global (built-in) | Built-in |
+| **Dashboard** | — | Yes | Yes |
+| **Cost / 1K scrapes** | **$0** (self-hosted) | From $13/mo | $0.83–5.33 |
+| **Dependencies** | single binary | None (API) | Node + Redis |
+| **License** | AGPL-3.0 | Managed | AGPL |
 
 Benchmark: [Firecrawl scrape-content-dataset-v1](https://huggingface.co/datasets/firecrawl/scrape-content-dataset-v1) — 1,000 real-world URLs with JS rendering enabled.
 
@@ -86,9 +96,32 @@ Benchmark: [Firecrawl scrape-content-dataset-v1](https://huggingface.co/datasets
 - **🕵️ Stealth mode** — browser-like UA rotation and header injection to reduce bot detection
 - **🌐 Per-request proxy** — override the global proxy per scrape request
 
+## Cloud vs Self-Hosted
+
+| | Self-hosted | Cloud ([fastcrw.com](https://fastcrw.com)) |
+|---|---|---|
+| **Setup** | `cargo install crw-server` | Sign up → get API key |
+| **Infrastructure** | You manage | Fully managed |
+| **Proxy** | Bring your own | Global proxy network |
+| **Scaling** | Manual | Auto-scaling |
+| **API** | Firecrawl-compatible | Same Firecrawl-compatible API |
+
+Both use the same Firecrawl-compatible API — your code works with either. Switch between self-hosted and cloud by changing the base URL.
+
 ## Quick Start
 
-**Install from crates.io:**
+**Cloud (no setup):**
+
+```bash
+curl -X POST https://fastcrw.com/api/v1/scrape \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com"}'
+```
+
+> Get your API key at [fastcrw.com](https://fastcrw.com) — 50 free credits included.
+
+**Self-hosted — install from crates.io:**
 
 ```bash
 cargo install crw-server
@@ -525,11 +558,14 @@ CRW includes built-in protections against common web scraping attack vectors:
 Contributions are welcome! Please open an issue or submit a pull request.
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feat/my-feature`)
-3. Commit your changes (`git commit -m 'feat: add my feature'`)
-4. Push to the branch (`git push origin feat/my-feature`)
-5. Open a Pull Request
+2. Install pre-commit hooks: `make hooks`
+3. Create your feature branch (`git checkout -b feat/my-feature`)
+4. Commit your changes (`git commit -m 'feat: add my feature'`)
+5. Push to the branch (`git push origin feat/my-feature`)
+6. Open a Pull Request
+
+The pre-commit hook runs the same checks as CI (`cargo fmt`, `cargo clippy`, `cargo test`). You can also run them manually with `make check`.
 
 ## License
 
-[AGPL-3.0](LICENSE)
+CRW is open-source under [AGPL-3.0](LICENSE). For a managed version without AGPL obligations, see [fastcrw.com](https://fastcrw.com).

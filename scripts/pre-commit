@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Pre-commit hook for crw-opencore
+# Mirrors the CI checks: fmt, clippy, test
+# Install: cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+#    or:   make hooks
+
+set -euo pipefail
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m'
+
+info()  { printf "${GREEN}[pre-commit]${NC} %s\n" "$1"; }
+warn()  { printf "${YELLOW}[pre-commit]${NC} %s\n" "$1"; }
+fail()  { printf "${RED}[pre-commit]${NC} %s\n" "$1"; exit 1; }
+
+# Only check Rust files that are staged
+STAGED_RS=$(git diff --cached --name-only --diff-filter=ACMR -- '*.rs' '*.toml' || true)
+if [ -z "$STAGED_RS" ]; then
+    info "No Rust/TOML files staged, skipping checks."
+    exit 0
+fi
+
+info "Checking formatting..."
+cargo fmt --all -- --check 2>&1 || fail "Formatting check failed. Run 'cargo fmt --all' to fix."
+
+info "Running clippy..."
+cargo clippy --workspace --all-targets -- -D warnings 2>&1 || fail "Clippy found warnings. Fix them before committing."
+
+info "Running tests..."
+cargo test --workspace 2>&1 || fail "Tests failed. Fix them before committing."
+
+info "All checks passed!"

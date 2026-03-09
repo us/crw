@@ -2,6 +2,14 @@
   <h1 align="center">CRW</h1>
   <p align="center">轻量级、兼容 Firecrawl 的 AI 网页抓取和爬虫工具</p>
   <p align="center">
+    <a href="https://crates.io/crates/crw-server"><img src="https://img.shields.io/crates/v/crw-server.svg" alt="crates.io"></a>
+    <a href="https://github.com/us/crw/actions"><img src="https://github.com/us/crw/workflows/CI/badge.svg" alt="CI"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg" alt="License"></a>
+    <a href="https://github.com/us/crw/stargazers"><img src="https://img.shields.io/github/stars/us/crw?style=social" alt="GitHub Stars"></a>
+    <a href="https://fastcrw.com"><img src="https://img.shields.io/badge/Managed%20Cloud-fastcrw.com-blueviolet" alt="fastcrw.com"></a>
+  </p>
+  <p align="center">
+    <a href="https://fastcrw.com">云服务</a> &bull;
     <a href="docs/docs/installation.md">安装指南</a> &bull;
     <a href="docs/docs/rest-api.md">API 参考</a> &bull;
     <a href="docs/docs/mcp.md">MCP 集成</a> &bull;
@@ -14,6 +22,8 @@
 </p>
 
 ---
+
+> **不想自托管？** [fastcrw.com](https://fastcrw.com) 是托管云服务 — 全球代理网络、自动扩展、仪表板和 API 密钥。相同的 Firecrawl 兼容 API。[获取 50 个免费额度 →](https://fastcrw.com)
 
 CRW 是一个基于 Rust 构建的自托管网页抓取和爬虫工具 — 可直接替换 Firecrawl，专为 LLM 结构化提取、RAG 流水线和 AI 代理设计。单一二进制文件，约 6 MB 空闲内存，内置 MCP 服务器支持 Claude，通过 Anthropic 和 OpenAI 进行结构化数据提取。
 
@@ -52,19 +62,19 @@ crw-server
 
 CRW 提供 Firecrawl 的 API，但资源占用极低。无运行时依赖，无 Redis，无 Node.js — 只需一个二进制文件即可部署到任何地方。
 
-| | CRW | Firecrawl |
-|---|---|---|
-| **覆盖率（1K URL）** | **92.0%** | 77.2% |
-| **平均延迟** | **833ms** | 4,600ms |
-| **P50 延迟** | **446ms** | — |
-| **噪声过滤率** | **88.4%** | — |
-| **空闲内存** | 6.6 MB | ~500 MB+ |
-| **冷启动** | 85 ms | 数秒 |
-| **HTTP 抓取** | ~30 ms | ~200 ms+ |
-| **二进制大小** | ~8 MB | Node.js 运行时 |
-| **每千次成本** | **$0**（自托管） | $0.83–5.33 |
-| **依赖** | 单一二进制 | Node + Redis |
-| **许可证** | AGPL-3.0 | AGPL |
+| | CRW（自托管） | fastcrw.com（云服务） | Firecrawl |
+|---|---|---|---|
+| **覆盖率（1K URL）** | **92.0%** | **92.0%** | 77.2% |
+| **平均延迟** | **833ms** | **833ms** | 4,600ms |
+| **P50 延迟** | **446ms** | **446ms** | — |
+| **噪声过滤率** | **88.4%** | **88.4%** | — |
+| **空闲内存** | 6.6 MB | 0（托管） | ~500 MB+ |
+| **冷启动** | 85 ms | 0（始终在线） | 数秒 |
+| **代理网络** | 自备 | 全球（内置） | 内置 |
+| **仪表板** | — | 有 | 有 |
+| **每千次成本** | **$0**（自托管） | 从 $13/月起 | $0.83–5.33 |
+| **依赖** | 单一二进制 | 无（API） | Node + Redis |
+| **许可证** | AGPL-3.0 | 托管 | AGPL |
 
 基准测试：[Firecrawl scrape-content-dataset-v1](https://huggingface.co/datasets/firecrawl/scrape-content-dataset-v1) — 1,000 个真实 URL，启用 JS 渲染。
 
@@ -79,9 +89,32 @@ CRW 提供 Firecrawl 的 API，但资源占用极低。无运行时依赖，无 
 - **🔒 身份验证** — 可选的 Bearer Token，常量时间比较
 - **🐳 Docker 就绪** — 多阶段构建，含 LightPanda 边车
 
+## 云服务 vs 自托管
+
+| | 自托管 | 云服务（[fastcrw.com](https://fastcrw.com)） |
+|---|---|---|
+| **部署** | `cargo install crw-server` | 注册 → 获取 API 密钥 |
+| **基础设施** | 自行管理 | 完全托管 |
+| **代理** | 自备 | 全球代理网络 |
+| **扩展** | 手动 | 自动扩展 |
+| **API** | 兼容 Firecrawl | 相同的 Firecrawl 兼容 API |
+
+两者使用相同的 Firecrawl 兼容 API — 只需更改 base URL 即可在自托管和云服务之间切换。
+
 ## 快速开始
 
-**从 crates.io 安装：**
+**云服务（无需部署）：**
+
+```bash
+curl -X POST https://fastcrw.com/api/v1/scrape \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com"}'
+```
+
+> 在 [fastcrw.com](https://fastcrw.com) 获取 API 密钥 — 包含 50 个免费额度。
+
+**自托管 — 从 crates.io 安装：**
 
 ```bash
 cargo install crw-server
@@ -381,11 +414,14 @@ docker compose up
 欢迎贡献！请提交 issue 或 pull request。
 
 1. Fork 仓库
-2. 创建功能分支（`git checkout -b feat/my-feature`）
-3. 提交更改（`git commit -m 'feat: add my feature'`）
-4. 推送到分支（`git push origin feat/my-feature`）
-5. 创建 Pull Request
+2. 安装 pre-commit hooks：`make hooks`
+3. 创建功能分支（`git checkout -b feat/my-feature`）
+4. 提交更改（`git commit -m 'feat: add my feature'`）
+5. 推送到分支（`git push origin feat/my-feature`）
+6. 创建 Pull Request
+
+Pre-commit hook 会运行与 CI 相同的检查（`cargo fmt`、`cargo clippy`、`cargo test`）。也可以通过 `make check` 手动运行。
 
 ## 许可证
 
-[AGPL-3.0](LICENSE)
+CRW 基于 [AGPL-3.0](LICENSE) 开源。如需无 AGPL 义务的托管版本，请访问 [fastcrw.com](https://fastcrw.com)。
