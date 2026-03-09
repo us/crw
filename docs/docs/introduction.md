@@ -6,18 +6,18 @@ crw is a lightweight, self-hosted web scraper and crawler written in Rust. A **d
 
 Tested against [Firecrawl scrape-content-dataset-v1](https://huggingface.co/datasets/firecrawl/scrape-content-dataset-v1) — 1,000 real-world URLs:
 
-| | crw | Firecrawl |
-|---|---|---|
-| **Coverage (1K URLs)** | **92.0%** | 77.2% |
-| **Avg Latency** | **833ms** | 4,600ms |
-| **P50 Latency** | **446ms** | — |
-| **Noise Rejection** | **88.4%** | — |
-| **Idle RAM** | 6.6 MB | ~500 MB+ |
-| **Cold start** | 85 ms | seconds |
-| **HTTP scrape** | ~30 ms | ~200 ms+ |
-| **Binary size** | ~8 MB | Node.js runtime |
-| **Cost / 1K scrapes** | **$0** | $0.83–5.33 |
-| **Dependencies** | single binary | Node + Redis |
+| | CRW (self-hosted) | fastcrw.com (cloud) | Firecrawl |
+|---|---|---|---|
+| **Coverage (1K URLs)** | **92.0%** | **92.0%** | 77.2% |
+| **Avg Latency** | **833ms** | **833ms** | 4,600ms |
+| **P50 Latency** | **446ms** | **446ms** | — |
+| **Noise Rejection** | **88.4%** | **88.4%** | — |
+| **Idle RAM** | 6.6 MB | 0 (managed) | ~500 MB+ |
+| **Cold start** | 85 ms | 0 (always-on) | seconds |
+| **Proxy network** | BYO | Global (built-in) | Built-in |
+| **Dashboard** | — | Yes | Yes |
+| **Cost / 1K scrapes** | **$0** (self-hosted) | From $13/mo | $0.83–5.33 |
+| **Dependencies** | single binary | None (API) | Node + Redis |
 
 ## Features
 
