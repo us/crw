@@ -20,6 +20,7 @@ pub mod readability;
 pub mod selector;
 pub mod structured;
 
+use crw_core::error::{CrwError, CrwResult};
 use crw_core::types::{ChunkStrategy, FilterMode, OutputFormat, PageMetadata, ScrapeData};
 
 /// Options for the high-level extraction pipeline.
@@ -48,7 +49,7 @@ pub struct ExtractOptions<'a> {
 }
 
 /// High-level extraction: given raw HTML + options, produce ScrapeData.
-pub fn extract(opts: ExtractOptions<'_>) -> ScrapeData {
+pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
     let ExtractOptions {
         raw_html,
         source_url,
@@ -75,7 +76,7 @@ pub fn extract(opts: ExtractOptions<'_>) -> ScrapeData {
         .unwrap_or_else(|_| raw_html.to_string());
 
     // Step 3: Apply CSS/XPath selector if provided (narrows to a specific element).
-    let selected_html = apply_selector(&cleaned, css_selector, xpath);
+    let selected_html = apply_selector(&cleaned, css_selector, xpath)?;
     let after_selection = selected_html.as_deref().unwrap_or(&cleaned);
 
     // Step 4: If only_main_content, try to narrow further with readability scoring.
@@ -188,7 +189,7 @@ pub fn extract(opts: ExtractOptions<'_>) -> ScrapeData {
         None
     };
 
-    ScrapeData {
+    Ok(ScrapeData {
         markdown: md,
         html,
         raw_html: raw,
@@ -196,6 +197,7 @@ pub fn extract(opts: ExtractOptions<'_>) -> ScrapeData {
         links,
         json,
         chunks,
+        warning: None,
         metadata: PageMetadata {
             title: meta.title,
             description: meta.description,
@@ -209,24 +211,28 @@ pub fn extract(opts: ExtractOptions<'_>) -> ScrapeData {
             rendered_with,
             elapsed_ms,
         },
-    }
+    })
 }
 
 /// Apply CSS selector or XPath to narrow HTML content.
 /// Returns None if no selector is set or no match is found.
-fn apply_selector(html: &str, css: Option<&str>, xpath: Option<&str>) -> Option<String> {
+fn apply_selector(html: &str, css: Option<&str>, xpath: Option<&str>) -> CrwResult<Option<String>> {
     if let Some(sel) = css {
-        let result = selector::extract_by_css(html, sel);
+        let result = selector::extract_by_css(html, sel).map_err(CrwError::ExtractionError)?;
         if result.is_some() {
-            return result;
+            return Ok(result);
         }
     }
-    if let Some(xp) = xpath {
-        // XPath returns text; wrap it in a <div> so the rest of the pipeline
-        // can treat it as HTML.
-        if let Some(text) = selector::extract_by_xpath(html, xp) {
-            return Some(format!("<div>{text}</div>"));
-        }
+    if let Some(xp) = xpath
+        && let Some(texts) =
+            selector::extract_by_xpath(html, xp).map_err(CrwError::ExtractionError)?
+    {
+        let wrapped = texts
+            .into_iter()
+            .map(|text| format!("<div>{text}</div>"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        return Ok(Some(wrapped));
     }
-    None
+    Ok(None)
 }

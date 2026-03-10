@@ -10,9 +10,9 @@ categories.workspace = true
 description = "Async BFS web crawler with rate limiting and robots.txt support for CRW"
 
 [dependencies]
-crw-core = { path = "../crw-core", version = "0.0.2" }
-crw-renderer = { path = "../crw-renderer", version = "0.0.2" }
-crw-extract = { path = "../crw-extract", version = "0.0.2" }
+crw-core = { path = "../crw-core", version = "0.0.3" }
+crw-renderer = { path = "../crw-renderer", version = "0.0.3" }
+crw-extract = { path = "../crw-extract", version = "0.0.3" }
 reqwest = { workspace = true }
 scraper = { workspace = true }
 tokio = { workspace = true }

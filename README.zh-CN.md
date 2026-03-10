@@ -38,6 +38,14 @@ crw-server
 
 ## 最新动态
 
+### v0.0.3
+
+- **目标告警语义** — 4xx 与反爬页面现在返回 `success: true`，并通过 `warning` 与 `metadata.statusCode` 暴露真实目标状态
+- **更可靠的 JS 渲染** — CDP 导航会等待真实页面生命周期完成后再应用 `waitFor`
+- **隐身模式解压修复** — gzip 与 brotli 响应现在会被正确解码，不再返回乱码二进制内容
+- **爬取兼容性提升** — `limit`、`maxPages` 与 `max_pages` 统一归一到同一页数上限
+- **XPath 与分块修复** — XPath 返回全部匹配项，chunk 支持 overlap/dedupe，排序保留评分结果顺序
+
 ### v0.0.2
 
 - **CSS 选择器 & XPath** — Markdown 转换前提取特定 DOM 元素（`cssSelector`、`xpath`）

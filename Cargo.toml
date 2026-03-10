@@ -11,7 +11,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.0.2"
+version = "0.0.3"
 edition = "2024"
 license = "AGPL-3.0"
 repository = "https://github.com/us/crw"
@@ -29,7 +29,7 @@ tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "trace", "timeout"] }
 
 # HTTP client
-reqwest = { version = "0.13", default-features = false, features = ["json", "cookies", "rustls"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "cookies", "rustls", "gzip", "brotli", "deflate"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }

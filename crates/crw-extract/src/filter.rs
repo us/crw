@@ -78,7 +78,6 @@ fn filter_bm25(chunks: &[String], query: &str, top_k: usize) -> Vec<String> {
 
     scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     scored.truncate(top_k);
-    scored.sort_by_key(|(i, _)| *i); // Restore document order.
     scored.into_iter().map(|(i, _)| chunks[i].clone()).collect()
 }
 
@@ -142,7 +141,6 @@ fn filter_cosine(chunks: &[String], query: &str, top_k: usize) -> Vec<String> {
 
     scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     scored.truncate(top_k);
-    scored.sort_by_key(|(i, _)| *i);
     scored.into_iter().map(|(i, _)| chunks[i].clone()).collect()
 }
 
@@ -204,5 +202,30 @@ mod tests {
         let chunks = vec!["a".into(), "b".into()];
         let result = filter_chunks(&chunks, "a", &FilterMode::Bm25, 100);
         assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn ranking_order_is_preserved() {
+        let chunks = vec![
+            "irrelevant background".to_string(),
+            "rust programming language ownership borrow checker".to_string(),
+            "rust".to_string(),
+        ];
+
+        let result = filter_chunks(&chunks, "rust programming language", &FilterMode::Bm25, 2);
+        assert_eq!(result[0], chunks[1]);
+    }
+
+    #[test]
+    fn bm25_and_cosine_can_diverge() {
+        let chunks = vec![
+            "token token token token".to_string(),
+            "token related semantic context".to_string(),
+            "unrelated content".to_string(),
+        ];
+
+        let bm25 = filter_chunks(&chunks, "token semantic", &FilterMode::Bm25, 2);
+        let cosine = filter_chunks(&chunks, "token semantic", &FilterMode::Cosine, 2);
+        assert_ne!(bm25, cosine);
     }
 }

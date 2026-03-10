@@ -12,6 +12,7 @@ use tokio::time::Instant;
 use uuid::Uuid;
 
 use crate::robots::RobotsTxt;
+use crate::single::derive_target_warning;
 
 /// Maximum URL discovery limit to prevent memory exhaustion.
 const MAX_DISCOVERED_URLS: usize = 5000;
@@ -304,11 +305,12 @@ pub async fn run_crawl(opts: CrawlOptions<'_>) {
             );
         }
 
-        let mut data = crw_extract::extract(crw_extract::ExtractOptions {
+        let warning = derive_target_warning(&fetch_result);
+        let mut data = match crw_extract::extract(crw_extract::ExtractOptions {
             raw_html: &fetch_result.html,
             source_url: &fetch_result.url,
             status_code: fetch_result.status_code,
-            rendered_with: fetch_result.rendered_with,
+            rendered_with: fetch_result.rendered_with.clone(),
             elapsed_ms: fetch_result.elapsed_ms,
             formats: &req.formats,
             only_main_content: req.only_main_content,
@@ -320,7 +322,14 @@ pub async fn run_crawl(opts: CrawlOptions<'_>) {
             query: None,
             filter_mode: None,
             top_k: None,
-        });
+        }) {
+            Ok(data) => data,
+            Err(err) => {
+                tracing::warn!(url, error = %err, "Crawl: extraction failed");
+                continue;
+            }
+        };
+        data.warning = warning;
 
         if let (Some(schema), Some(llm)) = (&req.json_schema, llm_config)
             && let Some(md) = &data.markdown

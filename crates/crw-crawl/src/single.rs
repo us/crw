@@ -1,6 +1,6 @@
 use crw_core::config::{BUILTIN_UA_POOL, LlmConfig};
 use crw_core::error::CrwResult;
-use crw_core::types::{OutputFormat, ScrapeData, ScrapeRequest};
+use crw_core::types::{FetchResult, OutputFormat, ScrapeData, ScrapeRequest};
 use crw_renderer::FallbackRenderer;
 use crw_renderer::http_only::HttpFetcher;
 use crw_renderer::traits::PageFetcher;
@@ -45,11 +45,12 @@ pub async fn scrape_url(
             .await?
     };
 
+    let warning = derive_target_warning(&fetch_result);
     let mut data = crw_extract::extract(crw_extract::ExtractOptions {
         raw_html: &fetch_result.html,
         source_url: &fetch_result.url,
         status_code: fetch_result.status_code,
-        rendered_with: fetch_result.rendered_with,
+        rendered_with: fetch_result.rendered_with.clone(),
         elapsed_ms: fetch_result.elapsed_ms,
         formats: &req.formats,
         only_main_content: req.only_main_content,
@@ -61,7 +62,8 @@ pub async fn scrape_url(
         query: req.query.as_deref(),
         filter_mode: req.filter_mode.as_ref(),
         top_k: req.top_k,
-    });
+    })?;
+    data.warning = warning;
 
     // Phase 4: LLM structured extraction
     if formats_include_json(&req.formats) {
@@ -84,6 +86,82 @@ pub async fn scrape_url(
     Ok(data)
 }
 
+pub(crate) fn derive_target_warning(fetch_result: &FetchResult) -> Option<String> {
+    if fetch_result.warning.is_some() {
+        return fetch_result.warning.clone();
+    }
+
+    if matches!(fetch_result.status_code, 401 | 403 | 404 | 429 | 503) {
+        return Some(format!(
+            "Target returned {} {}",
+            fetch_result.status_code,
+            canonical_status_text(fetch_result.status_code)
+        ));
+    }
+
+    detect_block_interstitial(&fetch_result.html)
+}
+
+fn canonical_status_text(status_code: u16) -> &'static str {
+    match status_code {
+        401 => "Unauthorized",
+        403 => "Forbidden",
+        404 => "Not Found",
+        429 => "Too Many Requests",
+        503 => "Service Unavailable",
+        _ => "Response",
+    }
+}
+
+fn detect_block_interstitial(html: &str) -> Option<String> {
+    let lower = html.to_lowercase();
+    let markers = [
+        "just a moment",
+        "attention required",
+        "cf-browser-verification",
+        "cf-challenge",
+        "captcha",
+        "access denied",
+    ];
+
+    if markers.iter().any(|marker| lower.contains(marker)) {
+        Some("Blocked by anti-bot protection".to_string())
+    } else {
+        None
+    }
+}
+
 fn formats_include_json(formats: &[OutputFormat]) -> bool {
     formats.contains(&OutputFormat::Json)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_fetch(status_code: u16, html: &str) -> FetchResult {
+        FetchResult {
+            url: "https://example.com".into(),
+            status_code,
+            html: html.into(),
+            rendered_with: None,
+            elapsed_ms: 10,
+            warning: None,
+        }
+    }
+
+    #[test]
+    fn warning_detects_target_status_codes() {
+        let warning = derive_target_warning(&sample_fetch(403, "<html></html>"));
+        assert_eq!(warning.as_deref(), Some("Target returned 403 Forbidden"));
+    }
+
+    #[test]
+    fn warning_detects_block_markers() {
+        let warning = derive_target_warning(&sample_fetch(
+            200,
+            "<html><title>Just a moment</title><body>cf-browser-verification</body></html>",
+        ));
+        assert_eq!(warning.as_deref(), Some("Blocked by anti-bot protection"));
+    }
 }

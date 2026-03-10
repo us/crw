@@ -86,7 +86,7 @@ async fn main() {
 
     let renderer = Arc::new(FallbackRenderer::new(
         &renderer_config,
-        "crw/0.0.2",
+        "crw/0.0.3",
         cli.proxy.as_deref(),
         &stealth_config,
     ));
@@ -120,7 +120,7 @@ async fn main() {
         stealth: if cli.stealth { Some(true) } else { None },
     };
 
-    let data = match scrape_url(&req, &renderer, None, "crw/0.0.2", cli.stealth).await {
+    let data = match scrape_url(&req, &renderer, None, "crw/0.0.3", cli.stealth).await {
         Ok(d) => d,
         Err(e) => {
             eprintln!("error: {e}");

@@ -1,13 +1,57 @@
 use crw_core::types::ChunkStrategy;
 use regex::Regex;
+use std::collections::HashSet;
+
+#[derive(Clone, Copy)]
+struct ChunkOptions {
+    max_chars: Option<usize>,
+    overlap_chars: usize,
+    dedupe: bool,
+}
 
 /// Chunk text according to the given strategy.
 pub fn chunk_text(text: &str, strategy: &ChunkStrategy) -> Vec<String> {
-    match strategy {
-        ChunkStrategy::Sentence { max_chars } => chunk_by_sentence(text, *max_chars),
-        ChunkStrategy::Regex { pattern } => chunk_by_regex(text, pattern),
-        ChunkStrategy::Topic => chunk_by_topic(text),
-    }
+    let (chunks, options) = match strategy {
+        ChunkStrategy::Sentence {
+            max_chars,
+            overlap_chars,
+            dedupe,
+        } => (
+            chunk_by_sentence(text, *max_chars),
+            ChunkOptions {
+                max_chars: *max_chars,
+                overlap_chars: overlap_chars.unwrap_or(0),
+                dedupe: dedupe.unwrap_or(false),
+            },
+        ),
+        ChunkStrategy::Regex {
+            pattern,
+            max_chars,
+            overlap_chars,
+            dedupe,
+        } => (
+            chunk_by_regex(text, pattern),
+            ChunkOptions {
+                max_chars: *max_chars,
+                overlap_chars: overlap_chars.unwrap_or(0),
+                dedupe: dedupe.unwrap_or(false),
+            },
+        ),
+        ChunkStrategy::Topic {
+            max_chars,
+            overlap_chars,
+            dedupe,
+        } => (
+            chunk_by_topic(text),
+            ChunkOptions {
+                max_chars: *max_chars,
+                overlap_chars: overlap_chars.unwrap_or(0),
+                dedupe: dedupe.unwrap_or(false),
+            },
+        ),
+    };
+
+    post_process_chunks(chunks, options)
 }
 
 /// Split on sentence boundaries (.!?) then merge chunks that are too short.
@@ -74,6 +118,89 @@ fn chunk_by_sentence(text: &str, max_chars: Option<usize>) -> Vec<String> {
     merged
 }
 
+fn post_process_chunks(chunks: Vec<String>, options: ChunkOptions) -> Vec<String> {
+    let mut processed = if let Some(max_chars) = options.max_chars.filter(|max| *max > 0) {
+        chunks
+            .into_iter()
+            .flat_map(|chunk| split_long_chunk(&chunk, max_chars, options.overlap_chars))
+            .collect::<Vec<_>>()
+    } else {
+        chunks
+    };
+
+    processed.retain(|chunk| !chunk.trim().is_empty());
+
+    if options.dedupe {
+        let mut seen = HashSet::new();
+        processed.retain(|chunk| seen.insert(normalize_chunk(chunk)));
+    }
+
+    processed
+}
+
+fn split_long_chunk(chunk: &str, max_chars: usize, overlap_chars: usize) -> Vec<String> {
+    let text = chunk.trim();
+    if text.is_empty() || text.len() <= max_chars {
+        return if text.is_empty() {
+            Vec::new()
+        } else {
+            vec![text.to_string()]
+        };
+    }
+
+    let mut result = Vec::new();
+    let mut start = 0;
+    let overlap_chars = overlap_chars.min(max_chars.saturating_sub(1));
+
+    while start < text.len() {
+        while start < text.len() && !text.is_char_boundary(start) {
+            start += 1;
+        }
+
+        let remaining = &text[start..];
+        if remaining.len() <= max_chars {
+            result.push(remaining.trim().to_string());
+            break;
+        }
+
+        let mut end = start + max_chars;
+        while end > start && !text.is_char_boundary(end) {
+            end -= 1;
+        }
+
+        if let Some(relative) = text[start..end].rfind(|c: char| c.is_whitespace())
+            && relative > max_chars / 2
+        {
+            end = start + relative;
+        }
+
+        let segment = text[start..end].trim();
+        if !segment.is_empty() {
+            result.push(segment.to_string());
+        }
+
+        if end >= text.len() {
+            break;
+        }
+
+        let step = end
+            .saturating_sub(start)
+            .saturating_sub(overlap_chars)
+            .max(1);
+        start += step;
+    }
+
+    result
+}
+
+fn normalize_chunk(chunk: &str) -> String {
+    chunk
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
 /// Split using a regex pattern as separator.
 fn chunk_by_regex(text: &str, pattern: &str) -> Vec<String> {
     let re = match Regex::new(pattern) {
@@ -120,6 +247,8 @@ mod tests {
             text,
             &ChunkStrategy::Sentence {
                 max_chars: Some(30),
+                overlap_chars: None,
+                dedupe: None,
             },
         );
         assert!(!chunks.is_empty());
@@ -133,7 +262,14 @@ mod tests {
     fn topic_chunks_on_headings() {
         let text =
             "# Title\nContent under title.\n## Section\nSection content.\n### Sub\nSub content.";
-        let chunks = chunk_text(text, &ChunkStrategy::Topic);
+        let chunks = chunk_text(
+            text,
+            &ChunkStrategy::Topic {
+                max_chars: None,
+                overlap_chars: None,
+                dedupe: None,
+            },
+        );
         assert_eq!(chunks.len(), 3);
         assert!(chunks[0].starts_with("# Title"));
         assert!(chunks[1].starts_with("## Section"));
@@ -146,6 +282,9 @@ mod tests {
             text,
             &ChunkStrategy::Regex {
                 pattern: r"\n\n".to_string(),
+                max_chars: None,
+                overlap_chars: None,
+                dedupe: None,
             },
         );
         assert_eq!(chunks.len(), 3);
@@ -158,9 +297,29 @@ mod tests {
             text,
             &ChunkStrategy::Regex {
                 pattern: "[invalid".to_string(),
+                max_chars: None,
+                overlap_chars: None,
+                dedupe: None,
             },
         );
         assert_eq!(chunks.len(), 1);
         assert_eq!(chunks[0], text);
+    }
+
+    #[test]
+    fn overlap_and_dedupe_are_applied() {
+        let text = "alpha beta gamma delta epsilon zeta eta theta";
+        let chunks = chunk_text(
+            text,
+            &ChunkStrategy::Regex {
+                pattern: r"\n\n".to_string(),
+                max_chars: Some(16),
+                overlap_chars: Some(5),
+                dedupe: Some(true),
+            },
+        );
+
+        assert!(chunks.len() >= 2);
+        assert!(chunks.iter().all(|chunk| chunk.len() <= 16));
     }
 }

@@ -10,7 +10,7 @@ categories.workspace = true
 description = "HTML extraction and markdown conversion engine for the CRW web scraper"
 
 [dependencies]
-crw-core = { path = "../crw-core", version = "0.0.2" }
+crw-core = { path = "../crw-core", version = "0.0.3" }
 lol_html = { workspace = true }
 scraper = { workspace = true }
 htmd = { workspace = true }

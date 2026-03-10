@@ -27,9 +27,9 @@
 
 > **Don't want to self-host?** [fastcrw.com](https://fastcrw.com) is the managed cloud — global proxy network, auto-scaling, dashboard, and API keys. Same Firecrawl-compatible API. [Get 50 free credits →](https://fastcrw.com)
 
-CRW is an open-source, self-hosted web scraper and web crawler built in Rust — a fast, lightweight alternative to Firecrawl and Crawl4AI designed for LLM structured extraction, RAG pipelines, and AI agents. Single binary, ~6 MB idle RAM, built-in MCP server for Claude Code/Cursor/Windsurf, and structured data extraction via Anthropic and OpenAI. Drop-in compatible with Firecrawl's API — 92% coverage, 5.5x faster, 75x less memory.
+CRW is an open-source, self-hosted web scraper and web crawler built in Rust — a fast, lightweight alternative to Firecrawl and Crawl4AI designed for LLM structured extraction, RAG pipelines, and AI agents. Single binary, ~6 MB idle RAM, built-in MCP server for Claude Code/Cursor/Windsurf, and structured data extraction via Anthropic and OpenAI. Firecrawl-compatible workflow support — 92% coverage, 5.5x faster, 75x less memory.
 
-**Single binary. No Redis. No Node.js. Drop-in Firecrawl API.**
+**Single binary. No Redis. No Node.js. Firecrawl-compatible workflows.**
 
 ```bash
 cargo install crw-server
@@ -37,6 +37,14 @@ crw-server
 ```
 
 ## What's New
+
+### v0.0.3
+
+- **Warning-aware target handling** — 4xx and anti-bot targets now return `success: true` with `warning` and `metadata.statusCode`
+- **More reliable JS rendering** — CDP navigation now waits for real page lifecycle completion before applying `waitFor`
+- **Stealth decompression fix** — gzip and brotli responses decode cleanly instead of leaking garbled binary payloads
+- **Crawl compatibility** — `limit`, `maxPages`, and `max_pages` now normalize to the same crawl cap
+- **XPath and chunking fixes** — XPath returns all matches, chunk overlap/dedupe is supported, and scorer rank order is preserved
 
 ### v0.0.2
 
@@ -114,7 +122,7 @@ CRW gives you Firecrawl's API with a fraction of the resource usage. No runtime 
 
 ## Features
 
-- **🔌 Firecrawl-compatible API** — same endpoints, same request/response format, drop-in replacement
+- **🔌 Firecrawl-compatible API** — same endpoint family and familiar request/response ergonomics
 - **📄 6 output formats** — markdown, HTML, cleaned HTML, raw HTML, plain text, links, structured JSON
 - **🤖 LLM structured extraction** — send a JSON schema, get validated structured data back (Anthropic tool_use + OpenAI function calling)
 - **🌐 JS rendering** — auto-detect SPAs with shell heuristics, render via LightPanda, Playwright, or Chrome (CDP)
