@@ -229,7 +229,13 @@ fn apply_selector(html: &str, css: Option<&str>, xpath: Option<&str>) -> CrwResu
     {
         let wrapped = texts
             .into_iter()
-            .map(|text| format!("<div>{text}</div>"))
+            .map(|text| {
+                let escaped = text
+                    .replace('&', "&amp;")
+                    .replace('<', "&lt;")
+                    .replace('>', "&gt;");
+                format!("<div>{escaped}</div>")
+            })
             .collect::<Vec<_>>()
             .join("\n");
         return Ok(Some(wrapped));

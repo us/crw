@@ -91,7 +91,9 @@ pub(crate) fn derive_target_warning(fetch_result: &FetchResult) -> Option<String
         return fetch_result.warning.clone();
     }
 
-    if matches!(fetch_result.status_code, 401 | 403 | 404 | 429 | 503) {
+    if (400..=499).contains(&fetch_result.status_code)
+        || (500..=599).contains(&fetch_result.status_code)
+    {
         return Some(format!(
             "Target returned {} {}",
             fetch_result.status_code,
@@ -104,17 +106,35 @@ pub(crate) fn derive_target_warning(fetch_result: &FetchResult) -> Option<String
 
 fn canonical_status_text(status_code: u16) -> &'static str {
     match status_code {
+        400 => "Bad Request",
         401 => "Unauthorized",
         403 => "Forbidden",
         404 => "Not Found",
+        405 => "Method Not Allowed",
+        408 => "Request Timeout",
+        410 => "Gone",
         429 => "Too Many Requests",
+        451 => "Unavailable For Legal Reasons",
+        500 => "Internal Server Error",
+        502 => "Bad Gateway",
         503 => "Service Unavailable",
-        _ => "Response",
+        504 => "Gateway Timeout",
+        _ => "Error",
     }
 }
 
 fn detect_block_interstitial(html: &str) -> Option<String> {
-    let lower = html.to_lowercase();
+    const SCAN_LIMIT: usize = 128 * 1024;
+    let end = if html.len() <= SCAN_LIMIT {
+        html.len()
+    } else {
+        let mut e = SCAN_LIMIT;
+        while e > 0 && !html.is_char_boundary(e) {
+            e -= 1;
+        }
+        e
+    };
+    let lower = html[..end].to_lowercase();
     let markers = [
         "just a moment",
         "attention required",
