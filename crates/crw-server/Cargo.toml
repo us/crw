@@ -15,10 +15,10 @@ cdp = ["crw-renderer/cdp"]
 test-utils = []
 
 [dependencies]
-crw-core = { path = "../crw-core", version = "0.0.3" }
-crw-renderer = { path = "../crw-renderer", version = "0.0.3" }
-crw-extract = { path = "../crw-extract", version = "0.0.3" }
-crw-crawl = { path = "../crw-crawl", version = "0.0.3" }
+crw-core = { path = "../crw-core", version = "0.0.4" }
+crw-renderer = { path = "../crw-renderer", version = "0.0.4" }
+crw-extract = { path = "../crw-extract", version = "0.0.4" }
+crw-crawl = { path = "../crw-crawl", version = "0.0.4" }
 axum = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
