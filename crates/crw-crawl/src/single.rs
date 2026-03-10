@@ -91,9 +91,7 @@ pub(crate) fn derive_target_warning(fetch_result: &FetchResult) -> Option<String
         return fetch_result.warning.clone();
     }
 
-    if (400..=499).contains(&fetch_result.status_code)
-        || (500..=599).contains(&fetch_result.status_code)
-    {
+    if fetch_result.status_code >= 400 {
         return Some(format!(
             "Target returned {} {}",
             fetch_result.status_code,
