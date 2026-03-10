@@ -73,7 +73,6 @@ impl PageFetcher for HttpFetcher {
             req = req
                 .header("Accept", STEALTH_ACCEPT)
                 .header("Accept-Language", "en-US,en;q=0.9")
-                .header("Accept-Encoding", "gzip, deflate, br")
                 .header("Sec-Ch-Ua", STEALTH_SEC_CH_UA)
                 .header("Sec-Ch-Ua-Mobile", "?0")
                 .header("Sec-Ch-Ua-Platform", "\"Windows\"")
@@ -124,6 +123,7 @@ impl PageFetcher for HttpFetcher {
             html,
             rendered_with: None,
             elapsed_ms: start.elapsed().as_millis() as u64,
+            warning: None,
         })
     }
 

@@ -45,6 +45,7 @@ fn api_response_ok_serialization() {
     assert_eq!(json["success"], true);
     assert_eq!(json["data"], "hello");
     assert!(json.get("error").is_none());
+    assert!(json.get("warning").is_none());
 }
 
 #[test]
@@ -54,6 +55,7 @@ fn api_response_err_serialization() {
     assert_eq!(json["success"], false);
     assert!(json.get("data").is_none());
     assert_eq!(json["error"], "something went wrong");
+    assert!(json.get("warning").is_none());
 }
 
 #[test]
@@ -112,6 +114,13 @@ fn crawl_request_default_formats() {
 }
 
 #[test]
+fn crawl_request_accepts_limit_alias() {
+    let req: CrawlRequest =
+        serde_json::from_str(r#"{"url":"https://example.com","limit":3}"#).unwrap();
+    assert_eq!(req.max_pages, Some(3));
+}
+
+#[test]
 fn crawl_start_response_serialization() {
     let resp = CrawlStartResponse {
         success: true,
@@ -139,6 +148,7 @@ fn scrape_data_skip_serializing_none() {
         links: None,
         json: None,
         chunks: None,
+        warning: None,
         metadata: PageMetadata {
             title: None,
             description: None,

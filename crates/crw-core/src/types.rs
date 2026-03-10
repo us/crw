@@ -23,13 +23,32 @@ pub enum ChunkStrategy {
     Sentence {
         #[serde(default, alias = "maxChars")]
         max_chars: Option<usize>,
+        #[serde(default, alias = "overlapChars")]
+        overlap_chars: Option<usize>,
+        #[serde(default)]
+        dedupe: Option<bool>,
     },
     /// Split on a regex pattern.
     #[serde(rename = "regex")]
-    Regex { pattern: String },
+    Regex {
+        pattern: String,
+        #[serde(default, alias = "maxChars")]
+        max_chars: Option<usize>,
+        #[serde(default, alias = "overlapChars")]
+        overlap_chars: Option<usize>,
+        #[serde(default)]
+        dedupe: Option<bool>,
+    },
     /// Split on markdown headings (h1-h6).
     #[serde(rename = "topic")]
-    Topic,
+    Topic {
+        #[serde(default, alias = "maxChars")]
+        max_chars: Option<usize>,
+        #[serde(default, alias = "overlapChars")]
+        overlap_chars: Option<usize>,
+        #[serde(default)]
+        dedupe: Option<bool>,
+    },
 }
 
 /// Filtering mode for ranked chunk retrieval.
@@ -139,6 +158,8 @@ pub struct ScrapeData {
     pub json: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chunks: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warning: Option<String>,
     pub metadata: PageMetadata,
 }
 
@@ -150,6 +171,8 @@ pub struct ApiResponse<T: Serialize> {
     pub data: Option<T>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warning: Option<String>,
 }
 
 impl<T: Serialize> ApiResponse<T> {
@@ -158,6 +181,7 @@ impl<T: Serialize> ApiResponse<T> {
             success: true,
             data: Some(data),
             error: None,
+            warning: None,
         }
     }
 
@@ -166,6 +190,7 @@ impl<T: Serialize> ApiResponse<T> {
             success: false,
             data: None,
             error: Some(msg.into()),
+            warning: None,
         }
     }
 }
@@ -178,6 +203,7 @@ impl<T: Serialize> ApiResponse<T> {
 pub struct CrawlRequest {
     pub url: String,
     pub max_depth: Option<u32>,
+    #[serde(alias = "limit", alias = "max_pages")]
     pub max_pages: Option<u32>,
     #[serde(default = "default_formats")]
     pub formats: Vec<OutputFormat>,
@@ -248,4 +274,5 @@ pub struct FetchResult {
     pub html: String,
     pub rendered_with: Option<String>,
     pub elapsed_ms: u64,
+    pub warning: Option<String>,
 }

@@ -36,10 +36,14 @@ pub struct CdpRenderer {
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 struct CdpMessage {
     id: Option<u64>,
+    method: Option<String>,
+    params: Option<serde_json::Value>,
     result: Option<serde_json::Value>,
     error: Option<serde_json::Value>,
+    session_id: Option<String>,
 }
 
 type WsWrite = futures::stream::SplitSink<
@@ -58,10 +62,14 @@ async fn cdp_send_recv(
     read: &mut WsRead,
     method: &str,
     params: serde_json::Value,
+    session_id: Option<&str>,
     timeout: Duration,
 ) -> CrwResult<serde_json::Value> {
     let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
-    let req = serde_json::json!({ "id": id, "method": method, "params": params });
+    let mut req = serde_json::json!({ "id": id, "method": method, "params": params });
+    if let Some(session_id) = session_id {
+        req["sessionId"] = serde_json::Value::String(session_id.to_string());
+    }
 
     write
         .send(Message::Text(req.to_string().into()))
@@ -76,14 +84,65 @@ async fn cdp_send_recv(
             .ok_or_else(|| CrwError::RendererError("WS closed".into()))?
             .map_err(|e| CrwError::RendererError(format!("WS read: {e}")))?;
 
-        if let Message::Text(text) = msg {
-            if let Ok(resp) = serde_json::from_str::<CdpMessage>(&text) {
-                if resp.id == Some(id) {
-                    if let Some(err) = resp.error {
-                        return Err(CrwError::RendererError(format!("CDP {method}: {err}")));
+        if let Message::Text(text) = msg
+            && let Ok(resp) = serde_json::from_str::<CdpMessage>(&text)
+            && resp.id == Some(id)
+        {
+            if let Some(err) = resp.error {
+                return Err(CrwError::RendererError(format!("CDP {method}: {err}")));
+            }
+            return Ok(resp.result.unwrap_or(serde_json::Value::Null));
+        }
+    }
+}
+
+async fn wait_for_page_ready(
+    read: &mut WsRead,
+    session_id: &str,
+    timeout: Duration,
+) -> CrwResult<u16> {
+    let deadline = tokio::time::Instant::now() + timeout;
+    let mut main_document_status = None;
+
+    loop {
+        let msg = tokio::time::timeout_at(deadline, read.next())
+            .await
+            .map_err(|_| CrwError::Timeout(timeout.as_millis() as u64))?
+            .ok_or_else(|| CrwError::RendererError("WS closed".into()))?
+            .map_err(|e| CrwError::RendererError(format!("WS read: {e}")))?;
+
+        if let Message::Text(text) = msg
+            && let Ok(resp) = serde_json::from_str::<CdpMessage>(&text)
+        {
+            if resp.session_id.as_deref() != Some(session_id) {
+                continue;
+            }
+
+            match resp.method.as_deref() {
+                Some("Network.responseReceived") => {
+                    let params = resp.params.unwrap_or_default();
+                    let is_document = params
+                        .get("type")
+                        .and_then(|value| value.as_str())
+                        .is_some_and(|value| value == "Document");
+                    if is_document {
+                        main_document_status = params
+                            .get("response")
+                            .and_then(|response| response.get("status"))
+                            .and_then(|status| status.as_f64())
+                            .map(|status| status as u16)
+                            .or(main_document_status);
                     }
-                    return Ok(resp.result.unwrap_or(serde_json::Value::Null));
                 }
+                Some("Page.loadEventFired") => {
+                    return Ok(main_document_status.unwrap_or(200));
+                }
+                Some("Inspector.targetCrashed") => {
+                    return Err(CrwError::RendererError(
+                        "Target crashed during render".into(),
+                    ));
+                }
+                _ => {}
             }
         }
     }
@@ -92,6 +151,18 @@ async fn cdp_send_recv(
 /// Close WebSocket with a timeout to prevent hanging.
 async fn close_ws(write: &mut WsWrite) {
     let _ = tokio::time::timeout(WS_CLOSE_TIMEOUT, write.close()).await;
+}
+
+async fn close_target(write: &mut WsWrite, read: &mut WsRead, target_id: &str) {
+    let _ = cdp_send_recv(
+        write,
+        read,
+        "Target.closeTarget",
+        serde_json::json!({ "targetId": target_id }),
+        None,
+        TARGET_CLOSE_TIMEOUT,
+    )
+    .await;
 }
 
 impl CdpRenderer {
@@ -188,7 +259,7 @@ impl CdpRenderer {
         // Always close WebSocket, even on error
         close_ws(&mut write).await;
 
-        let html = result?;
+        let (html, status_code) = result?;
 
         if html.is_empty() {
             return Err(CrwError::RendererError(
@@ -204,10 +275,11 @@ impl CdpRenderer {
 
         Ok(FetchResult {
             url: url.to_string(),
-            status_code: 200,
+            status_code,
             html,
             rendered_with: Some(self.name.clone()),
             elapsed_ms: start.elapsed().as_millis() as u64,
+            warning: None,
         })
     }
 
@@ -217,13 +289,14 @@ impl CdpRenderer {
         read: &mut WsRead,
         url: &str,
         wait_for_ms: Option<u64>,
-    ) -> CrwResult<String> {
-        // 1. Create target (navigate to URL)
+    ) -> CrwResult<(String, u16)> {
+        // 1. Create a blank target so navigation events can be observed reliably.
         let create_result = cdp_send_recv(
             write,
             read,
             "Target.createTarget",
-            serde_json::json!({ "url": url }),
+            serde_json::json!({ "url": "about:blank" }),
+            None,
             self.page_timeout,
         )
         .await?;
@@ -234,33 +307,89 @@ impl CdpRenderer {
             .ok_or_else(|| CrwError::RendererError(format!("No targetId: {create_result}")))?
             .to_string();
 
-        // Helper to close the target — used for both success and error paths.
-        let close_target = |w: &mut WsWrite, r: &mut WsRead, tid: &str| async move {
-            let _ = cdp_send_recv(
-                w,
-                r,
-                "Target.closeTarget",
-                serde_json::json!({ "targetId": tid }),
-                TARGET_CLOSE_TIMEOUT,
-            )
-            .await;
-        };
-
         // 2. Attach to target
-        if let Err(e) = cdp_send_recv(
+        let attach_result = match cdp_send_recv(
             write,
             read,
             "Target.attachToTarget",
             serde_json::json!({ "targetId": &target_id, "flatten": true }),
+            None,
             self.page_timeout,
         )
         .await
         {
-            close_target(write, read, &target_id).await;
-            return Err(e);
+            Ok(result) => result,
+            Err(err) => {
+                close_target(write, read, &target_id).await;
+                return Err(err);
+            }
+        };
+
+        let session_id = match attach_result
+            .get("sessionId")
+            .and_then(|value| value.as_str())
+        {
+            Some(value) => value.to_string(),
+            None => {
+                close_target(write, read, &target_id).await;
+                return Err(CrwError::RendererError(
+                    "CDP attach did not return sessionId".into(),
+                ));
+            }
+        };
+
+        for method in ["Page.enable", "Network.enable", "Runtime.enable"] {
+            if let Err(err) = cdp_send_recv(
+                write,
+                read,
+                method,
+                serde_json::json!({}),
+                Some(&session_id),
+                self.page_timeout,
+            )
+            .await
+            {
+                close_target(write, read, &target_id).await;
+                return Err(err);
+            }
         }
 
-        // 3. Wait for JS
+        let navigate_result = match cdp_send_recv(
+            write,
+            read,
+            "Page.navigate",
+            serde_json::json!({ "url": url }),
+            Some(&session_id),
+            self.page_timeout,
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(err) => {
+                close_target(write, read, &target_id).await;
+                return Err(err);
+            }
+        };
+
+        if let Some(error_text) = navigate_result
+            .get("errorText")
+            .and_then(|value| value.as_str())
+        {
+            close_target(write, read, &target_id).await;
+            return Err(CrwError::RendererError(format!(
+                "Navigation failed: {error_text}"
+            )));
+        }
+
+        let status_code = match wait_for_page_ready(read, &session_id, self.page_timeout).await {
+            Ok(status) => status,
+            Err(err) => {
+                close_target(write, read, &target_id).await;
+                return Err(err);
+            }
+        };
+
+        // 3. Wait for additional JS work requested by the caller.
         let wait = wait_for_ms.unwrap_or(DEFAULT_JS_WAIT_MS);
         tokio::time::sleep(Duration::from_millis(wait)).await;
 
@@ -273,6 +402,7 @@ impl CdpRenderer {
                 "expression": "document.documentElement.outerHTML",
                 "returnByValue": true
             }),
+            Some(&session_id),
             self.page_timeout,
         )
         .await
@@ -294,6 +424,6 @@ impl CdpRenderer {
         // 5. Cleanup target
         close_target(write, read, &target_id).await;
 
-        Ok(html)
+        Ok((html, status_code))
     }
 }

@@ -1,6 +1,6 @@
 # Introduction
 
-CRW is an open-source, lightweight, self-hosted web scraper and web crawler written in Rust. A **drop-in replacement** for [Firecrawl](https://firecrawl.dev) and a faster alternative to [Crawl4AI](https://github.com/unclecode/crawl4ai) that you can self-host — no Node.js, no Redis, no Python, just a single binary. Built for AI agents, RAG pipelines, and LLM structured extraction with a built-in MCP server for Claude Code, Cursor, Windsurf, and 8+ other platforms.
+CRW is an open-source, lightweight, self-hosted web scraper and web crawler written in Rust. A Firecrawl-compatible workflow layer and a faster alternative to [Crawl4AI](https://github.com/unclecode/crawl4ai) that you can self-host — no Node.js, no Redis, no Python, just a single binary. Built for AI agents, RAG pipelines, and LLM structured extraction with a built-in MCP server for Claude Code, Cursor, Windsurf, and 8+ other platforms.
 
 ## Benchmarks
 
@@ -25,11 +25,11 @@ Tested against [Firecrawl scrape-content-dataset-v1](https://huggingface.co/data
 
 **vs Crawl4AI** — Both are free and self-hosted. Crawl4AI is Python-based and depends on Playwright (~200 MB RAM per browser). crw ships as a single binary with optional LightPanda sidecar (~3.3 MB idle). In [Spider.cloud's benchmark](https://spider.cloud/blog/firecrawl-vs-crawl4ai-vs-spider-honest-benchmark), Crawl4AI showed 19 pages/sec throughput, 11.3% noise ratio, and 72% anti-bot success — while crw achieves 187+ pages/sec throughput with 88.4% noise rejection.
 
-**vs Spider** — Spider-RS is the fastest crawler in raw throughput (182 pages/sec static, 99.9% coverage). However, Spider's advanced features (anti-bot, proxy rotation) require their paid cloud service. crw offers a Firecrawl-compatible API (drop-in replacement), built-in MCP server for AI agents, and LLM structured extraction — features Spider doesn't provide out of the box.
+**vs Spider** — Spider-RS is the fastest crawler in raw throughput (182 pages/sec static, 99.9% coverage). However, Spider's advanced features (anti-bot, proxy rotation) require their paid cloud service. crw offers Firecrawl-compatible endpoints, a built-in MCP server for AI agents, and LLM structured extraction — features Spider doesn't provide out of the box.
 
 ## Features
 
-- **Firecrawl-compatible API** — Same endpoints, same request/response format, drop-in replacement
+- **Firecrawl-compatible API** — Same endpoint family, familiar request/response ergonomics
 - **6 output formats** — Markdown, HTML, cleaned HTML, raw HTML, plain text, links, structured JSON
 - **LLM structured extraction** — Send a JSON schema, get validated structured data back (Anthropic tool_use + OpenAI function calling)
 - **JS rendering** — Auto-detect SPAs with shell heuristics, render via LightPanda, Playwright, or Chrome (CDP)

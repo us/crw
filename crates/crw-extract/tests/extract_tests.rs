@@ -20,7 +20,8 @@ fn extract_markdown_format() {
         query: None,
         filter_mode: None,
         top_k: None,
-    });
+    })
+    .unwrap();
 
     assert!(data.markdown.is_some());
     assert!(data.html.is_none());
@@ -59,7 +60,8 @@ fn extract_all_formats() {
         query: None,
         filter_mode: None,
         top_k: None,
-    });
+    })
+    .unwrap();
 
     assert!(data.markdown.is_some(), "markdown should be present");
     assert!(data.html.is_some(), "html should be present");
@@ -96,7 +98,8 @@ fn extract_metadata_populated() {
         query: None,
         filter_mode: None,
         top_k: None,
-    });
+    })
+    .unwrap();
 
     assert_eq!(data.metadata.title.as_deref(), Some("My Page"));
     assert_eq!(data.metadata.description.as_deref(), Some("A description"));
@@ -121,7 +124,8 @@ fn extract_empty_html() {
         query: None,
         filter_mode: None,
         top_k: None,
-    });
+    })
+    .unwrap();
 
     // Should not crash
     assert!(data.markdown.is_some());
@@ -148,7 +152,8 @@ fn extract_with_include_exclude_tags() {
         query: None,
         filter_mode: None,
         top_k: None,
-    });
+    })
+    .unwrap();
 
     let md = data.markdown.unwrap();
     assert!(md.contains("Content"), "Should include article content");
