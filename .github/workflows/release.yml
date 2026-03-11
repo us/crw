@@ -50,48 +50,39 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Publish crw-core
+      - name: "Tier 0: Publish crw-core"
         run: cargo publish -p crw-core
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       - name: Wait for crates.io index
-        run: sleep 45
+        run: sleep 30
 
-      - name: Publish crw-renderer
-        run: cargo publish -p crw-renderer
+      - name: "Tier 1: Publish crw-renderer, crw-extract, crw-mcp (parallel)"
+        run: |
+          cargo publish -p crw-renderer &
+          cargo publish -p crw-extract &
+          cargo publish -p crw-mcp &
+          wait
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       - name: Wait for crates.io index
-        run: sleep 45
+        run: sleep 30
 
-      - name: Publish crw-extract
-        run: cargo publish -p crw-extract
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Wait for crates.io index
-        run: sleep 45
-
-      - name: Publish crw-crawl
+      - name: "Tier 2: Publish crw-crawl"
         run: cargo publish -p crw-crawl
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       - name: Wait for crates.io index
-        run: sleep 45
+        run: sleep 30
 
-      - name: Publish crw-server
-        run: cargo publish -p crw-server
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Wait for crates.io index
-        run: sleep 45
-
-      - name: Publish crw-mcp
-        run: cargo publish -p crw-mcp
+      - name: "Tier 3: Publish crw-server, crw-cli (parallel)"
+        run: |
+          cargo publish -p crw-server &
+          cargo publish -p crw-cli &
+          wait
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
