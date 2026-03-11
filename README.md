@@ -160,6 +160,13 @@ curl -X POST https://fastcrw.com/api/v1/scrape \
 
 > Get your API key at [fastcrw.com](https://fastcrw.com) — 50 free credits included.
 
+**CLI (no server needed):**
+
+```bash
+cargo install crw-cli
+crw https://example.com
+```
+
 **Self-hosted — install from crates.io:**
 
 ```bash
@@ -192,6 +199,12 @@ docker compose up
 ```bash
 cargo build --release --bin crw-server
 ./target/release/crw-server
+```
+
+**MCP stdio binary:**
+
+```bash
+cargo install crw-mcp
 ```
 
 **Scrape a page:**
@@ -273,6 +286,12 @@ model = "claude-sonnet-4-20250514"
 ## MCP Server
 
 CRW works as an MCP tool server for any AI assistant that supports MCP. It provides 4 tools: `crw_scrape`, `crw_crawl`, `crw_check_crawl_status`, `crw_map`.
+
+**Install the MCP stdio binary:**
+
+```bash
+cargo install crw-mcp
+```
 
 ### Claude Code
 
@@ -564,6 +583,7 @@ python3 bench/run_bench.py
 | [`crw-extract`](crates/crw-extract) | HTML → markdown/plaintext extraction | [![crates.io](https://img.shields.io/crates/v/crw-extract.svg)](https://crates.io/crates/crw-extract) |
 | [`crw-crawl`](crates/crw-crawl) | Async BFS crawler with robots.txt & sitemap | [![crates.io](https://img.shields.io/crates/v/crw-crawl.svg)](https://crates.io/crates/crw-crawl) |
 | [`crw-server`](crates/crw-server) | Axum API server (Firecrawl-compatible) | [![crates.io](https://img.shields.io/crates/v/crw-server.svg)](https://crates.io/crates/crw-server) |
+| [`crw-cli`](crates/crw-cli) | Standalone CLI (`crw` binary, no server needed) | [![crates.io](https://img.shields.io/crates/v/crw-cli.svg)](https://crates.io/crates/crw-cli) |
 | [`crw-mcp`](crates/crw-mcp) | MCP stdio proxy binary | [![crates.io](https://img.shields.io/crates/v/crw-mcp.svg)](https://crates.io/crates/crw-mcp) |
 
 See [docs/crates.md](docs/crates.md) for usage examples and `cargo add` instructions.

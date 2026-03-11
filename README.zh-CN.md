@@ -154,6 +154,13 @@ curl -X POST https://fastcrw.com/api/v1/scrape \
 
 > 在 [fastcrw.com](https://fastcrw.com) 获取 API 密钥 — 包含 50 个免费额度。
 
+**CLI（无需服务器）：**
+
+```bash
+cargo install crw-cli
+crw https://example.com
+```
+
 **自托管 — 从 crates.io 安装：**
 
 ```bash
@@ -174,6 +181,12 @@ crw-server setup
 ```bash
 cargo build --release --bin crw-server
 ./target/release/crw-server
+```
+
+**MCP stdio 二进制文件：**
+
+```bash
+cargo install crw-mcp
 ```
 
 **Docker：**
@@ -261,6 +274,12 @@ model = "claude-sonnet-4-20250514"
 ## MCP 服务器
 
 CRW 可作为 Claude Code 和 Claude Desktop 的 MCP 工具服务器，支持两种传输方式。
+
+**安装 MCP stdio 二进制文件：**
+
+```bash
+cargo install crw-mcp
+```
 
 **HTTP 传输（推荐）：**
 
@@ -435,6 +454,7 @@ docker compose up
 | [`crw-extract`](crates/crw-extract) | HTML → Markdown/纯文本提取 | [![crates.io](https://img.shields.io/crates/v/crw-extract.svg)](https://crates.io/crates/crw-extract) |
 | [`crw-crawl`](crates/crw-crawl) | 异步 BFS 爬虫，支持 robots.txt 和站点地图 | [![crates.io](https://img.shields.io/crates/v/crw-crawl.svg)](https://crates.io/crates/crw-crawl) |
 | [`crw-server`](crates/crw-server) | Axum API 服务器（兼容 Firecrawl） | [![crates.io](https://img.shields.io/crates/v/crw-server.svg)](https://crates.io/crates/crw-server) |
+| [`crw-cli`](crates/crw-cli) | 独立 CLI（`crw` 二进制文件，无需服务器） | [![crates.io](https://img.shields.io/crates/v/crw-cli.svg)](https://crates.io/crates/crw-cli) |
 | [`crw-mcp`](crates/crw-mcp) | MCP stdio 代理二进制文件 | [![crates.io](https://img.shields.io/crates/v/crw-mcp.svg)](https://crates.io/crates/crw-mcp) |
 
 详细用法和 `cargo add` 命令请参见 [docs/crates.md](docs/crates.md)。
