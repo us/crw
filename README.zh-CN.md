@@ -25,7 +25,7 @@
 
 ---
 
-> **不想自托管？** [fastcrw.com](https://fastcrw.com) 是托管云服务 — 全球代理网络、自动扩展、仪表板和 API 密钥。相同的 Firecrawl 兼容 API。[获取 50 个免费额度 →](https://fastcrw.com)
+> **不想自托管？** [fastcrw.com](https://fastcrw.com) 是托管云服务 — 全球代理网络、自动扩展、仪表板和 API 密钥。相同的 Firecrawl 兼容 API。[获取 500 个免费额度 →](https://fastcrw.com)
 
 CRW 是一个开源、基于 Rust 构建的自托管网页抓取和爬虫工具 — 可直接替换 Firecrawl 和 Crawl4AI，专为 LLM 结构化提取、RAG 流水线和 AI 代理设计。单一二进制文件，约 6 MB 空闲内存，内置 MCP 服务器支持 Claude Code/Cursor/Windsurf，通过 Anthropic 和 OpenAI 进行结构化数据提取。覆盖率 92%，速度快 5.5 倍，内存减少 75 倍。
 
@@ -37,6 +37,20 @@ crw-server
 ```
 
 ## 最新动态
+
+### v0.0.8
+
+- **Wikipedia / MediaWiki onlyMainContent 修复** — `onlyMainContent: true` 现在能正确提取维基百科文章文本（体积减少约 49%）。此前 `<html>` 元素的 `class="vector-toc-available"` 通过子串匹配命中了 `"toc"` 噪声模式，导致整个页面被移除
+- **三级噪声模式匹配** — 噪声 class/id 匹配改为三级：子串匹配（长模式）、精确 token 匹配（短/模糊词：`toc`、`share`、`social`、`comment`、`related`）、前缀匹配（`ad-`、`ads-`），避免误判
+- **结构元素保护** — 噪声处理器不再移除 `<html>`、`<head>`、`<body>`、`<main>` 元素
+- **可读性后再清洗** — 可读性输出会二次清洗，去除宽容器内残留的噪声元素（infobox、navbox、catlinks 等）
+- **维基百科感知可读性** — 评分选择器新增 `.mw-parser-output`、`#mw-content-text`、`#bodyContent`；占 body >90% 的优先/评分选择器会被跳过
+- **BYOK LLM 提取** — 支持每请求传入 `llmApiKey`、`llmProvider`、`llmModel`，无需服务器配置即可使用自有密钥进行结构化提取
+- **JSON 格式验证** — `formats: ["json"]` 缺少 `jsonSchema` 时返回 400 错误，而非仅警告
+- **跳过封锁检测** — 超过 50 KB 的页面跳过插页/封锁检测（维基百科不再误报"被反爬拦截"）
+- **空字节 URL 拒绝** — 包含 `%00` 或空字节的 URL 在验证层即被拒绝
+- **请求超时** — 默认超时从 60 秒提升至 120 秒
+- **Dockerfile 修复** — 修正 `cargo build` 参数，添加 `config.docker.toml`
 
 ### v0.0.7
 

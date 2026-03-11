@@ -27,7 +27,7 @@
 
 ---
 
-> **Don't want to self-host?** [fastcrw.com](https://fastcrw.com) is the managed cloud — global proxy network, auto-scaling, dashboard, and API keys. Same Firecrawl-compatible API. [Get 50 free credits →](https://fastcrw.com)
+> **Don't want to self-host?** [fastcrw.com](https://fastcrw.com) is the managed cloud — global proxy network, auto-scaling, dashboard, and API keys. Same Firecrawl-compatible API. [Get 500 free credits →](https://fastcrw.com)
 
 CRW is an open-source, self-hosted web scraper and web crawler built in Rust — a fast, lightweight alternative to Firecrawl and Crawl4AI designed for LLM structured extraction, RAG pipelines, and AI agents. Single binary, ~6 MB idle RAM, built-in MCP server for Claude Code/Cursor/Windsurf, and structured data extraction via Anthropic and OpenAI. Firecrawl-compatible workflow support — 92% coverage, 5.5x faster, 75x less memory.
 
@@ -39,6 +39,20 @@ crw-server
 ```
 
 ## What's New
+
+### v0.0.8
+
+- **Wikipedia / MediaWiki onlyMainContent fix** — `onlyMainContent: true` now correctly extracts article text from Wikipedia pages (~49% size reduction). Previously the `<html>` element's `class="vector-toc-available"` matched the `"toc"` noise pattern via substring, removing the entire page
+- **3-tier noise pattern matching** — noise class/id matching now uses substring (long patterns), exact-token (short/ambiguous: `toc`, `share`, `social`, `comment`, `related`), and prefix (`ad-`, `ads-`) matching to avoid false positives
+- **Structural element guard** — noise handler never removes `<html>`, `<head>`, `<body>`, or `<main>` elements
+- **Re-clean after readability** — readability output is re-cleaned to strip residual noise (infobox, navbox, catlinks) that survives inside broad containers
+- **Wikipedia-aware readability** — added `.mw-parser-output`, `#mw-content-text`, `#bodyContent` to scored selectors; priority/scored selectors that wrap >90% of body are skipped
+- **BYOK LLM extraction** — per-request `llmApiKey`, `llmProvider`, `llmModel` fields for bring-your-own-key structured extraction without server config
+- **JSON format validation** — `formats: ["json"]` without `jsonSchema` now returns a 400 error instead of a warning
+- **Block detection skip** — pages >50 KB skip interstitial/block detection (no more false "blocked by anti-bot" on Wikipedia)
+- **Null byte URL rejection** — URLs with `%00` or null bytes rejected at validation
+- **Request timeout** — default timeout bumped from 60s to 120s
+- **Dockerfile fix** — corrected `cargo build` flags, added `config.docker.toml`
 
 ### v0.0.7
 
@@ -191,7 +205,7 @@ curl -X POST https://fastcrw.com/api/v1/scrape \
   -d '{"url": "https://example.com"}'
 ```
 
-> Get your API key at [fastcrw.com](https://fastcrw.com) — 50 free credits included.
+> Get your API key at [fastcrw.com](https://fastcrw.com) — 500 free credits included.
 
 **CLI (no server needed):**
 
