@@ -1,9 +1,12 @@
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use std::sync::Arc;
 use std::time::Duration;
 use tower_http::cors::CorsLayer;
+use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
 
@@ -19,10 +22,19 @@ pub fn create_app(state: AppState) -> Router {
     let timeout = Duration::from_secs(state.config.server.request_timeout_secs);
 
     let api_routes = Router::new()
-        .route("/v1/scrape", post(routes::scrape::scrape))
-        .route("/v1/crawl", post(routes::crawl::start_crawl))
+        .route(
+            "/v1/scrape",
+            post(routes::scrape::scrape).fallback(method_not_allowed),
+        )
+        .route(
+            "/v1/crawl",
+            post(routes::crawl::start_crawl).fallback(method_not_allowed),
+        )
         .route("/v1/crawl/{id}", get(routes::crawl::get_crawl))
-        .route("/v1/map", post(routes::map::map))
+        .route(
+            "/v1/map",
+            post(routes::map::map).fallback(method_not_allowed),
+        )
         .route("/mcp", post(routes::mcp::mcp_handler));
 
     let api_routes = if api_keys.is_empty() {
@@ -42,9 +54,26 @@ pub fn create_app(state: AppState) -> Router {
         .merge(api_routes)
         .layer(DefaultBodyLimit::max(MAX_BODY_SIZE))
         .layer(TimeoutLayer::with_status_code(
-            axum::http::StatusCode::GATEWAY_TIMEOUT,
+            StatusCode::GATEWAY_TIMEOUT,
             timeout,
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            axum::http::header::X_CONTENT_TYPE_OPTIONS,
+            axum::http::HeaderValue::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            axum::http::header::X_FRAME_OPTIONS,
+            axum::http::HeaderValue::from_static("DENY"),
         ))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
+}
+
+async fn method_not_allowed() -> impl IntoResponse {
+    (
+        StatusCode::METHOD_NOT_ALLOWED,
+        axum::Json(crw_core::types::ApiResponse::<()>::err(
+            "Method not allowed".to_string(),
+        )),
+    )
 }

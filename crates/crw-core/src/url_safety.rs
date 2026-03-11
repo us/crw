@@ -24,6 +24,14 @@ pub fn safe_redirect_policy() -> reqwest::redirect::Policy {
 /// - Link-local addresses (169.254.x — e.g. AWS metadata endpoint)
 /// - 0.0.0.0
 pub fn validate_safe_url(url: &url::Url) -> Result<(), String> {
+    // URL length limit
+    const MAX_URL_LENGTH: usize = 2048;
+    if url.as_str().len() > MAX_URL_LENGTH {
+        return Err(format!(
+            "URL exceeds maximum length of {MAX_URL_LENGTH} characters"
+        ));
+    }
+
     // Null byte check
     if url.as_str().contains("%00") || url.as_str().contains('\0') {
         return Err("URL contains null bytes".into());
@@ -156,6 +164,18 @@ mod tests {
     fn blocks_ipv6_ula() {
         assert!(validate_safe_url(&url("http://[fc00::1]")).is_err());
         assert!(validate_safe_url(&url("http://[fd00::1]")).is_err());
+    }
+
+    #[test]
+    fn blocks_extremely_long_urls() {
+        let long = format!("https://example.com/{}", "a".repeat(3000));
+        assert!(validate_safe_url(&url(&long)).is_err());
+    }
+
+    #[test]
+    fn allows_url_within_length_limit() {
+        let ok = format!("https://example.com/{}", "a".repeat(1000));
+        assert!(validate_safe_url(&url(&ok)).is_ok());
     }
 
     #[test]

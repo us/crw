@@ -81,6 +81,7 @@ impl AppState {
         let id = Uuid::new_v4();
         let initial = CrawlState {
             id,
+            success: true,
             status: CrawlStatus::InProgress,
             total: 0,
             completed: 0,
@@ -117,6 +118,7 @@ impl AppState {
                 Err(_) => {
                     let _ = tx.send(CrawlState {
                         id,
+                        success: false,
                         status: CrawlStatus::Failed,
                         total: 0,
                         completed: 0,

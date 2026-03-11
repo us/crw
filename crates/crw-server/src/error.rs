@@ -16,7 +16,25 @@ impl From<CrwError> for AppError {
 
 impl From<JsonRejection> for AppError {
     fn from(rejection: JsonRejection) -> Self {
-        Self(CrwError::InvalidRequest(rejection.body_text()))
+        let msg = match &rejection {
+            JsonRejection::JsonDataError(_) => {
+                let raw = rejection.body_text();
+                // Strip internal Rust type paths, keep the user-readable part.
+                if let Some(pos) = raw.find(": ") {
+                    format!("Invalid request body: {}", &raw[pos + 2..])
+                } else {
+                    format!("Invalid request body: {raw}")
+                }
+            }
+            JsonRejection::JsonSyntaxError(_) => {
+                "Invalid JSON syntax in request body".to_string()
+            }
+            JsonRejection::MissingJsonContentType(_) => {
+                "Missing Content-Type: application/json header".to_string()
+            }
+            _ => "Invalid request body".to_string(),
+        };
+        Self(CrwError::InvalidRequest(msg))
     }
 }
 

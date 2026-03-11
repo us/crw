@@ -168,6 +168,19 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
     // JSON extraction is handled asynchronously in scrape_url after extract() returns.
     let json = None;
 
+    // Warn if filtering params are provided without a chunking strategy.
+    let orphan_chunk_warning = if chunk_strategy.is_none()
+        && (query.is_some() || filter_mode.is_some())
+    {
+        Some(
+            "'query' and 'filterMode' require 'chunkStrategy' to be set. \
+             These parameters were ignored."
+                .to_string(),
+        )
+    } else {
+        None
+    };
+
     // Step 6: Chunk the markdown if a strategy is provided.
     let chunks = if let Some(strategy) = chunk_strategy
         && let Some(ref markdown_text) = md
@@ -221,7 +234,7 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
         links,
         json,
         chunks,
-        warning: None,
+        warning: orphan_chunk_warning,
         metadata: PageMetadata {
             title: meta.title,
             description: meta.description,

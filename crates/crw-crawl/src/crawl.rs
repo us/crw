@@ -151,6 +151,7 @@ fn is_safe_url(url: &url::Url) -> bool {
 fn send_failed(id: Uuid, state_tx: &tokio::sync::watch::Sender<CrawlState>, error: String) {
     let _ = state_tx.send(CrawlState {
         id,
+        success: false,
         status: CrawlStatus::Failed,
         total: 0,
         completed: 0,
@@ -348,6 +349,7 @@ pub async fn run_crawl(opts: CrawlOptions<'_>) {
         // Full data is sent only in the final Completed state.
         let _ = state_tx.send(CrawlState {
             id,
+            success: true,
             status: CrawlStatus::InProgress,
             total: visited.len() as u32,
             completed: results.len() as u32,
@@ -358,6 +360,7 @@ pub async fn run_crawl(opts: CrawlOptions<'_>) {
 
     let _ = state_tx.send(CrawlState {
         id,
+        success: true,
         status: CrawlStatus::Completed,
         total: visited.len() as u32,
         completed: results.len() as u32,

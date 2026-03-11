@@ -31,8 +31,8 @@ impl<'de> Deserialize<'de> for OutputFormat {
             "links" => Ok(OutputFormat::Links),
             "json" | "extract" | "llm-extract" => Ok(OutputFormat::Json),
             other => Err(serde::de::Error::custom(format!(
-                "Unknown format '{other}'. Valid formats: markdown, html, rawHtml, plainText, links, json. \
-                 Use formats: [\"json\"] with jsonSchema for structured extraction."
+                "Unknown format '{other}'. Valid formats: markdown, html, rawHtml, plainText, links, json \
+                 (aliases: extract, llm-extract). Use formats: [\"json\"] with jsonSchema for structured extraction."
             ))),
         }
     }
@@ -275,6 +275,7 @@ pub enum CrawlStatus {
 pub struct CrawlState {
     #[serde(skip_serializing)]
     pub id: Uuid,
+    pub success: bool,
     pub status: CrawlStatus,
     pub total: u32,
     pub completed: u32,
