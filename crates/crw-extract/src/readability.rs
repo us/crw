@@ -10,6 +10,13 @@ pub fn extract_main_content(html: &str) -> String {
     // Priority candidates in order: well-known semantic selectors first.
     let priority_selectors = ["article", "main", "[role=\"main\"]"];
 
+    // Compute body length once for ratio checks below.
+    let body_len = Selector::parse("body")
+        .ok()
+        .and_then(|sel| document.select(&sel).next())
+        .map(|b| b.html().len())
+        .unwrap_or(html.len());
+
     // Try priority selectors first (no scoring needed — these are strong signals).
     for sel_str in &priority_selectors {
         if let Ok(sel) = Selector::parse(sel_str)
@@ -18,6 +25,11 @@ pub fn extract_main_content(html: &str) -> String {
             let content = el.html();
             // Only accept if the element has substantial text.
             if text_density(&content) > 0.1 && content.len() > 200 {
+                // Skip if the element wraps nearly the entire document
+                // (e.g. Wikipedia's <article> contains everything including sidebar).
+                if body_len > 0 && content.len() as f64 / body_len as f64 > 0.9 {
+                    continue; // Too broad — fall through to scoring
+                }
                 return content;
             }
         }
@@ -39,6 +51,11 @@ pub fn extract_main_content(html: &str) -> String {
         ".main",
         "[itemprop=\"articleBody\"]",
         "[itemprop=\"text\"]",
+        // Wikipedia / MediaWiki
+        ".mw-parser-output",
+        "#mw-content-text",
+        "#bodyContent",
+        ".mw-body-content",
     ];
 
     let mut best: Option<(String, f64)> = None;
@@ -48,6 +65,10 @@ pub fn extract_main_content(html: &str) -> String {
         {
             let content = el.html();
             if content.len() < 100 {
+                continue;
+            }
+            // Skip selectors that wrap nearly the entire body (same as priority check).
+            if body_len > 0 && content.len() as f64 / body_len as f64 > 0.9 {
                 continue;
             }
             let score = text_density(&content) * (content.len() as f64).ln();
@@ -203,6 +224,40 @@ mod tests {
         assert_eq!(meta.og_description.unwrap(), "OG Desc");
         assert_eq!(meta.og_image.unwrap(), "https://img.com/pic.jpg");
         assert_eq!(meta.canonical_url.unwrap(), "https://example.com/canonical");
+    }
+
+    #[test]
+    fn skips_broad_article_picks_mw_parser_output() {
+        // Simulate Wikipedia structure: <article> wraps everything,
+        // but .mw-parser-output is the real content.
+        let filler = "x".repeat(500);
+        let html = format!(
+            r#"<html><body>
+            <article>
+              <div id="mw-navigation">{filler}</div>
+              <div id="content" role="main">
+                <div id="bodyContent">
+                  <div id="mw-content-text">
+                    <div class="mw-parser-output">
+                      <p>This is the real Wikipedia article content about web scraping. {filler}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="catlinks">{filler}</div>
+            </article>
+            </body></html>"#
+        );
+        let content = extract_main_content(&html);
+        assert!(
+            content.contains("real Wikipedia article content"),
+            "Should extract .mw-parser-output content"
+        );
+        // Should NOT contain the navigation or catlinks filler
+        assert!(
+            !content.contains("mw-navigation"),
+            "Should not include navigation div"
+        );
     }
 
     #[test]

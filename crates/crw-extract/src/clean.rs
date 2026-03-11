@@ -63,14 +63,28 @@ pub fn clean_html(
         // Remove elements whose class or id matches common non-content patterns.
         // Covers sidebars, TOC, navigation, ads, related/recommended sections,
         // cookie banners, share widgets, and comment sections.
+        //
+        // IMPORTANT: Never remove structural elements (html, head, body) — that
+        // would nuke the entire page. Also skip <main> since it typically
+        // wraps the primary content we want to keep.
         handlers.push(element!("*", |el| {
+            let tag = el.tag_name();
+            let tag_name = tag.as_str();
+            if matches!(tag_name, "html" | "head" | "body" | "main") {
+                return Ok(());
+            }
+
             let class = el.get_attribute("class").unwrap_or_default().to_lowercase();
             let id = el.get_attribute("id").unwrap_or_default().to_lowercase();
+
+            // Check each CSS class token and the id individually.
+            // Per-token substring matching avoids cross-token false positives
+            // (e.g. "vector-toc-available skin-theme" wouldn't match "toc" on
+            // a combined string that also contains the other classes).
             let combined = format!("{class} {id}");
 
             const NOISE_PATTERNS: &[&str] = &[
                 "sidebar",
-                "toc",
                 "table-of-contents",
                 "tableofcontents",
                 "infobox",
@@ -81,14 +95,7 @@ pub fn clean_html(
                 "cookie",
                 "consent",
                 "banner",
-                "share",
-                "social",
-                "related",
-                "recommended",
-                "comment",
                 "disqus",
-                "ad-",
-                "ads-",
                 "advert",
                 "popup",
                 "modal",
@@ -100,9 +107,46 @@ pub fn clean_html(
                 "mw-navigation",
                 "sitesub",
                 "jump-to-nav",
+                "mw-editsection",
+                "reflist",
+                "mw-references",
+                "authority-control",
+                "mw-indicators",
+                "sistersitebox",
+                "mbox",
+                "ambox",
+                "ombox",
+                "hatnote",
+                "shortdescription",
             ];
 
-            if NOISE_PATTERNS.iter().any(|p| combined.contains(p)) {
+            // Patterns that need exact token matching (too short/generic for substring).
+            // Checked against individual class names and the id value.
+            const NOISE_EXACT_TOKENS: &[&str] = &[
+                "toc",       // table of contents — "toc" but not "vector-toc-available"
+                "share",     // share widgets — not "share-price" or "shareholder"
+                "social",    // social buttons
+                "related",   // related content
+                "recommended",
+                "comment",   // comment sections — not "uncommented"
+            ];
+
+            // Prefix patterns: match tokens that START with these strings.
+            const NOISE_PREFIXES: &[&str] = &[
+                "ad-",       // ad containers — not "load-more", "typeahead"
+                "ads-",
+            ];
+
+            let is_noise = NOISE_PATTERNS.iter().any(|p| combined.contains(p))
+                || {
+                    let tokens_iter = class.split_whitespace().chain(std::iter::once(id.as_str()));
+                    tokens_iter.into_iter().any(|tok| {
+                        NOISE_EXACT_TOKENS.iter().any(|p| tok == *p)
+                        || NOISE_PREFIXES.iter().any(|pre| tok.starts_with(pre))
+                    })
+                };
+
+            if is_noise {
                 el.remove();
             }
 
@@ -285,6 +329,15 @@ mod tests {
         let result = clean_html(html, false, &[], &["div.ad".into()]).unwrap();
         assert!(!result.contains("Ad stuff"));
         assert!(result.contains("Real content"));
+    }
+
+    #[test]
+    fn does_not_remove_html_body_with_noise_classes() {
+        // Wikipedia's <html> has classes like "vector-toc-available" containing "toc".
+        // The noise handler must skip structural elements to avoid nuking the page.
+        let html = r#"<html class="vector-toc-available"><body><main class="mw-body"><p>Content</p></main></body></html>"#;
+        let result = clean_html(html, true, &[], &[]).unwrap();
+        assert!(result.contains("Content"), "Structural elements must not be removed by noise patterns");
     }
 
     #[test]

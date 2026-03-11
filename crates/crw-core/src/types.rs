@@ -133,6 +133,15 @@ pub struct ScrapeRequest {
     /// Unsupported Firecrawl parameter — captured to return a clear error.
     #[serde(default)]
     pub actions: Option<serde_json::Value>,
+    /// Per-request LLM API key for structured extraction (BYOK).
+    #[serde(default, alias = "llm_api_key")]
+    pub llm_api_key: Option<String>,
+    /// Per-request LLM provider override ("anthropic" or "openai").
+    #[serde(default, alias = "llm_provider")]
+    pub llm_provider: Option<String>,
+    /// Per-request LLM model override.
+    #[serde(default, alias = "llm_model")]
+    pub llm_model: Option<String>,
 }
 
 fn default_formats() -> Vec<OutputFormat> {

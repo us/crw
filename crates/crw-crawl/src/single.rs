@@ -91,7 +91,17 @@ pub async fn scrape_url(
 
     // Phase 4: LLM structured extraction
     if formats_include_json(&req.formats) {
-        if let (Some(schema), Some(llm)) = (&req.json_schema, llm_config) {
+        // Merge per-request LLM config (BYOK) with server config
+        let byok_config = req.llm_api_key.as_ref().map(|key| LlmConfig {
+            api_key: key.clone(),
+            provider: req.llm_provider.clone().unwrap_or_else(|| "anthropic".into()),
+            model: req.llm_model.clone().unwrap_or_else(|| "claude-sonnet-4-20250514".into()),
+            base_url: None,
+            max_tokens: 4096,
+        });
+        let effective_llm = byok_config.as_ref().or(llm_config);
+
+        if let (Some(schema), Some(llm)) = (&req.json_schema, effective_llm) {
             let md = data.markdown.as_deref().unwrap_or("");
             match crw_extract::structured::extract_structured(md, schema, llm).await {
                 Ok(json) => data.json = Some(json),
@@ -100,15 +110,14 @@ pub async fn scrape_url(
                     return Err(e);
                 }
             }
-        } else if req.json_schema.is_some() && llm_config.is_none() {
+        } else if req.json_schema.is_some() && effective_llm.is_none() {
             return Err(crw_core::error::CrwError::ExtractionError(
-                "JSON extraction requested but no LLM configured. Set [extraction.llm] in config or CRW_EXTRACTION__LLM__API_KEY env var.".into()
+                "JSON extraction requested but no LLM configured. Either set [extraction.llm] in server config, or pass 'llmApiKey' in the request body.".into()
             ));
         } else if req.json_schema.is_none() {
-            // formats includes json/extract but no schema was provided — warn the user
-            data.warning = Some(
-                "Format 'json' requires a jsonSchema. Provide jsonSchema for structured LLM extraction.".into()
-            );
+            return Err(crw_core::error::CrwError::InvalidRequest(
+                "Format 'json' requires a jsonSchema field. Provide a JSON Schema object for structured extraction.".into()
+            ));
         }
     }
 
@@ -151,6 +160,11 @@ fn canonical_status_text(status_code: u16) -> &'static str {
 }
 
 fn detect_block_interstitial(html: &str) -> Option<String> {
+    // If page has substantial content (>50KB), it's not a block/interstitial page
+    if html.len() > 50_000 {
+        return None;
+    }
+
     const SCAN_LIMIT: usize = 128 * 1024;
     let end = if html.len() <= SCAN_LIMIT {
         html.len()

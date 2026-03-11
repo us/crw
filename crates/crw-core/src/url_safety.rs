@@ -24,6 +24,11 @@ pub fn safe_redirect_policy() -> reqwest::redirect::Policy {
 /// - Link-local addresses (169.254.x — e.g. AWS metadata endpoint)
 /// - 0.0.0.0
 pub fn validate_safe_url(url: &url::Url) -> Result<(), String> {
+    // Null byte check
+    if url.as_str().contains("%00") || url.as_str().contains('\0') {
+        return Err("URL contains null bytes".into());
+    }
+
     // Scheme check
     if !matches!(url.scheme(), "http" | "https") {
         return Err("Only http/https URLs are allowed".into());

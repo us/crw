@@ -84,7 +84,10 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
     // Step 4: If only_main_content, try to narrow further with readability scoring.
     let (content_html, cleaned_ref) = if only_main_content && selected_html.is_none() {
         let main = readability::extract_main_content(after_selection);
-        (main, Some(cleaned))
+        // Re-clean: readability may have selected a broad container (e.g. <article>)
+        // that still contains noise elements (infobox, navbox, catlinks, etc.)
+        let re_cleaned = clean::clean_html(&main, true, &[], &[]).unwrap_or(main);
+        (re_cleaned, Some(cleaned))
     } else {
         (after_selection.to_string(), None)
     };
