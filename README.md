@@ -9,7 +9,7 @@
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg" alt="License"></a>
     <a href="https://github.com/us/crw/stargazers"><img src="https://img.shields.io/github/stars/us/crw?style=social" alt="GitHub Stars"></a>
     <a href="https://fastcrw.com"><img src="https://img.shields.io/badge/Managed%20Cloud-fastcrw.com-blueviolet" alt="fastcrw.com"></a>
-    <a href="https://discord.gg/kkFh2SC8"><img src="https://img.shields.io/discord/1234567890?color=7289da&label=Discord&logo=discord&logoColor=white" alt="Discord"></a>
+    <a href="https://discord.gg/kkFh2SC8"><img src="https://img.shields.io/badge/Discord-Join%20Community-7289da?logo=discord&logoColor=white" alt="Discord"></a>
   </p>
   <p align="center">
     <a href="https://fastcrw.com">Cloud</a> &bull;
