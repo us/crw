@@ -123,28 +123,27 @@ pub fn clean_html(
             // Patterns that need exact token matching (too short/generic for substring).
             // Checked against individual class names and the id value.
             const NOISE_EXACT_TOKENS: &[&str] = &[
-                "toc",       // table of contents — "toc" but not "vector-toc-available"
-                "share",     // share widgets — not "share-price" or "shareholder"
-                "social",    // social buttons
-                "related",   // related content
+                "toc",     // table of contents — "toc" but not "vector-toc-available"
+                "share",   // share widgets — not "share-price" or "shareholder"
+                "social",  // social buttons
+                "related", // related content
                 "recommended",
-                "comment",   // comment sections — not "uncommented"
+                "comment", // comment sections — not "uncommented"
             ];
 
             // Prefix patterns: match tokens that START with these strings.
             const NOISE_PREFIXES: &[&str] = &[
-                "ad-",       // ad containers — not "load-more", "typeahead"
+                "ad-", // ad containers — not "load-more", "typeahead"
                 "ads-",
             ];
 
-            let is_noise = NOISE_PATTERNS.iter().any(|p| combined.contains(p))
-                || {
-                    let tokens_iter = class.split_whitespace().chain(std::iter::once(id.as_str()));
-                    tokens_iter.into_iter().any(|tok| {
-                        NOISE_EXACT_TOKENS.iter().any(|p| tok == *p)
+            let is_noise = NOISE_PATTERNS.iter().any(|p| combined.contains(p)) || {
+                let tokens_iter = class.split_whitespace().chain(std::iter::once(id.as_str()));
+                tokens_iter.into_iter().any(|tok| {
+                    NOISE_EXACT_TOKENS.iter().any(|p| tok == *p)
                         || NOISE_PREFIXES.iter().any(|pre| tok.starts_with(pre))
-                    })
-                };
+                })
+            };
 
             if is_noise {
                 el.remove();
@@ -337,7 +336,10 @@ mod tests {
         // The noise handler must skip structural elements to avoid nuking the page.
         let html = r#"<html class="vector-toc-available"><body><main class="mw-body"><p>Content</p></main></body></html>"#;
         let result = clean_html(html, true, &[], &[]).unwrap();
-        assert!(result.contains("Content"), "Structural elements must not be removed by noise patterns");
+        assert!(
+            result.contains("Content"),
+            "Structural elements must not be removed by noise patterns"
+        );
     }
 
     #[test]

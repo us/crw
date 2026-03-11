@@ -94,8 +94,14 @@ pub async fn scrape_url(
         // Merge per-request LLM config (BYOK) with server config
         let byok_config = req.llm_api_key.as_ref().map(|key| LlmConfig {
             api_key: key.clone(),
-            provider: req.llm_provider.clone().unwrap_or_else(|| "anthropic".into()),
-            model: req.llm_model.clone().unwrap_or_else(|| "claude-sonnet-4-20250514".into()),
+            provider: req
+                .llm_provider
+                .clone()
+                .unwrap_or_else(|| "anthropic".into()),
+            model: req
+                .llm_model
+                .clone()
+                .unwrap_or_else(|| "claude-sonnet-4-20250514".into()),
             base_url: None,
             max_tokens: 4096,
         });
