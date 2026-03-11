@@ -9,6 +9,7 @@
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg" alt="License"></a>
     <a href="https://github.com/us/crw/stargazers"><img src="https://img.shields.io/github/stars/us/crw?style=social" alt="GitHub Stars"></a>
     <a href="https://fastcrw.com"><img src="https://img.shields.io/badge/Managed%20Cloud-fastcrw.com-blueviolet" alt="fastcrw.com"></a>
+    <a href="https://discord.gg/kkFh2SC8"><img src="https://img.shields.io/discord/1234567890?color=7289da&label=Discord&logo=discord&logoColor=white" alt="Discord"></a>
   </p>
   <p align="center">
     <a href="https://fastcrw.com">Cloud</a> &bull;
@@ -16,7 +17,8 @@
     <a href="docs/docs/rest-api.md">API Reference</a> &bull;
     <a href="docs/docs/mcp.md">MCP Integration</a> &bull;
     <a href="docs/docs/js-rendering.md">JS Rendering</a> &bull;
-    <a href="docs/docs/configuration.md">Configuration</a>
+    <a href="docs/docs/configuration.md">Configuration</a> &bull;
+    <a href="https://discord.gg/kkFh2SC8">Discord</a>
   </p>
   <p align="center">
     <b>English</b> | <a href="README.zh-CN.md">中文</a>
@@ -631,6 +633,10 @@ CRW includes built-in protections against common web scraping attack vectors:
 - **robots.txt** — respects `Allow`/`Disallow` with wildcard patterns (`*`, `$`) and RFC 9309 specificity
 - **Rate limiting** — configurable per-second request cap
 - **Resource limits** — max body size (1 MB), max crawl depth (10), max pages (1000), max discovered URLs (5000)
+
+## Community
+
+Don't be shy — [join us on Discord](https://discord.gg/kkFh2SC8)! Ask questions, share what you're building, report bugs, or just hang out.
 
 ## Contributing
 
