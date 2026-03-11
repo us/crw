@@ -1,6 +1,7 @@
 use crw_core::types::ChunkStrategy;
 use regex::Regex;
 use std::collections::HashSet;
+use std::sync::OnceLock;
 
 #[derive(Clone, Copy)]
 struct ChunkOptions {
@@ -21,7 +22,7 @@ pub fn chunk_text(text: &str, strategy: &ChunkStrategy) -> Vec<String> {
             ChunkOptions {
                 max_chars: *max_chars,
                 overlap_chars: overlap_chars.unwrap_or(0),
-                dedupe: dedupe.unwrap_or(false),
+                dedupe: dedupe.unwrap_or(true),
             },
         ),
         ChunkStrategy::Regex {
@@ -34,7 +35,7 @@ pub fn chunk_text(text: &str, strategy: &ChunkStrategy) -> Vec<String> {
             ChunkOptions {
                 max_chars: *max_chars,
                 overlap_chars: overlap_chars.unwrap_or(0),
-                dedupe: dedupe.unwrap_or(false),
+                dedupe: dedupe.unwrap_or(true),
             },
         ),
         ChunkStrategy::Topic {
@@ -46,7 +47,7 @@ pub fn chunk_text(text: &str, strategy: &ChunkStrategy) -> Vec<String> {
             ChunkOptions {
                 max_chars: *max_chars,
                 overlap_chars: overlap_chars.unwrap_or(0),
-                dedupe: dedupe.unwrap_or(false),
+                dedupe: dedupe.unwrap_or(true),
             },
         ),
     };
@@ -61,7 +62,8 @@ fn chunk_by_sentence(text: &str, max_chars: Option<usize>) -> Vec<String> {
 
     // Split on sentence boundaries: find [.!?] followed by whitespace, keep punctuation
     // with the preceding sentence. Rust regex doesn't support lookbehind.
-    let boundary = Regex::new(r"[.!?]+\s+").unwrap();
+    static SENTENCE_BOUNDARY: OnceLock<Regex> = OnceLock::new();
+    let boundary = SENTENCE_BOUNDARY.get_or_init(|| Regex::new(r"[.!?]+\s+").unwrap());
     let mut raw: Vec<String> = Vec::new();
     let mut last = 0;
     for m in boundary.find_iter(text) {
@@ -128,7 +130,15 @@ fn post_process_chunks(chunks: Vec<String>, options: ChunkOptions) -> Vec<String
         chunks
     };
 
-    processed.retain(|chunk| !chunk.trim().is_empty());
+    processed.retain(|chunk| {
+        let trimmed = chunk.trim();
+        if trimmed.is_empty() {
+            return false;
+        }
+        // Filter out chunks that are only markdown separators or whitespace
+        let stripped: String = trimmed.chars().filter(|c| !c.is_whitespace()).collect();
+        !stripped.chars().all(|c| c == '-' || c == '*' || c == '_')
+    });
 
     if options.dedupe {
         let mut seen = HashSet::new();

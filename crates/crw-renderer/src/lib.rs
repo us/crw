@@ -137,7 +137,20 @@ impl FallbackRenderer {
     ) -> CrwResult<FetchResult> {
         match render_js {
             Some(false) => self.http.fetch(url, headers, None).await,
-            Some(true) => self.fetch_with_js(url, headers, wait_for_ms).await,
+            Some(true) => {
+                if self.js_renderers.is_empty() {
+                    tracing::warn!(
+                        url,
+                        "JS rendering requested but no renderer available — falling back to HTTP"
+                    );
+                    let mut result = self.http.fetch(url, headers, None).await?;
+                    result.rendered_with = Some("http_only_fallback".to_string());
+                    result.warning = Some("JS rendering was requested but no renderer is available. Content was fetched via HTTP only.".to_string());
+                    Ok(result)
+                } else {
+                    self.fetch_with_js(url, headers, wait_for_ms).await
+                }
+            }
             None => {
                 let result = self.http.fetch(url, headers, None).await?;
                 if !self.js_renderers.is_empty() && detector::needs_js_rendering(&result.html) {

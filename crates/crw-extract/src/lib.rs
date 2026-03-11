@@ -21,7 +21,9 @@ pub mod selector;
 pub mod structured;
 
 use crw_core::error::{CrwError, CrwResult};
-use crw_core::types::{ChunkStrategy, FilterMode, OutputFormat, PageMetadata, ScrapeData};
+use crw_core::types::{
+    ChunkResult, ChunkStrategy, FilterMode, OutputFormat, PageMetadata, ScrapeData,
+};
 
 /// Options for the high-level extraction pipeline.
 pub struct ExtractOptions<'a> {
@@ -171,19 +173,34 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
         let raw_chunks = chunking::chunk_text(markdown_text, strategy);
 
         // Step 7: Filter chunks by relevance if query + filter_mode are set.
-        let filtered = if let (Some(q), Some(mode)) = (query, filter_mode)
+        let chunk_results = if let (Some(q), Some(mode)) = (query, filter_mode)
             && !q.trim().is_empty()
             && !raw_chunks.is_empty()
         {
-            filter::filter_chunks(&raw_chunks, q, mode, top_k.unwrap_or(5))
+            filter::filter_chunks_scored(&raw_chunks, q, mode, top_k.unwrap_or(5))
+                .into_iter()
+                .map(|sc| ChunkResult {
+                    content: sc.content,
+                    score: Some(sc.score),
+                    index: sc.index,
+                })
+                .collect::<Vec<_>>()
         } else {
             raw_chunks
+                .into_iter()
+                .enumerate()
+                .map(|(i, c)| ChunkResult {
+                    content: c,
+                    score: None,
+                    index: i,
+                })
+                .collect()
         };
 
-        if filtered.is_empty() {
+        if chunk_results.is_empty() {
             None
         } else {
-            Some(filtered)
+            Some(chunk_results)
         }
     } else {
         None

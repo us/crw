@@ -204,7 +204,24 @@ impl PageFetcher for CdpRenderer {
     }
 
     async fn is_available(&self) -> bool {
-        connect_async(&self.ws_url).await.is_ok()
+        // Try connecting and running a minimal CDP command to verify the
+        // renderer can actually process requests, not just accept connections.
+        let ws = match tokio::time::timeout(WS_CONNECT_TIMEOUT, connect_async(&self.ws_url)).await {
+            Ok(Ok((ws, _))) => ws,
+            _ => return false,
+        };
+        let (mut write, mut read) = ws.split();
+        let check = cdp_send_recv(
+            &mut write,
+            &mut read,
+            "Browser.getVersion",
+            serde_json::json!({}),
+            None,
+            Duration::from_secs(5),
+        )
+        .await;
+        close_ws(&mut write).await;
+        check.is_ok()
     }
 }
 

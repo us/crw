@@ -40,6 +40,19 @@ crw-server
 
 ## What's New
 
+### v0.0.7
+
+- **`success: false` on 4xx targets** — scraping a 403/404/429 target with minimal body now correctly returns `success: false` with error details, instead of `success: true` with a warning. Targets with real content (custom error pages) still return `success: true` with a warning
+- **JS renderer fallback warning** — when `renderJs: true` is requested but no CDP renderer is available, the response now includes `rendered_with: "http_only_fallback"` and a warning instead of silently falling back
+- **CDP health check** — `is_available()` now runs a real `Browser.getVersion` command instead of just testing the WebSocket connection
+- **Specific error messages** — unknown formats now return descriptive errors (e.g., `"Unknown format 'extract'. Valid formats: ..."`) instead of generic 422
+- **`"extract"` format alias** — `formats: ["extract"]` and `formats: ["llm-extract"]` are now accepted as aliases for `"json"` (Firecrawl compatibility)
+- **Chunk dedup by default** — deduplication is now enabled by default for all chunking strategies; separator-only chunks (`---`, `***`) are filtered out
+- **Chunk relevance scores** — chunks now return `{ content, score, index }` objects instead of plain strings when a query is provided
+- **Map timeout** — `/v1/map` accepts a `timeout` parameter (default 120s, max 300s) to prevent 502s on large sites
+- **Stealth + JS rendering fix** — `stealth: true` with `renderJs: true` no longer bypasses CDP; the shared renderer is used with stealth headers injected
+- **BM25 NaN guard** — prevents `NaN` scores when all chunks are empty
+
 ### v0.0.6
 
 - **Crate READMEs on crates.io** — all 7 crates now have detailed README documentation visible on their crates.io pages, with usage examples, API docs, and installation instructions

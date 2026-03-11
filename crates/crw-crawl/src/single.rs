@@ -35,10 +35,27 @@ pub async fn scrape_url(
         } else {
             user_agent.to_string()
         };
-        let temp_http = HttpFetcher::new(&effective_ua, proxy, inject_stealth);
-        temp_http
-            .fetch(&req.url, &req.headers, req.wait_for)
-            .await?
+
+        if req.render_js == Some(false) {
+            // HTTP-only: safe to use a temp HttpFetcher with custom proxy/stealth.
+            let temp_http = HttpFetcher::new(&effective_ua, proxy, inject_stealth);
+            temp_http
+                .fetch(&req.url, &req.headers, req.wait_for)
+                .await?
+        } else {
+            // JS rendering needed (or auto-detect): use the shared renderer which
+            // has CDP backends configured. Inject stealth headers via custom headers
+            // so the shared renderer's CDP connections are still used.
+            let mut merged_headers = req.headers.clone();
+            if inject_stealth {
+                merged_headers
+                    .entry("User-Agent".to_string())
+                    .or_insert(effective_ua);
+            }
+            renderer
+                .fetch(&req.url, &merged_headers, req.render_js, req.wait_for)
+                .await?
+        }
     } else {
         renderer
             .fetch(&req.url, &req.headers, req.render_js, req.wait_for)

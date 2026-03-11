@@ -38,6 +38,19 @@ crw-server
 
 ## 最新动态
 
+### v0.0.7
+
+- **4xx 目标返回 `success: false`** — 抓取 403/404/429 等目标且内容极少时，现在正确返回 `success: false` 并附带错误详情，而非 `success: true` 加警告。有真实内容的错误页面（自定义 404 页面等）仍返回 `success: true` 加警告
+- **JS 渲染回退警告** — 请求 `renderJs: true` 但无 CDP 渲染器时，响应中包含 `rendered_with: "http_only_fallback"` 和警告，而非静默回退
+- **CDP 健康检查改进** — `is_available()` 现在执行真正的 `Browser.getVersion` 命令，而非仅测试 WebSocket 连接
+- **具体错误消息** — 未知格式现返回描述性错误（如 `"Unknown format 'extract'. Valid formats: ..."`）
+- **`"extract"` 格式别名** — `formats: ["extract"]` 和 `formats: ["llm-extract"]` 现作为 `"json"` 的别名被接受（Firecrawl 兼容）
+- **默认启用分块去重** — 所有分块策略默认启用去重；纯分隔符分块（`---`、`***`）被过滤
+- **分块相关性评分** — 提供查询时，分块现返回 `{ content, score, index }` 对象而非纯字符串
+- **Map 超时参数** — `/v1/map` 接受 `timeout` 参数（默认 120 秒，最大 300 秒），防止大型站点 502 错误
+- **隐身 + JS 渲染修复** — `stealth: true` 配合 `renderJs: true` 不再绕过 CDP；使用共享渲染器并注入隐身请求头
+- **BM25 NaN 防护** — 防止所有分块为空时产生 NaN 评分
+
 ### v0.0.6
 
 - **crates.io 上的 README 文档** — 全部 7 个 crate 现在都在 crates.io 页面上显示详细的 README 文档，包含使用示例、API 说明和安装指南

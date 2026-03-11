@@ -14,7 +14,7 @@ name = "crw-mcp"
 path = "src/main.rs"
 
 [dependencies]
-crw-core = { path = "../crw-core", version = "0.0.6" }
+crw-core = { path = "../crw-core", version = "0.0.7" }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 reqwest = { workspace = true }

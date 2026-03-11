@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 /// Supported output formats.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+///
+/// `"extract"` and `"llm-extract"` are accepted as aliases for `Json`
+/// during deserialization (Firecrawl compatibility).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum OutputFormat {
     Markdown,
@@ -12,6 +15,27 @@ pub enum OutputFormat {
     PlainText,
     Links,
     Json,
+}
+
+impl<'de> Deserialize<'de> for OutputFormat {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        match s.as_str() {
+            "markdown" => Ok(OutputFormat::Markdown),
+            "html" => Ok(OutputFormat::Html),
+            "rawHtml" => Ok(OutputFormat::RawHtml),
+            "plainText" => Ok(OutputFormat::PlainText),
+            "links" => Ok(OutputFormat::Links),
+            "json" | "extract" | "llm-extract" => Ok(OutputFormat::Json),
+            other => Err(serde::de::Error::custom(format!(
+                "Unknown format '{other}'. Valid formats: markdown, html, rawHtml, plainText, links, json. \
+                 Use formats: [\"json\"] with jsonSchema for structured extraction."
+            ))),
+        }
+    }
 }
 
 /// Strategy for chunking text content.
@@ -140,6 +164,15 @@ pub struct PageMetadata {
     pub elapsed_ms: u64,
 }
 
+/// A single chunk with optional relevance score.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChunkResult {
+    pub content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<f64>,
+    pub index: usize,
+}
+
 /// Data returned for a single scraped page.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -157,7 +190,7 @@ pub struct ScrapeData {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub json: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub chunks: Option<Vec<String>>,
+    pub chunks: Option<Vec<ChunkResult>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub warning: Option<String>,
     pub metadata: PageMetadata,
@@ -254,6 +287,9 @@ pub struct MapRequest {
     pub max_depth: Option<u32>,
     #[serde(default = "default_true")]
     pub use_sitemap: bool,
+    /// Custom timeout in seconds (default: 120).
+    #[serde(default)]
+    pub timeout: Option<u64>,
 }
 
 /// POST /v1/map response body.

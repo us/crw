@@ -1,6 +1,39 @@
 use crw_core::types::FilterMode;
 use std::collections::HashMap;
 
+/// A chunk with its relevance score and original index.
+pub struct ScoredChunk {
+    pub content: String,
+    pub score: f64,
+    pub index: usize,
+}
+
+/// Filter and rank chunks by relevance to a query, returning scores.
+pub fn filter_chunks_scored(
+    chunks: &[String],
+    query: &str,
+    mode: &FilterMode,
+    top_k: usize,
+) -> Vec<ScoredChunk> {
+    if chunks.is_empty() || query.trim().is_empty() {
+        // No query: return all chunks without scores (top_k doesn't apply without ranking)
+        return chunks
+            .iter()
+            .enumerate()
+            .map(|(i, c)| ScoredChunk {
+                content: c.clone(),
+                score: 0.0,
+                index: i,
+            })
+            .collect();
+    }
+    let k = top_k.max(1).min(chunks.len());
+    match mode {
+        FilterMode::Bm25 => filter_bm25_scored(chunks, query, k),
+        FilterMode::Cosine => filter_cosine_scored(chunks, query, k),
+    }
+}
+
 /// Filter and rank chunks by relevance to a query.
 pub fn filter_chunks(
     chunks: &[String],
@@ -8,14 +41,10 @@ pub fn filter_chunks(
     mode: &FilterMode,
     top_k: usize,
 ) -> Vec<String> {
-    if chunks.is_empty() || query.trim().is_empty() {
-        return chunks.to_vec();
-    }
-    let k = top_k.max(1).min(chunks.len());
-    match mode {
-        FilterMode::Bm25 => filter_bm25(chunks, query, k),
-        FilterMode::Cosine => filter_cosine(chunks, query, k),
-    }
+    filter_chunks_scored(chunks, query, mode, top_k)
+        .into_iter()
+        .map(|sc| sc.content)
+        .collect()
 }
 
 // ── Tokenization ──────────────────────────────────────────────────────────────
@@ -33,12 +62,12 @@ fn tokenize(text: &str) -> Vec<String> {
 const K1: f64 = 1.2;
 const B: f64 = 0.75;
 
-fn filter_bm25(chunks: &[String], query: &str, top_k: usize) -> Vec<String> {
+fn filter_bm25_scored(chunks: &[String], query: &str, top_k: usize) -> Vec<ScoredChunk> {
     let query_terms = tokenize(query);
     let tokenized: Vec<Vec<String>> = chunks.iter().map(|c| tokenize(c)).collect();
 
     let n = chunks.len() as f64;
-    let avgdl = tokenized.iter().map(|t| t.len()).sum::<usize>() as f64 / n;
+    let avgdl = (tokenized.iter().map(|t| t.len()).sum::<usize>() as f64 / n).max(1.0);
 
     // Document frequency: how many chunks contain each term.
     let mut df: HashMap<&str, usize> = HashMap::new();
@@ -78,12 +107,19 @@ fn filter_bm25(chunks: &[String], query: &str, top_k: usize) -> Vec<String> {
 
     scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     scored.truncate(top_k);
-    scored.into_iter().map(|(i, _)| chunks[i].clone()).collect()
+    scored
+        .into_iter()
+        .map(|(i, score)| ScoredChunk {
+            content: chunks[i].clone(),
+            score,
+            index: i,
+        })
+        .collect()
 }
 
 // ── Cosine Similarity (TF-IDF) ───────────────────────────────────────────────
 
-fn filter_cosine(chunks: &[String], query: &str, top_k: usize) -> Vec<String> {
+fn filter_cosine_scored(chunks: &[String], query: &str, top_k: usize) -> Vec<ScoredChunk> {
     let all_docs: Vec<Vec<String>> = std::iter::once(query.to_string())
         .chain(chunks.iter().cloned())
         .map(|s| tokenize(&s))
@@ -141,7 +177,14 @@ fn filter_cosine(chunks: &[String], query: &str, top_k: usize) -> Vec<String> {
 
     scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     scored.truncate(top_k);
-    scored.into_iter().map(|(i, _)| chunks[i].clone()).collect()
+    scored
+        .into_iter()
+        .map(|(i, score)| ScoredChunk {
+            content: chunks[i].clone(),
+            score,
+            index: i,
+        })
+        .collect()
 }
 
 fn dot(a: &[f64], b: &[f64]) -> f64 {
