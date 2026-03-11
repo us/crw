@@ -140,7 +140,7 @@ pub fn clean_html(
             let is_noise = NOISE_PATTERNS.iter().any(|p| combined.contains(p)) || {
                 let tokens_iter = class.split_whitespace().chain(std::iter::once(id.as_str()));
                 tokens_iter.into_iter().any(|tok| {
-                    NOISE_EXACT_TOKENS.iter().any(|p| tok == *p)
+                    NOISE_EXACT_TOKENS.contains(&tok)
                         || NOISE_PREFIXES.iter().any(|pre| tok.starts_with(pre))
                 })
             };

@@ -119,6 +119,9 @@ async fn main() {
         proxy: cli.proxy,
         stealth: if cli.stealth { Some(true) } else { None },
         actions: None,
+        llm_api_key: None,
+        llm_provider: None,
+        llm_model: None,
     };
 
     let data = match scrape_url(&req, &renderer, None, "crw/0.0.3", cli.stealth).await {
