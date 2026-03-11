@@ -38,6 +38,20 @@ crw-server
 
 ## What's New
 
+### v0.0.5
+
+- **`crw-cli` now on crates.io** — install the standalone CLI with `cargo install crw-cli` and scrape URLs without running a server
+- **Parallelized release workflow** — crate publishing uses tiered parallelism, cutting release time by ~2.25 minutes
+- **CLI and MCP install docs** — README now includes `cargo install` instructions for both `crw-cli` and `crw-mcp`
+
+### v0.0.4
+
+- **Hardened rendering and warning semantics** — improved reliability of the rendering pipeline and warning detection logic
+- **XPath output escaping** — XPath extraction results are now properly escaped to prevent injection
+- **Broadened status warnings** — expanded HTTP status code range that triggers warning metadata
+- **Capped interstitial scan** — bounded interstitial page detection to avoid excessive scanning
+- **Clippy cleanup** — simplified status code checks for cleaner, idiomatic Rust
+
 ### v0.0.3
 
 - **Warning-aware target handling** — 4xx and anti-bot targets now return `success: true` with `warning` and `metadata.statusCode`

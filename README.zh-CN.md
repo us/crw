@@ -38,6 +38,20 @@ crw-server
 
 ## 最新动态
 
+### v0.0.5
+
+- **`crw-cli` 上架 crates.io** — 通过 `cargo install crw-cli` 安装独立 CLI，无需启动服务器即可抓取 URL
+- **并行化发布流程** — crate 发布采用分层并行，发布时间缩短约 2.25 分钟
+- **CLI 和 MCP 安装文档** — README 新增 `crw-cli` 和 `crw-mcp` 的 `cargo install` 说明
+
+### v0.0.4
+
+- **增强渲染和告警语义** — 提升渲染管道和告警检测逻辑的可靠性
+- **XPath 输出转义** — XPath 提取结果现在会正确转义，防止注入
+- **扩展状态码告警** — 扩大触发告警元数据的 HTTP 状态码范围
+- **限制插页扫描** — 限制插页检测的扫描范围，避免过度扫描
+- **Clippy 清理** — 简化状态码检查，代码更地道
+
 ### v0.0.3
 
 - **目标告警语义** — 4xx 与反爬页面现在返回 `success: true`，并通过 `warning` 与 `metadata.statusCode` 暴露真实目标状态
