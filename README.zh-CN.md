@@ -65,53 +65,7 @@ crw-server
 - **隐身 + JS 渲染修复** — `stealth: true` 配合 `renderJs: true` 不再绕过 CDP；使用共享渲染器并注入隐身请求头
 - **BM25 NaN 防护** — 防止所有分块为空时产生 NaN 评分
 
-### v0.0.6
-
-- **crates.io 上的 README 文档** — 全部 7 个 crate 现在都在 crates.io 页面上显示详细的 README 文档，包含使用示例、API 说明和安装指南
-
-### v0.0.5
-
-- **`crw-cli` 上架 crates.io** — 通过 `cargo install crw-cli` 安装独立 CLI，无需启动服务器即可抓取 URL
-- **并行化发布流程** — crate 发布采用分层并行，发布时间缩短约 2.25 分钟
-- **CLI 和 MCP 安装文档** — README 新增 `crw-cli` 和 `crw-mcp` 的 `cargo install` 说明
-
-### v0.0.4
-
-- **增强渲染和告警语义** — 提升渲染管道和告警检测逻辑的可靠性
-- **XPath 输出转义** — XPath 提取结果现在会正确转义，防止注入
-- **扩展状态码告警** — 扩大触发告警元数据的 HTTP 状态码范围
-- **限制插页扫描** — 限制插页检测的扫描范围，避免过度扫描
-- **Clippy 清理** — 简化状态码检查，代码更地道
-
-### v0.0.3
-
-- **目标告警语义** — 4xx 与反爬页面现在返回 `success: true`，并通过 `warning` 与 `metadata.statusCode` 暴露真实目标状态
-- **更可靠的 JS 渲染** — CDP 导航会等待真实页面生命周期完成后再应用 `waitFor`
-- **隐身模式解压修复** — gzip 与 brotli 响应现在会被正确解码，不再返回乱码二进制内容
-- **爬取兼容性提升** — `limit`、`maxPages` 与 `max_pages` 统一归一到同一页数上限
-- **XPath 与分块修复** — XPath 返回全部匹配项，chunk 支持 overlap/dedupe，排序保留评分结果顺序
-
-### v0.0.2
-
-- **CSS 选择器 & XPath** — Markdown 转换前提取特定 DOM 元素（`cssSelector`、`xpath`）
-- **分块策略** — 按主题、句子或正则表达式将内容切分为 RAG 流水线所需的块（`chunkStrategy`）
-- **BM25 & 余弦过滤** — 按查询相关性对块排序，返回前 K 个结果（`filterMode`、`topK`）
-- **更好的 Markdown** — 切换到 `htmd`（Turndown.js 移植版）：表格、代码块语言、嵌套列表均正确渲染
-- **隐身模式** — 从内置 Chrome/Firefox/Safari 池轮换 User-Agent，注入 12 个浏览器同款请求头（`stealth: true`）
-- **单请求代理** — 每次请求可单独覆盖全局代理（`proxy: "http://..."`）
-- **速率限制抖动** — 请求间随机延迟，避免均匀流量指纹
-- **`crw-server setup`** — 一键 JS 渲染设置：自动下载 LightPanda，创建 `config.local.toml`
-
-### v0.0.1
-
-- **兼容 Firecrawl 的 REST API** — `/v1/scrape`、`/v1/crawl`、`/v1/map`，请求/响应格式完全一致
-- **6 种输出格式** — Markdown、HTML、清洁 HTML、原始 HTML、纯文本、链接、结构化 JSON
-- **LLM 结构化提取** — 发送 JSON Schema，获取经验证的结构化数据（Anthropic tool_use + OpenAI function calling）
-- **JS 渲染** — 通过启发式方法自动检测 SPA，通过 LightPanda、Playwright 或 Chrome（CDP）渲染
-- **BFS 爬虫** — 异步爬取，支持速率限制、robots.txt、站点地图、并发任务
-- **MCP 服务器** — 内置 stdio + HTTP 传输，支持 Claude Code 和 Claude Desktop
-- **SSRF 防护** — 私有 IP、云元数据、IPv6、危险 URI 过滤
-- **Docker 就绪** — 多阶段构建，含 LightPanda 边车
+[完整更新日志 →](CHANGELOG.md)
 
 ## 为什么选择 CRW？
 

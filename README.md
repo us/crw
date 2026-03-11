@@ -67,53 +67,7 @@ crw-server
 - **Stealth + JS rendering fix** — `stealth: true` with `renderJs: true` no longer bypasses CDP; the shared renderer is used with stealth headers injected
 - **BM25 NaN guard** — prevents `NaN` scores when all chunks are empty
 
-### v0.0.6
-
-- **Crate READMEs on crates.io** — all 7 crates now have detailed README documentation visible on their crates.io pages, with usage examples, API docs, and installation instructions
-
-### v0.0.5
-
-- **`crw-cli` now on crates.io** — install the standalone CLI with `cargo install crw-cli` and scrape URLs without running a server
-- **Parallelized release workflow** — crate publishing uses tiered parallelism, cutting release time by ~2.25 minutes
-- **CLI and MCP install docs** — README now includes `cargo install` instructions for both `crw-cli` and `crw-mcp`
-
-### v0.0.4
-
-- **Hardened rendering and warning semantics** — improved reliability of the rendering pipeline and warning detection logic
-- **XPath output escaping** — XPath extraction results are now properly escaped to prevent injection
-- **Broadened status warnings** — expanded HTTP status code range that triggers warning metadata
-- **Capped interstitial scan** — bounded interstitial page detection to avoid excessive scanning
-- **Clippy cleanup** — simplified status code checks for cleaner, idiomatic Rust
-
-### v0.0.3
-
-- **Warning-aware target handling** — 4xx and anti-bot targets now return `success: true` with `warning` and `metadata.statusCode`
-- **More reliable JS rendering** — CDP navigation now waits for real page lifecycle completion before applying `waitFor`
-- **Stealth decompression fix** — gzip and brotli responses decode cleanly instead of leaking garbled binary payloads
-- **Crawl compatibility** — `limit`, `maxPages`, and `max_pages` now normalize to the same crawl cap
-- **XPath and chunking fixes** — XPath returns all matches, chunk overlap/dedupe is supported, and scorer rank order is preserved
-
-### v0.0.2
-
-- **CSS selector & XPath** — target specific DOM elements before Markdown conversion (`cssSelector`, `xpath`)
-- **Chunking strategies** — split content into topic, sentence, or regex-delimited chunks for RAG pipelines (`chunkStrategy`)
-- **BM25 & cosine filtering** — rank chunks by relevance to a query and return top-K results (`filterMode`, `topK`)
-- **Better Markdown** — switched to `htmd` (Turndown.js port): tables, code block languages, nested lists all render correctly
-- **Stealth mode** — rotate User-Agent from a built-in Chrome/Firefox/Safari pool and inject 12 browser-like headers (`stealth: true`)
-- **Per-request proxy** — override the global proxy on a per-request basis (`proxy: "http://..."`)
-- **Rate limit jitter** — randomized delay between requests to avoid uniform traffic fingerprinting
-- **`crw-server setup`** — one-command JS rendering setup: downloads LightPanda, creates `config.local.toml`
-
-### v0.0.1
-
-- **Firecrawl-compatible REST API** — `/v1/scrape`, `/v1/crawl`, `/v1/map` with identical request/response format
-- **6 output formats** — markdown, HTML, cleaned HTML, raw HTML, plain text, links, structured JSON
-- **LLM structured extraction** — JSON schema in, validated structured data out (Anthropic tool_use + OpenAI function calling)
-- **JS rendering** — auto-detect SPAs via heuristics, render via LightPanda, Playwright, or Chrome (CDP)
-- **BFS crawler** — async crawl with rate limiting, robots.txt, sitemap support, concurrent jobs
-- **MCP server** — built-in stdio + HTTP transport for Claude Code and Claude Desktop
-- **SSRF protection** — private IPs, cloud metadata, IPv6, dangerous URI filtering
-- **Docker ready** — multi-stage build with LightPanda sidecar
+[Full changelog →](CHANGELOG.md)
 
 ## Why CRW?
 
