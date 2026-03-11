@@ -186,7 +186,7 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
                 })
                 .collect::<Vec<_>>()
         } else {
-            raw_chunks
+            let mut results: Vec<_> = raw_chunks
                 .into_iter()
                 .enumerate()
                 .map(|(i, c)| ChunkResult {
@@ -194,7 +194,11 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
                     score: None,
                     index: i,
                 })
-                .collect()
+                .collect();
+            if let Some(k) = top_k {
+                results.truncate(k);
+            }
+            results
         };
 
         if chunk_results.is_empty() {

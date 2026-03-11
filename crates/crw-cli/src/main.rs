@@ -118,6 +118,7 @@ async fn main() {
         top_k: None,
         proxy: cli.proxy,
         stealth: if cli.stealth { Some(true) } else { None },
+        actions: None,
     };
 
     let data = match scrape_url(&req, &renderer, None, "crw/0.0.3", cli.stealth).await {

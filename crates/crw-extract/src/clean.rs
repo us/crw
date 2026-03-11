@@ -59,6 +59,55 @@ pub fn clean_html(
             el.remove();
             Ok(())
         }));
+
+        // Remove elements whose class or id matches common non-content patterns.
+        // Covers sidebars, TOC, navigation, ads, related/recommended sections,
+        // cookie banners, share widgets, and comment sections.
+        handlers.push(element!("*", |el| {
+            let class = el.get_attribute("class").unwrap_or_default().to_lowercase();
+            let id = el.get_attribute("id").unwrap_or_default().to_lowercase();
+            let combined = format!("{class} {id}");
+
+            const NOISE_PATTERNS: &[&str] = &[
+                "sidebar",
+                "toc",
+                "table-of-contents",
+                "tableofcontents",
+                "infobox",
+                "navbox",
+                "nav-box",
+                "navigation",
+                "breadcrumb",
+                "cookie",
+                "consent",
+                "banner",
+                "share",
+                "social",
+                "related",
+                "recommended",
+                "comment",
+                "disqus",
+                "ad-",
+                "ads-",
+                "advert",
+                "popup",
+                "modal",
+                "newsletter",
+                "subscribe",
+                "printfooter",
+                "catlinks",
+                "mw-panel",
+                "mw-navigation",
+                "sitesub",
+                "jump-to-nav",
+            ];
+
+            if NOISE_PATTERNS.iter().any(|p| combined.contains(p)) {
+                el.remove();
+            }
+
+            Ok(())
+        }));
     }
 
     let mut result = rewrite_str(

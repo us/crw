@@ -1,4 +1,5 @@
 use axum::Json;
+use axum::extract::rejection::JsonRejection;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use crw_core::error::CrwError;
@@ -10,6 +11,12 @@ pub struct AppError(pub CrwError);
 impl From<CrwError> for AppError {
     fn from(e: CrwError) -> Self {
         Self(e)
+    }
+}
+
+impl From<JsonRejection> for AppError {
+    fn from(rejection: JsonRejection) -> Self {
+        Self(CrwError::InvalidRequest(rejection.body_text()))
     }
 }
 

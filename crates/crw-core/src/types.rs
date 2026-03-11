@@ -130,6 +130,9 @@ pub struct ScrapeRequest {
     /// Override stealth mode for this request (None = use global config).
     #[serde(default)]
     pub stealth: Option<bool>,
+    /// Unsupported Firecrawl parameter — captured to return a clear error.
+    #[serde(default)]
+    pub actions: Option<serde_json::Value>,
 }
 
 fn default_formats() -> Vec<OutputFormat> {

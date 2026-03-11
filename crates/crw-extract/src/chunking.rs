@@ -143,6 +143,11 @@ fn post_process_chunks(chunks: Vec<String>, options: ChunkOptions) -> Vec<String
     if options.dedupe {
         let mut seen = HashSet::new();
         processed.retain(|chunk| seen.insert(normalize_chunk(chunk)));
+
+        // Remove near-duplicates using Jaccard word similarity.
+        // Two chunks sharing >85% of their words are considered near-duplicates;
+        // the second one is dropped.
+        processed = remove_near_duplicates(processed, 0.85);
     }
 
     processed
@@ -201,6 +206,51 @@ fn split_long_chunk(chunk: &str, max_chars: usize, overlap_chars: usize) -> Vec<
     }
 
     result
+}
+
+/// Remove near-duplicate chunks using Jaccard word similarity.
+/// Keeps the first occurrence; drops later chunks that are too similar to any kept chunk.
+fn remove_near_duplicates(chunks: Vec<String>, threshold: f64) -> Vec<String> {
+    if chunks.len() <= 1 {
+        return chunks;
+    }
+
+    // Pre-compute word sets for each chunk.
+    let word_sets: Vec<HashSet<String>> = chunks
+        .iter()
+        .map(|c| {
+            c.split_whitespace()
+                .map(|w| w.to_lowercase())
+                .collect::<HashSet<_>>()
+        })
+        .collect();
+
+    let mut kept_indices: Vec<usize> = Vec::with_capacity(chunks.len());
+
+    for (i, set_i) in word_sets.iter().enumerate() {
+        if set_i.is_empty() {
+            continue;
+        }
+
+        let is_near_dup = kept_indices.iter().any(|&k| {
+            let set_k = &word_sets[k];
+            let intersection = set_i.intersection(set_k).count();
+            let union = set_i.union(set_k).count();
+            if union == 0 {
+                return false;
+            }
+            (intersection as f64 / union as f64) >= threshold
+        });
+
+        if !is_near_dup {
+            kept_indices.push(i);
+        }
+    }
+
+    kept_indices
+        .into_iter()
+        .map(|i| chunks[i].clone())
+        .collect()
 }
 
 fn normalize_chunk(chunk: &str) -> String {
