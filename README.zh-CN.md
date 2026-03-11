@@ -38,6 +38,10 @@ crw-server
 
 ## 最新动态
 
+### v0.0.6
+
+- **crates.io 上的 README 文档** — 全部 7 个 crate 现在都在 crates.io 页面上显示详细的 README 文档，包含使用示例、API 说明和安装指南
+
 ### v0.0.5
 
 - **`crw-cli` 上架 crates.io** — 通过 `cargo install crw-cli` 安装独立 CLI，无需启动服务器即可抓取 URL

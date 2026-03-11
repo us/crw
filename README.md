@@ -38,6 +38,10 @@ crw-server
 
 ## What's New
 
+### v0.0.6
+
+- **Crate READMEs on crates.io** — all 7 crates now have detailed README documentation visible on their crates.io pages, with usage examples, API docs, and installation instructions
+
 ### v0.0.5
 
 - **`crw-cli` now on crates.io** — install the standalone CLI with `cargo install crw-cli` and scrape URLs without running a server
