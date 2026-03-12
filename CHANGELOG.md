@@ -2,7 +2,7 @@
 
 All notable changes to CRW are documented here.
 
-## v0.0.9
+## v0.0.10
 
 - **Crawl cancel endpoint** — `DELETE /v1/crawl/{id}` cancels a running crawl job via `AbortHandle` and returns `{ success: true }`
 - **API rate limiting** — token-bucket rate limiter (configurable `rate_limit_rps`, default 10). Returns 429 with `error_code: "rate_limited"` when exceeded

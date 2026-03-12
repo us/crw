@@ -40,7 +40,7 @@ crw-server
 
 ## What's New
 
-### v0.0.9
+### v0.0.10
 
 - **Crawl cancel** — `DELETE /v1/crawl/{id}` cancels running crawl jobs
 - **API rate limiting** — token-bucket rate limiter (`rate_limit_rps` config, default 10 req/s), returns 429 when exceeded
