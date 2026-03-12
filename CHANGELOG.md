@@ -2,6 +2,20 @@
 
 All notable changes to CRW are documented here.
 
+## v0.0.9
+
+- **Crawl cancel endpoint** — `DELETE /v1/crawl/{id}` cancels a running crawl job via `AbortHandle` and returns `{ success: true }`
+- **API rate limiting** — token-bucket rate limiter (configurable `rate_limit_rps`, default 10). Returns 429 with `error_code: "rate_limited"` when exceeded
+- **Machine-readable error codes** — all error responses now include an `error_code` field (e.g. `"invalid_url"`, `"http_error"`, `"rate_limited"`, `"not_found"`)
+- **Map response envelope** — `/v1/map` now returns `{ success, data: { links } }` instead of `{ success, links }` for consistency with other endpoints
+- **Fenced code blocks** — indented code blocks (4-space) are post-processed into fenced (```) blocks for better LLM/RAG compatibility
+- **Sphinx footer cleanup** — `"footer"` added to exact-token noise patterns, catching `<div class="footer">` in Sphinx/documentation sites
+- **`renderedWith: "http"`** — HTTP-only fetches now report `rendered_with: "http"` in metadata instead of `null`
+- **405 JSON responses** — all routes now have `.fallback(method_not_allowed)` returning structured JSON with `error_code: "method_not_allowed"` instead of empty bodies
+- **Anchor link cleanup** — empty anchor links (`[](#id)`, `[¶](#id)`) and pilcrow/section signs stripped from Markdown output
+- **`role="contentinfo"` cleanup** — elements with ARIA roles `contentinfo`, `navigation`, `banner`, `complementary` removed during cleaning
+- **Tiny chunk merging** — topic chunking merges heading-only chunks (<50 chars) with the next chunk to improve RAG embedding quality
+
 ## v0.0.8
 
 - **Wikipedia / MediaWiki onlyMainContent fix** — `onlyMainContent: true` now correctly extracts article text from Wikipedia pages (~49% size reduction). Previously the `<html>` element's `class="vector-toc-available"` matched the `"toc"` noise pattern via substring, removing the entire page

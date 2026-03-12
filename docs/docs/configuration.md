@@ -16,7 +16,8 @@ crw looks for configuration in this order:
 [server]
 host = "0.0.0.0"
 port = 3000
-request_timeout_secs = 60
+request_timeout_secs = 120
+rate_limit_rps = 10              # Max requests/second (global). 0 = unlimited.
 
 [renderer]
 mode = "auto"               # auto | lightpanda | playwright | chrome | none
@@ -84,6 +85,7 @@ Use the `CRW_` prefix with `__` as a nesting separator:
 | `renderer.mode` | `CRW_RENDERER__MODE` |
 | `crawler.max_concurrency` | `CRW_CRAWLER__MAX_CONCURRENCY` |
 | `crawler.requests_per_second` | `CRW_CRAWLER__REQUESTS_PER_SECOND` |
+| `server.rate_limit_rps` | `CRW_SERVER__RATE_LIMIT_RPS` |
 | `crawler.stealth` | `CRW_CRAWLER__STEALTH` |
 | `crawler.proxy` | `CRW_CRAWLER__PROXY` |
 | `extraction.llm.api_key` | `CRW_EXTRACTION__LLM__API_KEY` |

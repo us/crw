@@ -169,17 +169,16 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
     let json = None;
 
     // Warn if filtering params are provided without a chunking strategy.
-    let orphan_chunk_warning = if chunk_strategy.is_none()
-        && (query.is_some() || filter_mode.is_some())
-    {
-        Some(
-            "'query' and 'filterMode' require 'chunkStrategy' to be set. \
+    let orphan_chunk_warning =
+        if chunk_strategy.is_none() && (query.is_some() || filter_mode.is_some()) {
+            Some(
+                "'query' and 'filterMode' require 'chunkStrategy' to be set. \
              These parameters were ignored."
-                .to_string(),
-        )
-    } else {
-        None
-    };
+                    .to_string(),
+            )
+        } else {
+            None
+        };
 
     // Step 6: Chunk the markdown if a strategy is provided.
     let chunks = if let Some(strategy) = chunk_strategy

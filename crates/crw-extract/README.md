@@ -10,7 +10,7 @@ HTML content extraction and format conversion engine for the [CRW](https://githu
 
 `crw-extract` converts raw HTML into clean, structured output formats for LLM consumption, RAG pipelines, and data extraction.
 
-- **Markdown** — High-fidelity HTML→Markdown via `htmd` (Turndown.js port): tables, code blocks, nested lists
+- **Markdown** — High-fidelity HTML→Markdown via `htmd` (Turndown.js port): tables, code blocks, nested lists. Indented code blocks are post-processed into fenced (```) blocks for better LLM compatibility
 - **Plain text** — Tag-stripped, whitespace-normalized text
 - **Cleaned HTML** — Boilerplate removal (scripts, styles, nav, footer, ads)
 - **Readability** — Main-content extraction with text-density scoring and multi-selector fallback

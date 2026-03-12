@@ -1,5 +1,6 @@
 use axum::Json;
 use axum::extract::State;
+use axum::extract::rejection::JsonRejection;
 use crw_core::error::CrwError;
 use crw_core::types::{ApiResponse, ScrapeData, ScrapeRequest};
 use crw_crawl::single::scrape_url;
@@ -9,8 +10,9 @@ use crate::state::AppState;
 
 pub async fn scrape(
     State(state): State<AppState>,
-    Json(req): Json<ScrapeRequest>,
+    body: Result<Json<ScrapeRequest>, JsonRejection>,
 ) -> Result<Json<ApiResponse<ScrapeData>>, AppError> {
+    let Json(req) = body.map_err(AppError::from)?;
     let parsed_url = url::Url::parse(&req.url)
         .map_err(|e| CrwError::InvalidRequest(format!("Invalid URL: {e}")))?;
     crw_core::url_safety::validate_safe_url(&parsed_url).map_err(CrwError::InvalidRequest)?;
@@ -52,6 +54,7 @@ pub async fn scrape(
                 success: false,
                 data: Some(data),
                 error: Some(error_msg),
+                error_code: Some("http_error".into()),
                 warning: None,
             }));
         }

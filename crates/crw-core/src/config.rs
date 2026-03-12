@@ -22,6 +22,9 @@ pub struct ServerConfig {
     pub port: u16,
     #[serde(default = "default_request_timeout")]
     pub request_timeout_secs: u64,
+    /// Maximum requests per second (global). 0 = unlimited.
+    #[serde(default = "default_rate_limit_rps")]
+    pub rate_limit_rps: u64,
 }
 
 impl Default for ServerConfig {
@@ -30,8 +33,13 @@ impl Default for ServerConfig {
             host: default_host(),
             port: default_port(),
             request_timeout_secs: default_request_timeout(),
+            rate_limit_rps: default_rate_limit_rps(),
         }
     }
+}
+
+fn default_rate_limit_rps() -> u64 {
+    10
 }
 
 fn default_host() -> String {

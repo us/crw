@@ -26,9 +26,7 @@ impl From<JsonRejection> for AppError {
                     format!("Invalid request body: {raw}")
                 }
             }
-            JsonRejection::JsonSyntaxError(_) => {
-                "Invalid JSON syntax in request body".to_string()
-            }
+            JsonRejection::JsonSyntaxError(_) => "Invalid JSON syntax in request body".to_string(),
             JsonRejection::MissingJsonContentType(_) => {
                 "Missing Content-Type: application/json header".to_string()
             }
@@ -40,16 +38,18 @@ impl From<JsonRejection> for AppError {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        let (status, message) = match &self.0 {
-            CrwError::InvalidRequest(_) => (StatusCode::BAD_REQUEST, self.0.to_string()),
-            CrwError::NotFound(_) => (StatusCode::NOT_FOUND, self.0.to_string()),
-            CrwError::Timeout(_) => (StatusCode::GATEWAY_TIMEOUT, self.0.to_string()),
-            CrwError::HttpError(_) => (StatusCode::BAD_GATEWAY, self.0.to_string()),
-            CrwError::ExtractionError(_) => (StatusCode::UNPROCESSABLE_ENTITY, self.0.to_string()),
-            _ => (StatusCode::INTERNAL_SERVER_ERROR, self.0.to_string()),
+        let status = match &self.0 {
+            CrwError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
+            CrwError::NotFound(_) => StatusCode::NOT_FOUND,
+            CrwError::Timeout(_) => StatusCode::GATEWAY_TIMEOUT,
+            CrwError::HttpError(_) => StatusCode::BAD_GATEWAY,
+            CrwError::ExtractionError(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            CrwError::RateLimited => StatusCode::TOO_MANY_REQUESTS,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
-        let body = ApiResponse::<()>::err(message);
+        let error_code = self.0.error_code().to_string();
+        let body = ApiResponse::<()>::err_with_code(self.0.to_string(), error_code);
         (status, Json(body)).into_response()
     }
 }

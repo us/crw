@@ -2,6 +2,7 @@
 host = "0.0.0.0"
 port = 3000
 request_timeout_secs = 120
+rate_limit_rps = 10              # Max requests/second (global). 0 = unlimited.
 
 [renderer]
 mode = "auto"                     # auto | lightpanda | playwright | chrome | none

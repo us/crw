@@ -29,8 +29,30 @@ pub enum CrwError {
     #[error("Not found: {0}")]
     NotFound(String),
 
+    #[error("Rate limited")]
+    RateLimited,
+
     #[error("{0}")]
     Internal(String),
+}
+
+impl CrwError {
+    /// Machine-readable error code for API consumers.
+    pub fn error_code(&self) -> &'static str {
+        match self {
+            CrwError::HttpError(_) => "http_error",
+            CrwError::UrlParseError(_) => "invalid_url",
+            CrwError::InvalidRequest(_) => "invalid_request",
+            CrwError::RendererError(_) => "renderer_error",
+            CrwError::ExtractionError(_) => "extraction_error",
+            CrwError::CrawlError(_) => "crawl_error",
+            CrwError::Timeout(_) => "timeout",
+            CrwError::ConfigError(_) => "config_error",
+            CrwError::NotFound(_) => "not_found",
+            CrwError::RateLimited => "rate_limited",
+            CrwError::Internal(_) => "internal_error",
+        }
+    }
 }
 
 pub type CrwResult<T> = Result<T, CrwError>;

@@ -118,6 +118,9 @@ pub fn clean_html(
                 "ombox",
                 "hatnote",
                 "shortdescription",
+                "sphinxsidebar",
+                "sphinxfooter",
+                "copyright",
             ];
 
             // Patterns that need exact token matching (too short/generic for substring).
@@ -129,6 +132,7 @@ pub fn clean_html(
                 "related", // related content
                 "recommended",
                 "comment", // comment sections — not "uncommented"
+                "footer",  // div.footer (e.g. Sphinx "Created using Sphinx")
             ];
 
             // Prefix patterns: match tokens that START with these strings.
@@ -147,6 +151,17 @@ pub fn clean_html(
 
             if is_noise {
                 el.remove();
+                return Ok(());
+            }
+
+            // Remove elements with ARIA landmark roles that indicate non-content areas.
+            let role = el.get_attribute("role").unwrap_or_default().to_lowercase();
+            if matches!(
+                role.as_str(),
+                "contentinfo" | "navigation" | "banner" | "complementary"
+            ) {
+                el.remove();
+                return Ok(());
             }
 
             Ok(())
@@ -340,6 +355,24 @@ mod tests {
             result.contains("Content"),
             "Structural elements must not be removed by noise patterns"
         );
+    }
+
+    #[test]
+    fn strips_role_contentinfo_in_main_content_mode() {
+        let html = r#"<body><div role="contentinfo">Copyright 2024</div><p>Content</p><div role="navigation">Nav</div></body>"#;
+        let result = clean_html(html, true, &[], &[]).unwrap();
+        assert!(!result.contains("Copyright"));
+        assert!(!result.contains("Nav"));
+        assert!(result.contains("Content"));
+    }
+
+    #[test]
+    fn strips_sphinx_patterns_in_main_content_mode() {
+        let html = r#"<body><div class="sphinxsidebar">Sidebar</div><p>Content</p><div class="copyright">Copyright</div></body>"#;
+        let result = clean_html(html, true, &[], &[]).unwrap();
+        assert!(!result.contains("Sidebar"));
+        assert!(!result.contains("Copyright"));
+        assert!(result.contains("Content"));
     }
 
     #[test]

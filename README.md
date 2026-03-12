@@ -40,6 +40,17 @@ crw-server
 
 ## What's New
 
+### v0.0.9
+
+- **Crawl cancel** — `DELETE /v1/crawl/{id}` cancels running crawl jobs
+- **API rate limiting** — token-bucket rate limiter (`rate_limit_rps` config, default 10 req/s), returns 429 when exceeded
+- **Machine-readable error codes** — `error_code` field in all error responses (`"invalid_url"`, `"rate_limited"`, `"not_found"`, etc.)
+- **Map response envelope** — `/v1/map` returns `{ success, data: { links } }` for consistency
+- **Fenced code blocks** — indented code blocks auto-converted to fenced (```) for better LLM compatibility
+- **Sphinx/docs cleanup** — footer noise, anchor artifacts (`[¶](#id)`), ARIA role-based element removal
+- **`renderedWith: "http"`** — HTTP-only fetches now report renderer in metadata
+- **405 JSON bodies** — all routes return structured JSON for method-not-allowed errors
+
 ### v0.0.8
 
 - **Wikipedia / MediaWiki onlyMainContent fix** — `onlyMainContent: true` now correctly extracts article text from Wikipedia pages (~49% size reduction). Previously the `<html>` element's `class="vector-toc-available"` matched the `"toc"` noise pattern via substring, removing the entire page
@@ -246,6 +257,7 @@ curl -X POST http://localhost:3000/v1/scrape \
 | `POST` | `/v1/scrape` | Scrape a single URL, optionally with LLM extraction |
 | `POST` | `/v1/crawl` | Start async BFS crawl (returns job ID) |
 | `GET` | `/v1/crawl/:id` | Check crawl status and retrieve results |
+| `DELETE` | `/v1/crawl/:id` | Cancel a running crawl job |
 | `POST` | `/v1/map` | Discover all URLs on a site |
 | `GET` | `/health` | Health check (no auth required) |
 | `POST` | `/mcp` | Streamable HTTP MCP transport |
@@ -471,6 +483,7 @@ CRW uses layered TOML configuration with environment variable overrides:
 [server]
 host = "0.0.0.0"
 port = 3000
+rate_limit_rps = 10        # Max requests/second (global). 0 = unlimited.
 
 [renderer]
 mode = "auto"  # auto | lightpanda | playwright | chrome | none
@@ -612,7 +625,7 @@ CRW includes built-in protections against common web scraping attack vectors:
   - Non-HTTP schemes (`file://`, `ftp://`, `gopher://`, `data:`)
 - **Auth** — optional Bearer token with constant-time comparison (no length or key-index leakage)
 - **robots.txt** — respects `Allow`/`Disallow` with wildcard patterns (`*`, `$`) and RFC 9309 specificity
-- **Rate limiting** — configurable per-second request cap
+- **Rate limiting** — configurable per-second request cap with token-bucket algorithm (returns 429 with `error_code`)
 - **Resource limits** — max body size (1 MB), max crawl depth (10), max pages (1000), max discovered URLs (5000)
 
 ## Community

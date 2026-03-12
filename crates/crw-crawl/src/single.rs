@@ -87,9 +87,20 @@ pub async fn scrape_url(
         filter_mode: req.filter_mode.as_ref(),
         top_k: req.top_k,
     })?;
-    data.warning = warning;
+    // Merge target warning with any extraction warning (e.g. orphan chunk params).
+    data.warning = match (warning, data.warning) {
+        (Some(w1), Some(w2)) => Some(format!("{w1}; {w2}")),
+        (Some(w), None) | (None, Some(w)) => Some(w),
+        (None, None) => None,
+    };
 
     // Phase 4: LLM structured extraction
+    // Merge Firecrawl-compatible extract.schema into json_schema if not already set.
+    let effective_schema = req
+        .json_schema
+        .as_ref()
+        .or_else(|| req.extract.as_ref().and_then(|e| e.schema.as_ref()));
+
     if formats_include_json(&req.formats) {
         // Merge per-request LLM config (BYOK) with server config
         let byok_config = req.llm_api_key.as_ref().map(|key| LlmConfig {
@@ -107,7 +118,7 @@ pub async fn scrape_url(
         });
         let effective_llm = byok_config.as_ref().or(llm_config);
 
-        if let (Some(schema), Some(llm)) = (&req.json_schema, effective_llm) {
+        if let (Some(schema), Some(llm)) = (effective_schema, effective_llm) {
             let md = data.markdown.as_deref().unwrap_or("");
             match crw_extract::structured::extract_structured(md, schema, llm).await {
                 Ok(json) => data.json = Some(json),
@@ -116,13 +127,13 @@ pub async fn scrape_url(
                     return Err(e);
                 }
             }
-        } else if req.json_schema.is_some() && effective_llm.is_none() {
+        } else if effective_schema.is_some() && effective_llm.is_none() {
             return Err(crw_core::error::CrwError::ExtractionError(
                 "JSON extraction requested but no LLM configured. Either set [extraction.llm] in server config, or pass 'llmApiKey' in the request body.".into()
             ));
-        } else if req.json_schema.is_none() {
+        } else if effective_schema.is_none() {
             return Err(crw_core::error::CrwError::InvalidRequest(
-                "Format 'json' requires a jsonSchema field. Provide a JSON Schema object for structured extraction.".into()
+                "Structured extraction (formats: json/extract) requires a 'jsonSchema' field. Provide a JSON Schema object.".into()
             ));
         }
     }

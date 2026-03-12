@@ -40,6 +40,7 @@ crw-server setup
 | `POST` | `/v1/scrape` | Scrape a single URL, optionally with LLM extraction |
 | `POST` | `/v1/crawl` | Start async BFS crawl (returns job ID) |
 | `GET` | `/v1/crawl/:id` | Check crawl status and retrieve results |
+| `DELETE` | `/v1/crawl/:id` | Cancel a running crawl job |
 | `POST` | `/v1/map` | Discover all URLs on a site |
 | `GET` | `/health` | Health check (no auth required) |
 | `POST` | `/mcp` | Streamable HTTP MCP transport |
@@ -97,7 +98,8 @@ CRW uses layered TOML configuration with environment variable overrides:
 [server]
 host = "0.0.0.0"
 port = 3000
-request_timeout_secs = 60
+request_timeout_secs = 120
+rate_limit_rps = 10        # Max requests/second (global). 0 = unlimited.
 
 [renderer]
 mode = "auto"  # auto | lightpanda | playwright | chrome | none

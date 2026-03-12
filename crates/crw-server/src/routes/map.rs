@@ -1,7 +1,8 @@
 use axum::Json;
 use axum::extract::State;
+use axum::extract::rejection::JsonRejection;
 use crw_core::error::CrwError;
-use crw_core::types::{MapRequest, MapResponse};
+use crw_core::types::{MapData, MapRequest, MapResponse};
 use crw_crawl::crawl::{DiscoverOptions, discover_urls};
 use std::time::Duration;
 
@@ -12,8 +13,9 @@ use crate::state::AppState;
 /// Response format matches Firecrawl: { success: true, links: [...] }
 pub async fn map(
     State(state): State<AppState>,
-    Json(req): Json<MapRequest>,
+    body: Result<Json<MapRequest>, JsonRejection>,
 ) -> Result<Json<MapResponse>, AppError> {
+    let Json(req) = body.map_err(AppError::from)?;
     let parsed_url = url::Url::parse(&req.url)
         .map_err(|e| CrwError::InvalidRequest(format!("Invalid URL: {e}")))?;
     crw_core::url_safety::validate_safe_url(&parsed_url).map_err(CrwError::InvalidRequest)?;
@@ -42,8 +44,5 @@ pub async fn map(
         }
     };
 
-    Ok(Json(MapResponse {
-        success: true,
-        links: urls,
-    }))
+    Ok(Json(MapResponse::ok(MapData { links: urls })))
 }

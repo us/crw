@@ -12,6 +12,8 @@ use uuid::Uuid;
 pub struct CrawlJob {
     pub rx: watch::Receiver<CrawlState>,
     pub created_at: Instant,
+    /// Handle to abort the crawl task.
+    pub abort_handle: Option<tokio::task::AbortHandle>,
 }
 
 /// Maximum number of concurrent crawl jobs.
@@ -98,6 +100,7 @@ impl AppState {
                 CrawlJob {
                     rx,
                     created_at: Instant::now(),
+                    abort_handle: None,
                 },
             );
         }
@@ -112,7 +115,7 @@ impl AppState {
         let proxy = self.config.crawler.proxy.clone();
         let jitter_factor = self.config.crawler.stealth.jitter_factor;
 
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             let _permit = match crawl_semaphore.acquire().await {
                 Ok(p) => p,
                 Err(_) => {
@@ -143,6 +146,14 @@ impl AppState {
             })
             .await;
         });
+
+        // Store the abort handle so the job can be cancelled via DELETE.
+        {
+            let mut jobs = self.crawl_jobs.write().await;
+            if let Some(job) = jobs.get_mut(&id) {
+                job.abort_handle = Some(handle.abort_handle());
+            }
+        }
 
         id
     }

@@ -119,6 +119,7 @@ async fn main() {
         proxy: cli.proxy,
         stealth: if cli.stealth { Some(true) } else { None },
         actions: None,
+        extract: None,
         llm_api_key: None,
         llm_provider: None,
         llm_model: None,

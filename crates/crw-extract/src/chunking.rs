@@ -277,6 +277,7 @@ fn chunk_by_regex(text: &str, pattern: &str) -> Vec<String> {
 }
 
 /// Split on markdown headings (lines starting with #).
+/// Tiny chunks (< 50 chars, e.g. heading-only) are merged with the next chunk.
 fn chunk_by_topic(text: &str) -> Vec<String> {
     let mut chunks: Vec<String> = Vec::new();
     let mut current = String::new();
@@ -293,7 +294,38 @@ fn chunk_by_topic(text: &str) -> Vec<String> {
         chunks.push(current.trim().to_string());
     }
 
-    chunks
+    merge_tiny_chunks(chunks, 50)
+}
+
+/// Merge chunks shorter than `min_chars` with the following chunk.
+/// If the last chunk is tiny, append it to the previous one instead.
+fn merge_tiny_chunks(chunks: Vec<String>, min_chars: usize) -> Vec<String> {
+    let mut merged: Vec<String> = Vec::new();
+    let mut carry = String::new();
+
+    for chunk in chunks {
+        if !carry.is_empty() {
+            carry.push_str("\n\n");
+            carry.push_str(&chunk);
+            if carry.len() >= min_chars {
+                merged.push(carry);
+                carry = String::new();
+            }
+        } else if chunk.trim().len() < min_chars {
+            carry = chunk;
+        } else {
+            merged.push(chunk);
+        }
+    }
+    if !carry.is_empty() {
+        if let Some(last) = merged.last_mut() {
+            last.push_str("\n\n");
+            last.push_str(&carry);
+        } else {
+            merged.push(carry);
+        }
+    }
+    merged
 }
 
 #[cfg(test)]
@@ -320,8 +352,7 @@ mod tests {
 
     #[test]
     fn topic_chunks_on_headings() {
-        let text =
-            "# Title\nContent under title.\n## Section\nSection content.\n### Sub\nSub content.";
+        let text = "# Title\nContent under title with enough text to exceed the minimum chunk size threshold.\n## Section\nSection content that is also long enough to be kept as a separate chunk easily.\n### Sub\nSub content with additional words to pass the minimum size requirement for chunks.";
         let chunks = chunk_text(
             text,
             &ChunkStrategy::Topic {
@@ -333,6 +364,25 @@ mod tests {
         assert_eq!(chunks.len(), 3);
         assert!(chunks[0].starts_with("# Title"));
         assert!(chunks[1].starts_with("## Section"));
+    }
+
+    #[test]
+    fn topic_chunks_merge_tiny() {
+        // Heading-only chunks (< 50 chars) should be merged with the next chunk.
+        let text =
+            "# A\n## B\nSome real content that is long enough to form a proper chunk on its own.";
+        let chunks = chunk_text(
+            text,
+            &ChunkStrategy::Topic {
+                max_chars: None,
+                overlap_chars: None,
+                dedupe: None,
+            },
+        );
+        // "# A" is tiny, merged with "## B\n..." which together exceed 50 chars
+        assert_eq!(chunks.len(), 1);
+        assert!(chunks[0].contains("# A"));
+        assert!(chunks[0].contains("## B"));
     }
 
     #[test]

@@ -59,7 +59,9 @@ fn fetch_page(url: &str) -> CrwResult<String> {
 }
 ```
 
-Error variants: `HttpError`, `UrlParseError`, `InvalidRequest`, `RendererError`, `ExtractionError`, `CrawlError`, `Timeout`, `ConfigError`, `NotFound`, `Internal`.
+Error variants: `HttpError`, `UrlParseError`, `InvalidRequest`, `RendererError`, `ExtractionError`, `CrawlError`, `Timeout`, `ConfigError`, `NotFound`, `RateLimited`, `Internal`.
+
+Each variant maps to a machine-readable `error_code` string via `CrwError::error_code()` (e.g. `"invalid_url"`, `"rate_limited"`, `"not_found"`).
 
 ### SSRF protection
 

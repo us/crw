@@ -38,6 +38,17 @@ crw-server
 
 ## 最新动态
 
+### v0.0.9
+
+- **爬取取消端点** — `DELETE /v1/crawl/{id}` 取消正在运行的爬取任务
+- **API 速率限制** — 令牌桶速率限制器（`rate_limit_rps` 配置项，默认 10 请求/秒），超限返回 429
+- **机器可读错误码** — 所有错误响应新增 `error_code` 字段（`"invalid_url"`、`"rate_limited"`、`"not_found"` 等）
+- **Map 响应信封** — `/v1/map` 返回 `{ success, data: { links } }` 以保持一致性
+- **围栏代码块** — 缩进代码块自动转换为围栏（```）格式，提升 LLM 兼容性
+- **Sphinx/文档清洗** — footer 噪声、锚点伪影（`[¶](#id)`）、ARIA 角色元素移除
+- **`renderedWith: "http"`** — HTTP-only 抓取现在在元数据中报告渲染器
+- **405 JSON 响应体** — 所有路由对 method-not-allowed 返回结构化 JSON
+
 ### v0.0.8
 
 - **Wikipedia / MediaWiki onlyMainContent 修复** — `onlyMainContent: true` 现在能正确提取维基百科文章文本（体积减少约 49%）。此前 `<html>` 元素的 `class="vector-toc-available"` 通过子串匹配命中了 `"toc"` 噪声模式，导致整个页面被移除
@@ -232,6 +243,7 @@ curl -X POST http://localhost:3000/v1/scrape \
 | `POST` | `/v1/scrape` | 抓取单个 URL，可选 LLM 提取 |
 | `POST` | `/v1/crawl` | 启动异步 BFS 爬取（返回任务 ID） |
 | `GET` | `/v1/crawl/:id` | 查询爬取状态并获取结果 |
+| `DELETE` | `/v1/crawl/:id` | 取消正在运行的爬取任务 |
 | `POST` | `/v1/map` | 发现网站上的所有 URL |
 | `GET` | `/health` | 健康检查（无需认证） |
 | `POST` | `/mcp` | Streamable HTTP MCP 传输 |
@@ -371,6 +383,7 @@ CRW 使用分层 TOML 配置，支持环境变量覆盖：
 [server]
 host = "0.0.0.0"
 port = 3000
+rate_limit_rps = 10        # 每秒最大请求数（全局）。0 = 无限制。
 
 [renderer]
 mode = "auto"  # auto | lightpanda | playwright | chrome | none

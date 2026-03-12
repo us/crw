@@ -83,6 +83,14 @@ pub enum FilterMode {
     Cosine,
 }
 
+/// Firecrawl-compatible extraction options (used via `extract: { schema: {...} }`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtractOptions {
+    #[serde(default)]
+    pub schema: Option<serde_json::Value>,
+}
+
 /// POST /v1/scrape request body.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -133,6 +141,10 @@ pub struct ScrapeRequest {
     /// Unsupported Firecrawl parameter — captured to return a clear error.
     #[serde(default)]
     pub actions: Option<serde_json::Value>,
+    /// Firecrawl-compatible `extract` object (e.g. `{ "schema": {...} }`).
+    /// If `extract.schema` is set and `jsonSchema` is not, uses `extract.schema` as the schema.
+    #[serde(default)]
+    pub extract: Option<ExtractOptions>,
     /// Per-request LLM API key for structured extraction (BYOK).
     #[serde(default, alias = "llm_api_key")]
     pub llm_api_key: Option<String>,
@@ -217,6 +229,8 @@ pub struct ApiResponse<T: Serialize> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub warning: Option<String>,
 }
 
@@ -226,6 +240,7 @@ impl<T: Serialize> ApiResponse<T> {
             success: true,
             data: Some(data),
             error: None,
+            error_code: None,
             warning: None,
         }
     }
@@ -235,6 +250,17 @@ impl<T: Serialize> ApiResponse<T> {
             success: false,
             data: None,
             error: Some(msg.into()),
+            error_code: None,
+            warning: None,
+        }
+    }
+
+    pub fn err_with_code(msg: impl Into<String>, code: impl Into<String>) -> Self {
+        Self {
+            success: false,
+            data: None,
+            error: Some(msg.into()),
+            error_code: Some(code.into()),
             warning: None,
         }
     }
@@ -305,13 +331,15 @@ pub struct MapRequest {
     pub timeout: Option<u64>,
 }
 
-/// POST /v1/map response body.
-/// Matches Firecrawl format: { success: true, links: [...] }
+/// POST /v1/map response data — the discovered links.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MapResponse {
-    pub success: bool,
+pub struct MapData {
     pub links: Vec<String>,
 }
+
+/// POST /v1/map response body.
+/// Standard envelope: { success: true, data: { links: [...] } }
+pub type MapResponse = ApiResponse<MapData>;
 
 // ── Render result ──
 

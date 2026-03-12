@@ -325,7 +325,9 @@ POST /v1/map
 ```json
 {
   "success": true,
-  "links": ["https://example.com", "https://example.com/about"]
+  "data": {
+    "links": ["https://example.com", "https://example.com/about"]
+  }
 }
 ```
 
@@ -337,14 +339,32 @@ POST /mcp
 
 Accepts JSON-RPC 2.0 requests for MCP protocol over HTTP. See [MCP Server](#mcp) for details.
 
+## Cancel a Crawl
+
+```
+DELETE /v1/crawl/{id}
+```
+
+Cancels a running crawl job. Returns an error if the job doesn't exist or has already completed.
+
+```json
+{
+  "success": true,
+  "message": "Crawl job cancelled"
+}
+```
+
 ## Error Responses
 
 ```json
 {
   "success": false,
-  "error": "Human-readable error message"
+  "error": "Human-readable error message",
+  "error_code": "machine_readable_code"
 }
 ```
+
+All error responses include a machine-readable `error_code` field. Common codes: `invalid_url`, `invalid_request`, `http_error`, `rate_limited`, `not_found`, `renderer_error`, `timeout`, `method_not_allowed`, `internal_error`.
 
 | Status | When |
 |--------|------|
@@ -352,7 +372,9 @@ Accepts JSON-RPC 2.0 requests for MCP protocol over HTTP. See [MCP Server](#mcp)
 | `400` | Invalid URL, missing required fields, non-http(s) scheme |
 | `401` | Missing or invalid Bearer token |
 | `404` | Crawl job ID doesn't exist |
+| `405` | Wrong HTTP method for endpoint |
 | `422` | LLM extraction failed |
+| `429` | Rate limit exceeded |
 | `502` | Target website returned an error |
 | `504` | Request timed out |
 | `500` | Unexpected server error |
@@ -366,5 +388,5 @@ Accepts JSON-RPC 2.0 requests for MCP protocol over HTTP. See [MCP Server](#mcp)
 | Max crawl depth | 10 |
 | Max crawl pages | 1,000 |
 | Max discovered URLs | 5,000 |
-| Request timeout | Configurable (default: 60s) |
+| Request timeout | Configurable (default: 120s) |
 | URL schemes | `http`, `https` only |

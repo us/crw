@@ -121,7 +121,7 @@ impl PageFetcher for HttpFetcher {
             url: url.to_string(),
             status_code: status,
             html,
-            rendered_with: None,
+            rendered_with: Some("http".to_string()),
             elapsed_ms: start.elapsed().as_millis() as u64,
             warning: None,
         })

@@ -46,6 +46,21 @@ GET /v1/crawl/{id}
 
 Returns the crawl state, pages completed, and results collected so far.
 
+## Cancel a Crawl
+
+```
+DELETE /v1/crawl/{id}
+```
+
+Cancels a running crawl job. The crawl task is aborted immediately via its `AbortHandle`. Returns an error if the job doesn't exist or has already completed.
+
+```json
+{
+  "success": true,
+  "message": "Crawl job cancelled"
+}
+```
+
 ## How BFS Crawling Works
 
 1. Start URL is added to the queue at depth 0
