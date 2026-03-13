@@ -88,10 +88,13 @@ impl PageFetcher for HttpFetcher {
             req = req.header(k.as_str(), v.as_str());
         }
 
-        let resp = req
-            .send()
-            .await
-            .map_err(|e| CrwError::HttpError(e.to_string()))?;
+        let resp = req.send().await.map_err(|e| {
+            if e.is_connect() {
+                CrwError::TargetUnreachable(format!("Could not reach {url}: {e}"))
+            } else {
+                CrwError::HttpError(e.to_string())
+            }
+        })?;
         let status = resp.status().as_u16();
 
         // Check content-length before downloading

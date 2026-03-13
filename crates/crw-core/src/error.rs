@@ -5,6 +5,9 @@ pub enum CrwError {
     #[error("HTTP request failed: {0}")]
     HttpError(String),
 
+    #[error("Target unreachable: {0}")]
+    TargetUnreachable(String),
+
     #[error("URL parse error: {0}")]
     UrlParseError(#[from] url::ParseError),
 
@@ -41,6 +44,7 @@ impl CrwError {
     pub fn error_code(&self) -> &'static str {
         match self {
             CrwError::HttpError(_) => "http_error",
+            CrwError::TargetUnreachable(_) => "target_unreachable",
             CrwError::UrlParseError(_) => "invalid_url",
             CrwError::InvalidRequest(_) => "invalid_request",
             CrwError::RendererError(_) => "renderer_error",

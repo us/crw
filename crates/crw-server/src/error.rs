@@ -43,6 +43,7 @@ impl IntoResponse for AppError {
             CrwError::NotFound(_) => StatusCode::NOT_FOUND,
             CrwError::Timeout(_) => StatusCode::GATEWAY_TIMEOUT,
             CrwError::HttpError(_) => StatusCode::BAD_GATEWAY,
+            CrwError::TargetUnreachable(_) => StatusCode::UNPROCESSABLE_ENTITY,
             CrwError::ExtractionError(_) => StatusCode::UNPROCESSABLE_ENTITY,
             CrwError::RateLimited => StatusCode::TOO_MANY_REQUESTS,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
