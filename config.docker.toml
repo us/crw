@@ -1,2 +1,8 @@
+# Docker-specific overrides (layered on top of config.default.toml).
+# Renderer failover order: HTTP → LightPanda → Chrome.
+
 [renderer.lightpanda]
 ws_url = "ws://lightpanda:9222/"
+
+[renderer.chrome]
+ws_url = "ws://chrome:9222/"

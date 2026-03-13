@@ -40,43 +40,23 @@ crw-server
 
 ## What's New
 
+### v0.0.11
+
+- **Stealth anti-bot bypass** — automatic stealth JS injection (navigator.webdriver, Chrome runtime, plugins, languages, permissions) to bypass Cloudflare and other bot detection
+- **Cloudflare challenge retry** — auto-detects JS challenge pages and polls up to 3x3s for auto-resolve
+- **HTTP to CDP auto-escalation** — when HTTP response looks like an anti-bot challenge, automatically retries with JS renderer
+- **Chrome failover** — full failover chain: HTTP → LightPanda → Chrome. If LightPanda crashes on complex SPAs, Chrome takes over
+- **Chrome Docker sidecar** — `docker compose up` now includes Chrome (chromedp/headless-shell) alongside LightPanda
+- **Chrome WS URL auto-discovery** — resolves Chrome DevTools WS URL via `/json/version` endpoint
+- **Proxy docs** — config examples for HTTP, SOCKS5, and residential proxy providers
+
 ### v0.0.10
 
 - **Crawl cancel** — `DELETE /v1/crawl/{id}` cancels running crawl jobs
-- **API rate limiting** — token-bucket rate limiter (`rate_limit_rps` config, default 10 req/s), returns 429 when exceeded
-- **Machine-readable error codes** — `error_code` field in all error responses (`"invalid_url"`, `"rate_limited"`, `"not_found"`, etc.)
-- **Map response envelope** — `/v1/map` returns `{ success, data: { links } }` for consistency
-- **Fenced code blocks** — indented code blocks auto-converted to fenced (```) for better LLM compatibility
-- **Sphinx/docs cleanup** — footer noise, anchor artifacts (`[¶](#id)`), ARIA role-based element removal
-- **`renderedWith: "http"`** — HTTP-only fetches now report renderer in metadata
-- **405 JSON bodies** — all routes return structured JSON for method-not-allowed errors
-
-### v0.0.8
-
-- **Wikipedia / MediaWiki onlyMainContent fix** — `onlyMainContent: true` now correctly extracts article text from Wikipedia pages (~49% size reduction). Previously the `<html>` element's `class="vector-toc-available"` matched the `"toc"` noise pattern via substring, removing the entire page
-- **3-tier noise pattern matching** — noise class/id matching now uses substring (long patterns), exact-token (short/ambiguous: `toc`, `share`, `social`, `comment`, `related`), and prefix (`ad-`, `ads-`) matching to avoid false positives
-- **Structural element guard** — noise handler never removes `<html>`, `<head>`, `<body>`, or `<main>` elements
-- **Re-clean after readability** — readability output is re-cleaned to strip residual noise (infobox, navbox, catlinks) that survives inside broad containers
-- **Wikipedia-aware readability** — added `.mw-parser-output`, `#mw-content-text`, `#bodyContent` to scored selectors; priority/scored selectors that wrap >90% of body are skipped
-- **BYOK LLM extraction** — per-request `llmApiKey`, `llmProvider`, `llmModel` fields for bring-your-own-key structured extraction without server config
-- **JSON format validation** — `formats: ["json"]` without `jsonSchema` now returns a 400 error instead of a warning
-- **Block detection skip** — pages >50 KB skip interstitial/block detection (no more false "blocked by anti-bot" on Wikipedia)
-- **Null byte URL rejection** — URLs with `%00` or null bytes rejected at validation
-- **Request timeout** — default timeout bumped from 60s to 120s
-- **Dockerfile fix** — corrected `cargo build` flags, added `config.docker.toml`
-
-### v0.0.7
-
-- **`success: false` on 4xx targets** — scraping a 403/404/429 target with minimal body now correctly returns `success: false` with error details, instead of `success: true` with a warning. Targets with real content (custom error pages) still return `success: true` with a warning
-- **JS renderer fallback warning** — when `renderJs: true` is requested but no CDP renderer is available, the response now includes `rendered_with: "http_only_fallback"` and a warning instead of silently falling back
-- **CDP health check** — `is_available()` now runs a real `Browser.getVersion` command instead of just testing the WebSocket connection
-- **Specific error messages** — unknown formats now return descriptive errors (e.g., `"Unknown format 'extract'. Valid formats: ..."`) instead of generic 422
-- **`"extract"` format alias** — `formats: ["extract"]` and `formats: ["llm-extract"]` are now accepted as aliases for `"json"` (Firecrawl compatibility)
-- **Chunk dedup by default** — deduplication is now enabled by default for all chunking strategies; separator-only chunks (`---`, `***`) are filtered out
-- **Chunk relevance scores** — chunks now return `{ content, score, index }` objects instead of plain strings when a query is provided
-- **Map timeout** — `/v1/map` accepts a `timeout` parameter (default 120s, max 300s) to prevent 502s on large sites
-- **Stealth + JS rendering fix** — `stealth: true` with `renderJs: true` no longer bypasses CDP; the shared renderer is used with stealth headers injected
-- **BM25 NaN guard** — prevents `NaN` scores when all chunks are empty
+- **API rate limiting** — token-bucket rate limiter, returns 429 when exceeded
+- **Machine-readable error codes** — `error_code` field in all error responses
+- **Fenced code blocks** — indented code blocks auto-converted to fenced for better LLM compatibility
+- **Sphinx/docs cleanup** — footer noise, anchor artifacts, ARIA role-based element removal
 
 [Full changelog →](CHANGELOG.md)
 

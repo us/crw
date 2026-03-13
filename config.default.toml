@@ -5,18 +5,23 @@ request_timeout_secs = 120
 rate_limit_rps = 10              # Max requests/second (global). 0 = unlimited.
 
 [renderer]
-mode = "auto"                     # auto | lightpanda | playwright | chrome | none
+mode = "auto"                     # auto | none
 page_timeout_ms = 30000
 pool_size = 4
+
+# Failover order: LightPanda → Chrome. Configure one or both.
+# In auto mode, CRW tries each renderer in order. If LightPanda crashes
+# on complex SPAs, Chrome takes over. Chrome also handles Cloudflare
+# challenges via built-in stealth injection + challenge retry.
 
 [renderer.lightpanda]
 ws_url = "ws://127.0.0.1:9222/"
 
+# [renderer.chrome]
+# ws_url = "ws://127.0.0.1:9223/"
+
 # [renderer.playwright]
 # ws_url = "ws://playwright:9222"
-
-# [renderer.chrome]
-# ws_url = "ws://chrome:9222"
 
 [crawler]
 max_concurrency = 10
@@ -26,6 +31,18 @@ user_agent = "CRW/0.0.1"
 default_max_depth = 2
 default_max_pages = 100
 job_ttl_secs = 3600
+# Proxy support — route crawler requests through an HTTP or SOCKS5 proxy.
+# Useful for bypassing IP-based rate limiting on sites like Reddit, LinkedIn, etc.
+#
+# Examples:
+#   proxy = "http://user:pass@proxy:8080"                      # HTTP proxy
+#   proxy = "socks5://user:pass@proxy:1080"                    # SOCKS5 proxy
+#   proxy = "http://user:pass@geo.iproyal.com:12321"           # Residential (IPRoyal)
+#   proxy = "http://user:pass@pr.oxylabs.io:7777"              # Residential (Oxylabs)
+#   proxy = "http://user:pass@gate.smartproxy.com:7000"        # Residential (Smartproxy)
+#
+# Residential proxies use real ISP IPs and are much harder for sites to detect.
+# Most providers give you a single gateway URL that auto-rotates IPs per request.
 # proxy = "http://proxy:8080"
 
 [extraction]

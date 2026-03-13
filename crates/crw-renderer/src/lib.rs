@@ -128,6 +128,12 @@ impl FallbackRenderer {
     }
 
     /// Fetch a URL with smart mode: HTTP first, then JS if needed.
+    ///
+    /// When `render_js` is `None` (auto-detect), the renderer also escalates to
+    /// JS rendering if the HTTP response looks like an anti-bot challenge page
+    /// (Cloudflare "Just a moment...", etc.). The CDP renderer has built-in
+    /// challenge retry logic that waits for non-interactive JS challenges to
+    /// auto-resolve.
     pub async fn fetch(
         &self,
         url: &str,
@@ -153,8 +159,19 @@ impl FallbackRenderer {
             }
             None => {
                 let result = self.http.fetch(url, headers, None).await?;
-                if !self.js_renderers.is_empty() && detector::needs_js_rendering(&result.html) {
-                    tracing::info!(url, "SPA shell detected, retrying with JS renderer");
+
+                let needs_js = detector::needs_js_rendering(&result.html);
+                let is_blocked = Self::looks_like_challenge(&result.html);
+
+                if !self.js_renderers.is_empty() && (needs_js || is_blocked) {
+                    if is_blocked {
+                        tracing::info!(
+                            url,
+                            "Anti-bot challenge detected in HTTP response, escalating to JS renderer"
+                        );
+                    } else {
+                        tracing::info!(url, "SPA shell detected, retrying with JS renderer");
+                    }
                     match self.fetch_with_js(url, headers, wait_for_ms).await {
                         Ok(js_result) => Ok(js_result),
                         Err(e) => {
@@ -167,6 +184,19 @@ impl FallbackRenderer {
                 }
             }
         }
+    }
+
+    /// Quick check if HTML looks like an anti-bot challenge/interstitial page.
+    fn looks_like_challenge(html: &str) -> bool {
+        if html.len() > 50_000 {
+            return false;
+        }
+        let lower = html.to_lowercase();
+        lower.contains("just a moment")
+            || lower.contains("cf-browser-verification")
+            || lower.contains("cf-challenge-running")
+            || lower.contains("challenge-platform")
+            || (lower.contains("attention required") && lower.contains("cloudflare"))
     }
 
     async fn fetch_with_js(

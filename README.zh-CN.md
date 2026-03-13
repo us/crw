@@ -38,43 +38,23 @@ crw-server
 
 ## 最新动态
 
+### v0.0.11
+
+- **隐身反爬绕过** — 通过 `Page.addScriptToEvaluateOnNewDocument` 自动注入隐身 JS（navigator.webdriver、Chrome runtime、plugins、languages、permissions），绕过 Cloudflare 等反爬检测
+- **Cloudflare 挑战重试** — 自动检测 JS 挑战页面，最多轮询 3 次（每次 3 秒）等待非交互式挑战自动解决
+- **HTTP 到 CDP 自动升级** — 当 HTTP 响应看起来像反爬挑战页面时，自动使用 JS 渲染器重试
+- **Chrome 故障转移** — 完整的故障转移链：HTTP → LightPanda → Chrome。LightPanda 在复杂 SPA 上崩溃时，Chrome 自动接管
+- **Chrome Docker 边车** — `docker compose up` 现在同时包含 Chrome（chromedp/headless-shell）和 LightPanda
+- **Chrome WS URL 自动发现** — 通过 `/json/version` 端点自动解析 Chrome DevTools WebSocket URL
+- **代理配置文档** — 新增 HTTP、SOCKS5 和住宅代理提供商配置示例
+
 ### v0.0.10
 
 - **爬取取消端点** — `DELETE /v1/crawl/{id}` 取消正在运行的爬取任务
-- **API 速率限制** — 令牌桶速率限制器（`rate_limit_rps` 配置项，默认 10 请求/秒），超限返回 429
-- **机器可读错误码** — 所有错误响应新增 `error_code` 字段（`"invalid_url"`、`"rate_limited"`、`"not_found"` 等）
-- **Map 响应信封** — `/v1/map` 返回 `{ success, data: { links } }` 以保持一致性
-- **围栏代码块** — 缩进代码块自动转换为围栏（```）格式，提升 LLM 兼容性
-- **Sphinx/文档清洗** — footer 噪声、锚点伪影（`[¶](#id)`）、ARIA 角色元素移除
-- **`renderedWith: "http"`** — HTTP-only 抓取现在在元数据中报告渲染器
-- **405 JSON 响应体** — 所有路由对 method-not-allowed 返回结构化 JSON
-
-### v0.0.8
-
-- **Wikipedia / MediaWiki onlyMainContent 修复** — `onlyMainContent: true` 现在能正确提取维基百科文章文本（体积减少约 49%）。此前 `<html>` 元素的 `class="vector-toc-available"` 通过子串匹配命中了 `"toc"` 噪声模式，导致整个页面被移除
-- **三级噪声模式匹配** — 噪声 class/id 匹配改为三级：子串匹配（长模式）、精确 token 匹配（短/模糊词：`toc`、`share`、`social`、`comment`、`related`）、前缀匹配（`ad-`、`ads-`），避免误判
-- **结构元素保护** — 噪声处理器不再移除 `<html>`、`<head>`、`<body>`、`<main>` 元素
-- **可读性后再清洗** — 可读性输出会二次清洗，去除宽容器内残留的噪声元素（infobox、navbox、catlinks 等）
-- **维基百科感知可读性** — 评分选择器新增 `.mw-parser-output`、`#mw-content-text`、`#bodyContent`；占 body >90% 的优先/评分选择器会被跳过
-- **BYOK LLM 提取** — 支持每请求传入 `llmApiKey`、`llmProvider`、`llmModel`，无需服务器配置即可使用自有密钥进行结构化提取
-- **JSON 格式验证** — `formats: ["json"]` 缺少 `jsonSchema` 时返回 400 错误，而非仅警告
-- **跳过封锁检测** — 超过 50 KB 的页面跳过插页/封锁检测（维基百科不再误报"被反爬拦截"）
-- **空字节 URL 拒绝** — 包含 `%00` 或空字节的 URL 在验证层即被拒绝
-- **请求超时** — 默认超时从 60 秒提升至 120 秒
-- **Dockerfile 修复** — 修正 `cargo build` 参数，添加 `config.docker.toml`
-
-### v0.0.7
-
-- **4xx 目标返回 `success: false`** — 抓取 403/404/429 等目标且内容极少时，现在正确返回 `success: false` 并附带错误详情，而非 `success: true` 加警告。有真实内容的错误页面（自定义 404 页面等）仍返回 `success: true` 加警告
-- **JS 渲染回退警告** — 请求 `renderJs: true` 但无 CDP 渲染器时，响应中包含 `rendered_with: "http_only_fallback"` 和警告，而非静默回退
-- **CDP 健康检查改进** — `is_available()` 现在执行真正的 `Browser.getVersion` 命令，而非仅测试 WebSocket 连接
-- **具体错误消息** — 未知格式现返回描述性错误（如 `"Unknown format 'extract'. Valid formats: ..."`）
-- **`"extract"` 格式别名** — `formats: ["extract"]` 和 `formats: ["llm-extract"]` 现作为 `"json"` 的别名被接受（Firecrawl 兼容）
-- **默认启用分块去重** — 所有分块策略默认启用去重；纯分隔符分块（`---`、`***`）被过滤
-- **分块相关性评分** — 提供查询时，分块现返回 `{ content, score, index }` 对象而非纯字符串
-- **Map 超时参数** — `/v1/map` 接受 `timeout` 参数（默认 120 秒，最大 300 秒），防止大型站点 502 错误
-- **隐身 + JS 渲染修复** — `stealth: true` 配合 `renderJs: true` 不再绕过 CDP；使用共享渲染器并注入隐身请求头
-- **BM25 NaN 防护** — 防止所有分块为空时产生 NaN 评分
+- **API 速率限制** — 令牌桶速率限制器，超限返回 429
+- **机器可读错误码** — 所有错误响应新增 `error_code` 字段
+- **围栏代码块** — 缩进代码块自动转换为围栏格式，提升 LLM 兼容性
+- **Sphinx/文档清洗** — footer 噪声、锚点伪影、ARIA 角色元素移除
 
 [完整更新日志 →](CHANGELOG.md)
 
