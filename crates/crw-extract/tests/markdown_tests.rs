@@ -52,3 +52,15 @@ fn markdown_1mb_document() {
         "1MB markdown conversion took too long: {elapsed:?}"
     );
 }
+
+#[test]
+fn markdown_strips_data_uri_images() {
+    let html = r#"<p>Before</p><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQABNjN9GQA"><p>After</p>"#;
+    let md = html_to_markdown(html);
+    assert!(
+        !md.contains("data:image"),
+        "data: URI should be stripped from markdown. Got: {md}"
+    );
+    assert!(md.contains("Before"));
+    assert!(md.contains("After"));
+}

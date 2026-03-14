@@ -36,6 +36,15 @@ pub fn clean_html(
             el.remove();
             Ok(())
         }),
+        // Remove images with data: URIs (base64 blobs bloat markdown output).
+        element!("img", |el| {
+            if let Some(src) = el.get_attribute("src")
+                && src.starts_with("data:")
+            {
+                el.remove();
+            }
+            Ok(())
+        }),
     ];
 
     if only_main_content {
@@ -56,6 +65,11 @@ pub fn clean_html(
             Ok(())
         }));
         handlers.push(element!("menu", |el| {
+            el.remove();
+            Ok(())
+        }));
+        // Dropdown <select> elements are never publishable content.
+        handlers.push(element!("select", |el| {
             el.remove();
             Ok(())
         }));
@@ -121,6 +135,9 @@ pub fn clean_html(
                 "sphinxsidebar",
                 "sphinxfooter",
                 "copyright",
+                "dropdown",
+                "city-selector",
+                "location-selector",
             ];
 
             // Patterns that need exact token matching (too short/generic for substring).

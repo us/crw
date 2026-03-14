@@ -101,20 +101,24 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
             selected_html.is_none() && md.trim().len() < 100 && raw_html.len() > 5000;
         if md_too_short {
             let fallback_md = if only_main_content && selected_html.is_none() {
-                // Fallback 1: cleaned HTML without main-content narrowing
-                let from_cleaned = if let Some(ref cleaned) = cleaned_ref {
-                    markdown::html_to_markdown(cleaned)
-                } else {
-                    String::new()
-                };
-                if from_cleaned.trim().is_empty() {
-                    // Fallback 2: basic clean (no only_main_content stripping)
+                // Try both fallbacks and pick whichever produced more content.
+                let from_cleaned = cleaned_ref
+                    .as_ref()
+                    .map(|c| markdown::html_to_markdown(c))
+                    .unwrap_or_default();
+
+                let basic_md = {
                     let basic_cleaned =
                         clean::clean_html(raw_html, false, include_tags, exclude_tags)
                             .unwrap_or_else(|_| raw_html.to_string());
                     markdown::html_to_markdown(&basic_cleaned)
-                } else {
+                };
+
+                // Pick whichever produced more content
+                if from_cleaned.trim().len() >= basic_md.trim().len() {
                     from_cleaned
+                } else {
+                    basic_md
                 }
             } else {
                 markdown::html_to_markdown(raw_html)

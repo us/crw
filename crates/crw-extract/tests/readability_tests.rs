@@ -3,6 +3,29 @@ use crw_extract::readability::{extract_links, extract_main_content, extract_meta
 // ── Main Content Extraction ──
 
 #[test]
+fn broad_main_finds_inner_content() {
+    let filler = "x".repeat(500);
+    let html = format!(
+        r#"<html><body>
+        <main>
+            <nav>Navigation {filler}</nav>
+            <div class="main-page-content">
+                <h1>Promise</h1>
+                <p>The Promise object represents the eventual completion. {filler}</p>
+            </div>
+            <footer>Footer {filler}</footer>
+        </main>
+    </body></html>"#
+    );
+    let content = extract_main_content(&html);
+    assert!(
+        content.contains("Promise"),
+        "Should find inner content. Got: {content}"
+    );
+    assert!(!content.contains("Navigation"), "Should not include nav");
+}
+
+#[test]
 fn extract_main_content_no_article_falls_to_body() {
     let html = "<html><body><p>Body content only</p></body></html>";
     let content = extract_main_content(html);

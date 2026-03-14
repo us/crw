@@ -5,6 +5,7 @@ use std::sync::LazyLock;
 pub fn html_to_markdown(html: &str) -> String {
     let md = htmd::convert(html).unwrap_or_default();
     let md = strip_anchor_artifacts(&md);
+    let md = strip_data_uris(&md);
     convert_indented_code_to_fenced(&md)
 }
 
@@ -81,6 +82,14 @@ fn flush_code_block(result: &mut String, code_lines: &mut Vec<&str>) {
         result.push_str("```\n");
     }
     code_lines.clear();
+}
+
+/// Strip markdown images with data: URIs (base64 blobs) as a safety net
+/// for cases where clean.rs didn't run (e.g. onlyMainContent: false + rawHtml format).
+fn strip_data_uris(md: &str) -> String {
+    static DATA_URI_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"!\[[^\]]*\]\(data:[^)]{10,}\)").unwrap());
+    DATA_URI_RE.replace_all(md, "").to_string()
 }
 
 /// Remove empty anchor links, pilcrow signs (¶), section signs (§), and other

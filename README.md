@@ -43,15 +43,21 @@ claude mcp add crw -- crw-mcp
 
 ## What's New
 
+### v0.0.12
+
+- **Readability drill-down** — broad `<main>`/`<article>` elements now searched for inner content instead of being discarded. Fixes MDN, StackOverflow extraction
+- **Base64 image stripping** — `data:` URI images stripped at both HTML and markdown layers. No more Reddit base64 blobs
+- **Select/dropdown removal** — `<select>` elements and dropdown noise patterns removed in content mode
+- **Extended selectors** — MDN, StackOverflow, and generic site selectors added for better coverage
+- **Smarter fallback** — both fallback paths tried, longest result picked
+
 ### v0.0.11
 
-- **Stealth anti-bot bypass** — automatic stealth JS injection (navigator.webdriver, Chrome runtime, plugins, languages, permissions) to bypass Cloudflare and other bot detection
+- **Stealth anti-bot bypass** — automatic stealth JS injection to bypass Cloudflare and other bot detection
 - **Cloudflare challenge retry** — auto-detects JS challenge pages and polls up to 3x3s for auto-resolve
-- **HTTP to CDP auto-escalation** — when HTTP response looks like an anti-bot challenge, automatically retries with JS renderer
-- **Chrome failover** — full failover chain: HTTP → LightPanda → Chrome. If LightPanda crashes on complex SPAs, Chrome takes over
-- **Chrome Docker sidecar** — `docker compose up` now includes Chrome (chromedp/headless-shell) alongside LightPanda
-- **Chrome WS URL auto-discovery** — resolves Chrome DevTools WS URL via `/json/version` endpoint
-- **Proxy docs** — config examples for HTTP, SOCKS5, and residential proxy providers
+- **HTTP to CDP auto-escalation** — anti-bot challenge responses automatically retried with JS renderer
+- **Chrome failover** — full failover chain: HTTP → LightPanda → Chrome
+- **Chrome Docker sidecar** — `docker compose up` now includes Chrome alongside LightPanda
 
 ### v0.0.10
 

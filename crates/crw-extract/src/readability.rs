@@ -1,5 +1,46 @@
 use scraper::{Html, Selector};
 
+/// When a priority selector is "too broad" (>90% of body), drill down into it
+/// to find a narrower content element.
+fn find_content_within(parent_el: &scraper::ElementRef, parent_len: usize) -> Option<String> {
+    let inner_selectors = [
+        ".main-page-content",
+        ".article-content",
+        ".post-content",
+        ".entry-content",
+        ".content-body",
+        ".article-body",
+        "[itemprop=\"articleBody\"]",
+        "[itemprop=\"text\"]",
+        ".mw-parser-output",
+        "#mw-content-text",
+        "#content",
+        ".content",
+        "article", // nested article inside broad main
+    ];
+
+    let mut best: Option<(String, f64)> = None;
+    for sel_str in &inner_selectors {
+        if let Ok(sel) = Selector::parse(sel_str) {
+            for el in parent_el.select(&sel) {
+                let content = el.html();
+                if content.len() < 200 {
+                    continue;
+                }
+                // Skip if still too broad relative to parent
+                if content.len() as f64 / parent_len as f64 > 0.85 {
+                    continue;
+                }
+                let score = text_density(&content) * (content.len() as f64).ln();
+                if best.as_ref().is_none_or(|(_, s)| score > *s) {
+                    best = Some((content, score));
+                }
+            }
+        }
+    }
+    best.map(|(c, _)| c)
+}
+
 /// Extract the "main content" element from HTML.
 ///
 /// Uses text-density scoring across candidate selectors to pick the richest element.
@@ -28,6 +69,10 @@ pub fn extract_main_content(html: &str) -> String {
                 // Skip if the element wraps nearly the entire document
                 // (e.g. Wikipedia's <article> contains everything including sidebar).
                 if body_len > 0 && content.len() as f64 / body_len as f64 > 0.9 {
+                    // Try to find a narrower content element within the broad container.
+                    if let Some(narrowed) = find_content_within(&el, content.len()) {
+                        return narrowed;
+                    }
                     continue; // Too broad — fall through to scoring
                 }
                 return content;
@@ -51,6 +96,16 @@ pub fn extract_main_content(html: &str) -> String {
         ".main",
         "[itemprop=\"articleBody\"]",
         "[itemprop=\"text\"]",
+        // MDN
+        ".main-page-content",
+        // StackOverflow
+        ".js-post-body",
+        ".s-prose",
+        "#question",
+        // Generic
+        ".page-content",
+        "#page-content",
+        "[role=\"article\"]",
         // Wikipedia / MediaWiki
         ".mw-parser-output",
         "#mw-content-text",
@@ -69,6 +124,9 @@ pub fn extract_main_content(html: &str) -> String {
             }
             // Skip selectors that wrap nearly the entire body (same as priority check).
             if body_len > 0 && content.len() as f64 / body_len as f64 > 0.9 {
+                if let Some(narrowed) = find_content_within(&el, content.len()) {
+                    return narrowed;
+                }
                 continue;
             }
             let score = text_density(&content) * (content.len() as f64).ln();

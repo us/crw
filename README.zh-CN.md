@@ -41,15 +41,21 @@ claude mcp add crw -- crw-mcp
 
 ## 最新动态
 
+### v0.0.12
+
+- **可读性深入搜索** — 宽泛的 `<main>`/`<article>` 元素现在会搜索内部更精确的内容元素，而不是被丢弃。修复 MDN、StackOverflow 内容提取
+- **Base64 图片清除** — 在 HTML 清洗和 Markdown 后处理两层清除 `data:` URI 图片。消除 Reddit 等网站的大量 base64 数据
+- **Select/下拉框移除** — 内容模式下移除 `<select>` 元素和下拉框噪声模式
+- **扩展选择器** — 新增 MDN、StackOverflow 和通用网站选择器，提升覆盖率
+- **更智能的后备链** — 两条后备路径都会尝试，选择内容最长的结果
+
 ### v0.0.11
 
-- **隐身反爬绕过** — 通过 `Page.addScriptToEvaluateOnNewDocument` 自动注入隐身 JS（navigator.webdriver、Chrome runtime、plugins、languages、permissions），绕过 Cloudflare 等反爬检测
-- **Cloudflare 挑战重试** — 自动检测 JS 挑战页面，最多轮询 3 次（每次 3 秒）等待非交互式挑战自动解决
-- **HTTP 到 CDP 自动升级** — 当 HTTP 响应看起来像反爬挑战页面时，自动使用 JS 渲染器重试
-- **Chrome 故障转移** — 完整的故障转移链：HTTP → LightPanda → Chrome。LightPanda 在复杂 SPA 上崩溃时，Chrome 自动接管
-- **Chrome Docker 边车** — `docker compose up` 现在同时包含 Chrome（chromedp/headless-shell）和 LightPanda
-- **Chrome WS URL 自动发现** — 通过 `/json/version` 端点自动解析 Chrome DevTools WebSocket URL
-- **代理配置文档** — 新增 HTTP、SOCKS5 和住宅代理提供商配置示例
+- **隐身反爬绕过** — 自动注入隐身 JS，绕过 Cloudflare 等反爬检测
+- **Cloudflare 挑战重试** — 自动检测 JS 挑战页面，最多轮询 3 次等待自动解决
+- **HTTP 到 CDP 自动升级** — 反爬挑战响应自动使用 JS 渲染器重试
+- **Chrome 故障转移** — 完整的故障转移链：HTTP → LightPanda → Chrome
+- **Chrome Docker 边车** — `docker compose up` 现在同时包含 Chrome 和 LightPanda
 
 ### v0.0.10
 

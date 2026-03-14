@@ -146,3 +146,47 @@ fn clean_html_main_content_mode_removes_extras() {
     assert!(!result.contains("Foot"));
     assert!(result.contains("Content"));
 }
+
+#[test]
+fn clean_html_removes_data_uri_images() {
+    let html =
+        r#"<body><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUg..."><p>Content</p></body>"#;
+    let result = clean_html(html, false, &[], &[]).unwrap();
+    assert!(
+        !result.contains("data:image"),
+        "data: URI images should be removed"
+    );
+    assert!(result.contains("Content"));
+}
+
+#[test]
+fn clean_html_preserves_normal_images() {
+    let html = r#"<body><img src="https://example.com/photo.jpg"><p>Content</p></body>"#;
+    let result = clean_html(html, false, &[], &[]).unwrap();
+    assert!(
+        result.contains("photo.jpg"),
+        "Normal images should be preserved"
+    );
+}
+
+#[test]
+fn clean_html_removes_select_elements_in_main_content_mode() {
+    let html = r#"<body><select><option>Istanbul</option><option>Ankara</option></select><p>Content</p></body>"#;
+    let result = clean_html(html, true, &[], &[]).unwrap();
+    assert!(
+        !result.contains("Istanbul"),
+        "Select elements should be removed in main content mode"
+    );
+    assert!(result.contains("Content"));
+}
+
+#[test]
+fn clean_html_removes_dropdown_noise_class() {
+    let html = r#"<body><div class="dropdown">Dropdown content</div><p>Content</p></body>"#;
+    let result = clean_html(html, true, &[], &[]).unwrap();
+    assert!(
+        !result.contains("Dropdown content"),
+        "Dropdown class should be noise-removed"
+    );
+    assert!(result.contains("Content"));
+}
