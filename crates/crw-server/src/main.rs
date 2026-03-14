@@ -52,8 +52,12 @@ async fn run_server() {
     tracing::info!("Renderer mode: {}", config.renderer.mode);
     if let Some(lp) = &config.renderer.lightpanda {
         tracing::info!("Lightpanda CDP: {}", lp.ws_url);
-    } else {
-        tracing::warn!("No Lightpanda CDP endpoint configured");
+    }
+    if let Some(ch) = &config.renderer.chrome {
+        tracing::info!("Chrome CDP: {}", ch.ws_url);
+    }
+    if config.renderer.lightpanda.is_none() && config.renderer.chrome.is_none() {
+        tracing::warn!("No CDP renderer configured — JS rendering disabled");
     }
 
     if config.extraction.llm.is_some() {

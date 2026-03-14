@@ -199,6 +199,11 @@ impl FallbackRenderer {
             || (lower.contains("attention required") && lower.contains("cloudflare"))
     }
 
+    /// Minimum body text length for a JS-rendered result to be considered
+    /// successful. If the rendered page has less visible text than this, the
+    /// next renderer in the chain is tried.
+    const MIN_RENDERED_TEXT_LEN: usize = 50;
+
     async fn fetch_with_js(
         &self,
         url: &str,
@@ -206,9 +211,23 @@ impl FallbackRenderer {
         wait_for_ms: Option<u64>,
     ) -> CrwResult<FetchResult> {
         let mut last_error = None;
+        let mut thin_result: Option<FetchResult> = None;
         for renderer in &self.js_renderers {
             match renderer.fetch(url, headers, wait_for_ms).await {
-                Ok(result) => return Ok(result),
+                Ok(result) => {
+                    let text_len = html_body_text_len(&result.html);
+                    if text_len >= Self::MIN_RENDERED_TEXT_LEN {
+                        return Ok(result);
+                    }
+                    tracing::info!(
+                        renderer = renderer.name(),
+                        text_len,
+                        "JS renderer returned thin content, trying next renderer"
+                    );
+                    if thin_result.is_none() {
+                        thin_result = Some(result);
+                    }
+                }
                 Err(e) => {
                     tracing::warn!(renderer = renderer.name(), "JS renderer failed: {e}");
                     last_error = Some(e);
@@ -216,8 +235,13 @@ impl FallbackRenderer {
                 }
             }
         }
-        Err(last_error
-            .unwrap_or_else(|| CrwError::RendererError("No JS renderer available".to_string())))
+        // Return the best thin result if we have one, otherwise the last error.
+        if let Some(result) = thin_result {
+            Ok(result)
+        } else {
+            Err(last_error
+                .unwrap_or_else(|| CrwError::RendererError("No JS renderer available".to_string())))
+        }
     }
 
     /// Check availability of all renderers.
@@ -229,4 +253,40 @@ impl FallbackRenderer {
         }
         health
     }
+}
+
+/// Rough estimate of visible text length in an HTML document.
+/// Strips tags and collapses whitespace. Used to detect "thin" renders
+/// where a renderer returned HTML but failed to execute JavaScript.
+fn html_body_text_len(html: &str) -> usize {
+    // Extract body content if present, otherwise use entire HTML.
+    let body = if let Some(start) = html.find("<body") {
+        let start = html[start..].find('>').map(|i| start + i + 1).unwrap_or(0);
+        let end = html.find("</body>").unwrap_or(html.len());
+        &html[start..end]
+    } else {
+        html
+    };
+    // Strip tags crudely.
+    let mut in_tag = false;
+    let mut text_len = 0;
+    let mut prev_ws = true;
+    for ch in body.chars() {
+        if ch == '<' {
+            in_tag = true;
+        } else if ch == '>' {
+            in_tag = false;
+        } else if !in_tag {
+            if ch.is_whitespace() {
+                if !prev_ws {
+                    text_len += 1;
+                    prev_ws = true;
+                }
+            } else {
+                text_len += 1;
+                prev_ws = false;
+            }
+        }
+    }
+    text_len
 }
