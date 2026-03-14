@@ -2,7 +2,7 @@
   <a href="https://fastcrw.com">
     <img src="docs/fastcrw-banner.png" alt="fastCRW" height="120" />
   </a>
-  <p align="center">Lightweight, Firecrawl-compatible web scraper and crawler for AI</p>
+  <p align="center">The web scraper built for AI agents. Single binary. Zero config.</p>
   <p align="center">
     <a href="https://crates.io/crates/crw-server"><img src="https://img.shields.io/crates/v/crw-server.svg" alt="crates.io"></a>
     <a href="https://github.com/us/crw/actions"><img src="https://github.com/us/crw/workflows/CI/badge.svg" alt="CI"></a>
@@ -12,10 +12,13 @@
     <a href="https://discord.gg/kkFh2SC8"><img src="https://img.shields.io/badge/Discord-Join%20Community-7289da?logo=discord&logoColor=white" alt="Discord"></a>
   </p>
   <p align="center">
-    <a href="https://fastcrw.com">Cloud</a> &bull;
+    Works with: Claude Code · Cursor · Windsurf · Cline · Copilot · Continue.dev · Codex
+  </p>
+  <p align="center">
+    <a href="docs/docs/mcp.md">MCP Integration</a> &bull;
     <a href="docs/docs/installation.md">Installation</a> &bull;
     <a href="docs/docs/rest-api.md">API Reference</a> &bull;
-    <a href="docs/docs/mcp.md">MCP Integration</a> &bull;
+    <a href="https://fastcrw.com">Cloud</a> &bull;
     <a href="docs/docs/js-rendering.md">JS Rendering</a> &bull;
     <a href="docs/docs/configuration.md">Configuration</a> &bull;
     <a href="https://discord.gg/kkFh2SC8">Discord</a>
@@ -29,13 +32,13 @@
 
 > **Don't want to self-host?** [fastcrw.com](https://fastcrw.com) is the managed cloud — global proxy network, auto-scaling, dashboard, and API keys. Same Firecrawl-compatible API. [Get 500 free credits →](https://fastcrw.com)
 
-CRW is an open-source, self-hosted web scraper and web crawler built in Rust — a fast, lightweight alternative to Firecrawl and Crawl4AI designed for LLM structured extraction, RAG pipelines, and AI agents. Single binary, ~6 MB idle RAM, built-in MCP server for Claude Code/Cursor/Windsurf, and structured data extraction via Anthropic and OpenAI. Firecrawl-compatible workflow support — 92% coverage, 5.5x faster, 75x less memory.
+CRW is the open-source web scraper built for AI agents. Built-in MCP server (stdio + HTTP), single binary, ~6 MB idle RAM. Give Claude Code, Cursor, or any MCP client web scraping superpowers in 30 seconds. Firecrawl-compatible API — 5.5x faster, 75x less memory, 92% coverage on 1K real-world URLs.
 
-**Single binary. No Redis. No Node.js. Firecrawl-compatible workflows.**
+**Built-in MCP server. Single binary. No Redis. No Node.js.**
 
 ```bash
-cargo install crw-server
-crw-server
+cargo install crw-mcp
+claude mcp add crw -- crw-mcp
 ```
 
 ## What's New
@@ -114,12 +117,12 @@ CRW gives you Firecrawl's API with a fraction of the resource usage. No runtime 
 
 ## Features
 
+- **🔧 MCP server** — built-in stdio + HTTP transport for Claude Code, Cursor, Windsurf, and any MCP client
 - **🔌 Firecrawl-compatible API** — same endpoint family and familiar request/response ergonomics
 - **📄 6 output formats** — markdown, HTML, cleaned HTML, raw HTML, plain text, links, structured JSON
 - **🤖 LLM structured extraction** — send a JSON schema, get validated structured data back (Anthropic tool_use + OpenAI function calling)
 - **🌐 JS rendering** — auto-detect SPAs with shell heuristics, render via LightPanda, Playwright, or Chrome (CDP)
 - **🕷️ BFS crawler** — async crawl with rate limiting, robots.txt, sitemap support, concurrent jobs
-- **🔧 MCP server** — built-in stdio + HTTP transport for Claude Code and Claude Desktop
 - **🔒 Security** — SSRF protection (private IPs, cloud metadata, IPv6), constant-time auth, dangerous URI filtering
 - **🐳 Docker ready** — multi-stage build with LightPanda sidecar
 - **🎯 CSS selector & XPath** — extract specific DOM elements before Markdown conversion
@@ -141,16 +144,14 @@ Both use the same Firecrawl-compatible API — your code works with either. Swit
 
 ## Quick Start
 
-**Cloud (no setup):**
+**MCP (AI agents — recommended):**
 
 ```bash
-curl -X POST https://fastcrw.com/api/v1/scrape \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://example.com"}'
+cargo install crw-mcp
+claude mcp add crw -- crw-mcp
 ```
 
-> Get your API key at [fastcrw.com](https://fastcrw.com) — 500 free credits included.
+> That's it. Claude Code now has `crw_scrape`, `crw_crawl`, `crw_map` tools. For Cursor, Windsurf, Cline, and other MCP clients, see [MCP Server](#mcp-server).
 
 **CLI (no server needed):**
 
@@ -159,7 +160,7 @@ cargo install crw-cli
 crw https://example.com
 ```
 
-**Self-hosted — install from crates.io:**
+**Self-hosted server:**
 
 ```bash
 cargo install crw-server
@@ -174,7 +175,18 @@ crw-server setup
 
 This downloads [LightPanda](https://github.com/lightpanda-io/browser) and creates a `config.local.toml` for JS rendering. See [JS Rendering](#js-rendering) for details.
 
-**Docker (pre-built image):**
+**Cloud (no setup):**
+
+```bash
+curl -X POST https://fastcrw.com/api/v1/scrape \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com"}'
+```
+
+> Get your API key at [fastcrw.com](https://fastcrw.com) — 500 free credits included.
+
+**Docker:**
 
 ```bash
 docker run -p 3000:3000 ghcr.io/us/crw:latest
@@ -184,19 +196,6 @@ docker run -p 3000:3000 ghcr.io/us/crw:latest
 
 ```bash
 docker compose up
-```
-
-**Build from source:**
-
-```bash
-cargo build --release --bin crw-server
-./target/release/crw-server
-```
-
-**MCP stdio binary:**
-
-```bash
-cargo install crw-mcp
 ```
 
 **Scrape a page:**
@@ -564,8 +563,8 @@ CRW hits a sweet spot: **near-Spider speed** with **Firecrawl API compatibility*
 Run the benchmark yourself:
 
 ```bash
-pip install datasets aiohttp
-python3 bench/run_bench.py
+uv pip install datasets aiohttp
+uv run python bench/run_bench.py
 ```
 
 ## Crates

@@ -2,7 +2,7 @@
   <a href="https://fastcrw.com">
     <img src="docs/fastcrw-banner.png" alt="fastCRW" height="120" />
   </a>
-  <p align="center">轻量级、兼容 Firecrawl 的 AI 网页抓取和爬虫工具</p>
+  <p align="center">为 AI 代理打造的网页抓取工具。单一可执行文件。零配置。</p>
   <p align="center">
     <a href="https://crates.io/crates/crw-server"><img src="https://img.shields.io/crates/v/crw-server.svg" alt="crates.io"></a>
     <a href="https://github.com/us/crw/actions"><img src="https://github.com/us/crw/workflows/CI/badge.svg" alt="CI"></a>
@@ -11,10 +11,13 @@
     <a href="https://fastcrw.com"><img src="https://img.shields.io/badge/Managed%20Cloud-fastcrw.com-blueviolet" alt="fastcrw.com"></a>
   </p>
   <p align="center">
-    <a href="https://fastcrw.com">云服务</a> &bull;
+    适用于: Claude Code · Cursor · Windsurf · Cline · Copilot · Continue.dev · Codex
+  </p>
+  <p align="center">
+    <a href="docs/docs/mcp.md">MCP 集成</a> &bull;
     <a href="docs/docs/installation.md">安装指南</a> &bull;
     <a href="docs/docs/rest-api.md">API 参考</a> &bull;
-    <a href="docs/docs/mcp.md">MCP 集成</a> &bull;
+    <a href="https://fastcrw.com">云服务</a> &bull;
     <a href="docs/docs/js-rendering.md">JS 渲染</a> &bull;
     <a href="docs/docs/configuration.md">配置说明</a>
   </p>
@@ -27,13 +30,13 @@
 
 > **不想自托管？** [fastcrw.com](https://fastcrw.com) 是托管云服务 — 全球代理网络、自动扩展、仪表板和 API 密钥。相同的 Firecrawl 兼容 API。[获取 500 个免费额度 →](https://fastcrw.com)
 
-CRW 是一个开源、基于 Rust 构建的自托管网页抓取和爬虫工具 — 可直接替换 Firecrawl 和 Crawl4AI，专为 LLM 结构化提取、RAG 流水线和 AI 代理设计。单一二进制文件，约 6 MB 空闲内存，内置 MCP 服务器支持 Claude Code/Cursor/Windsurf，通过 Anthropic 和 OpenAI 进行结构化数据提取。覆盖率 92%，速度快 5.5 倍，内存减少 75 倍。
+CRW 是为 AI 代理打造的开源网页抓取工具。内置 MCP 服务器（stdio + HTTP），单一二进制文件，约 6 MB 空闲内存。30 秒内为 Claude Code、Cursor 或任何 MCP 客户端赋予网页抓取能力。兼容 Firecrawl API — 速度快 5.5 倍，内存减少 75 倍，1K 真实 URL 覆盖率 92%。
 
-**单一二进制文件。无 Redis。无 Node.js。兼容 Firecrawl API。**
+**内置 MCP 服务器。单一二进制文件。无 Redis。无 Node.js。**
 
 ```bash
-cargo install crw-server
-crw-server
+cargo install crw-mcp
+claude mcp add crw -- crw-mcp
 ```
 
 ## 最新动态
@@ -110,12 +113,12 @@ CRW 提供 Firecrawl 的 API，但资源占用极低。无运行时依赖，无 
 
 ## 功能特性
 
+- **🔧 MCP 服务器** — 内置 stdio + HTTP 传输，支持 Claude Code、Cursor、Windsurf 及任何 MCP 客户端
 - **🔌 兼容 Firecrawl API** — 相同端点、相同请求/响应格式，可直接替换
 - **📄 6 种输出格式** — Markdown、HTML、清洁 HTML、原始 HTML、纯文本、链接、结构化 JSON
 - **🤖 LLM 结构化提取** — 发送 JSON Schema，获取经验证的结构化数据（Anthropic tool_use + OpenAI function calling）
 - **🌐 JS 渲染** — 通过 Shell 启发式自动检测 SPA，通过 LightPanda、Playwright 或 Chrome（CDP）渲染
 - **🕷️ BFS 爬虫** — 异步爬取，支持速率限制、robots.txt、站点地图、并发任务
-- **🔧 MCP 服务器** — 内置 stdio + HTTP 传输，支持 Claude Code 和 Claude Desktop
 - **🔒 身份验证** — 可选的 Bearer Token，常量时间比较
 - **🐳 Docker 就绪** — 多阶段构建，含 LightPanda 边车
 
@@ -133,16 +136,14 @@ CRW 提供 Firecrawl 的 API，但资源占用极低。无运行时依赖，无 
 
 ## 快速开始
 
-**云服务（无需部署）：**
+**MCP（AI 代理 — 推荐）：**
 
 ```bash
-curl -X POST https://fastcrw.com/api/v1/scrape \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://example.com"}'
+cargo install crw-mcp
+claude mcp add crw -- crw-mcp
 ```
 
-> 在 [fastcrw.com](https://fastcrw.com) 获取 API 密钥 — 包含 50 个免费额度。
+> 完成。Claude Code 现在拥有 `crw_scrape`、`crw_crawl`、`crw_map` 工具。Cursor、Windsurf、Cline 等 MCP 客户端请参见 [MCP 服务器](#mcp-服务器)。
 
 **CLI（无需服务器）：**
 
@@ -151,7 +152,7 @@ cargo install crw-cli
 crw https://example.com
 ```
 
-**自托管 — 从 crates.io 安装：**
+**自托管服务器：**
 
 ```bash
 cargo install crw-server
@@ -166,20 +167,24 @@ crw-server setup
 
 自动下载 [LightPanda](https://github.com/lightpanda-io/browser) 并创建 `config.local.toml` 配置文件。详见 [JS 渲染](#js-渲染)。
 
-**从源码构建：**
+**云服务（无需部署）：**
 
 ```bash
-cargo build --release --bin crw-server
-./target/release/crw-server
+curl -X POST https://fastcrw.com/api/v1/scrape \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com"}'
 ```
 
-**MCP stdio 二进制文件：**
-
-```bash
-cargo install crw-mcp
-```
+> 在 [fastcrw.com](https://fastcrw.com) 获取 API 密钥 — 包含 500 个免费额度。
 
 **Docker：**
+
+```bash
+docker run -p 3000:3000 ghcr.io/us/crw:latest
+```
+
+**Docker Compose（含 JS 渲染）：**
 
 ```bash
 docker compose up
