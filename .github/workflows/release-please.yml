@@ -1,0 +1,68 @@
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          release-type: rust
+
+      # After release-please merges and creates a tag,
+      # the existing release.yml workflow handles crates.io + Docker publishing.
+      # This step updates the README "What's New" section with the latest 3 releases.
+      - uses: actions/checkout@v6
+        if: ${{ steps.release.outputs.release_created }}
+
+      - name: Update README What's New
+        if: ${{ steps.release.outputs.release_created }}
+        run: |
+          # Extract the latest 3 version sections from CHANGELOG.md
+          # Each section starts with "## " (h2) — skip the first line ("# Changelog")
+          awk '
+            /^## / { count++ }
+            count >= 1 && count <= 3 { print }
+            count > 3 { exit }
+          ' CHANGELOG.md > /tmp/latest_changes.md
+
+          # Replace the What's New section in README.md
+          # Section is between "## What's New" and the next "## " heading
+          python3 - <<'PYEOF'
+          import re
+
+          with open("README.md", "r") as f:
+              readme = f.read()
+
+          with open("/tmp/latest_changes.md", "r") as f:
+              changes = f.read().strip()
+
+          # Convert CHANGELOG h2 (## v0.x.x) to h3 (### v0.x.x) for README
+          changes = re.sub(r'^## ', '### ', changes, flags=re.MULTILINE)
+
+          # Replace everything between "## What's New" and the next "## " or "[Full changelog"
+          pattern = r"(## What's New\n\n).*?(\n\[Full changelog)"
+          replacement = rf"\1{changes}\n\2"
+          readme = re.sub(pattern, replacement, readme, flags=re.DOTALL)
+
+          with open("README.md", "w") as f:
+              f.write(readme)
+          PYEOF
+
+          # Commit the README update
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git diff --cached --quiet || git commit -m "docs: update README What's New section"
+          git push
