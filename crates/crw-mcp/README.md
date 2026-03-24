@@ -1,13 +1,20 @@
 # crw-mcp
 
-MCP (Model Context Protocol) stdio proxy for the [CRW](https://github.com/us/crw) web scraper.
+MCP (Model Context Protocol) server for the [CRW](https://github.com/us/crw) web scraper.
 
 [![crates.io](https://img.shields.io/crates/v/crw-mcp.svg)](https://crates.io/crates/crw-mcp)
 [![license](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](https://github.com/us/crw/blob/main/LICENSE)
 
 ## Overview
 
-`crw-mcp` is a lightweight stdio binary that bridges MCP-compatible AI clients (Claude Code, Claude Desktop, Cursor, Windsurf, Cline, Continue.dev) to a running CRW server. It reads JSON-RPC requests from stdin, forwards them to the CRW HTTP API, and writes responses to stdout.
+`crw-mcp` is a self-contained MCP server that gives any MCP-compatible AI client (Claude Code, Claude Desktop, Cursor, Windsurf, Cline, Continue.dev, OpenAI Codex CLI) 4 web scraping tools. No external server needed — just add and go.
+
+**Two modes:**
+
+| Mode | When | Setup |
+|------|------|-------|
+| **Embedded** (default) | No `--api-url` set | Self-contained, zero setup |
+| **Proxy** | `--api-url` provided | Forwards to remote CRW server |
 
 **4 MCP tools:**
 
@@ -24,34 +31,81 @@ MCP (Model Context Protocol) stdio proxy for the [CRW](https://github.com/us/crw
 cargo install crw-mcp
 ```
 
-## Prerequisites
+## Quick Start (Embedded Mode)
 
-A running CRW server instance:
+No server to run. Just add `crw-mcp` to your AI client:
 
 ```bash
-cargo install crw-server
-crw-server
+# Claude Code
+claude mcp add crw -- crw-mcp
+
+# With custom config via env vars
+claude mcp add \
+  -e CRW_CRAWLER__MAX_CONCURRENCY=5 \
+  -e CRW_RENDERER__LIGHTPANDA__WS_URL=ws://127.0.0.1:9222 \
+  crw -- crw-mcp
 ```
 
-## Environment variables
+## Proxy Mode (Remote Server)
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CRW_API_URL` | `http://localhost:3000` | CRW server base URL |
-| `CRW_API_KEY` | *(none)* | Optional Bearer token for authenticated servers |
+Connect to [fastcrw.com](https://fastcrw.com) or any remote CRW instance:
 
-## Setup by client
+```bash
+# Cloud server
+claude mcp add \
+  -e CRW_API_URL=https://fastcrw.com/api \
+  -e CRW_API_KEY=fc-xxx \
+  crw -- crw-mcp
+
+# Local crw-server on custom port
+claude mcp add \
+  -e CRW_API_URL=http://localhost:4000 \
+  crw -- crw-mcp
+```
+
+Or use the HTTP transport directly (no `crw-mcp` binary needed):
+
+```bash
+claude mcp add --transport http crw http://localhost:3000/mcp
+```
+
+## CLI Options
+
+| Flag | Env Var | Description |
+|------|---------|-------------|
+| `--api-url` | `CRW_API_URL` | Remote server URL (enables proxy mode) |
+| `--api-key` | `CRW_API_KEY` | Bearer token for remote server auth |
+| `--config` | `CRW_CONFIG` | Config file path (embedded mode only) |
+| — | `RUST_LOG` | Log level (default: `crw_mcp=info`, logs go to stderr) |
+
+### Embedded mode configuration
+
+In embedded mode, `crw-mcp` loads configuration the same way as `crw-server`: `config.default.toml` → `config.local.toml` → environment variable overrides. Env vars use `CRW_` prefix with `__` as separator:
+
+```bash
+CRW_CRAWLER__MAX_CONCURRENCY=5
+CRW_RENDERER__LIGHTPANDA__WS_URL=ws://127.0.0.1:9222
+CRW_CRAWLER__USER_AGENT="MyBot/1.0"
+```
+
+## Feature Flags
+
+| Feature | Default | Description |
+|---------|---------|-------------|
+| `embedded` | on | Self-contained scraping engine (pulls in `crw-server`) |
+
+Build a slim proxy-only binary without the embedded engine:
+
+```bash
+cargo build -p crw-mcp --no-default-features --release
+```
+
+## Setup by Client
 
 ### Claude Code
 
 ```bash
-claude mcp add --transport stdio crw crw-mcp
-```
-
-Or use the HTTP transport directly (no binary needed):
-
-```bash
-claude mcp add --transport http crw http://localhost:3000/mcp
+claude mcp add crw -- crw-mcp
 ```
 
 ### Claude Desktop
@@ -68,8 +122,7 @@ Edit your config file:
 {
   "mcpServers": {
     "crw": {
-      "command": "crw-mcp",
-      "env": { "CRW_API_URL": "http://localhost:3000" }
+      "command": "crw-mcp"
     }
   }
 }
@@ -83,8 +136,7 @@ Edit `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project):
 {
   "mcpServers": {
     "crw": {
-      "command": "crw-mcp",
-      "env": { "CRW_API_URL": "http://localhost:3000" }
+      "command": "crw-mcp"
     }
   }
 }
@@ -98,8 +150,7 @@ Edit `~/.codeium/windsurf/mcp_config.json`:
 {
   "mcpServers": {
     "crw": {
-      "command": "crw-mcp",
-      "env": { "CRW_API_URL": "http://localhost:3000" }
+      "command": "crw-mcp"
     }
   }
 }
@@ -112,7 +163,6 @@ Edit `~/.codeium/windsurf/mcp_config.json`:
   "mcpServers": {
     "crw": {
       "command": "crw-mcp",
-      "env": { "CRW_API_URL": "http://localhost:3000" },
       "alwaysAllow": ["crw_scrape", "crw_map"],
       "disabled": false
     }
@@ -128,8 +178,6 @@ Edit `~/.continue/config.yaml`:
 mcpServers:
   - name: crw
     command: crw-mcp
-    env:
-      CRW_API_URL: http://localhost:3000
 ```
 
 ### OpenAI Codex CLI
@@ -139,9 +187,6 @@ Edit `~/.codex/config.toml`:
 ```toml
 [mcp_servers.crw]
 command = "crw-mcp"
-
-[mcp_servers.crw.env]
-CRW_API_URL = "http://localhost:3000"
 ```
 
 ### Any MCP client
@@ -150,36 +195,15 @@ CRW_API_URL = "http://localhost:3000"
 {
   "mcpServers": {
     "crw": {
-      "command": "crw-mcp",
-      "env": { "CRW_API_URL": "http://localhost:3000" }
+      "command": "crw-mcp"
     }
   }
 }
 ```
 
-> **Tip:** For clients that support HTTP transport, use `http://localhost:3000/mcp` directly — no stdio binary needed.
+> **Tip:** For clients that support HTTP transport, you can still use `http://localhost:3000/mcp` directly with a running `crw-server` — no stdio binary needed.
 
-## With authentication
-
-If your CRW server requires auth:
-
-```json
-{
-  "mcpServers": {
-    "crw": {
-      "command": "crw-mcp",
-      "env": {
-        "CRW_API_URL": "http://localhost:3000",
-        "CRW_API_KEY": "fc-your-api-key"
-      }
-    }
-  }
-}
-```
-
-## With remote / cloud server
-
-Point to [fastcrw.com](https://fastcrw.com) or any remote CRW instance:
+## With Proxy Mode Authentication
 
 ```json
 {
@@ -188,7 +212,7 @@ Point to [fastcrw.com](https://fastcrw.com) or any remote CRW instance:
       "command": "crw-mcp",
       "env": {
         "CRW_API_URL": "https://fastcrw.com/api",
-        "CRW_API_KEY": "your-cloud-api-key"
+        "CRW_API_KEY": "fc-your-api-key"
       }
     }
   }
@@ -207,7 +231,7 @@ This crate is part of the [CRW](https://github.com/us/crw) workspace — a fast,
 | [crw-crawl](https://crates.io/crates/crw-crawl) | Async BFS crawler with robots.txt & sitemap |
 | [crw-server](https://crates.io/crates/crw-server) | Firecrawl-compatible API server |
 | [crw-cli](https://crates.io/crates/crw-cli) | Standalone CLI (`crw` binary) |
-| **crw-mcp** | MCP stdio proxy binary (this crate) |
+| **crw-mcp** | MCP server binary (this crate) |
 
 ## License
 

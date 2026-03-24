@@ -694,7 +694,9 @@ dependencies = [
 name = "crw-mcp"
 version = "0.0.12"
 dependencies = [
+ "clap",
  "crw-core",
+ "crw-server",
  "reqwest 0.13.2",
  "serde_json",
  "tokio",

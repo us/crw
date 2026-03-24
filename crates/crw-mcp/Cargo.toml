@@ -13,6 +13,10 @@ description = "MCP (Model Context Protocol) server for the CRW web scraper"
 name = "crw-mcp"
 path = "src/main.rs"
 
+[features]
+default = ["embedded"]
+embedded = ["dep:crw-server"]
+
 [dependencies]
 crw-core = { path = "../crw-core", version = "0.0.12" }
 serde_json = { workspace = true }
@@ -20,3 +24,7 @@ tokio = { workspace = true }
 reqwest = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+clap = { workspace = true }
+
+# Embedded mode: pulls in full scraping engine
+crw-server = { path = "../crw-server", version = "0.0.12", optional = true, features = ["cdp"] }

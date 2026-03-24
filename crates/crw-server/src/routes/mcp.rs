@@ -16,12 +16,12 @@ const SERVER_NAME: &str = "crw";
 const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Validate URL safety for MCP tool calls (same checks as REST API routes).
-fn validate_url(url: &str) -> Result<(), String> {
+pub fn validate_url(url: &str) -> Result<(), String> {
     let parsed = url::Url::parse(url).map_err(|e| format!("Invalid URL: {e}"))?;
     crw_core::url_safety::validate_safe_url(&parsed)
 }
 
-async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result<Value, String> {
+pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result<Value, String> {
     match tool_name {
         "crw_scrape" => {
             let req: ScrapeRequest =
@@ -87,7 +87,7 @@ async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result<Val
     }
 }
 
-async fn handle_request(state: &AppState, req: JsonRpcRequest) -> Option<JsonRpcResponse> {
+pub async fn handle_request(state: &AppState, req: JsonRpcRequest) -> Option<JsonRpcResponse> {
     // Handle common protocol methods via shared logic.
     match handle_protocol_method(SERVER_NAME, SERVER_VERSION, &req) {
         ProtocolResult::Response(resp) => return Some(resp),

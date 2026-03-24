@@ -2,14 +2,73 @@
 
 CRW includes a built-in MCP (Model Context Protocol) server that gives any MCP-compatible AI assistant — Claude Code, Claude Desktop, Cursor, Windsurf, Cline, Continue.dev, OpenAI Codex CLI — 4 web scraping tools. Turn any AI coding agent into a web scraper with a single command.
 
-## Two Transport Options
+## Two Modes
+
+`crw-mcp` supports two modes:
+
+| Mode | When | Description |
+|------|------|-------------|
+| **Embedded** (default) | No `--api-url` / `CRW_API_URL` set | Self-contained. No server needed. The scraping engine runs inside the MCP process. |
+| **Proxy** | `--api-url` / `CRW_API_URL` set | Forwards tool calls to a remote CRW server (fastcrw.com, self-hosted, etc.) |
+
+## Quick Start (Embedded Mode)
+
+No server to start, no setup. Just add `crw-mcp`:
+
+```bash
+claude mcp add crw -- crw-mcp
+```
+
+That's it. The agent starts `crw-mcp`, which contains the full scraping engine. When the agent disconnects, the process dies.
+
+### With CDP rendering (LightPanda/Chrome)
+
+If you have a CDP-compatible browser, pass it via env vars:
+
+```bash
+claude mcp add \
+  -e CRW_RENDERER__LIGHTPANDA__WS_URL=ws://127.0.0.1:9222 \
+  crw -- crw-mcp
+```
+
+Without a CDP browser, `crw-mcp` uses its HTTP-only renderer (no JavaScript rendering).
+
+### Embedded mode configuration
+
+In embedded mode, `crw-mcp` loads config the same way as `crw-server`: `config.default.toml` → `config.local.toml` → env var overrides. Env vars use `CRW_` prefix with `__` separator:
+
+```bash
+CRW_CRAWLER__MAX_CONCURRENCY=5
+CRW_RENDERER__LIGHTPANDA__WS_URL=ws://127.0.0.1:9222
+CRW_CRAWLER__USER_AGENT="MyBot/1.0"
+```
+
+## Proxy Mode (Remote Server)
+
+Connect to [fastcrw.com](https://fastcrw.com) or any remote CRW instance:
+
+```bash
+# Cloud server
+claude mcp add \
+  -e CRW_API_URL=https://fastcrw.com/api \
+  -e CRW_API_KEY=fc-xxx \
+  crw -- crw-mcp
+
+# Local crw-server on custom port
+claude mcp add \
+  -e CRW_API_URL=http://localhost:4000 \
+  crw -- crw-mcp
+```
+
+## Three Transport Options
 
 | Transport | Setup | Requires |
 |-----------|-------|----------|
-| **HTTP** (recommended) | One-liner, no binary needed | `crw-server` running |
-| **Stdio** | Separate binary (`crw-mcp`) | `crw-server` running + `crw-mcp` binary |
+| **Stdio embedded** (recommended) | `claude mcp add crw -- crw-mcp` | Nothing |
+| **Stdio proxy** | `CRW_API_URL=... crw-mcp` | Remote CRW server |
+| **HTTP** | `claude mcp add --transport http crw http://localhost:3000/mcp` | `crw-server` running |
 
-### HTTP Transport (Recommended)
+### HTTP Transport
 
 The `crw-server` has a built-in `/mcp` endpoint. No extra binary needed:
 
@@ -17,25 +76,26 @@ The `crw-server` has a built-in `/mcp` endpoint. No extra binary needed:
 claude mcp add --transport http crw http://localhost:3000/mcp
 ```
 
-### Stdio Transport
+## CLI Options
 
-Build the standalone MCP binary:
+| Flag | Env Var | Description |
+|------|---------|-------------|
+| `--api-url` | `CRW_API_URL` | Remote server URL (enables proxy mode) |
+| `--api-key` | `CRW_API_KEY` | Bearer token for remote server auth |
+| `--config` | `CRW_CONFIG` | Config file path (embedded mode only) |
+| — | `RUST_LOG` | Log level (default: `crw_mcp=info`, logs go to stderr) |
+
+## Feature Flags
+
+| Feature | Default | Description |
+|---------|---------|-------------|
+| `embedded` | on | Self-contained scraping engine (pulls in `crw-server`) |
+
+Build a slim proxy-only binary:
 
 ```bash
-cargo build --release --bin crw-mcp
+cargo build -p crw-mcp --no-default-features --release
 ```
-
-The binary is at `target/release/crw-mcp` (~4 MB). It's a pure JSON-RPC 2.0 stdio proxy that forwards to the HTTP API.
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CRW_API_URL` | `http://localhost:3000` | crw server URL |
-| `CRW_API_KEY` | — | Bearer token (if auth is enabled) |
-| `RUST_LOG` | `crw_mcp=info` | Log level (logs go to stderr) |
-
-Make sure `crw-server` is running before using the MCP tools. Both transports forward requests to the HTTP API.
 
 ## Available Tools
 
@@ -82,31 +142,15 @@ Make sure `crw-server` is running before using the MCP tools. Both transports fo
 
 ### Claude Code
 
-**HTTP transport (recommended):**
-
 ```bash
+# Embedded mode (recommended — no server needed)
+claude mcp add crw -- crw-mcp
+
+# Proxy mode (remote server)
+claude mcp add -e CRW_API_URL=https://fastcrw.com/api -e CRW_API_KEY=fc-xxx crw -- crw-mcp
+
+# HTTP transport (requires crw-server running)
 claude mcp add --transport http crw http://localhost:3000/mcp
-```
-
-**Stdio transport:**
-
-```bash
-claude mcp add crw -- /absolute/path/to/crw-mcp
-```
-
-Or manually edit `~/.claude.json`:
-
-```json
-{
-  "mcpServers": {
-    "crw": {
-      "command": "/absolute/path/to/crw-mcp",
-      "env": {
-        "CRW_API_URL": "http://localhost:3000"
-      }
-    }
-  }
-}
 ```
 
 Use `claude mcp list` to verify, `claude mcp remove crw` to uninstall.
@@ -125,10 +169,7 @@ Edit the config file for your OS:
 {
   "mcpServers": {
     "crw": {
-      "command": "/absolute/path/to/crw-mcp",
-      "env": {
-        "CRW_API_URL": "http://localhost:3000"
-      }
+      "command": "crw-mcp"
     }
   }
 }
@@ -144,10 +185,7 @@ Create or edit `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project-leve
 {
   "mcpServers": {
     "crw": {
-      "command": "/absolute/path/to/crw-mcp",
-      "env": {
-        "CRW_API_URL": "http://localhost:3000"
-      }
+      "command": "crw-mcp"
     }
   }
 }
@@ -163,10 +201,7 @@ Edit `~/.codeium/windsurf/mcp_config.json`:
 {
   "mcpServers": {
     "crw": {
-      "command": "/absolute/path/to/crw-mcp",
-      "env": {
-        "CRW_API_URL": "http://localhost:3000"
-      }
+      "command": "crw-mcp"
     }
   }
 }
@@ -186,10 +221,7 @@ Windsurf has a limit of 100 total tools across all MCP servers. crw uses only 4.
 {
   "mcpServers": {
     "crw": {
-      "command": "/absolute/path/to/crw-mcp",
-      "env": {
-        "CRW_API_URL": "http://localhost:3000"
-      },
+      "command": "crw-mcp",
       "alwaysAllow": ["crw_scrape", "crw_map"],
       "disabled": false
     }
@@ -206,9 +238,7 @@ Edit `~/.continue/config.yaml`:
 ```yaml
 mcpServers:
   - name: crw
-    command: /absolute/path/to/crw-mcp
-    env:
-      CRW_API_URL: http://localhost:3000
+    command: crw-mcp
 ```
 
 MCP tools only work in Continue's **Agent mode**, not in regular chat.
@@ -219,13 +249,10 @@ Edit `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.crw]
-command = "/absolute/path/to/crw-mcp"
-
-[mcp_servers.crw.env]
-CRW_API_URL = "http://localhost:3000"
+command = "crw-mcp"
 ```
 
-Or: `codex mcp add crw -- /absolute/path/to/crw-mcp`
+Or: `codex mcp add crw -- crw-mcp`
 
 ### Gemini CLI
 
@@ -235,10 +262,7 @@ Edit `~/.gemini/settings.json`:
 {
   "mcpServers": {
     "crw": {
-      "command": "/absolute/path/to/crw-mcp",
-      "env": {
-        "CRW_API_URL": "http://localhost:3000"
-      }
+      "command": "crw-mcp"
     }
   }
 }
@@ -252,10 +276,7 @@ Create or edit `~/.roo/mcp.json` (global) or `.roo/mcp.json` (project-level):
 {
   "mcpServers": {
     "crw": {
-      "command": "/absolute/path/to/crw-mcp",
-      "env": {
-        "CRW_API_URL": "http://localhost:3000"
-      }
+      "command": "crw-mcp"
     }
   }
 }
@@ -269,10 +290,7 @@ Add to your VS Code `settings.json` or `.vscode/mcp.json`:
 {
   "mcpServers": {
     "crw": {
-      "command": "/absolute/path/to/crw-mcp",
-      "env": {
-        "CRW_API_URL": "http://localhost:3000"
-      }
+      "command": "crw-mcp"
     }
   }
 }
@@ -282,28 +300,28 @@ Add to your VS Code `settings.json` or `.vscode/mcp.json`:
 
 | Platform | Config Format | Config Path | One-liner |
 |----------|-------------|------------|-----------|
-| Claude Code | JSON | `~/.claude.json` | `claude mcp add --transport http crw http://localhost:3000/mcp` |
+| Claude Code | JSON | `~/.claude.json` | `claude mcp add crw -- crw-mcp` |
 | Claude Desktop | JSON | OS-specific | — |
 | Cursor | JSON | `~/.cursor/mcp.json` | — |
 | Windsurf | JSON | `~/.codeium/windsurf/mcp_config.json` | — |
 | Cline | JSON | VS Code globalStorage | — |
 | Continue.dev | YAML | `~/.continue/config.yaml` | — |
-| OpenAI Codex | TOML | `~/.codex/config.toml` | `codex mcp add crw -- /path/to/crw-mcp` |
+| OpenAI Codex | TOML | `~/.codex/config.toml` | `codex mcp add crw -- crw-mcp` |
 | Gemini CLI | JSON | `~/.gemini/settings.json` | — |
 | Roo Code | JSON | `~/.roo/mcp.json` | — |
 | VS Code (Copilot) | JSON | `.vscode/mcp.json` | — |
 
-## With Authentication
+## With Proxy Mode Authentication
 
-If your crw server has auth enabled, add `CRW_API_KEY` to any config:
+If connecting to a remote server with auth, add `CRW_API_URL` and `CRW_API_KEY`:
 
 ```json
 {
   "mcpServers": {
     "crw": {
-      "command": "/absolute/path/to/crw-mcp",
+      "command": "crw-mcp",
       "env": {
-        "CRW_API_URL": "http://localhost:3000",
+        "CRW_API_URL": "https://fastcrw.com/api",
         "CRW_API_KEY": "your-api-key"
       }
     }
@@ -315,7 +333,7 @@ If your crw server has auth enabled, add `CRW_API_KEY` to any config:
 
 ```bash
 echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"test"},"protocolVersion":"2024-11-05"}}' \
-  | ./target/release/crw-mcp 2>/dev/null
+  | crw-mcp 2>/dev/null
 ```
 
 Expected:
@@ -327,12 +345,24 @@ Expected:
   "result": {
     "protocolVersion": "2024-11-05",
     "capabilities": {"tools": {}},
-    "serverInfo": {"name": "crw-mcp", "version": "0.0.1"}
+    "serverInfo": {"name": "crw-mcp", "version": "0.0.12"}
   }
 }
 ```
 
 ## How It Works
+
+**Embedded mode (default):**
+
+```
+AI Assistant → stdin (JSON-RPC 2.0) → crw-mcp [scraping engine] → Web pages
+```
+
+**Proxy mode:**
+
+```
+AI Assistant → stdin (JSON-RPC 2.0) → crw-mcp → HTTP → crw-server → Web pages
+```
 
 **HTTP transport:**
 
@@ -340,12 +370,6 @@ Expected:
 AI Assistant → HTTP POST (JSON-RPC 2.0) → crw-server /mcp → Web pages
 ```
 
-**Stdio transport:**
-
-```
-AI Assistant → stdin (JSON-RPC 2.0) → crw-mcp → HTTP → crw-server → Web pages
-```
-
-The HTTP transport calls internal functions directly with zero overhead. The stdio transport is a pure JSON proxy.
+In embedded mode, the scraping engine runs in-process with zero overhead. In proxy mode, tool calls are forwarded over HTTP. The HTTP transport calls `crw-server` functions directly.
 
 Protocol version: `2024-11-05`

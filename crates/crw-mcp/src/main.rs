@@ -1,30 +1,31 @@
-//! MCP (Model Context Protocol) stdio proxy for the CRW web scraper.
+//! MCP (Model Context Protocol) server for the CRW web scraper.
 //!
-//! This binary reads JSON-RPC requests from stdin and forwards them to a running
-//! CRW server instance over HTTP. It exposes four tools to MCP-compatible AI clients:
+//! Supports two modes:
+//!
+//! - **Embedded (default)** — Self-contained scraping engine. No external server needed.
+//! - **Proxy** — Forwards tool calls to a remote CRW server over HTTP.
+//!
+//! Mode selection: if `--api-url` or `CRW_API_URL` is set, proxy mode is used.
+//! Otherwise, embedded mode is used (requires the `embedded` feature, on by default).
+//!
+//! # Tools
 //!
 //! - `crw_scrape` — scrape a single URL
 //! - `crw_crawl` — start an async BFS crawl
 //! - `crw_check_crawl_status` — poll crawl job status
 //! - `crw_map` — discover URLs on a website
 //!
-//! # Environment variables
-//!
-//! | Variable | Default | Description |
-//! |----------|---------|-------------|
-//! | `CRW_API_URL` | `http://localhost:3000` | CRW server base URL |
-//! | `CRW_API_KEY` | *(none)* | Optional Bearer token for auth |
-//!
 //! # Usage
 //!
 //! ```bash
-//! # Start with default settings
+//! # Embedded mode (default — no server needed)
 //! crw-mcp
 //!
-//! # Point to a remote server
-//! CRW_API_URL=https://crw.example.com crw-mcp
+//! # Proxy mode — connect to a remote server
+//! crw-mcp --api-url https://fastcrw.com/api --api-key fc-xxx
 //! ```
 
+use clap::Parser;
 use crw_core::mcp::{
     JsonRpcRequest, JsonRpcResponse, ProtocolResult, handle_protocol_method, tool_result_response,
 };
@@ -34,9 +35,93 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 const SERVER_NAME: &str = "crw-mcp";
 const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-// --- HTTP dispatch ---
+// --- CLI ---
 
-async fn call_tool(
+#[derive(Parser)]
+#[command(name = "crw-mcp", about = "MCP server for the CRW web scraper")]
+struct Cli {
+    /// Remote CRW server URL. Enables proxy mode.
+    /// Without this flag, runs in embedded mode (self-contained).
+    #[arg(long, env = "CRW_API_URL")]
+    api_url: Option<String>,
+
+    /// API key for remote server authentication.
+    #[arg(long, env = "CRW_API_KEY")]
+    api_key: Option<String>,
+
+    /// Config file path (embedded mode only, overrides config.local.toml).
+    #[arg(long, env = "CRW_CONFIG")]
+    config: Option<String>,
+}
+
+// --- Backend ---
+
+enum Backend {
+    Proxy {
+        client: reqwest::Client,
+        base_url: String,
+        api_key: Option<String>,
+    },
+    #[cfg(feature = "embedded")]
+    Embedded { state: crw_server::state::AppState },
+}
+
+impl Backend {
+    async fn call_tool(&self, tool_name: &str, args: Value) -> Result<Value, String> {
+        match self {
+            Backend::Proxy {
+                client,
+                base_url,
+                api_key,
+            } => proxy_call_tool(client, base_url, api_key, tool_name, args).await,
+            #[cfg(feature = "embedded")]
+            Backend::Embedded { state } => {
+                crw_server::routes::mcp::call_tool(state, tool_name, args).await
+            }
+        }
+    }
+
+    async fn handle_request(&self, req: JsonRpcRequest) -> Option<JsonRpcResponse> {
+        // Handle common protocol methods via shared logic.
+        match handle_protocol_method(SERVER_NAME, SERVER_VERSION, &req) {
+            ProtocolResult::Response(resp) => return Some(resp),
+            ProtocolResult::Notification => return None,
+            ProtocolResult::NotHandled => {}
+        }
+
+        // Only remaining method: tools/call
+        match req.method.as_str() {
+            "tools/call" => {
+                let id = req.id.unwrap_or(Value::Null);
+                let tool_name = req
+                    .params
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let arguments = req.params.get("arguments").cloned().unwrap_or(json!({}));
+
+                let result = self.call_tool(tool_name, arguments).await;
+                Some(tool_result_response(id, result))
+            }
+
+            _ => {
+                if let Some(id) = req.id {
+                    Some(JsonRpcResponse::error(
+                        id,
+                        -32601,
+                        format!("method not found: {}", req.method),
+                    ))
+                } else {
+                    None
+                }
+            }
+        }
+    }
+}
+
+// --- Proxy mode HTTP dispatch ---
+
+async fn proxy_call_tool(
     client: &reqwest::Client,
     base_url: &str,
     api_key: &Option<String>,
@@ -120,53 +205,8 @@ fn truncate(s: &str, max: usize) -> &str {
     if s.len() <= max {
         s
     } else {
-        // Find the last char boundary at or before `max` to avoid UTF-8 panic.
         let end = s.floor_char_boundary(max);
         &s[..end]
-    }
-}
-
-// --- Request handling ---
-
-async fn handle_request(
-    client: &reqwest::Client,
-    base_url: &str,
-    api_key: &Option<String>,
-    req: JsonRpcRequest,
-) -> Option<JsonRpcResponse> {
-    // Handle common protocol methods via shared logic.
-    match handle_protocol_method(SERVER_NAME, SERVER_VERSION, &req) {
-        ProtocolResult::Response(resp) => return Some(resp),
-        ProtocolResult::Notification => return None,
-        ProtocolResult::NotHandled => {}
-    }
-
-    // Only remaining method: tools/call
-    match req.method.as_str() {
-        "tools/call" => {
-            let id = req.id.unwrap_or(Value::Null);
-            let tool_name = req
-                .params
-                .get("name")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            let arguments = req.params.get("arguments").cloned().unwrap_or(json!({}));
-
-            let result = call_tool(client, base_url, api_key, tool_name, arguments).await;
-            Some(tool_result_response(id, result))
-        }
-
-        _ => {
-            if let Some(id) = req.id {
-                Some(JsonRpcResponse::error(
-                    id,
-                    -32601,
-                    format!("method not found: {}", req.method),
-                ))
-            } else {
-                None
-            }
-        }
     }
 }
 
@@ -174,7 +214,7 @@ async fn handle_request(
 
 #[tokio::main]
 async fn main() {
-    // Log to stderr so stdout stays clean for MCP protocol
+    // Log to stderr so stdout stays clean for MCP protocol.
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
         .with_env_filter(
@@ -183,21 +223,66 @@ async fn main() {
         )
         .init();
 
-    let base_url = std::env::var("CRW_API_URL").unwrap_or_else(|_| "http://localhost:3000".into());
-    let api_key = std::env::var("CRW_API_KEY").ok();
+    let cli = Cli::parse();
 
-    tracing::info!("Starting {SERVER_NAME} v{SERVER_VERSION}");
-    tracing::info!("API URL: {base_url}");
+    let backend = if let Some(api_url) = cli.api_url {
+        tracing::info!("Starting {SERVER_NAME} v{SERVER_VERSION} (proxy mode)");
+        tracing::info!("API URL: {api_url}");
 
-    let client = reqwest::Client::builder()
-        .redirect(crw_core::url_safety::safe_redirect_policy())
-        .timeout(std::time::Duration::from_secs(120))
-        .connect_timeout(std::time::Duration::from_secs(10))
-        .build()
-        .expect("reqwest client build failed");
+        let client = reqwest::Client::builder()
+            .redirect(crw_core::url_safety::safe_redirect_policy())
+            .timeout(std::time::Duration::from_secs(120))
+            .connect_timeout(std::time::Duration::from_secs(10))
+            .build()
+            .expect("reqwest client build failed");
+
+        Backend::Proxy {
+            client,
+            base_url: api_url,
+            api_key: cli.api_key,
+        }
+    } else {
+        #[cfg(feature = "embedded")]
+        {
+            tracing::info!("Starting {SERVER_NAME} v{SERVER_VERSION} (embedded mode)");
+
+            // Set CRW_CONFIG env var if --config was provided, so AppConfig::load() picks it up.
+            if let Some(ref config_path) = cli.config {
+                // SAFETY: This runs before any other threads read CRW_CONFIG.
+                // AppConfig::load() is called immediately after on the same thread.
+                unsafe { std::env::set_var("CRW_CONFIG", config_path) };
+            }
+
+            let config = crw_core::config::AppConfig::load().unwrap_or_else(|e| {
+                tracing::warn!("Failed to load config, using defaults: {e}");
+                crw_core::config::AppConfig {
+                    server: Default::default(),
+                    renderer: Default::default(),
+                    crawler: Default::default(),
+                    extraction: Default::default(),
+                    auth: Default::default(),
+                }
+            });
+
+            let state = crw_server::state::AppState::new(config);
+            Backend::Embedded { state }
+        }
+
+        #[cfg(not(feature = "embedded"))]
+        {
+            tracing::error!(
+                "Embedded mode not available (compiled without 'embedded' feature). \
+                 Use --api-url to connect to a remote CRW server."
+            );
+            std::process::exit(1);
+        }
+    };
+
+    run_stdio_loop(backend).await;
+}
+
+async fn run_stdio_loop(backend: Backend) {
     let mut stdout = tokio::io::stdout();
-
-    // Use tokio async stdin to avoid blocking the async runtime.
     let stdin = tokio::io::stdin();
     let mut reader = BufReader::new(stdin);
     let mut line = String::new();
@@ -233,7 +318,7 @@ async fn main() {
             }
         };
 
-        if let Some(resp) = handle_request(&client, &base_url, &api_key, req).await {
+        if let Some(resp) = backend.handle_request(req).await {
             let out = serde_json::to_string(&resp).unwrap();
             tracing::debug!("→ {out}");
             let _ = stdout.write_all(out.as_bytes()).await;
