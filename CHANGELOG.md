@@ -2,6 +2,18 @@
 
 All notable changes to CRW are documented here.
 
+## [0.0.13](https://github.com/us/crw/compare/v0.0.12...v0.0.13) (2026-03-24)
+
+
+### Features
+
+* **mcp:** add embedded mode — self-contained MCP server, no crw-server needed ([75e5450](https://github.com/us/crw/commit/75e54504487f24ee30c0272bb83eb9aab807a284))
+
+
+### Bug Fixes
+
+* **ci:** switch release-please to simple type for Rust workspace support ([51cd420](https://github.com/us/crw/commit/51cd420ab77e4bd58bf1a6a7ab0c28287896a0b7))
+
 ## v0.0.12
 
 - **Readability drill-down** — when `<main>` or `<article>` wraps >90% of body, the extractor now searches inside for narrower content elements (`.main-page-content`, `.article-content`, `.entry-content`, etc.) instead of discarding. Fixes MDN pages returning 35 chars and StackOverflow returning only the question
