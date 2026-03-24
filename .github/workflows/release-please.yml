@@ -17,8 +17,6 @@ jobs:
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
-        with:
-          release-type: rust
 
       # After release-please merges and creates a tag,
       # the existing release.yml workflow handles crates.io + Docker publishing.
