@@ -43,29 +43,35 @@ claude mcp add crw -- crw-mcp
 
 ## What's New
 
+### [0.0.13](https://github.com/us/crw/compare/v0.0.12...v0.0.13) (2026-03-24)
+
+
+### Features
+
+* **mcp:** add embedded mode — self-contained MCP server, no crw-server needed ([75e5450](https://github.com/us/crw/commit/75e54504487f24ee30c0272bb83eb9aab807a284))
+
+
+### Bug Fixes
+
+* **ci:** switch release-please to simple type for Rust workspace support ([51cd420](https://github.com/us/crw/commit/51cd420ab77e4bd58bf1a6a7ab0c28287896a0b7))
+
 ### v0.0.12
 
-- **Readability drill-down** — broad `<main>`/`<article>` elements now searched for inner content instead of being discarded. Fixes MDN, StackOverflow extraction
-- **Base64 image stripping** — `data:` URI images stripped at both HTML and markdown layers. No more Reddit base64 blobs
-- **Select/dropdown removal** — `<select>` elements and dropdown noise patterns removed in content mode
-- **Extended selectors** — MDN, StackOverflow, and generic site selectors added for better coverage
-- **Smarter fallback** — both fallback paths tried, longest result picked
+- **Readability drill-down** — when `<main>` or `<article>` wraps >90% of body, the extractor now searches inside for narrower content elements (`.main-page-content`, `.article-content`, `.entry-content`, etc.) instead of discarding. Fixes MDN pages returning 35 chars and StackOverflow returning only the question
+- **Base64 image stripping** — `data:` URI images are removed in both HTML cleaning (lol_html) and markdown post-processing (regex safety net). Eliminates massive base64 blobs from Reddit and similar sites
+- **Select/dropdown removal** — `<select>` elements removed in `onlyMainContent` mode; dropdown/city-selector/location-selector noise patterns added. Fixes Hürriyet city dropdown leaking into content
+- **Extended scored selectors** — added `.main-page-content`, `.js-post-body`, `.s-prose`, `#question`, `.page-content`, `#page-content`, `[role="article"]` for better MDN, StackOverflow, and generic site coverage
+- **Smarter fallback chain** — when primary extraction produces too-short markdown, both fallbacks (cleaned HTML and basic clean) are tried and the longer result is picked, instead of short-circuiting on non-empty but insufficient content
 
 ### v0.0.11
 
-- **Stealth anti-bot bypass** — automatic stealth JS injection to bypass Cloudflare and other bot detection
-- **Cloudflare challenge retry** — auto-detects JS challenge pages and polls up to 3x3s for auto-resolve
-- **HTTP to CDP auto-escalation** — anti-bot challenge responses automatically retried with JS renderer
-- **Chrome failover** — full failover chain: HTTP → LightPanda → Chrome
-- **Chrome Docker sidecar** — `docker compose up` now includes Chrome alongside LightPanda
-
-### v0.0.10
-
-- **Crawl cancel** — `DELETE /v1/crawl/{id}` cancels running crawl jobs
-- **API rate limiting** — token-bucket rate limiter, returns 429 when exceeded
-- **Machine-readable error codes** — `error_code` field in all error responses
-- **Fenced code blocks** — indented code blocks auto-converted to fenced for better LLM compatibility
-- **Sphinx/docs cleanup** — footer noise, anchor artifacts, ARIA role-based element removal
+- **Stealth anti-bot bypass** — automatic stealth JS injection via `Page.addScriptToEvaluateOnNewDocument` before every CDP navigation. Spoofs `navigator.webdriver`, Chrome runtime object, plugins array, languages, permissions API, iframe `contentWindow`, and `toString()` proxy to bypass Cloudflare, PerimeterX, and other bot detection systems
+- **Cloudflare challenge auto-retry** — detects Cloudflare JS challenge pages ("Just a moment", `cf-browser-verification`, `challenge-platform`) after page load and polls up to 3 times at 3-second intervals for non-interactive challenges to auto-resolve
+- **HTTP → CDP auto-escalation** — `FallbackRenderer::fetch()` in auto mode now checks HTTP responses for anti-bot challenge signatures and automatically escalates to JS rendering when detected, instead of returning the challenge HTML
+- **Chrome failover in Docker** — full automatic failover chain: HTTP → LightPanda → Chrome. Added `chromedp/headless-shell` as a Docker Compose sidecar service with 2GB shared memory. If LightPanda crashes on complex SPAs (React, Angular), Chrome handles the render
+- **Chrome WS URL auto-discovery** — CDP renderer resolves Chrome DevTools WebSocket URL via the `/json/version` HTTP endpoint with `Host: localhost` header (required for chromedp/headless-shell's socat proxy). Uses `OnceCell` for lazy one-time resolution
+- **Proxy configuration docs** — expanded proxy config comments with examples for HTTP, SOCKS5, and residential proxy providers (IPRoyal, Oxylabs, Smartproxy)
+- **Raw string delimiter fix** — fixed `markdown.rs` test that used `r#"..."#` with a string containing `"#`, changed to `r##"..."##`
 
 [Full changelog →](CHANGELOG.md)
 
