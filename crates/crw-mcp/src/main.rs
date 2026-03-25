@@ -32,6 +32,9 @@ use crw_core::mcp::{
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
+#[cfg(feature = "embedded")]
+mod browser;
+
 const SERVER_NAME: &str = "crw-mcp";
 const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -253,7 +256,7 @@ async fn main() {
                 unsafe { std::env::set_var("CRW_CONFIG", config_path) };
             }
 
-            let config = crw_core::config::AppConfig::load().unwrap_or_else(|e| {
+            let mut config = crw_core::config::AppConfig::load().unwrap_or_else(|e| {
                 tracing::warn!("Failed to load config, using defaults: {e}");
                 crw_core::config::AppConfig {
                     server: Default::default(),
@@ -264,8 +267,45 @@ async fn main() {
                 }
             });
 
+            // Auto-spawn a headless browser for JS rendering.
+            // Priority: LightPanda (native/Docker) → Chrome/Chromium.
+            // Skip only if the user explicitly set a renderer via env var.
+            // Config file renderers (e.g. config.default.toml) may reference
+            // Docker services that aren't running locally, so we don't trust them.
+            let user_configured_renderer = std::env::var("CRW_RENDERER__LIGHTPANDA__WS_URL")
+                .is_ok()
+                || std::env::var("CRW_RENDERER__CHROME__WS_URL").is_ok()
+                || std::env::var("CRW_RENDERER__PLAYWRIGHT__WS_URL").is_ok();
+
+            let _browser_guard = if !user_configured_renderer {
+                match browser::spawn_headless().await {
+                    Some((guard, ws_url)) => {
+                        // Set as lightpanda slot (highest priority in the fallback chain).
+                        config.renderer.lightpanda = Some(crw_core::config::CdpEndpoint { ws_url });
+                        Some(guard)
+                    }
+                    None => {
+                        tracing::info!(
+                            "No browser found — JS rendering disabled. \
+                             Install LightPanda or Chrome for full SPA support."
+                        );
+                        None
+                    }
+                }
+            } else {
+                tracing::info!("CDP renderer already configured — skipping auto-spawn");
+                None
+            };
+
             let state = crw_server::state::AppState::new(config);
-            Backend::Embedded { state }
+
+            // Run the MCP loop. _browser_guard keeps the browser alive until shutdown.
+            let backend = Backend::Embedded { state };
+            run_stdio_loop(backend).await;
+
+            // Drop browser guard explicitly (kills the browser process).
+            drop(_browser_guard);
+            return;
         }
 
         #[cfg(not(feature = "embedded"))]
