@@ -3,6 +3,7 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -58,11 +59,10 @@ jobs:
       - name: Wait for crates.io index
         run: sleep 30
 
-      - name: "Tier 1: Publish crw-renderer, crw-extract, crw-mcp (parallel)"
+      - name: "Tier 1: Publish crw-renderer, crw-extract (parallel)"
         run: |
           cargo publish -p crw-renderer &
           cargo publish -p crw-extract &
-          cargo publish -p crw-mcp &
           wait
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
@@ -83,6 +83,14 @@ jobs:
           cargo publish -p crw-server &
           cargo publish -p crw-cli &
           wait
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Wait for crates.io index
+        run: sleep 30
+
+      - name: "Tier 4: Publish crw-mcp (depends on crw-server)"
+        run: cargo publish -p crw-mcp
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
