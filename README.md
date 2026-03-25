@@ -43,6 +43,19 @@ claude mcp add crw -- crw-mcp
 
 ## What's New
 
+### [0.0.14](https://github.com/us/crw/compare/v0.0.13...v0.0.14) (2026-03-25)
+
+
+### Features
+
+* **mcp:** auto-download LightPanda binary for zero-config JS rendering ([41f443b](https://github.com/us/crw/commit/41f443b885326401b653cfcba0054cb943672ca6))
+* **mcp:** auto-spawn headless Chrome for JS rendering in embedded mode ([9a6b0ae](https://github.com/us/crw/commit/9a6b0ae3f16399f8f9f233109e431f74a882d973))
+
+
+### Bug Fixes
+
+* **ci:** move crw-mcp to Tier 4 in release workflow and add workflow_dispatch ([d7584a8](https://github.com/us/crw/commit/d7584a82c0dd4ac0c6cd8b169b19939d92eb4e95))
+
 ### [0.0.13](https://github.com/us/crw/compare/v0.0.12...v0.0.13) (2026-03-24)
 
 
@@ -62,16 +75,6 @@ claude mcp add crw -- crw-mcp
 - **Select/dropdown removal** — `<select>` elements removed in `onlyMainContent` mode; dropdown/city-selector/location-selector noise patterns added. Fixes Hürriyet city dropdown leaking into content
 - **Extended scored selectors** — added `.main-page-content`, `.js-post-body`, `.s-prose`, `#question`, `.page-content`, `#page-content`, `[role="article"]` for better MDN, StackOverflow, and generic site coverage
 - **Smarter fallback chain** — when primary extraction produces too-short markdown, both fallbacks (cleaned HTML and basic clean) are tried and the longer result is picked, instead of short-circuiting on non-empty but insufficient content
-
-### v0.0.11
-
-- **Stealth anti-bot bypass** — automatic stealth JS injection via `Page.addScriptToEvaluateOnNewDocument` before every CDP navigation. Spoofs `navigator.webdriver`, Chrome runtime object, plugins array, languages, permissions API, iframe `contentWindow`, and `toString()` proxy to bypass Cloudflare, PerimeterX, and other bot detection systems
-- **Cloudflare challenge auto-retry** — detects Cloudflare JS challenge pages ("Just a moment", `cf-browser-verification`, `challenge-platform`) after page load and polls up to 3 times at 3-second intervals for non-interactive challenges to auto-resolve
-- **HTTP → CDP auto-escalation** — `FallbackRenderer::fetch()` in auto mode now checks HTTP responses for anti-bot challenge signatures and automatically escalates to JS rendering when detected, instead of returning the challenge HTML
-- **Chrome failover in Docker** — full automatic failover chain: HTTP → LightPanda → Chrome. Added `chromedp/headless-shell` as a Docker Compose sidecar service with 2GB shared memory. If LightPanda crashes on complex SPAs (React, Angular), Chrome handles the render
-- **Chrome WS URL auto-discovery** — CDP renderer resolves Chrome DevTools WebSocket URL via the `/json/version` HTTP endpoint with `Host: localhost` header (required for chromedp/headless-shell's socat proxy). Uses `OnceCell` for lazy one-time resolution
-- **Proxy configuration docs** — expanded proxy config comments with examples for HTTP, SOCKS5, and residential proxy providers (IPRoyal, Oxylabs, Smartproxy)
-- **Raw string delimiter fix** — fixed `markdown.rs` test that used `r#"..."#` with a string containing `"#`, changed to `r##"..."##`
 
 [Full changelog →](CHANGELOG.md)
 
