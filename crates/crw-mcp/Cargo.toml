@@ -25,6 +25,7 @@ reqwest = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 clap = { workspace = true }
+dirs = "6"
 
 # Embedded mode: pulls in full scraping engine
 crw-server = { path = "../crw-server", version = "0.0.13", optional = true, features = ["cdp"] }
