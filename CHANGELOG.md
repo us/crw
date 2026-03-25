@@ -2,6 +2,19 @@
 
 All notable changes to CRW are documented here.
 
+## [0.0.14](https://github.com/us/crw/compare/v0.0.13...v0.0.14) (2026-03-25)
+
+
+### Features
+
+* **mcp:** auto-download LightPanda binary for zero-config JS rendering ([41f443b](https://github.com/us/crw/commit/41f443b885326401b653cfcba0054cb943672ca6))
+* **mcp:** auto-spawn headless Chrome for JS rendering in embedded mode ([9a6b0ae](https://github.com/us/crw/commit/9a6b0ae3f16399f8f9f233109e431f74a882d973))
+
+
+### Bug Fixes
+
+* **ci:** move crw-mcp to Tier 4 in release workflow and add workflow_dispatch ([d7584a8](https://github.com/us/crw/commit/d7584a82c0dd4ac0c6cd8b169b19939d92eb4e95))
+
 ## [0.0.13](https://github.com/us/crw/compare/v0.0.12...v0.0.13) (2026-03-24)
 
 
