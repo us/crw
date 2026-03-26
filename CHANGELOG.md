@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.1.1](https://github.com/us/crw/compare/v0.1.0...v0.1.1) (2026-03-26)
+
+
+### Bug Fixes
+
+* skip already-published crates without masking real errors ([010649c](https://github.com/us/crw/commit/010649c522e4e49edcf51873d4c1065e08d510b1))
+
 ## [0.1.0](https://github.com/us/crw/compare/v0.0.14...v0.1.0) (2026-03-26)
 
 
