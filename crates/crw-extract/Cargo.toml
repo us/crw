@@ -14,7 +14,7 @@ default = ["pdf"]
 pdf = ["dep:pdf-inspector"]
 
 [dependencies]
-crw-core = { path = "../crw-core", version = "0.0.14" }
+crw-core = { path = "../crw-core", version = "0.1.0" }
 pdf-inspector = { workspace = true, optional = true }
 lol_html = { workspace = true }
 scraper = { workspace = true }

@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.1.0](https://github.com/us/crw/compare/v0.0.14...v0.1.0) (2026-03-26)
+
+
+### Features
+
+* add PDF extraction support via pdf-inspector ([06dd5bf](https://github.com/us/crw/commit/06dd5bf89caf004929f22d41d00f8a297d09b825))
+
 ## [0.0.14](https://github.com/us/crw/compare/v0.0.13...v0.0.14) (2026-03-25)
 
 
