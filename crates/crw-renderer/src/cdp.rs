@@ -500,6 +500,8 @@ impl CdpRenderer {
             url: url.to_string(),
             status_code,
             html,
+            content_type: None,
+            raw_bytes: None,
             rendered_with: Some(self.name.clone()),
             elapsed_ms: start.elapsed().as_millis() as u64,
             warning: None,

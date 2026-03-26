@@ -293,6 +293,50 @@ pub async fn run_crawl(opts: CrawlOptions<'_>) {
             }
         };
 
+        // PDF routing: skip HTML extraction and link discovery for PDFs.
+        #[cfg(feature = "pdf")]
+        if fetch_result.content_type.as_deref() == Some("application/pdf")
+            && let Some(bytes) = &fetch_result.raw_bytes
+        {
+            let mut data = match crw_extract::pdf::extract_pdf(
+                bytes,
+                &fetch_result.url,
+                fetch_result.status_code,
+                fetch_result.elapsed_ms,
+                &req.formats,
+            ) {
+                Ok(data) => data,
+                Err(err) => {
+                    tracing::warn!(url, error = %err, "Crawl: PDF extraction failed");
+                    continue;
+                }
+            };
+
+            if let (Some(schema), Some(llm)) = (&req.json_schema, llm_config)
+                && let Some(md) = &data.markdown
+            {
+                match crw_extract::structured::extract_structured(md, schema, llm).await {
+                    Ok(json) => data.json = Some(json),
+                    Err(e) => {
+                        tracing::warn!(url = url.as_str(), "Crawl PDF LLM extraction failed: {e}")
+                    }
+                }
+            }
+
+            results.push(data);
+
+            let _ = state_tx.send(CrawlState {
+                id,
+                success: true,
+                status: CrawlStatus::InProgress,
+                total: visited.len() as u32,
+                completed: results.len() as u32,
+                data: vec![],
+                error: None,
+            });
+            continue;
+        }
+
         // Extract links for further crawling.
         if depth < max_depth {
             enqueue_discovered_links(

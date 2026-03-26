@@ -9,6 +9,10 @@ keywords.workspace = true
 categories.workspace = true
 description = "Async BFS web crawler with rate limiting and robots.txt support for CRW"
 
+[features]
+default = ["pdf"]
+pdf = ["crw-extract/pdf"]
+
 [dependencies]
 crw-core = { path = "../crw-core", version = "0.0.14" }
 crw-renderer = { path = "../crw-renderer", version = "0.0.14" }

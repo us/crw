@@ -349,6 +349,8 @@ pub struct FetchResult {
     pub url: String,
     pub status_code: u16,
     pub html: String,
+    pub content_type: Option<String>,
+    pub raw_bytes: Option<Vec<u8>>,
     pub rendered_with: Option<String>,
     pub elapsed_ms: u64,
     pub warning: Option<String>,

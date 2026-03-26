@@ -144,12 +144,18 @@ impl FallbackRenderer {
         match render_js {
             Some(false) => self.http.fetch(url, headers, None).await,
             Some(true) => {
+                // Fetch via HTTP first to check content type — PDFs can't be JS-rendered.
+                let http_result = self.http.fetch(url, headers, None).await?;
+                if http_result.content_type.as_deref() == Some("application/pdf") {
+                    return Ok(http_result);
+                }
+
                 if self.js_renderers.is_empty() {
                     tracing::warn!(
                         url,
                         "JS rendering requested but no renderer available — falling back to HTTP"
                     );
-                    let mut result = self.http.fetch(url, headers, None).await?;
+                    let mut result = http_result;
                     result.rendered_with = Some("http_only_fallback".to_string());
                     result.warning = Some("JS rendering was requested but no renderer is available. Content was fetched via HTTP only.".to_string());
                     Ok(result)
@@ -159,6 +165,11 @@ impl FallbackRenderer {
             }
             None => {
                 let result = self.http.fetch(url, headers, None).await?;
+
+                // PDFs don't need JS rendering — return immediately.
+                if result.content_type.as_deref() == Some("application/pdf") {
+                    return Ok(result);
+                }
 
                 let needs_js = detector::needs_js_rendering(&result.html);
                 let is_blocked = Self::looks_like_challenge(&result.html);

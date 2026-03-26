@@ -41,6 +41,9 @@ lol_html = "2"
 scraper = "0.25"
 htmd = "0.5"
 
+# PDF processing
+pdf-inspector = { git = "https://github.com/firecrawl/pdf-inspector" }
+
 # Text processing
 regex = "1"
 

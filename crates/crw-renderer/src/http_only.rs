@@ -106,6 +106,14 @@ impl PageFetcher for HttpFetcher {
             )));
         }
 
+        let content_type = resp
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.split(';').next().unwrap_or(s).trim().to_lowercase());
+
+        let is_pdf = content_type.as_deref() == Some("application/pdf");
+
         let bytes = resp
             .bytes()
             .await
@@ -118,13 +126,23 @@ impl PageFetcher for HttpFetcher {
             )));
         }
 
-        let html = String::from_utf8_lossy(&bytes).into_owned();
+        let (html, raw_bytes) = if is_pdf {
+            (String::new(), Some(bytes.to_vec()))
+        } else {
+            (String::from_utf8_lossy(&bytes).into_owned(), None)
+        };
 
         Ok(FetchResult {
             url: url.to_string(),
             status_code: status,
             html,
-            rendered_with: Some("http".to_string()),
+            content_type,
+            raw_bytes,
+            rendered_with: if is_pdf {
+                Some("pdf".to_string())
+            } else {
+                Some("http".to_string())
+            },
             elapsed_ms: start.elapsed().as_millis() as u64,
             warning: None,
         })

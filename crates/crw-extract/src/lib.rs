@@ -15,6 +15,8 @@ pub mod chunking;
 pub mod clean;
 pub mod filter;
 pub mod markdown;
+#[cfg(feature = "pdf")]
+pub mod pdf;
 pub mod plaintext;
 pub mod readability;
 pub mod selector;
