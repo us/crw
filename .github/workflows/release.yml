@@ -51,8 +51,11 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: "Tier 0: Publish crw-core"
-        run: cargo publish -p crw-core 2>&1 | tee /tmp/out.txt || grep -q "already uploaded" /tmp/out.txt
+      - name: "Tier 0: Publish crw-core, crw-pdf"
+        run: |
+          for crate in crw-core crw-pdf; do
+            cargo publish -p "$crate" 2>&1 | tee /tmp/out.txt || grep -q "already uploaded" /tmp/out.txt
+          done
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 

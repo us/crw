@@ -101,6 +101,11 @@
           "type": "toml",
           "path": "crates/crw-mcp/Cargo.toml",
           "jsonpath": "$.dependencies.crw-server.version"
+        },
+        {
+          "type": "toml",
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.dependencies.crw-pdf.version"
         }
       ]
     }

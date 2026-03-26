@@ -13,7 +13,7 @@ pub fn extract_pdf(
     elapsed_ms: u64,
     formats: &[OutputFormat],
 ) -> CrwResult<ScrapeData> {
-    let result = pdf_inspector::process_pdf_mem(bytes)
+    let result = crw_pdf::process_pdf_mem(bytes)
         .map_err(|e| CrwError::ExtractionError(format!("PDF extraction failed: {e}")))?;
 
     let markdown = result.markdown.unwrap_or_default();
@@ -33,7 +33,7 @@ pub fn extract_pdf(
     };
 
     let warning = match result.pdf_type {
-        pdf_inspector::PdfType::Scanned | pdf_inspector::PdfType::ImageBased => {
+        crw_pdf::PdfType::Scanned | crw_pdf::PdfType::ImageBased => {
             Some("PDF appears to be scanned/image-based — text extraction may be incomplete".into())
         }
         _ => None,

@@ -11,11 +11,11 @@ description = "HTML extraction and markdown conversion engine for the CRW web sc
 
 [features]
 default = ["pdf"]
-pdf = ["dep:pdf-inspector"]
+pdf = ["dep:crw-pdf"]
 
 [dependencies]
 crw-core = { path = "../crw-core", version = "0.1.1" }
-pdf-inspector = { workspace = true, optional = true }
+crw-pdf = { workspace = true, optional = true }
 lol_html = { workspace = true }
 scraper = { workspace = true }
 htmd = { workspace = true }

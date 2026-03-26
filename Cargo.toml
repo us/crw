@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/crw-core",
+    "crates/crw-pdf",
     "crates/crw-renderer",
     "crates/crw-extract",
     "crates/crw-crawl",
@@ -42,7 +43,7 @@ scraper = "0.25"
 htmd = "0.5"
 
 # PDF processing
-pdf-inspector = { git = "https://github.com/firecrawl/pdf-inspector" }
+crw-pdf = { path = "crates/crw-pdf", version = "0.1.1" }
 
 # Text processing
 regex = "1"

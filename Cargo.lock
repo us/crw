@@ -726,7 +726,7 @@ checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
 name = "crw-cli"
-version = "0.0.13"
+version = "0.1.1"
 dependencies = [
  "clap",
  "crw-core",
@@ -739,7 +739,7 @@ dependencies = [
 
 [[package]]
 name = "crw-core"
-version = "0.0.13"
+version = "0.1.1"
 dependencies = [
  "config",
  "reqwest 0.13.2",
@@ -754,7 +754,7 @@ dependencies = [
 
 [[package]]
 name = "crw-crawl"
-version = "0.0.13"
+version = "0.1.1"
 dependencies = [
  "crw-core",
  "crw-extract",
@@ -772,13 +772,13 @@ dependencies = [
 
 [[package]]
 name = "crw-extract"
-version = "0.0.13"
+version = "0.1.1"
 dependencies = [
  "crw-core",
+ "crw-pdf",
  "htmd",
  "jsonschema",
  "lol_html",
- "pdf-inspector",
  "regex",
  "reqwest 0.13.2",
  "scraper",
@@ -795,7 +795,7 @@ dependencies = [
 
 [[package]]
 name = "crw-mcp"
-version = "0.0.13"
+version = "0.1.1"
 dependencies = [
  "clap",
  "crw-core",
@@ -809,8 +809,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "crw-pdf"
+version = "0.1.1"
+dependencies = [
+ "env_logger",
+ "log",
+ "lopdf",
+ "once_cell",
+ "rayon",
+ "regex",
+ "thiserror 2.0.18",
+ "ttf-parser",
+ "unicode-normalization",
+]
+
+[[package]]
 name = "crw-renderer"
-version = "0.0.13"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "axum",
@@ -830,7 +845,7 @@ dependencies = [
 
 [[package]]
 name = "crw-server"
-version = "0.0.13"
+version = "0.1.1"
 dependencies = [
  "axum",
  "axum-test",
@@ -2018,7 +2033,8 @@ dependencies = [
 [[package]]
 name = "lopdf"
 version = "0.40.0"
-source = "git+https://github.com/J-F-Liu/lopdf?rev=052674053814a9f4897af94f0b8e46a545c9b329#052674053814a9f4897af94f0b8e46a545c9b329"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73fdcbab5b237a03984f83b1394dc534e0b1960675c7f3ec4d04dccc9032b56d"
 dependencies = [
  "aes",
  "bitflags",
@@ -2373,22 +2389,6 @@ name = "pathdiff"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df94ce210e5bc13cb6651479fa48d14f601d9858cfe0467f43ae157023b938d3"
-
-[[package]]
-name = "pdf-inspector"
-version = "0.1.0"
-source = "git+https://github.com/firecrawl/pdf-inspector#4d52d7af5276279656d931da6d6d02d57af0b49a"
-dependencies = [
- "env_logger",
- "log",
- "lopdf",
- "once_cell",
- "rayon",
- "regex",
- "thiserror 2.0.18",
- "ttf-parser",
- "unicode-normalization",
-]
 
 [[package]]
 name = "percent-encoding"
