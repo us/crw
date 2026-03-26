@@ -43,6 +43,13 @@ claude mcp add crw -- crw-mcp
 
 ## What's New
 
+### [0.1.1](https://github.com/us/crw/compare/v0.1.0...v0.1.1) (2026-03-26)
+
+
+### Bug Fixes
+
+* skip already-published crates without masking real errors ([010649c](https://github.com/us/crw/commit/010649c522e4e49edcf51873d4c1065e08d510b1))
+
 ### [0.1.0](https://github.com/us/crw/compare/v0.0.14...v0.1.0) (2026-03-26)
 
 
@@ -62,18 +69,6 @@ claude mcp add crw -- crw-mcp
 ### Bug Fixes
 
 * **ci:** move crw-mcp to Tier 4 in release workflow and add workflow_dispatch ([d7584a8](https://github.com/us/crw/commit/d7584a82c0dd4ac0c6cd8b169b19939d92eb4e95))
-
-### [0.0.13](https://github.com/us/crw/compare/v0.0.12...v0.0.13) (2026-03-24)
-
-
-### Features
-
-* **mcp:** add embedded mode — self-contained MCP server, no crw-server needed ([75e5450](https://github.com/us/crw/commit/75e54504487f24ee30c0272bb83eb9aab807a284))
-
-
-### Bug Fixes
-
-* **ci:** switch release-please to simple type for Rust workspace support ([51cd420](https://github.com/us/crw/commit/51cd420ab77e4bd58bf1a6a7ab0c28287896a0b7))
 
 [Full changelog →](CHANGELOG.md)
 
