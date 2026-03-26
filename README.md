@@ -43,6 +43,13 @@ claude mcp add crw -- crw-mcp
 
 ## What's New
 
+### [0.1.0](https://github.com/us/crw/compare/v0.0.14...v0.1.0) (2026-03-26)
+
+
+### Features
+
+* add PDF extraction support via pdf-inspector ([06dd5bf](https://github.com/us/crw/commit/06dd5bf89caf004929f22d41d00f8a297d09b825))
+
 ### [0.0.14](https://github.com/us/crw/compare/v0.0.13...v0.0.14) (2026-03-25)
 
 
@@ -67,14 +74,6 @@ claude mcp add crw -- crw-mcp
 ### Bug Fixes
 
 * **ci:** switch release-please to simple type for Rust workspace support ([51cd420](https://github.com/us/crw/commit/51cd420ab77e4bd58bf1a6a7ab0c28287896a0b7))
-
-### v0.0.12
-
-- **Readability drill-down** — when `<main>` or `<article>` wraps >90% of body, the extractor now searches inside for narrower content elements (`.main-page-content`, `.article-content`, `.entry-content`, etc.) instead of discarding. Fixes MDN pages returning 35 chars and StackOverflow returning only the question
-- **Base64 image stripping** — `data:` URI images are removed in both HTML cleaning (lol_html) and markdown post-processing (regex safety net). Eliminates massive base64 blobs from Reddit and similar sites
-- **Select/dropdown removal** — `<select>` elements removed in `onlyMainContent` mode; dropdown/city-selector/location-selector noise patterns added. Fixes Hürriyet city dropdown leaking into content
-- **Extended scored selectors** — added `.main-page-content`, `.js-post-body`, `.s-prose`, `#question`, `.page-content`, `#page-content`, `[role="article"]` for better MDN, StackOverflow, and generic site coverage
-- **Smarter fallback chain** — when primary extraction produces too-short markdown, both fallbacks (cleaned HTML and basic clean) are tried and the longer result is picked, instead of short-circuiting on non-empty but insufficient content
 
 [Full changelog →](CHANGELOG.md)
 
