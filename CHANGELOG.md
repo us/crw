@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.1.2](https://github.com/us/crw/compare/v0.1.1...v0.1.2) (2026-03-27)
+
+
+### Bug Fixes
+
+* vendor pdf-inspector as crw-pdf for crates.io publishability ([3f7681d](https://github.com/us/crw/commit/3f7681dde0b78ff2c0c11d232d21a714edb94d75))
+
 ## [0.1.1](https://github.com/us/crw/compare/v0.1.0...v0.1.1) (2026-03-26)
 
 
