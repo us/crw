@@ -511,7 +511,36 @@ const { data } = await response.json();
 console.log(data.markdown);
 ```
 
-**LangChain document loader pattern:**
+**CrewAI** ([`crewai-crw`](https://pypi.org/project/crewai-crw/) — CRW tools for CrewAI):
+
+```bash
+pip install crewai-crw
+```
+
+```python
+from crewai import Agent, Task, Crew
+from crewai_crw import CrwScrapeWebsiteTool, CrwCrawlWebsiteTool, CrwMapWebsiteTool
+
+scrape_tool = CrwScrapeWebsiteTool()  # uses localhost:3000 by default
+
+researcher = Agent(
+    role="Web Researcher",
+    goal="Research and summarize information from websites",
+    backstory="Expert at extracting key information from web pages",
+    tools=[scrape_tool],
+)
+
+task = Task(
+    description="Scrape https://example.com and summarize the content",
+    expected_output="A summary of the page content",
+    agent=researcher,
+)
+
+crew = Crew(agents=[researcher], tasks=[task])
+result = crew.kickoff()
+```
+
+**LangChain document loader** ([PR #606](https://github.com/langchain-ai/langchain-community/pull/606)):
 
 ```python
 import requests
@@ -530,6 +559,8 @@ def load_documents(urls):
         })
     return documents
 ```
+
+> **More integrations (PRs pending):** [LangChain](https://github.com/langchain-ai/langchain-community/pull/606) · [Flowise](https://github.com/FlowiseAI/Flowise/pull/6066) · [Agno](https://github.com/agno-agi/agno/pull/7183) · [n8n](https://fastcrw.com/blog/n8n-web-scraping-crw) · [All integrations](https://fastcrw.com/docs#integrations)
 
 ## Docker
 

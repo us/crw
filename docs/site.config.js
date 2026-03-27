@@ -32,6 +32,7 @@ export default {
       children: [
         { title: "REST API", slug: "rest-api" },
         { title: "MCP Server", slug: "mcp" },
+        { title: "Integrations", slug: "integrations" },
       ],
     },
     {
