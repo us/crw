@@ -43,6 +43,13 @@ claude mcp add crw -- crw-mcp
 
 ## What's New
 
+### [0.1.2](https://github.com/us/crw/compare/v0.1.1...v0.1.2) (2026-03-27)
+
+
+### Bug Fixes
+
+* vendor pdf-inspector as crw-pdf for crates.io publishability ([3f7681d](https://github.com/us/crw/commit/3f7681dde0b78ff2c0c11d232d21a714edb94d75))
+
 ### [0.1.1](https://github.com/us/crw/compare/v0.1.0...v0.1.1) (2026-03-26)
 
 
@@ -56,19 +63,6 @@ claude mcp add crw -- crw-mcp
 ### Features
 
 * add PDF extraction support via pdf-inspector ([06dd5bf](https://github.com/us/crw/commit/06dd5bf89caf004929f22d41d00f8a297d09b825))
-
-### [0.0.14](https://github.com/us/crw/compare/v0.0.13...v0.0.14) (2026-03-25)
-
-
-### Features
-
-* **mcp:** auto-download LightPanda binary for zero-config JS rendering ([41f443b](https://github.com/us/crw/commit/41f443b885326401b653cfcba0054cb943672ca6))
-* **mcp:** auto-spawn headless Chrome for JS rendering in embedded mode ([9a6b0ae](https://github.com/us/crw/commit/9a6b0ae3f16399f8f9f233109e431f74a882d973))
-
-
-### Bug Fixes
-
-* **ci:** move crw-mcp to Tier 4 in release workflow and add workflow_dispatch ([d7584a8](https://github.com/us/crw/commit/d7584a82c0dd4ac0c6cd8b169b19939d92eb4e95))
 
 [Full changelog →](CHANGELOG.md)
 
