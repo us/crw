@@ -1,0 +1,28 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.us/crw",
+  "title": "CRW Web Scraper",
+  "description": "Open-source web scraper for AI agents with scrape, crawl, and map tools",
+  "version": "0.1.2",
+  "websiteUrl": "https://us.github.io/crw",
+  "repository": {
+    "url": "https://github.com/us/crw",
+    "source": "github",
+    "id": "1171030160"
+  },
+  "packages": [
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/us/crw:0.1.2",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "crw-mcp"
+        }
+      ]
+    }
+  ]
+}
