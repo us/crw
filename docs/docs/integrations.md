@@ -47,29 +47,33 @@ result = crew.kickoff()
 
 Source: [github.com/us/crewai-crw](https://github.com/us/crewai-crw)
 
-## LangChain (PR pending)
+## LangChain
 
-Community document loader submitted: [PR #606](https://github.com/langchain-ai/langchain-community/pull/606)
+Published PyPI package: [`langchain-crw`](https://pypi.org/project/langchain-crw/)
 
-In the meantime, use the HTTP API directly:
+```bash
+pip install langchain-crw
+```
 
 ```python
-import requests
+from langchain_crw import CrwLoader
 
-def load_documents(urls):
-    documents = []
-    for url in urls:
-        resp = requests.post("http://localhost:3000/v1/scrape", json={
-            "url": url,
-            "formats": ["markdown"]
-        })
-        data = resp.json()["data"]
-        documents.append({
-            "page_content": data["markdown"],
-            "metadata": data["metadata"]
-        })
-    return documents
+# Self-hosted (default: localhost:3000)
+loader = CrwLoader(url="https://example.com", mode="scrape")
+docs = loader.load()
+
+# Cloud (fastcrw.com)
+loader = CrwLoader(
+    url="https://example.com",
+    api_url="https://fastcrw.com/api",
+    api_key="crw_live_...",
+    mode="crawl",
+    params={"max_depth": 3, "max_pages": 50},
+)
+docs = loader.load()
 ```
+
+Source: [github.com/us/langchain-crw](https://github.com/us/langchain-crw)
 
 ## Flowise (PR pending)
 
@@ -161,7 +165,7 @@ console.log(data.markdown);
 | Framework | Type | Status | Package / PR |
 |-----------|------|--------|-------------|
 | [CrewAI](https://github.com/crewAIInc/crewAI) | PyPI package | **Published** | [`crewai-crw`](https://pypi.org/project/crewai-crw/) |
-| [LangChain](https://github.com/langchain-ai/langchain) | Community loader | PR pending | [#606](https://github.com/langchain-ai/langchain-community/pull/606) |
+| [LangChain](https://github.com/langchain-ai/langchain) | PyPI package | **Published** | [`langchain-crw`](https://pypi.org/project/langchain-crw/) |
 | [Flowise](https://github.com/FlowiseAI/Flowise) | Node | PR pending | [#6066](https://github.com/FlowiseAI/Flowise/pull/6066) |
 | [Agno](https://github.com/agno-agi/agno) | Toolkit | PR pending | [#7183](https://github.com/agno-agi/agno/pull/7183) |
 | [n8n](https://github.com/n8n-io/n8n) | HTTP nodes | Works now | [Tutorial](https://fastcrw.com/blog/n8n-web-scraping-crw) |

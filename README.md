@@ -540,27 +540,32 @@ crew = Crew(agents=[researcher], tasks=[task])
 result = crew.kickoff()
 ```
 
-**LangChain document loader** ([PR #606](https://github.com/langchain-ai/langchain-community/pull/606)):
+**LangChain** ([`langchain-crw`](https://pypi.org/project/langchain-crw/) — CRW document loader):
 
-```python
-import requests
-
-def load_documents(urls):
-    documents = []
-    for url in urls:
-        resp = requests.post("http://localhost:3000/v1/scrape", json={
-            "url": url,
-            "formats": ["markdown"]
-        })
-        data = resp.json()["data"]
-        documents.append({
-            "page_content": data["markdown"],
-            "metadata": data["metadata"]
-        })
-    return documents
+```bash
+pip install langchain-crw
 ```
 
-> **More integrations (PRs pending):** [LangChain](https://github.com/langchain-ai/langchain-community/pull/606) · [Flowise](https://github.com/FlowiseAI/Flowise/pull/6066) · [Agno](https://github.com/agno-agi/agno/pull/7183) · [n8n](https://fastcrw.com/blog/n8n-web-scraping-crw) · [All integrations](https://fastcrw.com/docs#integrations)
+```python
+from langchain_crw import CrwLoader
+
+# Self-hosted (default: localhost:3000)
+loader = CrwLoader(url="https://example.com", mode="scrape")
+docs = loader.load()
+print(docs[0].page_content)  # clean markdown
+
+# Cloud (fastcrw.com)
+loader = CrwLoader(
+    url="https://example.com",
+    api_url="https://fastcrw.com/api",
+    api_key="crw_live_...",
+    mode="crawl",
+    params={"max_depth": 3, "max_pages": 50},
+)
+docs = loader.load()
+```
+
+> **More integrations (PRs pending):** [Flowise](https://github.com/FlowiseAI/Flowise/pull/6066) · [Agno](https://github.com/agno-agi/agno/pull/7183) · [n8n](https://fastcrw.com/blog/n8n-web-scraping-crw) · [All integrations](https://fastcrw.com/docs#integrations)
 
 ## Docker
 
