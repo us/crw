@@ -43,6 +43,13 @@ claude mcp add crw -- crw-mcp
 
 ## What's New
 
+### [0.2.0](https://github.com/us/crw/compare/v0.1.2...v0.2.0) (2026-03-28)
+
+
+### Features
+
+* add MCP Registry support for official server discovery ([154b9f5](https://github.com/us/crw/commit/154b9f520015260d012ebf899513c3af1f9dfe3d))
+
 ### [0.1.2](https://github.com/us/crw/compare/v0.1.1...v0.1.2) (2026-03-27)
 
 
@@ -56,13 +63,6 @@ claude mcp add crw -- crw-mcp
 ### Bug Fixes
 
 * skip already-published crates without masking real errors ([010649c](https://github.com/us/crw/commit/010649c522e4e49edcf51873d4c1065e08d510b1))
-
-### [0.1.0](https://github.com/us/crw/compare/v0.0.14...v0.1.0) (2026-03-26)
-
-
-### Features
-
-* add PDF extraction support via pdf-inspector ([06dd5bf](https://github.com/us/crw/commit/06dd5bf89caf004929f22d41d00f8a297d09b825))
 
 [Full changelog →](CHANGELOG.md)
 
