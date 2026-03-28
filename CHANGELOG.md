@@ -2,6 +2,14 @@
 
 All notable changes to CRW are documented here.
 
+## [0.2.1](https://github.com/us/crw/compare/v0.2.0...v0.2.1) (2026-03-28)
+
+
+### Bug Fixes
+
+* make crw-mcp npm wrapper executable ([576a9eb](https://github.com/us/crw/commit/576a9eb19ae90bc677344045dd70fb96e8b938da))
+* use latest tag in server.json OCI identifier ([7ec3b82](https://github.com/us/crw/commit/7ec3b82ab78aa2c7ff900d07400f8a2426cb955f))
+
 ## [0.2.0](https://github.com/us/crw/compare/v0.1.2...v0.2.0) (2026-03-28)
 
 
