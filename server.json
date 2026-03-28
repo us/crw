@@ -3,7 +3,7 @@
   "name": "io.github.us/crw",
   "title": "CRW Web Scraper",
   "description": "Open-source web scraper for AI agents with scrape, crawl, and map tools",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "websiteUrl": "https://us.github.io/crw",
   "repository": {
     "url": "https://github.com/us/crw",
@@ -13,7 +13,7 @@
   "packages": [
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/us/crw:0.1.2",
+      "identifier": "ghcr.io/us/crw:0.2.0",
       "transport": {
         "type": "stdio"
       },
