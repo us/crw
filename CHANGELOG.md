@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.3.0](https://github.com/us/crw/compare/v0.2.0...v0.3.0) (2026-03-28)
+
+
+### Features
+
+* add prebuilt binaries and npm wrapper for crw-mcp ([26bbfad](https://github.com/us/crw/commit/26bbfad5e877ce915d7dee850b6ddda6ae2e7fc8))
+
 ## [0.2.0](https://github.com/us/crw/compare/v0.1.2...v0.2.0) (2026-03-28)
 
 
