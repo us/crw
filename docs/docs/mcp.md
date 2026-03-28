@@ -18,6 +18,10 @@ CRW includes a built-in MCP (Model Context Protocol) server that gives any MCP-c
 No server to start, no setup. Just add `crw-mcp`:
 
 ```bash
+# With npm (no Rust required):
+claude mcp add crw -- npx crw-mcp
+
+# Or with Cargo:
 claude mcp add crw -- crw-mcp
 ```
 

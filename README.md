@@ -37,8 +37,14 @@ CRW is the open-source web scraper built for AI agents. Built-in MCP server (std
 **Built-in MCP server. Single binary. No Redis. No Node.js.**
 
 ```bash
+# With npm (no Rust required):
+npx crw-mcp
+
+# Or with Cargo:
 cargo install crw-mcp
-claude mcp add crw -- crw-mcp
+
+# Add to Claude Code:
+claude mcp add crw -- npx crw-mcp
 ```
 
 > Listed on the [MCP Registry](https://registry.modelcontextprotocol.io/?q=crw)
@@ -289,6 +295,10 @@ CRW works as an MCP tool server for any AI assistant that supports MCP. It provi
 **Install the MCP stdio binary:**
 
 ```bash
+# With npm (no Rust required):
+npx crw-mcp
+
+# Or with Cargo:
 cargo install crw-mcp
 ```
 

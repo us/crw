@@ -1,0 +1,35 @@
+{
+  "name": "crw-mcp",
+  "version": "0.2.0",
+  "description": "MCP server for CRW web scraper — scrape, crawl, and map tools for AI agents",
+  "license": "AGPL-3.0",
+  "homepage": "https://github.com/us/crw",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/us/crw.git"
+  },
+  "keywords": [
+    "mcp",
+    "web-scraping",
+    "ai-agent",
+    "claude",
+    "cursor",
+    "firecrawl",
+    "crawl",
+    "scrape"
+  ],
+  "bin": {
+    "crw-mcp": "bin/crw-mcp.js"
+  },
+  "files": [
+    "bin/crw-mcp.js"
+  ],
+  "optionalDependencies": {
+    "crw-mcp-darwin-x64": "0.2.0",
+    "crw-mcp-darwin-arm64": "0.2.0",
+    "crw-mcp-linux-x64": "0.2.0",
+    "crw-mcp-linux-arm64": "0.2.0",
+    "crw-mcp-win32-x64": "0.2.0",
+    "crw-mcp-win32-arm64": "0.2.0"
+  }
+}
