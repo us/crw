@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.2.0](https://github.com/us/crw/compare/v0.1.2...v0.2.0) (2026-03-28)
+
+
+### Features
+
+* add MCP Registry support for official server discovery ([154b9f5](https://github.com/us/crw/commit/154b9f520015260d012ebf899513c3af1f9dfe3d))
+
 ## [0.1.2](https://github.com/us/crw/compare/v0.1.1...v0.1.2) (2026-03-27)
 
 
