@@ -111,6 +111,41 @@
           "type": "json",
           "path": "server.json",
           "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "npm/crw-mcp/package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "npm/crw-mcp-darwin-x64/package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "npm/crw-mcp-darwin-arm64/package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "npm/crw-mcp-linux-x64/package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "npm/crw-mcp-linux-arm64/package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "npm/crw-mcp-win32-x64/package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "npm/crw-mcp-win32-arm64/package.json",
+          "jsonpath": "$.version"
         }
       ]
     }
