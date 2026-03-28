@@ -41,6 +41,8 @@ cargo install crw-mcp
 claude mcp add crw -- crw-mcp
 ```
 
+> Listed on the [MCP Registry](https://registry.modelcontextprotocol.io/?q=crw)
+
 ## What's New
 
 ### [0.2.0](https://github.com/us/crw/compare/v0.1.2...v0.2.0) (2026-03-28)
@@ -281,6 +283,8 @@ model = "claude-sonnet-4-20250514"
 ## MCP Server
 
 CRW works as an MCP tool server for any AI assistant that supports MCP. It provides 4 tools: `crw_scrape`, `crw_crawl`, `crw_check_crawl_status`, `crw_map`.
+
+> Also available on the [MCP Registry](https://registry.modelcontextprotocol.io/?q=crw)
 
 **Install the MCP stdio binary:**
 

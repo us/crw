@@ -11,6 +11,8 @@ CRW includes a built-in MCP (Model Context Protocol) server that gives any MCP-c
 | **Embedded** (default) | No `--api-url` / `CRW_API_URL` set | Self-contained. No server needed. The scraping engine runs inside the MCP process. |
 | **Proxy** | `--api-url` / `CRW_API_URL` set | Forwards tool calls to a remote CRW server (fastcrw.com, self-hosted, etc.) |
 
+> Also available on the [MCP Registry](https://registry.modelcontextprotocol.io/?q=crw)
+
 ## Quick Start (Embedded Mode)
 
 No server to start, no setup. Just add `crw-mcp`:
