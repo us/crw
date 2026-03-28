@@ -146,6 +146,11 @@
           "type": "json",
           "path": "npm/crw-mcp-win32-arm64/package.json",
           "jsonpath": "$.version"
+        },
+        {
+          "type": "toml",
+          "path": "python/pyproject.toml",
+          "jsonpath": "$.project.version"
         }
       ]
     }

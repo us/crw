@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "crw"
+version = "0.2.1"
+description = "Python SDK for CRW web scraper — scrape, crawl, and map any website from Python"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+keywords = ["web-scraping", "mcp", "ai-agent", "crawler", "firecrawl", "scraper"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = ["platformdirs>=3.0"]
+
+[project.urls]
+Homepage = "https://github.com/us/crw"
+Documentation = "https://us.github.io/crw"
+Repository = "https://github.com/us/crw"
+
+[project.scripts]
+crw-mcp = "crw.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/crw"]
