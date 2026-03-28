@@ -95,11 +95,40 @@ agent = Agent(tools=[CrwTools()])
 agent.print_response("Scrape https://example.com and summarize it")
 ```
 
+## OpenClaw
+
+Published npm package: [`openclaw-plugin-crw`](https://www.npmjs.com/package/openclaw-plugin-crw)
+
+```bash
+openclaw plugins install openclaw-plugin-crw
+```
+
+```json
+{
+  "plugins": {
+    "crw": {
+      "apiKey": "crw_live_..."
+    }
+  }
+}
+```
+
+Cloud is the default. For self-hosted, add `"apiUrl": "http://localhost:3000"`.
+
+Source: [github.com/us/openclaw-plugin-crw](https://github.com/us/openclaw-plugin-crw)
+
 ## n8n
 
-Use n8n's HTTP Request nodes to connect to CRW's REST API. No custom node package required — CRW's endpoints work directly with n8n's built-in HTTP nodes.
+Published npm package: [`n8n-nodes-crw`](https://www.npmjs.com/package/n8n-nodes-crw)
 
-See the [n8n tutorial](https://fastcrw.com/blog/n8n-web-scraping-crw) for step-by-step setup.
+Install via n8n UI: **Settings > Community Nodes > Install > `n8n-nodes-crw`**
+
+Or via Docker:
+```bash
+docker run -e EXTRA_COMMUNITY_PACKAGES=n8n-nodes-crw n8nio/n8n
+```
+
+Source: [github.com/us/n8n-nodes-crw](https://github.com/us/n8n-nodes-crw)
 
 ## MCP (10+ Platforms)
 
@@ -166,8 +195,10 @@ console.log(data.markdown);
 |-----------|------|--------|-------------|
 | [CrewAI](https://github.com/crewAIInc/crewAI) | PyPI package | **Published** | [`crewai-crw`](https://pypi.org/project/crewai-crw/) |
 | [LangChain](https://github.com/langchain-ai/langchain) | PyPI package | **Published** | [`langchain-crw`](https://pypi.org/project/langchain-crw/) |
+| [OpenClaw](https://github.com/openclaw/openclaw) | npm plugin | **Published** | [`openclaw-plugin-crw`](https://www.npmjs.com/package/openclaw-plugin-crw) |
+| [n8n](https://github.com/n8n-io/n8n) | npm node | **Published** | [`n8n-nodes-crw`](https://www.npmjs.com/package/n8n-nodes-crw) |
 | [Flowise](https://github.com/FlowiseAI/Flowise) | Node | PR pending | [#6066](https://github.com/FlowiseAI/Flowise/pull/6066) |
 | [Agno](https://github.com/agno-agi/agno) | Toolkit | PR pending | [#7183](https://github.com/agno-agi/agno/pull/7183) |
-| [n8n](https://github.com/n8n-io/n8n) | HTTP nodes | Works now | [Tutorial](https://fastcrw.com/blog/n8n-web-scraping-crw) |
+| [Dify](https://github.com/langgenius/dify) | Plugin | Ready | [GitHub](https://github.com/us/dify-plugin-crw) |
 | MCP (10+ platforms) | Built-in | **Shipped** | [MCP docs](#mcp) |
 | Firecrawl SDK | Drop-in | **Works now** | API compatible |
