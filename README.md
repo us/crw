@@ -37,14 +37,21 @@ CRW is the open-source web scraper built for AI agents. Built-in MCP server (std
 **Built-in MCP server. Single binary. No Redis. No Node.js.**
 
 ```bash
-# With npm (no Rust required):
+# npm (zero install):
 npx crw-mcp
 
-# Or with Cargo:
+# Python:
+pip install crw
+
+# Direct binary (no package manager):
+curl -fsSL https://github.com/us/crw/releases/latest/download/crw-mcp-darwin-arm64.tar.gz | tar xz
+# Replace darwin-arm64 with your platform: darwin-x64, linux-x64, linux-arm64, win32-x64, win32-arm64
+
+# Cargo:
 cargo install crw-mcp
 
-# Add to Claude Code:
-claude mcp add crw -- npx crw-mcp
+# Docker:
+docker run -i ghcr.io/us/crw crw-mcp
 ```
 
 > Listed on the [MCP Registry](https://registry.modelcontextprotocol.io/?q=crw)
@@ -159,8 +166,7 @@ Both use the same Firecrawl-compatible API — your code works with either. Swit
 **MCP (AI agents — recommended):**
 
 ```bash
-cargo install crw-mcp
-claude mcp add crw -- crw-mcp
+claude mcp add crw -- npx crw-mcp
 ```
 
 > That's it. Claude Code now has `crw_scrape`, `crw_crawl`, `crw_map` tools. For Cursor, Windsurf, Cline, and other MCP clients, see [MCP Server](#mcp-server).
@@ -293,20 +299,30 @@ CRW works as an MCP tool server for any AI assistant that supports MCP. It provi
 
 > Also available on the [MCP Registry](https://registry.modelcontextprotocol.io/?q=crw)
 
-**Install the MCP stdio binary:**
+**Install:**
 
 ```bash
-# With npm (no Rust required):
+# npm (zero install):
 npx crw-mcp
 
-# Or with Cargo:
+# Python:
+pip install crw
+
+# Direct binary (no package manager):
+curl -fsSL https://github.com/us/crw/releases/latest/download/crw-mcp-darwin-arm64.tar.gz | tar xz
+# Replace darwin-arm64 with your platform: darwin-x64, linux-x64, linux-arm64, win32-x64, win32-arm64
+
+# Cargo:
 cargo install crw-mcp
+
+# Docker:
+docker run -i ghcr.io/us/crw crw-mcp
 ```
 
 ### Claude Code
 
 ```bash
-claude mcp add --transport http crw http://localhost:3000/mcp
+claude mcp add crw -- npx crw-mcp
 ```
 
 ### Claude Desktop
@@ -323,8 +339,8 @@ Edit your config file:
 {
   "mcpServers": {
     "crw": {
-      "command": "/absolute/path/to/crw-mcp",
-      "env": { "CRW_API_URL": "http://localhost:3000" }
+      "command": "npx",
+      "args": ["crw-mcp"]
     }
   }
 }
@@ -338,8 +354,8 @@ Edit `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project):
 {
   "mcpServers": {
     "crw": {
-      "command": "/absolute/path/to/crw-mcp",
-      "env": { "CRW_API_URL": "http://localhost:3000" }
+      "command": "npx",
+      "args": ["crw-mcp"]
     }
   }
 }
@@ -353,8 +369,8 @@ Edit `~/.codeium/windsurf/mcp_config.json`:
 {
   "mcpServers": {
     "crw": {
-      "command": "/absolute/path/to/crw-mcp",
-      "env": { "CRW_API_URL": "http://localhost:3000" }
+      "command": "npx",
+      "args": ["crw-mcp"]
     }
   }
 }
@@ -366,8 +382,8 @@ Edit `~/.codeium/windsurf/mcp_config.json`:
 {
   "mcpServers": {
     "crw": {
-      "command": "/absolute/path/to/crw-mcp",
-      "env": { "CRW_API_URL": "http://localhost:3000" },
+      "command": "npx",
+      "args": ["crw-mcp"],
       "alwaysAllow": ["crw_scrape", "crw_map"],
       "disabled": false
     }
@@ -382,9 +398,9 @@ Edit `~/.continue/config.yaml`:
 ```yaml
 mcpServers:
   - name: crw
-    command: /absolute/path/to/crw-mcp
-    env:
-      CRW_API_URL: http://localhost:3000
+    command: npx
+    args:
+      - crw-mcp
 ```
 
 ### OpenAI Codex CLI
@@ -393,10 +409,8 @@ Edit `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.crw]
-command = "/absolute/path/to/crw-mcp"
-
-[mcp_servers.crw.env]
-CRW_API_URL = "http://localhost:3000"
+command = "npx"
+args = ["crw-mcp"]
 ```
 
 ### Other MCP Clients
@@ -407,8 +421,8 @@ Any MCP-compatible client can connect to CRW using the standard JSON format:
 {
   "mcpServers": {
     "crw": {
-      "command": "/absolute/path/to/crw-mcp",
-      "env": { "CRW_API_URL": "http://localhost:3000" }
+      "command": "npx",
+      "args": ["crw-mcp"]
     }
   }
 }

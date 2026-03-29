@@ -15,14 +15,34 @@ CRW includes a built-in MCP (Model Context Protocol) server that gives any MCP-c
 
 ## Quick Start (Embedded Mode)
 
-No server to start, no setup. Just add `crw-mcp`:
+No server to start, no setup. Install and add `crw-mcp`:
 
 ```bash
-# With npm (no Rust required):
+# npm (zero install):
+npx crw-mcp
+
+# Python:
+pip install crw
+
+# Direct binary (no package manager):
+curl -fsSL https://github.com/us/crw/releases/latest/download/crw-mcp-darwin-arm64.tar.gz | tar xz
+# Replace darwin-arm64 with your platform: darwin-x64, linux-x64, linux-arm64, win32-x64, win32-arm64
+
+# Cargo:
+cargo install crw-mcp
+
+# Docker:
+docker run -i ghcr.io/us/crw crw-mcp
+```
+
+Add to your MCP client:
+
+```bash
+# Claude Code:
 claude mcp add crw -- npx crw-mcp
 
-# Or with Cargo:
-claude mcp add crw -- crw-mcp
+# OpenAI Codex CLI:
+codex mcp add crw -- npx crw-mcp
 ```
 
 That's it. The agent starts `crw-mcp`, which contains the full scraping engine. When the agent disconnects, the process dies.
@@ -34,7 +54,7 @@ If you have a CDP-compatible browser, pass it via env vars:
 ```bash
 claude mcp add \
   -e CRW_RENDERER__LIGHTPANDA__WS_URL=ws://127.0.0.1:9222 \
-  crw -- crw-mcp
+  crw -- npx crw-mcp
 ```
 
 Without a CDP browser, `crw-mcp` uses its HTTP-only renderer (no JavaScript rendering).
@@ -58,20 +78,20 @@ Connect to [fastcrw.com](https://fastcrw.com) or any remote CRW instance:
 claude mcp add \
   -e CRW_API_URL=https://fastcrw.com/api \
   -e CRW_API_KEY=fc-xxx \
-  crw -- crw-mcp
+  crw -- npx crw-mcp
 
 # Local crw-server on custom port
 claude mcp add \
   -e CRW_API_URL=http://localhost:4000 \
-  crw -- crw-mcp
+  crw -- npx crw-mcp
 ```
 
 ## Three Transport Options
 
 | Transport | Setup | Requires |
 |-----------|-------|----------|
-| **Stdio embedded** (recommended) | `claude mcp add crw -- crw-mcp` | Nothing |
-| **Stdio proxy** | `CRW_API_URL=... crw-mcp` | Remote CRW server |
+| **Stdio embedded** (recommended) | `claude mcp add crw -- npx crw-mcp` | Nothing |
+| **Stdio proxy** | `CRW_API_URL=... npx crw-mcp` | Remote CRW server |
 | **HTTP** | `claude mcp add --transport http crw http://localhost:3000/mcp` | `crw-server` running |
 
 ### HTTP Transport
@@ -150,10 +170,10 @@ cargo build -p crw-mcp --no-default-features --release
 
 ```bash
 # Embedded mode (recommended — no server needed)
-claude mcp add crw -- crw-mcp
+claude mcp add crw -- npx crw-mcp
 
 # Proxy mode (remote server)
-claude mcp add -e CRW_API_URL=https://fastcrw.com/api -e CRW_API_KEY=fc-xxx crw -- crw-mcp
+claude mcp add -e CRW_API_URL=https://fastcrw.com/api -e CRW_API_KEY=fc-xxx crw -- npx crw-mcp
 
 # HTTP transport (requires crw-server running)
 claude mcp add --transport http crw http://localhost:3000/mcp
@@ -175,7 +195,8 @@ Edit the config file for your OS:
 {
   "mcpServers": {
     "crw": {
-      "command": "crw-mcp"
+      "command": "npx",
+      "args": ["crw-mcp"]
     }
   }
 }
@@ -191,7 +212,8 @@ Create or edit `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project-leve
 {
   "mcpServers": {
     "crw": {
-      "command": "crw-mcp"
+      "command": "npx",
+      "args": ["crw-mcp"]
     }
   }
 }
@@ -207,7 +229,8 @@ Edit `~/.codeium/windsurf/mcp_config.json`:
 {
   "mcpServers": {
     "crw": {
-      "command": "crw-mcp"
+      "command": "npx",
+      "args": ["crw-mcp"]
     }
   }
 }
@@ -227,7 +250,8 @@ Windsurf has a limit of 100 total tools across all MCP servers. crw uses only 4.
 {
   "mcpServers": {
     "crw": {
-      "command": "crw-mcp",
+      "command": "npx",
+      "args": ["crw-mcp"],
       "alwaysAllow": ["crw_scrape", "crw_map"],
       "disabled": false
     }
@@ -244,7 +268,9 @@ Edit `~/.continue/config.yaml`:
 ```yaml
 mcpServers:
   - name: crw
-    command: crw-mcp
+    command: npx
+    args:
+      - crw-mcp
 ```
 
 MCP tools only work in Continue's **Agent mode**, not in regular chat.
@@ -255,10 +281,11 @@ Edit `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.crw]
-command = "crw-mcp"
+command = "npx"
+args = ["crw-mcp"]
 ```
 
-Or: `codex mcp add crw -- crw-mcp`
+Or: `codex mcp add crw -- npx crw-mcp`
 
 ### Gemini CLI
 
@@ -268,7 +295,8 @@ Edit `~/.gemini/settings.json`:
 {
   "mcpServers": {
     "crw": {
-      "command": "crw-mcp"
+      "command": "npx",
+      "args": ["crw-mcp"]
     }
   }
 }
@@ -282,7 +310,8 @@ Create or edit `~/.roo/mcp.json` (global) or `.roo/mcp.json` (project-level):
 {
   "mcpServers": {
     "crw": {
-      "command": "crw-mcp"
+      "command": "npx",
+      "args": ["crw-mcp"]
     }
   }
 }
@@ -296,7 +325,8 @@ Add to your VS Code `settings.json` or `.vscode/mcp.json`:
 {
   "mcpServers": {
     "crw": {
-      "command": "crw-mcp"
+      "command": "npx",
+      "args": ["crw-mcp"]
     }
   }
 }
@@ -306,13 +336,13 @@ Add to your VS Code `settings.json` or `.vscode/mcp.json`:
 
 | Platform | Config Format | Config Path | One-liner |
 |----------|-------------|------------|-----------|
-| Claude Code | JSON | `~/.claude.json` | `claude mcp add crw -- crw-mcp` |
+| Claude Code | JSON | `~/.claude.json` | `claude mcp add crw -- npx crw-mcp` |
 | Claude Desktop | JSON | OS-specific | — |
 | Cursor | JSON | `~/.cursor/mcp.json` | — |
 | Windsurf | JSON | `~/.codeium/windsurf/mcp_config.json` | — |
 | Cline | JSON | VS Code globalStorage | — |
 | Continue.dev | YAML | `~/.continue/config.yaml` | — |
-| OpenAI Codex | TOML | `~/.codex/config.toml` | `codex mcp add crw -- crw-mcp` |
+| OpenAI Codex | TOML | `~/.codex/config.toml` | `codex mcp add crw -- npx crw-mcp` |
 | Gemini CLI | JSON | `~/.gemini/settings.json` | — |
 | Roo Code | JSON | `~/.roo/mcp.json` | — |
 | VS Code (Copilot) | JSON | `.vscode/mcp.json` | — |
@@ -325,7 +355,8 @@ If connecting to a remote server with auth, add `CRW_API_URL` and `CRW_API_KEY`:
 {
   "mcpServers": {
     "crw": {
-      "command": "crw-mcp",
+      "command": "npx",
+      "args": ["crw-mcp"],
       "env": {
         "CRW_API_URL": "https://fastcrw.com/api",
         "CRW_API_KEY": "your-api-key"

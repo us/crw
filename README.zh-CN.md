@@ -35,8 +35,21 @@ CRW 是为 AI 代理打造的开源网页抓取工具。内置 MCP 服务器（s
 **内置 MCP 服务器。单一二进制文件。无 Redis。无 Node.js。**
 
 ```bash
+# npm（零安装）：
+npx crw-mcp
+
+# Python：
+pip install crw
+
+# 直接下载二进制文件：
+curl -fsSL https://github.com/us/crw/releases/latest/download/crw-mcp-darwin-arm64.tar.gz | tar xz
+# 替换 darwin-arm64 为你的平台：darwin-x64、linux-x64、linux-arm64、win32-x64、win32-arm64
+
+# Cargo：
 cargo install crw-mcp
-claude mcp add crw -- crw-mcp
+
+# Docker：
+docker run -i ghcr.io/us/crw crw-mcp
 ```
 
 ## 最新动态
@@ -145,8 +158,7 @@ CRW 提供 Firecrawl 的 API，但资源占用极低。无运行时依赖，无 
 **MCP（AI 代理 — 推荐）：**
 
 ```bash
-cargo install crw-mcp
-claude mcp add crw -- crw-mcp
+claude mcp add crw -- npx crw-mcp
 ```
 
 > 完成。Claude Code 现在拥有 `crw_scrape`、`crw_crawl`、`crw_map` 工具。Cursor、Windsurf、Cline 等 MCP 客户端请参见 [MCP 服务器](#mcp-服务器)。
@@ -277,34 +289,40 @@ model = "claude-sonnet-4-20250514"
 
 CRW 可作为 Claude Code 和 Claude Desktop 的 MCP 工具服务器，支持两种传输方式。
 
-**安装 MCP stdio 二进制文件：**
+**安装：**
 
 ```bash
+# npm（零安装）：
+npx crw-mcp
+
+# Python：
+pip install crw
+
+# 直接下载二进制文件：
+curl -fsSL https://github.com/us/crw/releases/latest/download/crw-mcp-darwin-arm64.tar.gz | tar xz
+# 替换 darwin-arm64 为你的平台：darwin-x64、linux-x64、linux-arm64、win32-x64、win32-arm64
+
+# Cargo：
 cargo install crw-mcp
+
+# Docker：
+docker run -i ghcr.io/us/crw crw-mcp
 ```
 
-**HTTP 传输（推荐）：**
+**Claude Code：**
 
 ```bash
-claude mcp add --transport http crw http://localhost:3000/mcp
+claude mcp add crw -- npx crw-mcp
 ```
 
-**Stdio 传输：**
-
-```bash
-cargo build --release --bin crw-mcp
-```
-
-添加到 `~/.claude.json`：
+**其他 MCP 客户端配置：**
 
 ```json
 {
   "mcpServers": {
     "crw": {
-      "command": "/absolute/path/to/crw-mcp",
-      "env": {
-        "CRW_API_URL": "http://localhost:3000"
-      }
+      "command": "npx",
+      "args": ["crw-mcp"]
     }
   }
 }
