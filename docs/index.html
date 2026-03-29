@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -54,9 +54,14 @@
   }
   </script>
 
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+  <div class="reading-progress" id="reading-progress"></div>
+
   <header class="navbar">
     <div class="navbar-left">
       <button class="hamburger" id="hamburger" aria-label="Toggle sidebar">
@@ -68,6 +73,7 @@
     </div>
     <nav class="navbar-links"></nav>
     <div class="navbar-right">
+      <a href="https://usxperiments.com" target="_blank" rel="noopener" class="profile-link" id="profile-link">us</a>
       <button class="search-trigger" id="search-trigger" aria-label="Search">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="11" r="8"></circle>

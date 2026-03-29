@@ -1,9 +1,21 @@
 import { searchEngine } from "./search.js";
 import config from "../site.config.js";
 
+const features = Object.assign(
+  { scrollReveal: true, codeCopyButtons: true, readingProgress: true, skeletonLoading: true },
+  config.features || {}
+);
+
 // ========== Render Navbar ==========
 function renderNavbar() {
-  document.querySelector(".logo").innerHTML = '<img src="logo-white.svg" alt="' + config.name + '" height="24" class="logo-img" />';
+  // Logo: image or text
+  const logoEl = document.querySelector(".logo");
+  if (config.logo) {
+    logoEl.innerHTML = `<img src="${config.logo}" alt="${config.name}" class="logo-img" />`;
+  } else {
+    logoEl.textContent = config.name;
+  }
+
   document.title = config.description
     ? `${config.name} — ${config.description}`
     : config.name;
@@ -18,12 +30,34 @@ function renderNavbar() {
     })
     .join("");
 
+  // Profile link (author branding)
+  const profileLink = document.getElementById("profile-link");
+  if (profileLink && config.author?.url) {
+    profileLink.href = config.author.url;
+    profileLink.textContent = config.author.name || "us";
+    profileLink.title = config.author.url;
+  }
+
   // Footer
   const footer = document.querySelector(".footer");
-  const footerBrand = footer.querySelector(".footer-brand");
-  const footerMeta = footer.querySelector(".footer-meta");
-  footerBrand.textContent = config.name;
-  footerMeta.innerHTML = `<div>${config.footer.left}</div><div>${config.footer.right}</div>`;
+  const authorName = config.author?.name || "us";
+  const authorUrl = config.author?.url || "https://github.com/us";
+  const githubLink = config.navLinks?.find(l => l.href?.includes("github.com"))?.href || "#";
+
+  let footerLeft = config.footer?.left || "";
+  let footerRight = config.footer?.right || "";
+
+  footer.innerHTML = `
+    <div class="footer-col">
+      <span class="footer-project">${config.name}</span>
+      <span class="footer-license">${footerLeft}</span>
+    </div>
+    <div class="footer-col footer-col-right">
+      ${githubLink !== "#" ? `<a href="${githubLink}" target="_blank" rel="noopener">GitHub</a>` : ""}
+      <a href="${authorUrl}" target="_blank" rel="noopener">Created by ${authorName}</a>
+      <span class="footer-license">${footerRight}</span>
+    </div>
+  `;
 }
 
 // ========== Apply Custom Theme ==========
@@ -55,15 +89,17 @@ function applyThemeOverrides() {
 
 // ========== Minimal Markdown Parser ==========
 function parseMarkdown(md) {
-  // If content is already HTML (TMLS sections), return as-is
   if (/^\s*</.test(md)) {
     return md;
   }
 
   let html = md;
 
-  // Code blocks (fenced) — extract and replace with placeholders
+  // Extract code blocks and inline code FIRST to protect from further parsing
   const codeBlocks = [];
+  const inlineCodes = [];
+
+  // Code blocks (fenced) — extract and replace with placeholders
   html = html.replace(
     /```(\w*)\n([\s\S]*?)```/g,
     (_, lang, code) => {
@@ -71,23 +107,22 @@ function parseMarkdown(md) {
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
-      const index = codeBlocks.length;
-      codeBlocks.push(`<pre><code class="language-${lang}">${escaped}</code></pre>`);
-      return `\n%%CODEBLOCK_${index}%%\n`;
+      const langAttr = lang ? ` class="language-${lang}"` : "";
+      const dataLang = lang ? ` data-lang="${lang}"` : "";
+      const placeholder = `\x00CODEBLOCK${codeBlocks.length}\x00`;
+      codeBlocks.push(`<pre${dataLang}><code${langAttr}>${escaped}</code></pre>`);
+      return placeholder;
     }
   );
 
   // Inline code — extract and replace with placeholders
-  const inlineCode = [];
   html = html.replace(/`([^`]+)`/g, (_, code) => {
-    const escaped = code
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-    const index = inlineCode.length;
-    inlineCode.push(`<code>${escaped}</code>`);
-    return `%%INLINECODE_${index}%%`;
+    const placeholder = `\x00INLINECODE${inlineCodes.length}\x00`;
+    inlineCodes.push(`<code>${code}</code>`);
+    return placeholder;
   });
+
+  // Now safe to parse markdown — code content is protected
 
   // Headings
   html = html.replace(/^#### (.+)$/gm, "<h4>$1</h4>");
@@ -106,7 +141,7 @@ function parseMarkdown(md) {
   // Images (before links)
   html = html.replace(
     /!\[([^\]]*)\]\(([^)]+)\)/g,
-    '<img src="$2" alt="$1">'
+    '<img src="$2" alt="$1" loading="lazy">'
   );
 
   // Links
@@ -163,17 +198,17 @@ function parseMarkdown(md) {
       const trimmed = block.trim();
       if (!trimmed) return "";
       if (/^</.test(trimmed)) return trimmed;
-      if (/^%%CODEBLOCK_/.test(trimmed)) return trimmed;
+      if (/^\x00CODEBLOCK/.test(trimmed)) return trimmed;
       return `<p>${trimmed.replace(/\n/g, "<br>")}</p>`;
     })
     .join("\n");
 
-  // Restore code blocks and inline code from placeholders
+  // Restore code blocks and inline code
   codeBlocks.forEach((block, i) => {
-    html = html.replace(`%%CODEBLOCK_${i}%%`, block);
+    html = html.replace(`\x00CODEBLOCK${i}\x00`, block);
   });
-  inlineCode.forEach((code, i) => {
-    html = html.replace(`%%INLINECODE_${i}%%`, code);
+  inlineCodes.forEach((code, i) => {
+    html = html.replace(`\x00INLINECODE${i}\x00`, code);
   });
 
   return html;
@@ -239,6 +274,92 @@ function renderSidebar() {
   });
 }
 
+// ========== Skeleton Loading ==========
+function showContentSkeleton() {
+  if (!features.skeletonLoading) return;
+  const article = document.getElementById("article");
+  article.innerHTML = `
+    <div class="skeleton" style="width:45%;height:32px;margin-bottom:20px"></div>
+    <div class="skeleton" style="width:100%;height:14px;margin-bottom:10px"></div>
+    <div class="skeleton" style="width:92%;height:14px;margin-bottom:10px"></div>
+    <div class="skeleton" style="width:78%;height:14px;margin-bottom:28px"></div>
+    <div class="skeleton" style="width:55%;height:24px;margin-bottom:16px"></div>
+    <div class="skeleton" style="width:100%;height:14px;margin-bottom:10px"></div>
+    <div class="skeleton" style="width:85%;height:14px;margin-bottom:10px"></div>
+    <div class="skeleton" style="width:96%;height:14px;margin-bottom:28px"></div>
+    <div class="skeleton" style="width:100%;height:120px;margin-bottom:20px"></div>
+  `;
+}
+
+// ========== Code Copy Buttons ==========
+function addCodeCopyButtons(container) {
+  if (!features.codeCopyButtons) return;
+  container.querySelectorAll("pre").forEach((pre) => {
+    pre.style.position = "relative";
+    const btn = document.createElement("button");
+    btn.className = "code-copy-btn";
+    btn.textContent = "COPY";
+    btn.setAttribute("aria-label", "Copy code");
+    btn.addEventListener("click", () => {
+      const code = pre.querySelector("code");
+      navigator.clipboard.writeText(code ? code.textContent : pre.textContent);
+      btn.textContent = "COPIED";
+      btn.classList.add("copied");
+      setTimeout(() => {
+        btn.textContent = "COPY";
+        btn.classList.remove("copied");
+      }, 2000);
+    });
+    pre.appendChild(btn);
+  });
+}
+
+// ========== Scroll Reveal ==========
+function initScrollReveal() {
+  if (!features.scrollReveal) return;
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("revealed");
+          observer.unobserve(entry.target);
+        }
+      });
+    },
+    { threshold: 0.15 }
+  );
+
+  document.querySelectorAll(".reveal").forEach((el) => observer.observe(el));
+}
+
+function applyRevealToContent(container) {
+  if (!features.scrollReveal) return;
+  container.querySelectorAll("h1, h2, h3, pre, blockquote, table, img").forEach((el, i) => {
+    el.classList.add("reveal");
+    el.style.transitionDelay = `${Math.min(i * 40, 200)}ms`;
+  });
+  initScrollReveal();
+}
+
+// ========== Reading Progress ==========
+function initReadingProgress() {
+  if (!features.readingProgress) return;
+  const bar = document.getElementById("reading-progress");
+  if (!bar) return;
+
+  const content = document.getElementById("content");
+  const update = () => {
+    const scrollTop = window.scrollY;
+    const docHeight = content.scrollHeight - window.innerHeight;
+    const progress = docHeight > 0 ? Math.min(scrollTop / docHeight, 1) : 0;
+    bar.style.width = `${progress * 100}%`;
+    bar.style.opacity = progress > 0.01 ? "1" : "0";
+  };
+
+  window.addEventListener("scroll", update, { passive: true });
+  update();
+}
+
 // ========== Routing ==========
 function getCurrentSlug() {
   return window.location.hash.slice(1) || config.defaultPage;
@@ -255,11 +376,15 @@ function getPageTitle(slug) {
 async function loadPage(slug) {
   const article = document.getElementById("article");
 
+  showContentSkeleton();
+
   try {
     const response = await fetch(`docs/${slug}.md`);
     if (!response.ok) throw new Error("Not found");
     const md = await response.text();
     article.innerHTML = parseMarkdown(md);
+    addCodeCopyButtons(article);
+    applyRevealToContent(article);
   } catch {
     article.innerHTML = `
       <h1>Page Not Found</h1>
@@ -268,39 +393,9 @@ async function loadPage(slug) {
     `;
   }
 
-  const pageTitle = getPageTitle(slug);
-  document.title = `${pageTitle} — ${config.name}`;
-  updatePageSeo(slug, pageTitle);
+  document.title = `${getPageTitle(slug)} — ${config.name}`;
   renderSidebar();
   window.scrollTo(0, 0);
-}
-
-// ========== Dynamic SEO ==========
-function updatePageSeo(slug, pageTitle) {
-  const setMeta = (attr, key, content) => {
-    let el = document.querySelector(`meta[${attr}="${key}"]`);
-    if (!el) {
-      el = document.createElement('meta');
-      el.setAttribute(attr, key);
-      document.head.appendChild(el);
-    }
-    el.setAttribute('content', content);
-  };
-
-  const baseUrl = window.location.origin + window.location.pathname;
-  const pageUrl = `${baseUrl}#${slug}`;
-  const fullTitle = `${pageTitle} — ${config.name}`;
-  const desc = config.description;
-
-  setMeta('name', 'description', `${pageTitle} — ${desc}`);
-  setMeta('property', 'og:title', fullTitle);
-  setMeta('property', 'og:description', desc);
-  setMeta('property', 'og:url', pageUrl);
-  setMeta('name', 'twitter:title', fullTitle);
-  setMeta('name', 'twitter:description', desc);
-
-  let canonical = document.querySelector('link[rel="canonical"]');
-  if (canonical) canonical.href = pageUrl;
 }
 
 // ========== Mobile Sidebar ==========
@@ -355,6 +450,7 @@ function init() {
   renderNavbar();
   applyThemeOverrides();
   loadPage(getCurrentSlug());
+  initReadingProgress();
 
   window.addEventListener("hashchange", () => {
     loadPage(getCurrentSlug());

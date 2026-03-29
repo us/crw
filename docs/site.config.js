@@ -1,6 +1,11 @@
 export default {
   name: "CRW",
   description: "Open-source Firecrawl alternative — self-hosted web scraper & crawler in Rust with MCP server for AI agents",
+  logo: "logo-white.svg",
+  author: {
+    name: "us",
+    url: "https://usxperiments.com",
+  },
 
   navLinks: [
     { label: "Docs", href: "#introduction" },
