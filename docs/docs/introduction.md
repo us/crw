@@ -36,6 +36,7 @@ Tested against [Firecrawl scrape-content-dataset-v1](https://huggingface.co/data
 - **BFS crawler** — Async crawl with rate limiting, robots.txt, sitemap support, concurrent jobs
 - **MCP server** — Built-in stdio + HTTP transport for Claude Code, Cursor, and 8+ other platforms
 - **Security** — SSRF protection (private IPs, cloud metadata, IPv6), constant-time auth, dangerous URI filtering
+- **🔍 Web search** — Search the web and optionally scrape results, with news and image support (cloud only via [fastcrw.com](https://fastcrw.com))
 - **Docker ready** — Multi-stage build with LightPanda sidecar
 
 ## Use Cases

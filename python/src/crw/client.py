@@ -118,6 +118,58 @@ class CrwClient:
         result = self._tool_call("crw_map", args)
         return result.get("links", [])
 
+    def search(
+        self,
+        query: str,
+        limit: int = 5,
+        lang: str | None = None,
+        tbs: str | None = None,
+        sources: list[str] | None = None,
+        categories: list[str] | None = None,
+        scrape_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> list[dict] | dict:
+        """Search the web and optionally scrape results.
+
+        Cloud-only feature — requires ``api_url`` to be set.
+        Not available in subprocess mode.
+
+        Args:
+            query: Search query string.
+            limit: Maximum number of results (1-20, default 5).
+            lang: Language code for results (e.g. ``"en"``, ``"tr"``).
+            tbs: Time filter (``"qdr:h"``, ``"qdr:d"``, ``"qdr:w"``, ``"qdr:m"``, ``"qdr:y"``).
+            sources: Result types (``"web"``, ``"news"``, ``"images"``). Groups response when set.
+            categories: Category filters (``"github"``, ``"research"``, ``"pdf"``).
+            scrape_options: Scrape each result URL, e.g. ``{"formats": ["markdown"]}``.
+
+        Returns:
+            List of result dicts (flat) or dict grouped by source type.
+
+        Raises:
+            CrwError: If ``api_url`` is not set (subprocess mode).
+        """
+        if not self._api_url:
+            raise CrwError(
+                "search() requires api_url (cloud-only feature). "
+                "Use CrwClient(api_url='https://fastcrw.com/api', api_key='...')"
+            )
+
+        args: dict[str, Any] = {"query": query, "limit": limit}
+        if lang:
+            args["lang"] = lang
+        if tbs:
+            args["tbs"] = tbs
+        if sources:
+            args["sources"] = sources
+        if categories:
+            args["categories"] = categories
+        if scrape_options:
+            args["scrapeOptions"] = scrape_options
+        args.update(kwargs)
+
+        return self._http_post("/v1/search", args)
+
     def close(self) -> None:
         """Shut down the subprocess if running."""
         if self._process and self._process.poll() is None:

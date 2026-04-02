@@ -331,6 +331,89 @@ POST /v1/map
 }
 ```
 
+## Search (Cloud Only)
+
+> Available exclusively on [fastcrw.com](https://fastcrw.com). Not included in the self-hosted binary.
+
+```
+POST https://fastcrw.com/api/v1/search
+```
+
+Search the web and optionally scrape the results in one operation.
+
+### Request Body
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `query` | string | **yes** | — | Search query |
+| `limit` | number | no | `5` | Max results (1–20) |
+| `lang` | string | no | — | Language code (e.g. `"en"`, `"tr"`) |
+| `tbs` | string | no | — | Time filter: `qdr:h`, `qdr:d`, `qdr:w`, `qdr:m`, `qdr:y` |
+| `sources` | string[] | no | — | Result types: `"web"`, `"news"`, `"images"` |
+| `categories` | string[] | no | — | Category filters: `"github"`, `"research"`, `"pdf"` |
+| `scrapeOptions` | object | no | — | Scrape each result URL (e.g. `{ "formats": ["markdown"] }`) |
+
+**`scrapeOptions` fields:**
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `formats` | string[] | **yes** | — | Output formats: `"markdown"`, `"html"`, `"rawHtml"`, `"links"` |
+| `onlyMainContent` | boolean | no | `true` | Extract primary content area only |
+
+### Response (flat — no sources)
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "url": "https://example.com/result",
+      "title": "Result Title",
+      "description": "Snippet from the search engine.",
+      "score": 8.5,
+      "position": 1,
+      "category": "general",
+      "markdown": "# Page content (when scrapeOptions is set)"
+    }
+  ]
+}
+```
+
+### Response (grouped — with sources)
+
+When `sources` is specified, results are grouped by type:
+
+```json
+{
+  "success": true,
+  "data": {
+    "web": [{ "url": "...", "title": "...", "description": "..." }],
+    "news": [{ "url": "...", "title": "...", "description": "..." }],
+    "images": [{ "url": "...", "title": "...", "description": "...", "imageUrl": "...", "thumbnailUrl": "...", "position": 1 }]
+  }
+}
+```
+
+### Credit Cost
+
+| Operation | Credits |
+|-----------|---------|
+| Search | 1 |
+| Search + scrape | 1 + 1 per scraped result (failed scrapes refunded) |
+
+### Example
+
+```bash
+curl -X POST https://fastcrw.com/api/v1/search \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "web scraping tools 2026",
+    "limit": 5,
+    "scrapeOptions": { "formats": ["markdown"] }
+  }'
+```
+
 ## MCP (Streamable HTTP)
 
 ```

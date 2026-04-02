@@ -58,6 +58,13 @@ docker run -i ghcr.io/us/crw crw-mcp
 
 ## What's New
 
+### Cloud: Search API
+
+- `POST /v1/search` — web search with optional content scraping (cloud only via [fastcrw.com](https://fastcrw.com))
+- Supports web, news, and image results via `sources` parameter
+- Time-based filtering (`tbs`) and category search (github, research, pdf)
+- 1 credit per search + 1 per scraped result
+
 ### [0.2.2](https://github.com/us/crw/compare/v0.2.1...v0.2.2) (2026-04-02)
 
 
@@ -149,6 +156,7 @@ CRW gives you Firecrawl's API with a fraction of the resource usage. No runtime 
 - **✂️ Chunking & filtering** — split content into topic/sentence/regex chunks; rank by BM25 or cosine similarity
 - **🕵️ Stealth mode** — browser-like UA rotation and header injection to reduce bot detection
 - **🌐 Per-request proxy** — override the global proxy per scrape request
+- **🔍 Web search** — search the web and optionally scrape results, with news and image support (cloud only via [fastcrw.com](https://fastcrw.com))
 
 ## Cloud vs Self-Hosted
 
@@ -159,6 +167,7 @@ CRW gives you Firecrawl's API with a fraction of the resource usage. No runtime 
 | **Proxy** | Bring your own | Global proxy network |
 | **Scaling** | Manual | Auto-scaling |
 | **API** | Firecrawl-compatible | Same Firecrawl-compatible API |
+| **Search** | — (cloud only) | Web search + optional scrape |
 
 Both use the same Firecrawl-compatible API — your code works with either. Switch between self-hosted and cloud by changing the base URL.
 
@@ -257,6 +266,7 @@ curl -X POST http://localhost:3000/v1/scrape \
 | `GET` | `/v1/crawl/:id` | Check crawl status and retrieve results |
 | `DELETE` | `/v1/crawl/:id` | Cancel a running crawl job |
 | `POST` | `/v1/map` | Discover all URLs on a site |
+| `POST` | `/v1/search` | **Cloud only** — Web search with optional content scraping |
 | `GET` | `/health` | Health check (no auth required) |
 | `POST` | `/mcp` | Streamable HTTP MCP transport |
 

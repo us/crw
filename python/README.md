@@ -73,3 +73,32 @@ print(job["id"])
 urls = client.map("https://example.com")
 print(urls)
 ```
+
+### Search (Cloud Only)
+
+Search requires a cloud API connection — it's not available in subprocess mode.
+
+```python
+from crw import CrwClient
+
+client = CrwClient(api_url="https://fastcrw.com/api", api_key="YOUR_KEY")
+
+# Basic search
+results = client.search("web scraping tools 2026")
+
+# Search with options
+results = client.search(
+    "AI news",
+    limit=10,
+    sources=["web", "news"],
+    tbs="qdr:w",
+)
+
+# Search + scrape content
+results = client.search(
+    "python tutorials",
+    scrape_options={"formats": ["markdown"]},
+)
+```
+
+> **Note:** Search is a cloud-only feature. Calling `search()` without `api_url` raises `CrwError`.

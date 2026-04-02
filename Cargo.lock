@@ -726,7 +726,7 @@ checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
 name = "crw-cli"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "clap",
  "crw-core",
@@ -739,7 +739,7 @@ dependencies = [
 
 [[package]]
 name = "crw-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "config",
  "reqwest 0.13.2",
@@ -754,7 +754,7 @@ dependencies = [
 
 [[package]]
 name = "crw-crawl"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "crw-core",
  "crw-extract",
@@ -772,7 +772,7 @@ dependencies = [
 
 [[package]]
 name = "crw-extract"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "crw-core",
  "crw-pdf",
@@ -795,7 +795,7 @@ dependencies = [
 
 [[package]]
 name = "crw-mcp"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "clap",
  "crw-core",
@@ -810,7 +810,7 @@ dependencies = [
 
 [[package]]
 name = "crw-pdf"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "env_logger",
  "log",
@@ -825,7 +825,7 @@ dependencies = [
 
 [[package]]
 name = "crw-renderer"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-trait",
  "axum",
@@ -845,7 +845,7 @@ dependencies = [
 
 [[package]]
 name = "crw-server"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "axum",
  "axum-test",
