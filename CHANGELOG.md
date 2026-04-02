@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.3.0](https://github.com/us/crw/compare/v0.2.2...v0.3.0) (2026-04-02)
+
+
+### Features
+
+* add search() method to Python SDK and docs ([591e3fe](https://github.com/us/crw/commit/591e3fed4bbd14b4470fd2f5cbc24c02f7543dba))
+
 ## [0.2.2](https://github.com/us/crw/compare/v0.2.1...v0.2.2) (2026-04-02)
 
 
