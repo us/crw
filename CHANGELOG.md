@@ -2,6 +2,14 @@
 
 All notable changes to CRW are documented here.
 
+## [0.2.2](https://github.com/us/crw/compare/v0.2.1...v0.2.2) (2026-04-02)
+
+
+### Bug Fixes
+
+* **renderer:** escalate to JS renderer on HTTP 401/403 responses ([f515caa](https://github.com/us/crw/commit/f515caa2e315a06df9274967bdc3fb23dbafcbcf))
+* use GitHub latest release instead of pinned version for binary download ([4afcb1a](https://github.com/us/crw/commit/4afcb1a4c67d4e9b36809ed32ce88b6a9fd4c342))
+
 ## [0.2.1](https://github.com/us/crw/compare/v0.2.0...v0.2.1) (2026-03-28)
 
 
