@@ -58,6 +58,14 @@ docker run -i ghcr.io/us/crw crw-mcp
 
 ## What's New
 
+### [0.2.2](https://github.com/us/crw/compare/v0.2.1...v0.2.2) (2026-04-02)
+
+
+### Bug Fixes
+
+* **renderer:** escalate to JS renderer on HTTP 401/403 responses ([f515caa](https://github.com/us/crw/commit/f515caa2e315a06df9274967bdc3fb23dbafcbcf))
+* use GitHub latest release instead of pinned version for binary download ([4afcb1a](https://github.com/us/crw/commit/4afcb1a4c67d4e9b36809ed32ce88b6a9fd4c342))
+
 ### [0.2.1](https://github.com/us/crw/compare/v0.2.0...v0.2.1) (2026-03-28)
 
 
@@ -72,13 +80,6 @@ docker run -i ghcr.io/us/crw crw-mcp
 ### Features
 
 * add MCP Registry support for official server discovery ([154b9f5](https://github.com/us/crw/commit/154b9f520015260d012ebf899513c3af1f9dfe3d))
-
-### [0.1.2](https://github.com/us/crw/compare/v0.1.1...v0.1.2) (2026-03-27)
-
-
-### Bug Fixes
-
-* vendor pdf-inspector as crw-pdf for crates.io publishability ([3f7681d](https://github.com/us/crw/commit/3f7681dde0b78ff2c0c11d232d21a714edb94d75))
 
 [Full changelog →](CHANGELOG.md)
 
