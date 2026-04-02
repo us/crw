@@ -14,7 +14,7 @@ default = []
 cdp = ["tokio-tungstenite"]
 
 [dependencies]
-crw-core = { path = "../crw-core", version = "0.2.2" }
+crw-core = { path = "../crw-core", version = "0.3.0" }
 reqwest = { workspace = true }
 tokio = { workspace = true }
 tokio-tungstenite = { version = "0.28", features = ["rustls-tls-native-roots"], optional = true }
