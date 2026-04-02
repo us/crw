@@ -58,12 +58,12 @@ docker run -i ghcr.io/us/crw crw-mcp
 
 ## What's New
 
-### Cloud: Search API
+### [0.3.0](https://github.com/us/crw/compare/v0.2.2...v0.3.0) (2026-04-02)
 
-- `POST /v1/search` — web search with optional content scraping (cloud only via [fastcrw.com](https://fastcrw.com))
-- Supports web, news, and image results via `sources` parameter
-- Time-based filtering (`tbs`) and category search (github, research, pdf)
-- 1 credit per search + 1 per scraped result
+
+### Features
+
+* add search() method to Python SDK and docs ([591e3fe](https://github.com/us/crw/commit/591e3fed4bbd14b4470fd2f5cbc24c02f7543dba))
 
 ### [0.2.2](https://github.com/us/crw/compare/v0.2.1...v0.2.2) (2026-04-02)
 
@@ -80,13 +80,6 @@ docker run -i ghcr.io/us/crw crw-mcp
 
 * make crw-mcp npm wrapper executable ([576a9eb](https://github.com/us/crw/commit/576a9eb19ae90bc677344045dd70fb96e8b938da))
 * use latest tag in server.json OCI identifier ([7ec3b82](https://github.com/us/crw/commit/7ec3b82ab78aa2c7ff900d07400f8a2426cb955f))
-
-### [0.2.0](https://github.com/us/crw/compare/v0.1.2...v0.2.0) (2026-03-28)
-
-
-### Features
-
-* add MCP Registry support for official server discovery ([154b9f5](https://github.com/us/crw/commit/154b9f520015260d012ebf899513c3af1f9dfe3d))
 
 [Full changelog →](CHANGELOG.md)
 
