@@ -14,10 +14,10 @@ name = "crw"
 path = "src/main.rs"
 
 [dependencies]
-crw-core = { path = "../crw-core", version = "0.2.1" }
-crw-renderer = { path = "../crw-renderer", version = "0.2.1" }
-crw-extract = { path = "../crw-extract", version = "0.2.1" }
-crw-crawl = { path = "../crw-crawl", version = "0.2.1" }
+crw-core = { path = "../crw-core", version = "0.2.2" }
+crw-renderer = { path = "../crw-renderer", version = "0.2.2" }
+crw-extract = { path = "../crw-extract", version = "0.2.2" }
+crw-crawl = { path = "../crw-crawl", version = "0.2.2" }
 
 tokio = { workspace = true }
 clap = { workspace = true }
