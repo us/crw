@@ -173,17 +173,9 @@ impl FallbackRenderer {
 
                 let needs_js = detector::needs_js_rendering(&result.html);
                 let is_blocked = Self::looks_like_challenge(&result.html);
-                let is_auth_blocked = matches!(result.status_code, 401 | 403);
 
-                if !self.js_renderers.is_empty() && (needs_js || is_blocked || is_auth_blocked) {
-                    if is_auth_blocked {
-                        tracing::info!(
-                            url,
-                            status_code = result.status_code,
-                            "HTTP {} received, escalating to JS renderer",
-                            result.status_code
-                        );
-                    } else if is_blocked {
+                if !self.js_renderers.is_empty() && (needs_js || is_blocked) {
+                    if is_blocked {
                         tracing::info!(
                             url,
                             "Anti-bot challenge detected in HTTP response, escalating to JS renderer"
