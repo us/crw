@@ -16,7 +16,7 @@ These features require significant effort or external dependencies and are plann
 
 ### /search Endpoint
 - Full-text search across crawled content
-- Requires external search API integration (e.g., SearXNG, Brave Search API)
+- Requires external search backend integration
 - Alternative: built-in index with tantivy
 
 ### Prometheus /metrics Endpoint
