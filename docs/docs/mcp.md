@@ -18,15 +18,14 @@ CRW includes a built-in MCP (Model Context Protocol) server that gives any MCP-c
 No server to start, no setup. Install and add `crw-mcp`:
 
 ```bash
+# One-line install (auto-detects OS & arch):
+curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | sh
+
 # npm (zero install):
 npx crw-mcp
 
 # Python:
 pip install crw
-
-# Direct binary (no package manager):
-curl -fsSL https://github.com/us/crw/releases/latest/download/crw-mcp-darwin-arm64.tar.gz | tar xz
-# Replace darwin-arm64 with your platform: darwin-x64, linux-x64, linux-arm64, win32-x64, win32-arm64
 
 # Cargo:
 cargo install crw-mcp

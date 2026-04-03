@@ -35,15 +35,14 @@ CRW 是为 AI 代理打造的开源网页抓取工具。内置 MCP 服务器（s
 **内置 MCP 服务器。单一二进制文件。无 Redis。无 Node.js。**
 
 ```bash
+# 一键安装（自动检测操作系统和架构）：
+curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | sh
+
 # npm（零安装）：
 npx crw-mcp
 
 # Python：
 pip install crw
-
-# 直接下载二进制文件：
-curl -fsSL https://github.com/us/crw/releases/latest/download/crw-mcp-darwin-arm64.tar.gz | tar xz
-# 替换 darwin-arm64 为你的平台：darwin-x64、linux-x64、linux-arm64、win32-x64、win32-arm64
 
 # Cargo：
 cargo install crw-mcp
@@ -292,15 +291,14 @@ CRW 可作为 Claude Code 和 Claude Desktop 的 MCP 工具服务器，支持两
 **安装：**
 
 ```bash
+# 一键安装（自动检测操作系统和架构）：
+curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | sh
+
 # npm（零安装）：
 npx crw-mcp
 
 # Python：
 pip install crw
-
-# 直接下载二进制文件：
-curl -fsSL https://github.com/us/crw/releases/latest/download/crw-mcp-darwin-arm64.tar.gz | tar xz
-# 替换 darwin-arm64 为你的平台：darwin-x64、linux-x64、linux-arm64、win32-x64、win32-arm64
 
 # Cargo：
 cargo install crw-mcp

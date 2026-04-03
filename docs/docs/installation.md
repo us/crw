@@ -12,6 +12,35 @@ curl -X POST https://fastcrw.com/api/v1/scrape \
   -d '{"url": "https://example.com"}'
 ```
 
+## One-Line Install (Recommended)
+
+The install script auto-detects your OS and architecture, downloads the latest binary, and installs it:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | sh
+```
+
+Or with `wget`:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/us/crw/main/install.sh | sh
+```
+
+**Options:**
+
+```bash
+# Install a specific version:
+curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | CRW_VERSION=v0.3.0 sh
+
+# Install to a custom directory:
+curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | CRW_INSTALL_DIR=~/.local/bin sh
+
+# Avoid GitHub API rate limits:
+curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | GITHUB_TOKEN=ghp_... sh
+```
+
+Supported platforms: macOS (Intel & Apple Silicon), Linux (x64 & ARM64), Windows (via MSYS2/Git Bash).
+
 ## From crates.io
 
 ```bash

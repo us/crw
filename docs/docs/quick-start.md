@@ -1,5 +1,14 @@
 # Quick Start — Web Scraping with CRW
 
+## Install
+
+```bash
+# One-line install (auto-detects OS & arch):
+curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | sh
+```
+
+See all installation options in the [installation guide](installation.md).
+
 ## CLI (no server needed)
 
 The `crw` binary lets you scrape any URL directly from the terminal — no server, no config file, no setup:
