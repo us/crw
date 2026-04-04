@@ -1,5 +1,11 @@
 #!/usr/bin/env node
 
+// Handle `init` subcommand before delegating to the Rust binary
+if (process.argv[2] === "init") {
+  require("./init.js");
+  process.exit(0);
+}
+
 const { spawnSync } = require("child_process");
 const path = require("path");
 

@@ -1,0 +1,41 @@
+# CRW Documentation
+
+> CRW is a high-performance, self-hosted web scraper for AI agents. Single Rust binary, ~6 MB idle RAM, Firecrawl-compatible REST API. Source: https://github.com/us/crw
+
+## Getting Started
+- [Introduction](https://docs.fastcrw.com/#introduction): What CRW is, architecture overview, and key features
+- [Installation](https://docs.fastcrw.com/#installation): Install via curl, cargo, npm, pip, or Docker
+- [Quick Start](https://docs.fastcrw.com/#quick-start): First scrape in 60 seconds
+- [Configuration](https://docs.fastcrw.com/#configuration): TOML config, env vars, CLI flags
+
+## API Reference
+- [REST API](https://docs.fastcrw.com/#rest-api): Full endpoint reference for /v1/scrape, /v1/crawl, /v1/map, /v1/search, /v1/extract
+- [Scraping](https://docs.fastcrw.com/#scraping): POST /v1/scrape — single URL content extraction
+- [Crawling](https://docs.fastcrw.com/#crawling): POST /v1/crawl — async BFS multi-page crawl with job polling
+- [Map](https://docs.fastcrw.com/#map): POST /v1/map — URL discovery via sitemap + link traversal
+- [Search](https://docs.fastcrw.com/#search): POST /v1/search — web search with optional scrape (cloud-only)
+- [Extract](https://docs.fastcrw.com/#extract): POST /v1/extract — LLM-powered structured JSON extraction
+- [Output Formats](https://docs.fastcrw.com/#output-formats): markdown, html, rawHtml, plainText, links, json
+- [JavaScript Rendering](https://docs.fastcrw.com/#js-rendering): Auto-detect SPA rendering with LightPanda, Chrome, or Playwright
+- [Error Codes](https://docs.fastcrw.com/#error-codes): HTTP status codes and error response format
+- [Rate Limits](https://docs.fastcrw.com/#rate-limits): Cloud rate limits and retry headers
+
+## Integrations
+- [MCP Server](https://docs.fastcrw.com/#mcp): Built-in MCP server for Claude Code, Cursor, and 10+ AI platforms
+- [Integrations Catalog](https://docs.fastcrw.com/#integrations): CrewAI, LangChain, n8n, OpenClaw, Dify, Firecrawl SDK drop-in
+- [SDK Examples](https://docs.fastcrw.com/#sdk-examples): Python, Node.js, curl code examples
+- [Agent Onboarding](https://docs.fastcrw.com/#agent-onboarding): Machine-readable API guide for AI agents
+
+## Deployment
+- [Self-Hosting Guide](https://docs.fastcrw.com/#self-hosting): Binary or Docker deployment
+- [Self-Hosting Hardening](https://docs.fastcrw.com/#self-hosting-hardening): Production security and ops
+- [Docker](https://docs.fastcrw.com/#docker): Container deployment and compose setup
+- [Credit Costs](https://docs.fastcrw.com/#credit-costs): Per-endpoint credit usage (cloud)
+
+## Architecture
+- [Architecture](https://docs.fastcrw.com/#architecture): Internal design, crate structure, data flow
+- [Crates](https://docs.fastcrw.com/#crates): Rust workspace crate breakdown
+- [Compatibility](https://docs.fastcrw.com/#compatibility): Firecrawl API compatibility status
+
+## Optional
+- [Changelog](https://docs.fastcrw.com/#changelog): Release notes and version history

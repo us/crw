@@ -438,7 +438,7 @@ function renderTOC() {
       h.id = 'toc-' + h.textContent.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     }
     const level = h.tagName === 'H3' ? ' toc-h3' : '';
-    return `<a class="toc-link${level}" data-target="${h.id}">${h.textContent}</a>`;
+    return `<a class="toc-link${level}" href="#${h.id}" data-target="${h.id}">${h.textContent}</a>`;
   }).join('');
 
   tocNav.querySelectorAll('.toc-link').forEach((link) => {
@@ -582,7 +582,12 @@ function init() {
   loadPage(getCurrentSlug());
   initReadingProgress();
   window.addEventListener("hashchange", () => { loadPage(getCurrentSlug()); });
-  buildSearchIndex();
+  // Defer search index build to after page is interactive
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(() => buildSearchIndex());
+  } else {
+    setTimeout(buildSearchIndex, 2000);
+  }
 }
 
 init();

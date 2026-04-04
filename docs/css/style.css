@@ -223,7 +223,7 @@ code::selection, code *::selection {
   font-size: 13px;
   font-weight: 600;
   color: #fff;
-  background: var(--accent-primary);
+  background: #15803d;
   text-decoration: none;
   padding: 6px 16px;
   border-radius: 8px;
@@ -377,7 +377,7 @@ code::selection, code *::selection {
 .content { flex: 1; min-width: 0; padding: 0; }
 
 /* ========== Article Prose ========== */
-#article { padding: 40px 48px 68px 40px; max-width: 860px; }
+#article { padding: 40px 48px 68px 40px; max-width: 860px; min-height: 100vh; }
 #article .eyebrow { font-family: var(--font-mono); font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: .18em; color: var(--ink-3); margin-bottom: 12px; }
 #article h1 { font-size: clamp(28px, 4vw, 34px); font-weight: 600; line-height: 1.2; letter-spacing: -.02em; margin-bottom: 16px; color: var(--ink); }
 #article h2 { font-size: clamp(20px, 3vw, 24px); font-weight: 600; line-height: 1.25; letter-spacing: -.01em; margin-top: 40px; margin-bottom: 16px; color: var(--ink); }
@@ -551,8 +551,8 @@ pre:hover .code-copy-btn { opacity: 1; }
 /* ========== Code Tabs ========== */
 .code-tabs { margin: 18px 0; border: 1px solid var(--code-border); border-radius: 8px; overflow: hidden; }
 .code-tabs-header { display: flex; background: var(--code-bg); border-bottom: 1px solid var(--code-border); padding: 0 4px; }
-.code-tab { padding: 8px 16px; font-size: 13px; font-weight: 500; color: rgba(255,255,255,.4); background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; font-family: var(--font-primary); transition: color var(--t-fast), border-color var(--t-fast); }
-.code-tab:hover { color: rgba(255,255,255,.7); }
+.code-tab { padding: 8px 16px; font-size: 13px; font-weight: 500; color: rgba(255,255,255,.64); background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; font-family: var(--font-primary); transition: color var(--t-fast), border-color var(--t-fast); }
+.code-tab:hover { color: rgba(255,255,255,.85); }
 .code-tab.active { color: var(--accent-primary); border-bottom-color: var(--accent-primary); }
 .code-tab-panel { display: none; }
 .code-tab-panel.active { display: block; }
@@ -594,11 +594,11 @@ pre:hover .code-copy-btn { opacity: 1; }
 .footer-col-links a { font-size: 13px; color: var(--ink-3); text-decoration: none; transition: color var(--t-fast); }
 .footer-col-links a:hover { color: var(--ink); }
 .footer-bottom { display: flex; align-items: center; justify-content: space-between; padding-top: 24px; border-top: 1px solid var(--border); }
-.footer-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-4); }
+.footer-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-3); }
 .footer-status-dot { width: 6px; height: 6px; border-radius: 50%; background: #22C55E; }
-.footer-copyright { font-size: 12px; color: var(--ink-4); }
+.footer-copyright { font-size: 12px; color: var(--ink-3); }
 .footer-socials { display: flex; gap: 16px; }
-.footer-social { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; color: var(--ink-4); transition: color var(--t-fast); }
+.footer-social { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; color: var(--ink-3); transition: color var(--t-fast); }
 .footer-social:hover { color: var(--ink-2); }
 .footer-social svg { width: 18px; height: 18px; }
 
@@ -768,7 +768,7 @@ pre:hover .code-copy-btn { opacity: 1; }
 
 .prev-next-label {
   font-size: 12px;
-  color: var(--ink-4);
+  color: var(--ink-3);
   font-weight: 400;
 }
 
