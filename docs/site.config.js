@@ -23,6 +23,8 @@ export default {
   ],
 
   quickLinks: [
+    { title: "Playground", href: "https://fastcrw.com/playground", icon: "play", external: true },
+    { title: "Blog", href: "https://fastcrw.com/blog", icon: "file-text", external: true },
     { title: "GitHub", href: "https://github.com/us/crw", icon: "github", external: true },
     { title: "Changelog", href: "#changelog", icon: "list" },
   ],
@@ -89,8 +91,22 @@ export default {
   defaultPage: "introduction",
 
   footer: {
-    left: "Released under the AGPL-3.0 License",
-    right: "CRW — Open-source Firecrawl alternative | Self-hosted web scraper in Rust",
+    tagline: "The base layer for agentic web intelligence.",
+    columns: [
+      { title: "Product", links: [
+        { label: "Documentation", href: "#introduction" },
+        { label: "API Reference", href: "#rest-api" },
+        { label: "MCP Server", href: "#mcp" },
+        { label: "Changelog", href: "#changelog" },
+      ]},
+      { title: "Community", links: [
+        { label: "GitHub", href: "https://github.com/us/crw", external: true },
+        { label: "Issues", href: "https://github.com/us/crw/issues", external: true },
+      ]},
+      { title: "Legal", links: [
+        { label: "License (AGPL-3.0)", href: "https://github.com/us/crw/blob/main/LICENSE", external: true },
+      ]},
+    ],
     socials: [
       { icon: "github", href: "https://github.com/us/crw" },
     ],

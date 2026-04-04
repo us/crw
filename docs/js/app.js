@@ -21,6 +21,7 @@ const icons = {
   layers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>',
   key: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>',
   play: '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>',
+  "file-text": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>',
   search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
   zap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
   book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
@@ -74,8 +75,9 @@ function renderFooter() {
   const footer = document.getElementById("footer");
   if (!footer) return;
 
-  const githubLink = config.navLinks?.find(l => l.href?.includes("github.com"))?.href || "#";
   const socials = config.footer?.socials || [];
+  const columns = config.footer?.columns || [];
+  const tagline = config.footer?.tagline || "";
 
   const socialHTML = socials.length > 0
     ? `<div class="footer-socials">${socials.map(s =>
@@ -83,12 +85,34 @@ function renderFooter() {
       ).join('')}</div>`
     : '';
 
+  const columnsHTML = columns.map(col => `
+    <div class="footer-col">
+      <div class="footer-col-title">${col.title}</div>
+      <div class="footer-col-links">
+        ${col.links.map(l =>
+          `<a href="${l.href}"${l.external ? ' target="_blank" rel="noopener"' : ''}>${l.label}</a>`
+        ).join('')}
+      </div>
+    </div>
+  `).join('');
+
   footer.innerHTML = `
     <div class="footer-inner">
-      ${socialHTML}
-      <div class="footer-text">
-        <span>${config.footer?.left || ''}</span>
-        <span>${config.footer?.right || ''}</span>
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="footer-brand-logo">
+            <img src="logo-icon.svg" alt="CRW" class="logo-img logo-light" />
+            <img src="logo-dark.svg" alt="CRW" class="logo-img logo-dark" />
+            <span>CRW</span>
+          </div>
+          <div class="footer-tagline">${tagline}</div>
+          ${socialHTML}
+        </div>
+        ${columnsHTML}
+      </div>
+      <div class="footer-bottom">
+        <div class="footer-copyright">&copy; ${new Date().getFullYear()} CRW. All rights reserved.</div>
+        <div class="footer-status"><span class="footer-status-dot"></span> All systems operational</div>
       </div>
     </div>
   `;
