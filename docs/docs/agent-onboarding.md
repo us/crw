@@ -32,7 +32,7 @@ For most agent workflows, start with this sequence:
 1. **Discover** what pages exist on a target domain:
 
 ```bash
-curl -X POST http://localhost:3002/v1/map \
+curl -X POST http://localhost:3000/v1/map \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com"}'
@@ -41,7 +41,7 @@ curl -X POST http://localhost:3002/v1/map \
 2. **Extract** content from specific pages:
 
 ```bash
-curl -X POST http://localhost:3002/v1/scrape \
+curl -X POST http://localhost:3000/v1/scrape \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com/page", "formats": ["markdown"]}'
@@ -50,7 +50,7 @@ curl -X POST http://localhost:3002/v1/scrape \
 3. **Search** when you need to find relevant pages across the web:
 
 ```bash
-curl -X POST http://localhost:3002/v1/search \
+curl -X POST http://localhost:3000/v1/search \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"query": "your search query", "limit": 5}'

@@ -10,11 +10,16 @@ Published PyPI package: [`crewai-crw`](https://pypi.org/project/crewai-crw/)
 pip install crewai crewai-crw
 ```
 
-Three ready-to-use tools — no custom `BaseTool` subclasses needed:
+Four ready-to-use tools — no custom `BaseTool` subclasses needed:
 
 ```python
 from crewai import Agent, Task, Crew
-from crewai_crw import CrwScrapeWebsiteTool, CrwCrawlWebsiteTool, CrwMapWebsiteTool
+from crewai_crw import (
+    CrwScrapeWebsiteTool,
+    CrwCrawlWebsiteTool,
+    CrwMapWebsiteTool,
+    CrwSearchWebTool,
+)
 
 # Self-hosted (default: localhost:3000)
 scrape_tool = CrwScrapeWebsiteTool()
@@ -69,6 +74,15 @@ loader = CrwLoader(
     api_key="crw_live_...",
     mode="crawl",
     params={"max_depth": 3, "max_pages": 50},
+)
+docs = loader.load()
+
+# Search the web (cloud only)
+loader = CrwLoader(
+    mode="search",
+    query="web scraping tools",
+    api_url="https://fastcrw.com/api",
+    api_key="crw_live_...",
 )
 docs = loader.load()
 ```
@@ -203,7 +217,7 @@ console.log(data.markdown);
 The API is straightforward enough that most integrations are a thin wrapper:
 
 1. Set the `Authorization` header with your API key.
-2. POST JSON to the endpoint you need (`/v1/scrape`, `/v1/crawl`, `/v1/map`).
+2. POST JSON to the endpoint you need (`/v1/scrape`, `/v1/crawl`, `/v1/map`, `/v1/search`).
 3. Parse the JSON response.
 
 No SDK is required — the consistent API design means any HTTP client works.
@@ -219,6 +233,25 @@ No SDK is required — the consistent API design means any HTTP client works.
 | Rate limits | Per plan | Unlimited |
 
 Both options expose the same API, so your integration code works with either.
+
+## Endpoint Support Matrix
+
+Not every integration supports every endpoint. Search is a cloud-only feature that requires the fastcrw.com API backend.
+
+| Integration | Scrape | Crawl | Map | Search | Extract |
+|-------------|--------|-------|-----|--------|---------|
+| [CrewAI](https://pypi.org/project/crewai-crw/) | Yes | Yes | Yes | Yes (cloud) | -- |
+| [LangChain](https://pypi.org/project/langchain-crw/) | Yes | Yes | Yes | Yes (cloud) | -- |
+| [OpenClaw](https://www.npmjs.com/package/openclaw-plugin-crw) | Yes | Yes | Yes | Yes (cloud) | -- |
+| [n8n](https://www.npmjs.com/package/n8n-nodes-crw) | Yes | Yes | Yes | Yes (cloud) | -- |
+| [Dify](https://github.com/us/dify-plugin-crw) | Yes | Yes | Yes | Yes (cloud) | -- |
+| MCP Server | Yes | Yes | Yes | -- | -- |
+| Firecrawl SDK (drop-in) | Yes | Yes | Yes | -- | Yes |
+| Direct HTTP | Yes | Yes | Yes | Yes (cloud) | Yes |
+
+:::note
+The MCP server is designed for self-hosted use and does not expose the search endpoint. Use the Python SDK, a framework integration, or direct HTTP calls for search.
+:::
 
 ## All Integrations
 

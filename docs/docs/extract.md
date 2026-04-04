@@ -45,7 +45,7 @@ If your next step is retrieval, summarization, or semantic search, markdown is o
 ## End-to-End Request Example
 
 ```bash
-curl -X POST http://localhost:3002/api/v1/scrape \
+curl -X POST http://localhost:3000/v1/scrape \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{

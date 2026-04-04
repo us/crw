@@ -253,7 +253,7 @@ class CrwClient:
 
     # --- HTTP mode ---
 
-    def _http_request(self, method: str, path: str, body: dict | None = None) -> dict:
+    def _http_request(self, method: str, path: str, body: dict | None = None, *, raw: bool = False) -> dict:
         import urllib.request
 
         url = f"{self._api_url.rstrip('/')}{path}"
@@ -269,6 +269,8 @@ class CrwClient:
 
         if not result.get("success"):
             raise CrwApiError(result.get("error", "API error"))
+        if raw:
+            return result
         return result.get("data", result)
 
     def _http_post(self, path: str, body: dict) -> dict:
@@ -288,7 +290,7 @@ class CrwClient:
             if time.monotonic() - start > timeout:
                 raise CrwTimeoutError(f"Crawl {job_id} timed out after {timeout}s")
 
-            status_result = self._http_get(f"/v1/crawl/{job_id}")
+            status_result = self._http_request("GET", f"/v1/crawl/{job_id}", raw=True)
             status = status_result.get("status")
 
             if status == "completed":

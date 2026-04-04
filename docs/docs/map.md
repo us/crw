@@ -9,7 +9,7 @@
 - and whether a full crawl is justified at all.
 
 ```bash
-curl -X POST http://localhost:3002/api/v1/map \
+curl -X POST http://localhost:3000/v1/map \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{"url":"https://example.com"}'
