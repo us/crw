@@ -54,7 +54,7 @@ CRW covers 15% more URLs than Firecrawl (92% vs 77.2%), runs 5.5x faster, and us
 :::tabs
 ::tab{title="cURL"}
 ```bash
-curl -X POST http://localhost:3002/v1/scrape \
+curl -X POST http://localhost:3000/v1/scrape \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{"url": "https://example.com", "formats": ["markdown"]}'
@@ -63,7 +63,7 @@ curl -X POST http://localhost:3002/v1/scrape \
 ```python
 import requests
 
-resp = requests.post("http://localhost:3002/v1/scrape", json={
+resp = requests.post("http://localhost:3000/v1/scrape", json={
     "url": "https://example.com",
     "formats": ["markdown"]
 }, headers={"Authorization": "Bearer YOUR_API_KEY"})
@@ -72,7 +72,7 @@ print(resp.json()["data"]["markdown"])
 ```
 ::tab{title="Node.js"}
 ```javascript
-const resp = await fetch("http://localhost:3002/v1/scrape", {
+const resp = await fetch("http://localhost:3000/v1/scrape", {
   method: "POST",
   headers: {
     "Content-Type": "application/json",

@@ -415,7 +415,7 @@ Expected:
   "result": {
     "protocolVersion": "2024-11-05",
     "capabilities": {"tools": {}},
-    "serverInfo": {"name": "crw-mcp", "version": "0.0.12"}
+    "serverInfo": {"name": "crw-mcp", "version": "0.3.0"}
   }
 }
 ```

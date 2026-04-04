@@ -3,7 +3,7 @@
 ## TypeScript
 
 ```ts
-const res = await fetch("http://localhost:3002/api/v1/scrape", {
+const res = await fetch("http://localhost:3000/v1/scrape", {
   method: "POST",
   headers: {
     Authorization: "Bearer YOUR_API_KEY",
@@ -28,7 +28,7 @@ This is enough for most Node.js backends, server actions, and edge handlers.
 import requests
 
 res = requests.post(
-    "http://localhost:3002/api/v1/scrape",
+    "http://localhost:3000/v1/scrape",
     headers={
         "Authorization": "Bearer YOUR_API_KEY",
         "Content-Type": "application/json",
@@ -55,7 +55,7 @@ import (
 
 func main() {
   body := []byte(`{"url":"https://example.com","formats":["markdown"]}`)
-  req, _ := http.NewRequest("POST", "http://localhost:3002/api/v1/scrape", bytes.NewBuffer(body))
+  req, _ := http.NewRequest("POST", "http://localhost:3000/v1/scrape", bytes.NewBuffer(body))
   req.Header.Set("Authorization", "Bearer YOUR_API_KEY")
   req.Header.Set("Content-Type", "application/json")
 
@@ -75,7 +75,7 @@ func main() {
 ### TypeScript
 
 ```ts
-const res = await fetch("http://localhost:3002/api/v1/search", {
+const res = await fetch("http://localhost:3000/v1/search", {
   method: "POST",
   headers: {
     Authorization: "Bearer YOUR_API_KEY",
@@ -95,7 +95,7 @@ const { data } = await res.json();
 
 ```python
 resp = requests.post(
-    "http://localhost:3002/api/v1/search",
+    "http://localhost:3000/v1/search",
     headers={"Authorization": "Bearer YOUR_API_KEY"},
     json={"query": "web scraping tools 2026", "limit": 5},
 )
@@ -108,7 +108,7 @@ data = resp.json()["data"]
 
 ```go
 body := `{"query":"web scraping tools 2026","limit":5}`
-req, _ := http.NewRequest("POST", "http://localhost:3002/api/v1/search",
+req, _ := http.NewRequest("POST", "http://localhost:3000/v1/search",
     strings.NewReader(body))
 req.Header.Set("Authorization", "Bearer YOUR_API_KEY")
 req.Header.Set("Content-Type", "application/json")
@@ -125,7 +125,7 @@ defer resp.Body.Close()
 Add `scrapeOptions` to fetch page content for each result in one call:
 
 ```ts
-const res = await fetch("http://localhost:3002/api/v1/search", {
+const res = await fetch("http://localhost:3000/v1/search", {
   method: "POST",
   headers: {
     Authorization: "Bearer YOUR_API_KEY",
@@ -164,7 +164,7 @@ That includes server actions, background jobs, serverless functions, and interna
 The same shape works in every language:
 
 ```ts
-const start = await fetch("http://localhost:3002/api/v1/crawl", {
+const start = await fetch("http://localhost:3000/v1/crawl", {
   method: "POST",
   headers: {
     Authorization: "Bearer YOUR_API_KEY",
@@ -175,7 +175,7 @@ const start = await fetch("http://localhost:3002/api/v1/crawl", {
 
 const { id } = await start.json();
 
-const status = await fetch(`http://localhost:3002/api/v1/crawl/${id}`, {
+const status = await fetch(`http://localhost:3000/v1/crawl/${id}`, {
   headers: { Authorization: "Bearer YOUR_API_KEY" },
 });
 ```

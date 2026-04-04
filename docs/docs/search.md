@@ -10,7 +10,7 @@ Use `search` when you need to find content across the web without knowing specif
 - and competitive analysis across multiple sources.
 
 ```bash
-curl -X POST http://localhost:3002/api/v1/search \
+curl -X POST http://localhost:3000/v1/search \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{"query":"web scraping tools","limit":5}'
@@ -93,7 +93,7 @@ When `sources` is set, results are grouped by type. The `limit` applies per sour
 The real power of the search endpoint is combining search with content scraping in a single call. Add `scrapeOptions` to fetch the full page content for each result:
 
 ```bash
-curl -X POST http://localhost:3002/api/v1/search \
+curl -X POST http://localhost:3000/v1/search \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
@@ -129,7 +129,7 @@ When `scrapeOptions` is combined with `sources`, only `web` results are scraped.
 Search specifically for recent news articles:
 
 ```bash
-curl -X POST http://localhost:3002/api/v1/search \
+curl -X POST http://localhost:3000/v1/search \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{"query":"artificial intelligence","sources":["news"],"limit":5}'
@@ -142,7 +142,7 @@ News results include a `publishedDate` field with the article publication timest
 Search for images across the web:
 
 ```bash
-curl -X POST http://localhost:3002/api/v1/search \
+curl -X POST http://localhost:3000/v1/search \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{"query":"neural network diagram","sources":["images"],"limit":5}'
