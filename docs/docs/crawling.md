@@ -2,6 +2,13 @@
 
 CRW crawls entire websites using breadth-first search (BFS) — a self-hosted alternative to Firecrawl's crawl endpoint. Crawl jobs are asynchronous — you start a crawl, get a job ID, and poll for results. Includes robots.txt compliance, sitemap discovery, rate limiting, and concurrent page processing.
 
+Use `crawl` when you need multiple pages instead of a single response payload. It is the right tool for:
+
+- documentation sections,
+- knowledge-base ingestion,
+- internal search refreshes,
+- and recursive collection jobs that start from one known URL.
+
 ## Start a Crawl
 
 ```
@@ -24,6 +31,7 @@ POST /v1/crawl
 | `url` | string | required | — | Starting URL |
 | `maxDepth` | int | 2 | 10 | Maximum link depth from start URL |
 | `maxPages` | int | 100 | 1000 | Maximum pages to crawl |
+| `limit` | int | — | — | Alias for `maxPages` (Firecrawl compatibility) |
 | `formats` | string[] | `["markdown"]` | — | Output formats per page |
 | `onlyMainContent` | bool | `true` | — | Extract only main content |
 | `jsonSchema` | object | — | — | JSON schema for LLM extraction |
@@ -37,6 +45,21 @@ Response:
   "url": "http://localhost:3000/v1/crawl/550e8400-e29b-41d4-a716-446655440000"
 }
 ```
+
+## Start, Then Poll
+
+The crawl API is asynchronous by design.
+
+1. `POST /v1/crawl` starts the job.
+2. The API returns a crawl id.
+3. `GET /v1/crawl/:id` returns progress and newly available results.
+4. Continue polling until the status becomes `completed` or a terminal error is returned.
+
+```bash
+curl http://localhost:3000/v1/crawl/CRAWL_ID
+```
+
+That flow is easy to drive from shell scripts, job runners, background workers, and dashboards.
 
 ## Check Status
 
@@ -113,6 +136,31 @@ When `useSitemap` is true, crw checks:
 
 Maximum discovered URLs: 5000.
 
+## A Practical Evaluation Loop
+
+The safest way to evaluate a new site is:
+
+1. run `map` first to understand the reachable section,
+2. launch a crawl with a low page cap,
+3. inspect the resulting markdown or extraction output,
+4. then widen the scope only after the first batch looks good.
+
+:::tip
+Start small. A crawl with `maxPages: 5` is much easier to inspect than a crawl with `maxPages: 500`. That sequence saves credits and helps you catch bad starting URLs early.
+:::
+
 ## Job Lifecycle
 
 Crawl jobs have a configurable TTL (`crawler.job_ttl_secs`, default: 3600). A background task cleans up expired jobs every 60 seconds.
+
+## Credit and Retry Behavior
+
+Available on [fastcrw.com](https://fastcrw.com) (cloud):
+
+- Starting a crawl consumes the initial crawl credit.
+- Polling is tied to newly materialized pages.
+- Transient upstream failures should be handled with retry logic rather than blind rapid polling.
+
+:::note
+If the API returns `429`, respect `Retry-After`. If the target site itself is slow or hostile, reducing crawl size usually gives you a clearer signal than hammering the same job harder.
+:::

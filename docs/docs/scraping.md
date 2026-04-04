@@ -2,6 +2,13 @@
 
 CRW scrapes single pages via the `POST /v1/scrape` endpoint — a Firecrawl-compatible web scraping API. It fetches the URL, optionally renders JavaScript via LightPanda or Chrome, cleans the HTML, and returns content in your requested formats (Markdown, HTML, JSON, plain text).
 
+Use `scrape` when you want one page turned into usable content without starting a wider crawl job. It is the right default for:
+
+- first-pass evaluation,
+- RAG ingestion from known URLs,
+- extraction pipelines,
+- and agent workflows that already know which page to fetch.
+
 ## Request
 
 ```
@@ -33,7 +40,7 @@ POST /v1/scrape
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `url` | string | required | URL to scrape |
-| `formats` | string[] | `["markdown"]` | Output formats: `markdown`, `html`, `rawHtml`, `plainText`, `links`, `json` |
+| `formats` | string[] | `["markdown"]` | Output formats: `markdown`, `html`, `rawHtml`, `plainText`, `links`, `json`, `extract` |
 | `onlyMainContent` | bool | `true` | Extract only main content (removes nav, footer, sidebar, etc.) |
 | `renderJs` | bool/null | `null` | `null` = auto-detect, `true` = force CDP, `false` = HTTP only |
 | `waitFor` | int | — | Wait time in ms after JS rendering |
@@ -49,6 +56,36 @@ POST /v1/scrape
 | `topK` | int | `5` | Number of top chunks to return |
 | `proxy` | string | — | Per-request proxy (e.g. `"http://user:pass@host:8080"`) |
 | `stealth` | bool | — | Override global stealth setting for this request |
+| `llmApiKey` | string | — | Per-request LLM API key for structured extraction (BYOK). Overrides server config. Available on [fastcrw.com](https://fastcrw.com) (cloud) |
+| `llmProvider` | string | `"anthropic"` | LLM provider: `"anthropic"` or `"openai"` |
+| `llmModel` | string | `"claude-sonnet-4-20250514"` | Model to use for structured extraction |
+
+## A Good Default Request
+
+If you are not sure where to start, use this shape first:
+
+```json
+{
+  "url": "https://example.com",
+  "formats": ["markdown"],
+  "onlyMainContent": true,
+  "renderJs": null
+}
+```
+
+That gives you a clean markdown output, keeps extraction focused on the main body, and leaves JavaScript rendering to the engine's default behavior.
+
+## Choosing the Right Formats
+
+Most integrations only need one of these patterns:
+
+- `["markdown"]` for retrieval, search, summarization, and LLM inputs.
+- `["markdown", "links"]` when you want the content plus outbound link discovery.
+- `["html"]` when you need cleaned markup instead of markdown.
+- `["rawHtml"]` when downstream logic expects the original HTML source.
+- `["json"]` when you are doing schema-driven extraction.
+
+Requesting more formats is convenient for debugging, but in production it is better to ask only for what you will actually store or process.
 
 ## Content Extraction Pipeline
 
@@ -71,6 +108,18 @@ When `renderJs` is `null` (default), crw uses heuristics to decide whether JS re
 - Body text is under 500 characters and URL matches known SPA hosts (Framer, Webflow, Wix, Squarespace)
 
 If any heuristic matches, crw re-fetches the page using CDP.
+
+## JS Rendering Guidance
+
+Use `renderJs: true` only when the page clearly needs a browser. Browser rendering increases latency and operational cost, so treat it as a deliberate choice rather than the universal default.
+
+When you do need it:
+
+- set `renderJs: true`,
+- start with `waitFor: 1000` or `2000`,
+- and raise `waitFor` only when the page still hydrates too slowly.
+
+If the response metadata shows an HTTP-only fallback or the output is suspiciously empty, read the [JS rendering guide](/docs/js-rendering).
 
 ## LLM Structured Extraction
 
@@ -107,11 +156,24 @@ model = "claude-sonnet-4-20250514"
 max_tokens = 4096
 ```
 
-## CSS Selector & XPath Extraction
+You do not need a separate endpoint for extraction. `scrape` can also return schema-shaped JSON when `formats` includes `json` and `jsonSchema` is present. That means a single API surface can support markdown for retrieval, links for discovery, and JSON for downstream application logic.
 
-Extract a specific part of the page before converting to Markdown. Useful for targeting article bodies, tables, or specific DOM elements.
+## Targeting the Right Part of a Page
 
-**CSS selector** — uses standard CSS selector syntax:
+The default extraction path works well for many pages, but if you know the site structure, tighten the request:
+
+- use `cssSelector` when there is a stable content container,
+- use `xpath` when selectors are easier to express that way,
+- use `includeTags` and `excludeTags` to keep or remove specific markup families,
+- and leave `onlyMainContent` on unless you explicitly want navigation, footer, or sidebar content.
+
+:::tip
+The common mistake is combining too many narrowing options at once. Start broad, inspect the result, then add one targeting primitive at a time.
+:::
+
+### CSS Selector
+
+Uses standard CSS selector syntax:
 
 ```bash
 curl -X POST http://localhost:3000/v1/scrape \
@@ -124,7 +186,9 @@ curl -X POST http://localhost:3000/v1/scrape \
   }'
 ```
 
-**XPath** — supports XPath 1.0 expressions:
+### XPath
+
+Supports XPath 1.0 expressions:
 
 ```bash
 curl -X POST http://localhost:3000/v1/scrape \
@@ -163,6 +227,19 @@ Split scraped Markdown into chunks for vector databases and RAG pipelines. Resul
 { "chunkStrategy": { "type": "regex", "pattern": "\\n\\n" } }
 ```
 
+### Chunking & Filtering Behavior
+
+- `chunkStrategy` alone splits the markdown and returns all chunks.
+- `chunkStrategy` + `query` + `filterMode` scores and ranks chunks, returning the top `topK`.
+- `topK` without `query`/`filterMode` still truncates the chunk array to `topK` items (no scoring).
+- `query` or `filterMode` without `chunkStrategy` is silently ignored — chunking must be enabled first.
+
+In practice:
+
+- use `sentence` when you want stable natural-language chunks,
+- use `regex` when you already know the structural separator,
+- and treat `topic` chunking as an advanced option that should be tested on real data before wide rollout.
+
 ### Chunk Filtering (BM25 / Cosine)
 
 Rank chunks by relevance to a query and return the top K:
@@ -181,7 +258,7 @@ Rank chunks by relevance to a query and return the top K:
 
 | `filterMode` | When to use |
 |---|---|
-| `bm25` | Keyword-heavy queries; fast, no dependencies |
+| `bm25` | Keyword-heavy queries; fast, no dependencies. Recommended for most use cases |
 | `cosine` | Semantic overlap; uses TF-IDF vectors |
 
 Without `filterMode`, all chunks are returned in document order.
@@ -227,3 +304,16 @@ The global proxy is configured in `config.toml`:
 [crawler]
 proxy = "http://proxy-host:8080"
 ```
+
+## Response Semantics
+
+The main response pattern is:
+
+- `success` for overall request outcome,
+- `data` for returned content,
+- `warning` for degraded but non-fatal situations,
+- and `metadata` for context such as title, status code, final URL, and elapsed time.
+
+:::warning
+Do not ignore warnings. A page blocked by anti-bot protection can still produce content that looks valid at first glance.
+:::

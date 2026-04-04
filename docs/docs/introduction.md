@@ -1,6 +1,13 @@
 # Introduction
 
-CRW is an open-source, lightweight, self-hosted web scraper and web crawler written in Rust. A Firecrawl-compatible workflow layer and a faster alternative to [Crawl4AI](https://github.com/unclecode/crawl4ai) that you can self-host — no Node.js, no Redis, no Python, just a single binary. Built for AI agents, RAG pipelines, and LLM structured extraction with a built-in MCP server for Claude Code, Cursor, Windsurf, and 8+ other platforms.
+Scrape, crawl, and extract structured data from any website — all through one self-hosted API.
+
+:::cards
+::card{icon="rocket" title="Quick Start" href="#quick-start" description="Get up and running with CRW in under 2 minutes"}
+::card{icon="code" title="REST API" href="#rest-api" description="Firecrawl-compatible REST API for scraping and crawling"}
+::card{icon="plug" title="MCP Server" href="#mcp" description="Built-in MCP server for Claude Code, Cursor, and 8+ platforms"}
+::card{icon="globe" title="Try Crawling" href="#crawling" description="BFS web crawler with robots.txt and sitemap support"}
+:::
 
 ## Benchmarks
 
@@ -21,6 +28,10 @@ Tested against [Firecrawl scrape-content-dataset-v1](https://huggingface.co/data
 
 ### How crw compares
 
+:::tip
+CRW covers 15% more URLs than Firecrawl (92% vs 77.2%), runs 5.5x faster, and uses 75x less RAM.
+:::
+
 **vs Firecrawl** — crw covers 15% more URLs (92% vs 77.2%), runs 5.5x faster on average, and uses ~75x less RAM at idle. Firecrawl requires 5 containers (Node.js, Redis, PostgreSQL, RabbitMQ, Playwright); crw is a single binary. Firecrawl's [independent Scrapeway benchmark](https://scrapeway.com/web-scraping-api/firecrawl) shows 64.3% success rate and $5.11/1K cost, with 0% success on LinkedIn/Twitter.
 
 **vs Crawl4AI** — Both are free and self-hosted. Crawl4AI is Python-based and depends on Playwright (~200 MB RAM per browser). crw ships as a single binary with optional LightPanda sidecar (~3.3 MB idle). In [Spider.cloud's benchmark](https://spider.cloud/blog/firecrawl-vs-crawl4ai-vs-spider-honest-benchmark), Crawl4AI showed 19 pages/sec throughput, 11.3% noise ratio, and 72% anti-bot success — while crw achieves 187+ pages/sec throughput with 88.4% noise rejection.
@@ -29,15 +40,51 @@ Tested against [Firecrawl scrape-content-dataset-v1](https://huggingface.co/data
 
 ## Features
 
-- **Firecrawl-compatible API** — Same endpoint family, familiar request/response ergonomics
-- **6 output formats** — Markdown, HTML, cleaned HTML, raw HTML, plain text, links, structured JSON
-- **LLM structured extraction** — Send a JSON schema, get validated structured data back (Anthropic tool_use + OpenAI function calling)
-- **JS rendering** — Auto-detect SPAs with shell heuristics, render via LightPanda, Playwright, or Chrome (CDP)
-- **BFS crawler** — Async crawl with rate limiting, robots.txt, sitemap support, concurrent jobs
-- **MCP server** — Built-in stdio + HTTP transport for Claude Code, Cursor, and 8+ other platforms
-- **Security** — SSRF protection (private IPs, cloud metadata, IPv6), constant-time auth, dangerous URI filtering
-- **🔍 Web search** — Search the web and optionally scrape results, with news and image support (cloud only via [fastcrw.com](https://fastcrw.com))
-- **Docker ready** — Multi-stage build with LightPanda sidecar
+:::features
+::feature{icon="code" title="Firecrawl API" description="Same endpoint family, familiar request/response ergonomics"}
+::feature{icon="layers" title="6 Output Formats" description="Markdown, HTML, cleaned HTML, raw HTML, plain text, links, JSON"}
+::feature{icon="zap" title="LLM Extraction" description="JSON schema in, validated structured data out (Anthropic + OpenAI)"}
+::feature{icon="globe" title="JS Rendering" description="Auto-detect SPAs, render via LightPanda, Playwright, or Chrome CDP"}
+::feature{icon="search" title="BFS Crawler" description="Async crawl with rate limiting, robots.txt, sitemap support"}
+::feature{icon="plug" title="MCP Server" description="Built-in stdio + HTTP transport for Claude Code, Cursor, and 8+ platforms"}
+:::
+
+## Quick Example
+
+:::tabs
+::tab{title="cURL"}
+```bash
+curl -X POST http://localhost:3002/v1/scrape \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{"url": "https://example.com", "formats": ["markdown"]}'
+```
+::tab{title="Python"}
+```python
+import requests
+
+resp = requests.post("http://localhost:3002/v1/scrape", json={
+    "url": "https://example.com",
+    "formats": ["markdown"]
+}, headers={"Authorization": "Bearer YOUR_API_KEY"})
+
+print(resp.json()["data"]["markdown"])
+```
+::tab{title="Node.js"}
+```javascript
+const resp = await fetch("http://localhost:3002/v1/scrape", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer YOUR_API_KEY"
+  },
+  body: JSON.stringify({ url: "https://example.com", formats: ["markdown"] })
+});
+
+const { data } = await resp.json();
+console.log(data.markdown);
+```
+:::
 
 ## Use Cases
 
@@ -65,6 +112,10 @@ Tested against [Firecrawl scrape-content-dataset-v1](https://huggingface.co/data
 ```
 
 ## Security
+
+:::note
+CRW includes comprehensive security protections out of the box. All SSRF vectors are blocked, auth uses constant-time comparison, and dangerous URIs are filtered.
+:::
 
 | Layer | Protection |
 |-------|-----------|

@@ -132,7 +132,7 @@ Source: [github.com/us/n8n-nodes-crw](https://github.com/us/n8n-nodes-crw)
 
 ## MCP (10+ Platforms)
 
-CRW includes a built-in MCP server that works with any MCP-compatible platform. See the [MCP documentation](#mcp) for setup instructions for:
+CRW includes a built-in MCP server that works with any MCP-compatible platform. See the [MCP documentation](/docs/mcp) for setup instructions for:
 
 - Claude Code, Claude Desktop
 - Cursor, Windsurf
@@ -141,6 +141,15 @@ CRW includes a built-in MCP server that works with any MCP-compatible platform. 
 - Gemini CLI
 - VS Code GitHub Copilot Agent
 - Roo Code
+
+## Automation Tools
+
+| Tool | Integration path | Notes |
+|------|-----------------|-------|
+| n8n | Community node | [`n8n-nodes-crw`](https://www.npmjs.com/package/n8n-nodes-crw) |
+| Make (Integromat) | HTTP module | Standard REST API integration |
+| Zapier | Webhooks | Use webhook triggers with the API |
+| GitHub Actions | curl in workflow | Useful for scheduled scraping jobs |
 
 ## Firecrawl Drop-in Replacement
 
@@ -189,6 +198,28 @@ const { data } = await response.json();
 console.log(data.markdown);
 ```
 
+## Building Custom Integrations
+
+The API is straightforward enough that most integrations are a thin wrapper:
+
+1. Set the `Authorization` header with your API key.
+2. POST JSON to the endpoint you need (`/v1/scrape`, `/v1/crawl`, `/v1/map`).
+3. Parse the JSON response.
+
+No SDK is required — the consistent API design means any HTTP client works.
+
+## Choosing Between Cloud and Self-Hosted
+
+| Factor | Cloud | Self-hosted |
+|--------|-------|-------------|
+| Setup time | Instant | 5-10 minutes |
+| Maintenance | Managed | You handle updates |
+| Data residency | Managed infrastructure. Available on [fastcrw.com](https://fastcrw.com) (cloud) | Your infrastructure |
+| Cost model | Credit-based | Your server costs only |
+| Rate limits | Per plan | Unlimited |
+
+Both options expose the same API, so your integration code works with either.
+
 ## All Integrations
 
 | Framework | Type | Status | Package / PR |
@@ -200,5 +231,5 @@ console.log(data.markdown);
 | [Flowise](https://github.com/FlowiseAI/Flowise) | Node | PR pending | [#6066](https://github.com/FlowiseAI/Flowise/pull/6066) |
 | [Agno](https://github.com/agno-agi/agno) | Toolkit | PR pending | [#7183](https://github.com/agno-agi/agno/pull/7183) |
 | [Dify](https://github.com/langgenius/dify) | Plugin | Ready | [GitHub](https://github.com/us/dify-plugin-crw) |
-| MCP (10+ platforms) | Built-in | **Shipped** | [MCP docs](#mcp) |
+| MCP (10+ platforms) | Built-in | **Shipped** | [MCP docs](/docs/mcp) |
 | Firecrawl SDK | Drop-in | **Works now** | API compatible |

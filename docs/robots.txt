@@ -1,6 +1,6 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://us.github.io/crw/sitemap.xml
+Sitemap: https://docs.fastcrw.com/sitemap.xml
 
 # CRW — Open-source Firecrawl alternative, self-hosted web scraper & crawler in Rust

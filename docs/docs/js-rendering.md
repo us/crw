@@ -39,6 +39,28 @@ Override the rendering mode per request using `renderJs`:
 | `true` | Force CDP rendering |
 | `false` | HTTP only |
 
+## When To Turn It On
+
+Enable JS rendering when the page content is not present in the initial HTML response. Typical examples:
+
+- single-page applications,
+- pages that fetch content after hydration,
+- and sites where the meaningful body is assembled client-side.
+
+Do not enable it blindly for every request. HTTP-only fetches are faster and cheaper.
+
+## Choosing a `waitFor` Value
+
+Start with the smallest value that works:
+
+- `500` to `1000` for lightly hydrated pages,
+- `2000` for typical JS-heavy pages,
+- `3000` to `5000` only when you have confirmed the target hydrates slowly.
+
+:::warning
+Long waits are not automatically safer. They increase latency and can hide the fact that the page is blocked rather than merely slow.
+:::
+
 ## Auto-detection
 
 When `renderJs` is `null`, crw fetches the page via HTTP first, then checks for SPA signals:
@@ -93,6 +115,26 @@ ws_url = "ws://chrome:9222"
 4. Wait for the configured time (`waitFor` or default 2000ms)
 5. Execute `Runtime.evaluate("document.documentElement.outerHTML")` to get rendered HTML
 6. Close the tab via `Target.closeTarget`
+
+## Cloud vs Self-hosted
+
+- **Cloud**: JS rendering is always available. The managed infrastructure runs a LightPanda sidecar alongside the engine. Available on [fastcrw.com](https://fastcrw.com) (cloud).
+- **Self-hosted**: You must run `crw-server setup` or configure a CDP browser (LightPanda, Chrome, or Playwright) in your `config.toml` under `[renderer]`. If no JS renderer is configured, requests with `renderJs: true` will fall back to HTTP-only fetching and include a warning.
+
+## What To Inspect in the Response
+
+When rendered output looks wrong, check:
+
+- `metadata.renderedWith` to verify a browser was actually used,
+- `metadata.elapsedMs` to understand the cost of the request,
+- and `warning` to catch anti-bot or fallback situations.
+
+## Troubleshooting
+
+- **Empty content from JS-heavy sites**: Increase `waitFor` (e.g., `3000`-`5000`). Some SPAs need extra time to hydrate.
+- **`rendered_with: "http_only_fallback"` in metadata**: JS rendering was requested but no renderer is available. Check your deployment configuration.
+- **Internal error on `renderJs: true`**: Verify the LightPanda sidecar is running and reachable. Check `/api/health` for renderer status.
+- **Still poor output after increasing `waitFor`**: The issue may be anti-bot protection or authentication flow, not rendering delay.
 
 ## Docker Compose
 

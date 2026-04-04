@@ -6,12 +6,12 @@
   <title>CRW — Open-Source Firecrawl Alternative | Self-Hosted Web Scraper & Crawler in Rust</title>
   <meta name="description" content="CRW is a fast, open-source Firecrawl alternative written in Rust. Self-hosted web scraper and crawler with MCP server for AI agents, LLM structured extraction, and Firecrawl-compatible workflows. 92% coverage, 5.5x faster, 75x less RAM than Firecrawl.">
   <meta name="keywords" content="web scraper, web crawler, firecrawl alternative, crawl4ai alternative, self-hosted scraper, rust web scraper, mcp server, ai web scraping, rag pipeline, llm extraction, open source crawler, headless browser scraper">
-  <link rel="canonical" href="https://us.github.io/crw/">
+  <link rel="canonical" href="https://docs.fastcrw.com/">
   <link rel="icon" href="favicon.png" type="image/png">
 
   <!-- Open Graph -->
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://us.github.io/crw/">
+  <meta property="og:url" content="https://docs.fastcrw.com/">
   <meta property="og:title" content="CRW — Open-Source Firecrawl Alternative | Web Scraper in Rust">
   <meta property="og:description" content="Self-hosted web scraper & crawler. 92% coverage, 5.5x faster than Firecrawl, 6.6 MB idle RAM. Firecrawl-compatible workflows, MCP server for Claude, LLM extraction.">
   <meta property="og:site_name" content="CRW">
@@ -30,7 +30,7 @@
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Linux, macOS, Windows (WSL)",
     "description": "Open-source, self-hosted web scraper and crawler written in Rust. A fast, lightweight Firecrawl alternative with MCP server support for AI agents, LLM structured extraction, and Firecrawl-compatible workflows.",
-    "url": "https://us.github.io/crw/",
+    "url": "https://docs.fastcrw.com/",
     "downloadUrl": "https://crates.io/crates/crw-server",
     "softwareVersion": "0.0.3",
     "license": "https://opensource.org/licenses/AGPL-3.0",
@@ -56,48 +56,60 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <div class="reading-progress" id="reading-progress"></div>
 
   <header class="navbar">
-    <div class="navbar-left">
-      <button class="hamburger" id="hamburger" aria-label="Toggle sidebar">
-        <span></span>
-        <span></span>
-        <span></span>
-      </button>
-      <a href="#" class="logo"><img src="logo-icon.svg" alt="CRW" height="28" class="logo-img logo-light" /><img src="logo-dark.svg" alt="CRW" height="28" class="logo-img logo-dark" /><span class="logo-text">fast<span style="color:#16A34A">crw</span></span></a>
+    <div class="navbar-top">
+      <div class="navbar-left">
+        <button class="hamburger" id="hamburger" aria-label="Toggle sidebar">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <a href="#" class="logo">
+          <img src="logo-icon.svg" alt="CRW" height="24" class="logo-img logo-light" />
+          <img src="logo-dark.svg" alt="CRW" height="24" class="logo-img logo-dark" />
+          <span class="logo-text">fast<span style="color:#16A34A">crw</span></span>
+        </a>
+      </div>
+      <div class="navbar-center">
+        <button class="search-trigger" id="search-trigger" aria-label="Search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <span class="search-placeholder">Search...</span>
+          <span class="search-shortcut">⌘K</span>
+        </button>
+      </div>
+      <div class="navbar-right">
+        <a href="https://github.com/us/crw" target="_blank" rel="noopener" class="navbar-github" id="navbar-github">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          <span>us/crw</span>
+        </a>
+        <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+          <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+          <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+      </div>
     </div>
-    <nav class="navbar-links"></nav>
-    <div class="navbar-right">
-      <a href="https://usxperiments.com" target="_blank" rel="noopener" class="profile-link" id="profile-link">us</a>
-      <button class="search-trigger" id="search-trigger" aria-label="Search">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="8"></circle>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-        </svg>
-        <span class="search-shortcut">⌘K</span>
-      </button>
-      <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
-        <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="5"></circle>
-          <line x1="12" y1="1" x2="12" y2="3"></line>
-          <line x1="12" y1="21" x2="12" y2="23"></line>
-          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-          <line x1="1" y1="12" x2="3" y2="12"></line>
-          <line x1="21" y1="12" x2="23" y2="12"></line>
-          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-        </svg>
-        <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-        </svg>
-      </button>
-    </div>
+    <div class="navbar-tabs" id="navbar-tabs"></div>
   </header>
 
   <div class="overlay" id="overlay"></div>
@@ -111,35 +123,7 @@
       <article id="article" role="main">
         <noscript>
           <h1>CRW — Open-Source Firecrawl Alternative</h1>
-          <p>CRW is a lightweight, self-hosted web scraper and web crawler written in Rust. A fast, open-source alternative to Firecrawl and Crawl4AI designed for LLM extraction, RAG pipelines, and AI agents.</p>
-          <h2>Why CRW over Firecrawl or Crawl4AI?</h2>
-          <ul>
-            <li><strong>92% coverage</strong> on 1,000 real-world URLs (vs Firecrawl 77.2%)</li>
-            <li><strong>5.5x faster</strong> — 833ms avg latency vs Firecrawl's 4,600ms</li>
-            <li><strong>75x less RAM</strong> — 6.6 MB idle vs Firecrawl's 500 MB+</li>
-            <li><strong>Single binary</strong> — no Node.js, no Redis, no PostgreSQL, no Docker required</li>
-            <li><strong>Firecrawl-compatible API</strong> — same endpoint family and familiar request/response shape</li>
-            <li><strong>Built-in MCP server</strong> — works with Claude Code, Claude Desktop, Cursor, Windsurf, Cline, Continue.dev</li>
-            <li><strong>LLM structured extraction</strong> — Anthropic tool_use + OpenAI function calling</li>
-            <li><strong>JS rendering</strong> — auto-detect SPAs, render via LightPanda, Playwright, or Chrome</li>
-          </ul>
-          <h2>Quick Start</h2>
-          <p>Install from crates.io: <code>cargo install crw-server</code>, then run <code>crw-server</code>. Scrape any URL with a single curl command to the Firecrawl-compatible REST API at localhost:3000.</p>
-          <h2>Features</h2>
-          <ul>
-            <li>Firecrawl-compatible REST API — /v1/scrape, /v1/crawl, /v1/map</li>
-            <li>6 output formats — Markdown, HTML, cleaned HTML, raw HTML, plain text, links, JSON</li>
-            <li>MCP server — stdio + HTTP transport for AI coding assistants</li>
-            <li>BFS crawler — async crawl with rate limiting, robots.txt, sitemap support</li>
-            <li>CSS selector &amp; XPath extraction</li>
-            <li>Chunking with BM25 &amp; cosine similarity for RAG pipelines</li>
-            <li>Stealth mode — browser-like User-Agent rotation</li>
-            <li>SSRF protection, constant-time auth</li>
-            <li>Docker ready with LightPanda sidecar</li>
-          </ul>
-          <h2>Benchmark Comparison</h2>
-          <p>Tested on Firecrawl's scrape-content-dataset-v1 (1,000 URLs). CRW: 92% coverage, 833ms latency, 6.6 MB RAM, $0 cost. Firecrawl: 77.2% coverage, 4,600ms latency, 500 MB+ RAM, $0.83-5.33/1K. Crawl4AI: 11.3% noise ratio, 480ms static latency, 72% anti-bot. Spider: 99.9% coverage, 45ms static latency, 4.2% noise.</p>
-          <p>CRW is open-source under AGPL-3.0. Managed cloud available at fastcrw.com.</p>
+          <p>CRW is a lightweight, self-hosted web scraper and web crawler written in Rust.</p>
         </noscript>
       </article>
     </main>
@@ -147,13 +131,21 @@
     <aside class="toc" id="toc">
       <div class="toc-header">On this page</div>
       <nav id="toc-nav"></nav>
+      <div class="toc-cta">
+        <div class="toc-cta-brand">
+          <img src="logo-icon.svg" alt="CRW" height="18" class="logo-img logo-light" />
+          <img src="logo-dark.svg" alt="CRW" height="18" class="logo-img logo-dark" />
+          <span>CRW</span>
+        </div>
+        <div class="toc-cta-title">Ready to scrape?</div>
+        <div class="toc-cta-desc">Start scraping the web for free with a single binary. No cloud, no dependencies.</div>
+        <a href="#installation" class="toc-cta-btn primary">Get started</a>
+        <a href="https://github.com/us/crw" target="_blank" rel="noopener" class="toc-cta-btn outline">View on GitHub</a>
+      </div>
     </aside>
   </div>
 
-  <footer class="footer">
-    <div class="footer-brand"></div>
-    <div class="footer-meta"></div>
-  </footer>
+  <footer class="footer" id="footer"></footer>
 
   <div class="search-modal" id="search-modal">
     <div class="search-modal-content">

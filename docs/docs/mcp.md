@@ -2,6 +2,8 @@
 
 CRW includes a built-in MCP (Model Context Protocol) server that gives any MCP-compatible AI assistant — Claude Code, Claude Desktop, Cursor, Windsurf, Cline, Continue.dev, OpenAI Codex CLI — 4 web scraping tools. Turn any AI coding agent into a web scraper with a single command.
 
+> Also available on the [MCP Registry](https://registry.modelcontextprotocol.io/?q=crw)
+
 ## Two Modes
 
 `crw-mcp` supports two modes:
@@ -11,7 +13,16 @@ CRW includes a built-in MCP (Model Context Protocol) server that gives any MCP-c
 | **Embedded** (default) | No `--api-url` / `CRW_API_URL` set | Self-contained. No server needed. The scraping engine runs inside the MCP process. |
 | **Proxy** | `--api-url` / `CRW_API_URL` set | Forwards tool calls to a remote CRW server (fastcrw.com, self-hosted, etc.) |
 
-> Also available on the [MCP Registry](https://registry.modelcontextprotocol.io/?q=crw)
+## When MCP Helps
+
+MCP is useful when the agent host already expects tools to be registered through a standard interface. That reduces one layer of custom glue code between the agent and your scraping service.
+
+Typical fits:
+
+- agentic research workflows,
+- internal copilots that need current website content,
+- multi-tool assistants that combine search, scrape, and synthesis,
+- and developer environments such as Claude or Cursor where MCP is already the preferred integration path.
 
 ## Quick Start (Embedded Mode)
 
@@ -162,6 +173,29 @@ cargo build -p crw-mcp --no-default-features --release
 | `url` | string | **yes** | URL to map |
 | `maxDepth` | integer | no | Discovery depth (default: 2) |
 | `useSitemap` | boolean | no | Read sitemap.xml (default: true) |
+
+## Example Agent Tool Flow
+
+A clean MCP setup often assigns each CRW route a narrow purpose:
+
+- `map` for discovery,
+- `scrape` for single-page extraction,
+- `crawl` for bounded recursive work.
+
+That keeps tool selection obvious for the host agent. If you expose one broad "web tool" instead, agents tend to overuse it and produce noisier traces.
+
+A common workflow:
+
+1. The agent identifies a site or page it needs.
+2. It calls an MCP-exposed CRW tool.
+3. CRW returns scrape, map, or crawl output.
+4. The agent decides whether to continue exploring or move into summarization, ranking, or retrieval.
+
+## When MCP Is Better Than Direct HTTP
+
+Choose MCP when the host environment already expects tool discovery through a shared protocol, especially in local agent runtimes or IDE workflows. Choose direct HTTP when your application already owns orchestration and just needs API access from the backend.
+
+In other words, MCP is ideal when the caller is an agent platform. Direct HTTP is often simpler when the caller is your own service code.
 
 ## Platform Setup Guides
 
@@ -409,3 +443,15 @@ AI Assistant → HTTP POST (JSON-RPC 2.0) → crw-server /mcp → Web pages
 In embedded mode, the scraping engine runs in-process with zero overhead. In proxy mode, tool calls are forwarded over HTTP. The HTTP transport calls `crw-server` functions directly.
 
 Protocol version: `2024-11-05`
+
+## Operational Notes
+
+- Keep MCP tool descriptions tight so the agent knows when to use `map` versus `scrape`.
+- Start with read-only scraping tools before exposing anything more complex in the same MCP server.
+- Log tool usage separately from downstream agent reasoning so debugging stays tractable.
+
+## Common Mistakes
+
+- Registering ambiguous tool descriptions that do not explain when to use `map` versus `scrape`.
+- Mixing operational secrets and agent prompts in the same configuration surface.
+- Assuming MCP replaces deployment or auth decisions; it only standardizes the tool interface.

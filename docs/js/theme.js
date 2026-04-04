@@ -3,9 +3,8 @@ const STORAGE_KEY = "theme-preference";
 function getPreference() {
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored) return stored;
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
+  // Default to dark mode
+  return "dark";
 }
 
 function setTheme(theme) {
