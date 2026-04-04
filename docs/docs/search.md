@@ -218,3 +218,4 @@ If you search with `limit: 5` and `scrapeOptions`, and all 5 results scrape succ
 - [Extract endpoint](/docs/extract) -- for structured JSON extraction from pages.
 - [Credit costs](/docs/credit-costs) -- full billing breakdown across all endpoints.
 - [SDK examples](/docs/sdk-examples) -- search examples in TypeScript, Python, and Go.
+- [Integrations](/docs/integrations) -- search support across CrewAI, LangChain, n8n, Dify, and more.

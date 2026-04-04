@@ -20,6 +20,9 @@ classifiers = [
 ]
 dependencies = ["platformdirs>=3.0"]
 
+[project.optional-dependencies]
+test = ["pytest>=7.0", "pytest-timeout>=2.0"]
+
 [project.urls]
 Homepage = "https://github.com/us/crw"
 Documentation = "https://us.github.io/crw"
@@ -27,6 +30,13 @@ Repository = "https://github.com/us/crw"
 
 [project.scripts]
 crw-mcp = "crw.__main__:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: tests that hit real APIs (need CRW_API_KEY env var)",
+]
+timeout = 120
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/crw"]

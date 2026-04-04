@@ -42,7 +42,7 @@ The safest way to confirm actual consumption is still the balance endpoint befor
 
 ## Balance check
 
-Use `GET /api/v1/account/balance` with your API key to inspect included credits, purchased balance, and total available credits.
+Use `GET /api/v1/account/balance` (cloud only — fastcrw.com) with your API key to inspect included credits, purchased balance, and total available credits.
 
 ## Example Monitoring Pattern
 

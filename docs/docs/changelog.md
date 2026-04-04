@@ -4,7 +4,7 @@
 
 ### New: Search Endpoint
 
-- `POST /api/v1/search` -- search the web with optional content scraping
+- `POST /api/v1/search` (cloud) / `POST /v1/search` (self-hosted) -- search the web with optional content scraping
 - Supports web, news, and image results via `sources` parameter
 - Time-based filtering with `tbs` parameter (`qdr:h`, `qdr:d`, `qdr:w`, `qdr:m`, `qdr:y`)
 - Category filtering: `github`, `research`, `pdf`
