@@ -516,6 +516,7 @@ async function loadPage(slug) {
     article.innerHTML = breadcrumb + parseMarkdown(md);
     addCodeCopyButtons(article);
     initCodeTabs(article);
+    if (window.hljs) hljs.highlightAll();
     applyRevealToContent(article);
     renderTOC();
     renderPrevNext(slug);

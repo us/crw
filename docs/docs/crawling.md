@@ -42,7 +42,7 @@ Response:
 {
   "success": true,
   "id": "550e8400-e29b-41d4-a716-446655440000",
-  "url": "http://localhost:3000/v1/crawl/550e8400-e29b-41d4-a716-446655440000"
+  "url": "https://fastcrw.com/api/v1/crawl/550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
@@ -56,7 +56,7 @@ The crawl API is asynchronous by design.
 4. Continue polling until the status becomes `completed` or a terminal error is returned.
 
 ```bash
-curl http://localhost:3000/v1/crawl/CRAWL_ID
+curl https://fastcrw.com/api/v1/crawl/CRAWL_ID
 ```
 
 That flow is easy to drive from shell scripts, job runners, background workers, and dashboards.

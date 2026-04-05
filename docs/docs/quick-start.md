@@ -44,12 +44,12 @@ crw https://example.com --css 'article.content'
 crw-server
 ```
 
-The server starts on `http://localhost:3000` by default.
+The cloud API is at `https://fastcrw.com/api`. For self-hosted, the server starts on `https://fastcrw.com/api` by default.
 
 ## Scrape a page
 
 ```bash
-curl -X POST http://localhost:3000/v1/scrape \
+curl -X POST https://fastcrw.com/api/v1/scrape \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com"}'
 ```
@@ -74,7 +74,7 @@ Response:
 ## Scrape with options
 
 ```bash
-curl -X POST http://localhost:3000/v1/scrape \
+curl -X POST https://fastcrw.com/api/v1/scrape \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://example.com",
@@ -89,7 +89,7 @@ curl -X POST http://localhost:3000/v1/scrape \
 
 ```bash
 # Start a crawl job (async)
-curl -X POST http://localhost:3000/v1/crawl \
+curl -X POST https://fastcrw.com/api/v1/crawl \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://example.com",
@@ -104,13 +104,13 @@ Response:
 {
   "success": true,
   "id": "550e8400-e29b-41d4-a716-446655440000",
-  "url": "http://localhost:3000/v1/crawl/550e8400-e29b-41d4-a716-446655440000"
+  "url": "https://fastcrw.com/api/v1/crawl/550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
 ```bash
 # Check crawl status and results
-curl http://localhost:3000/v1/crawl/550e8400-e29b-41d4-a716-446655440000
+curl https://fastcrw.com/api/v1/crawl/550e8400-e29b-41d4-a716-446655440000
 ```
 
 ## Map a site
@@ -118,7 +118,7 @@ curl http://localhost:3000/v1/crawl/550e8400-e29b-41d4-a716-446655440000
 Discover all URLs without scraping content:
 
 ```bash
-curl -X POST http://localhost:3000/v1/map \
+curl -X POST https://fastcrw.com/api/v1/map \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://example.com",
@@ -131,7 +131,7 @@ curl -X POST http://localhost:3000/v1/map \
 If `auth.api_keys` is configured, include the Bearer token:
 
 ```bash
-curl -X POST http://localhost:3000/v1/scrape \
+curl -X POST https://fastcrw.com/api/v1/scrape \
   -H "Authorization: Bearer fc-your-api-key" \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com"}'

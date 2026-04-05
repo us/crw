@@ -10,6 +10,13 @@ function getPreference() {
 function setTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
   localStorage.setItem(STORAGE_KEY, theme);
+
+  // Swap highlight.js theme
+  const hljsLink = document.getElementById("hljs-theme");
+  if (hljsLink) {
+    const base = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles";
+    hljsLink.href = theme === "dark" ? `${base}/github-dark.min.css` : `${base}/github.min.css`;
+  }
 }
 
 function toggleTheme() {

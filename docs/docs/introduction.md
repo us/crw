@@ -13,18 +13,18 @@ Scrape, crawl, and extract structured data from any website — all through one 
 
 Tested against [Firecrawl scrape-content-dataset-v1](https://huggingface.co/datasets/firecrawl/scrape-content-dataset-v1) — 1,000 real-world URLs:
 
-| Metric | CRW (self-hosted) | fastcrw.com (cloud) | Firecrawl | Crawl4AI | Spider |
-|---|---|---|---|---|---|
-| **Coverage (1K URLs)** | **92.0%** | **92.0%** | 77.2% | — | 99.9% |
-| **Avg Latency** | **833ms** | **833ms** | 4,600ms | — | — |
-| **P50 Latency** | **446ms** | **446ms** | — | — | 45ms (static) |
-| **Noise Rejection** | **88.4%** | **88.4%** | noise 6.8% | noise 11.3% | noise 4.2% |
-| **Idle RAM** | 6.6 MB | 0 (managed) | ~500 MB+ | — | cloud-only |
-| **Cold start** | 85 ms | 0 (always-on) | 30–60 s | — | — |
-| **HTTP scrape** | ~30 ms | ~30 ms | ~200 ms+ | ~480 ms | ~45 ms |
-| **Proxy network** | BYO | Global (built-in) | Built-in | — | Cloud-only |
-| **Cost / 1K scrapes** | **$0** (self-hosted) | From $13/mo | $0.83–5.33 | $0 | $0.65 |
-| **Dependencies** | single binary | None (API) | Node + Redis + PG + RabbitMQ | Python + Playwright | Rust / cloud |
+| Metric | CRW | Firecrawl | Crawl4AI | Spider |
+|---|---|---|---|---|
+| **Coverage (1K URLs)** | **92.0%** | 77.2% | — | 85% (static) |
+| **Avg Latency** | **833ms** | 4,600ms | — | — |
+| **P50 Latency** | **446ms** | — | — | 45ms (static) |
+| **Noise Rejection** | **88.4%** | noise 6.8% | noise 11.3% | noise 4.2% |
+| **Idle RAM** | **6.6 MB** | ~500 MB+ | — | cloud-only |
+| **Cold start** | **85 ms** | 30–60 s | — | — |
+| **HTTP scrape** | **~30 ms** | ~200 ms+ | ~480 ms | ~45 ms |
+| **Proxy network** | BYO / Global (cloud) | Built-in | — | Cloud-only |
+| **Cost / 1K scrapes** | **$0.49** | $0.83–5.33 | $0 | $0.65 |
+| **Dependencies** | single binary | Node + Redis + PG + RabbitMQ | Python + Playwright | Rust / cloud |
 
 ### How crw compares
 
@@ -36,7 +36,7 @@ CRW covers 15% more URLs than Firecrawl (92% vs 77.2%), runs 5.5x faster, and us
 
 **vs Crawl4AI** — Both are free and self-hosted. Crawl4AI is Python-based and depends on Playwright (~200 MB RAM per browser). crw ships as a single binary with optional LightPanda sidecar (~3.3 MB idle). In [Spider.cloud's benchmark](https://spider.cloud/blog/firecrawl-vs-crawl4ai-vs-spider-honest-benchmark), Crawl4AI showed 19 pages/sec throughput, 11.3% noise ratio, and 72% anti-bot success — while crw achieves 187+ pages/sec throughput with 88.4% noise rejection.
 
-**vs Spider** — Spider-RS is the fastest crawler in raw throughput (182 pages/sec static, 99.9% coverage). However, Spider's advanced features (anti-bot, proxy rotation) require their paid cloud service. crw offers Firecrawl-compatible endpoints, a built-in MCP server for AI agents, and LLM structured extraction — features Spider doesn't provide out of the box.
+**vs Spider** — Spider-RS is fast for static pages (182 pages/sec, ~85% coverage on real-world URLs). However, Spider's advanced features (anti-bot, proxy rotation) require their paid cloud service. crw offers Firecrawl-compatible endpoints, a built-in MCP server for AI agents, and LLM structured extraction — features Spider doesn't provide out of the box.
 
 ## Features
 
@@ -54,7 +54,7 @@ CRW covers 15% more URLs than Firecrawl (92% vs 77.2%), runs 5.5x faster, and us
 :::tabs
 ::tab{title="cURL"}
 ```bash
-curl -X POST http://localhost:3000/v1/scrape \
+curl -X POST https://fastcrw.com/api/v1/scrape \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{"url": "https://example.com", "formats": ["markdown"]}'
@@ -63,7 +63,7 @@ curl -X POST http://localhost:3000/v1/scrape \
 ```python
 import requests
 
-resp = requests.post("http://localhost:3000/v1/scrape", json={
+resp = requests.post("https://fastcrw.com/api/v1/scrape", json={
     "url": "https://example.com",
     "formats": ["markdown"]
 }, headers={"Authorization": "Bearer YOUR_API_KEY"})
@@ -72,7 +72,7 @@ print(resp.json()["data"]["markdown"])
 ```
 ::tab{title="Node.js"}
 ```javascript
-const resp = await fetch("http://localhost:3000/v1/scrape", {
+const resp = await fetch("https://fastcrw.com/api/v1/scrape", {
   method: "POST",
   headers: {
     "Content-Type": "application/json",

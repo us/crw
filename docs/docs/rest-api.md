@@ -1,6 +1,6 @@
 # REST API Reference — Firecrawl-Compatible
 
-Base URL: `http://localhost:3000`
+Base URL: `https://fastcrw.com/api`
 
 All `/v1/*` and `/mcp` endpoints require authentication when API keys are configured. The `/health` endpoint is always public.
 
@@ -107,7 +107,7 @@ Only requested formats are populated. Others are `null`. `chunks` is populated w
 **Basic scrape:**
 
 ```bash
-curl -X POST http://localhost:3000/v1/scrape \
+curl -X POST https://fastcrw.com/api/v1/scrape \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com"}'
 ```
@@ -115,7 +115,7 @@ curl -X POST http://localhost:3000/v1/scrape \
 **Multiple formats:**
 
 ```bash
-curl -X POST http://localhost:3000/v1/scrape \
+curl -X POST https://fastcrw.com/api/v1/scrape \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://example.com",
@@ -126,7 +126,7 @@ curl -X POST http://localhost:3000/v1/scrape \
 **Force JS rendering:**
 
 ```bash
-curl -X POST http://localhost:3000/v1/scrape \
+curl -X POST https://fastcrw.com/api/v1/scrape \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://spa-app.example.com",

@@ -176,7 +176,7 @@ The common mistake is combining too many narrowing options at once. Start broad,
 Uses standard CSS selector syntax:
 
 ```bash
-curl -X POST http://localhost:3000/v1/scrape \
+curl -X POST https://fastcrw.com/api/v1/scrape \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://news.ycombinator.com",
@@ -191,7 +191,7 @@ curl -X POST http://localhost:3000/v1/scrape \
 Supports XPath 1.0 expressions:
 
 ```bash
-curl -X POST http://localhost:3000/v1/scrape \
+curl -X POST https://fastcrw.com/api/v1/scrape \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://news.ycombinator.com",

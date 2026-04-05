@@ -189,7 +189,7 @@ result = app.scrape_url("https://example.com")
 ```python
 import requests
 
-response = requests.post("http://localhost:3000/v1/scrape", json={
+response = requests.post("https://fastcrw.com/api/v1/scrape", json={
     "url": "https://example.com",
     "formats": ["markdown", "links"]
 })
@@ -200,7 +200,7 @@ print(data["markdown"])
 ## Node.js (Direct HTTP)
 
 ```javascript
-const response = await fetch("http://localhost:3000/v1/scrape", {
+const response = await fetch("https://fastcrw.com/api/v1/scrape", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
