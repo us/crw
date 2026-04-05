@@ -86,19 +86,17 @@ docker run -i ghcr.io/us/crw crw-mcp
 
 CRW gives you Firecrawl's API with a fraction of the resource usage. No runtime dependencies, no Redis, no Node.js — just a single binary you can deploy anywhere.
 
-| Metric | CRW (self-hosted) | fastcrw.com (cloud) | Firecrawl | Crawl4AI | Spider |
-|---|---|---|---|---|---|
-| **Coverage (1K URLs)** | **92.0%** | **92.0%** | 77.2% | — | 99.9% |
-| **Avg Latency** | **833ms** | **833ms** | 4,600ms | — | — |
-| **P50 Latency** | **446ms** | **446ms** | — | — | 45ms (static) |
-| **Noise Rejection** | **88.4%** | **88.4%** | noise 6.8% | noise 11.3% | noise 4.2% |
-| **Idle RAM** | 6.6 MB | 0 (managed) | ~500 MB+ | — | cloud-only |
-| **Cold start** | 85 ms | 0 (always-on) | 30–60 s | — | — |
-| **HTTP scrape** | ~30 ms | ~30 ms | ~200 ms+ | ~480 ms | ~45 ms |
-| **Proxy network** | BYO | Global (built-in) | Built-in | — | Cloud-only |
-| **Cost / 1K scrapes** | **$0** (self-hosted) | From $13/mo | $0.83–5.33 | $0 | $0.65 |
-| **Dependencies** | single binary | None (API) | Node + Redis + PG + RabbitMQ | Python + Playwright | Rust / cloud |
-| **License** | AGPL-3.0 | Managed | AGPL-3.0 | Apache-2.0 | MIT |
+| Metric | CRW (self-hosted) | fastcrw.com (cloud) | Firecrawl | Tavily | Crawl4AI | Spider |
+|---|---|---|---|---|---|---|
+| **Coverage (1K URLs)** | **92.0%** | **92.0%** | 77.2% | — | — | 99.9% |
+| **Avg Scrape Latency** | **833ms** | **833ms** | 4,600ms | — | — | — |
+| **Avg Search Latency** | **880ms** | **880ms** | 954ms | 2,000ms | — | — |
+| **Search Win Rate** | **73/100** | **73/100** | 25/100 | 2/100 | — | — |
+| **Idle RAM** | 6.6 MB | 0 (managed) | ~500 MB+ | — (cloud) | — | cloud-only |
+| **Cold start** | 85 ms | 0 (always-on) | 30–60 s | — | — | — |
+| **Self-hosting** | **Single binary** | — | Multi-container | No | Python + Playwright | No |
+| **Cost / 1K scrapes** | **$0** (self-hosted) | From $13/mo | $0.83–5.33 | — | $0 | $0.65 |
+| **License** | AGPL-3.0 | Managed | AGPL-3.0 | Proprietary | Apache-2.0 | MIT |
 
 <details>
 <summary><b>Full benchmark details</b></summary>
@@ -617,6 +615,21 @@ docker compose up
 This starts CRW on port `3000` with LightPanda as a JS rendering sidecar on port `9222`. CRW auto-connects to LightPanda for SPA rendering.
 
 ## Benchmark
+
+### Search (100 queries, concurrent)
+
+Benchmarked against Firecrawl and Tavily across 100 search queries in 10 categories — all run concurrently via `Promise.all`:
+
+| Metric | CRW | Firecrawl | Tavily |
+|---|---|---|---|
+| **Avg Latency** | **880ms** | 954ms | 2,000ms |
+| **Median Latency** | **785ms** | 932ms | 1,724ms |
+| **P95 Latency** | **1,433ms** | 1,343ms | 3,534ms |
+| **Win Rate** | **73/100** | 25/100 | 2/100 |
+
+CRW is **2.3x faster than Tavily** and won 73% of latency races. [Full search benchmark →](https://fastcrw.com/benchmarks/tavily-search)
+
+### Scrape (1,000 URLs, JS rendering enabled)
 
 Tested on [Firecrawl's scrape-content-dataset-v1](https://huggingface.co/datasets/firecrawl/scrape-content-dataset-v1) (1,000 real-world URLs, JS rendering enabled):
 
