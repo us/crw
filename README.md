@@ -54,6 +54,9 @@ Markdown output, no server, no config. [Install →](#install)
 ### CLI (`crw`) — scrape URLs from your terminal
 
 ```bash
+# Homebrew:
+brew install us/crw/crw
+
 # One-line install (auto-detects OS & arch):
 curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | CRW_BINARY=crw sh
 
@@ -64,6 +67,9 @@ cargo install crw-cli
 ### MCP Server (`crw-mcp`) — give AI agents web scraping tools
 
 ```bash
+# Homebrew:
+brew install us/crw/crw-mcp
+
 # One-line install:
 curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | sh
 
@@ -85,6 +91,9 @@ docker run -i ghcr.io/us/crw crw-mcp
 ### API Server (`crw-server`) — Firecrawl-compatible REST API
 
 ```bash
+# Homebrew:
+brew install us/crw/crw-server
+
 # One-line install:
 curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | CRW_BINARY=crw-server sh
 
