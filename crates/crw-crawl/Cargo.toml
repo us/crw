@@ -14,9 +14,9 @@ default = ["pdf"]
 pdf = ["crw-extract/pdf"]
 
 [dependencies]
-crw-core = { path = "../crw-core", version = "0.3.1" }
-crw-renderer = { path = "../crw-renderer", version = "0.3.1" }
-crw-extract = { path = "../crw-extract", version = "0.3.1" }
+crw-core = { path = "../crw-core", version = "0.3.2" }
+crw-renderer = { path = "../crw-renderer", version = "0.3.2" }
+crw-extract = { path = "../crw-extract", version = "0.3.2" }
 reqwest = { workspace = true }
 scraper = { workspace = true }
 tokio = { workspace = true }
