@@ -10,6 +10,8 @@
     <a href="https://github.com/us/crw/stargazers"><img src="https://img.shields.io/github/stars/us/crw?style=social" alt="GitHub Stars"></a>
     <a href="https://fastcrw.com"><img src="https://img.shields.io/badge/Managed%20Cloud-fastcrw.com-blueviolet" alt="fastcrw.com"></a>
     <a href="https://discord.gg/kkFh2SC8"><img src="https://img.shields.io/badge/Discord-Join%20Community-7289da?logo=discord&logoColor=white" alt="Discord"></a>
+    <br>
+    <a href="https://www.producthunt.com/products/fastcrw?utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-fastcrw" target="_blank" rel="noopener noreferrer"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1116966&theme=light&t=1775671073751" alt="fastCRW - Search + scrape live web results for AI agents | Product Hunt" width="250" height="54" /></a>
   </p>
   <p align="center">
     Works with: Claude Code · Cursor · Windsurf · Cline · Copilot · Continue.dev · Codex
