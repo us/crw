@@ -119,10 +119,11 @@ docker run -p 3000:3000 ghcr.io/us/crw
 **CLI:**
 
 ```bash
-crw https://example.com                          # markdown to stdout
-crw https://example.com --format json             # JSON output
-crw https://example.com --js                      # with JS rendering (auto-detects browser)
-crw https://example.com --css 'article' --raw     # extract specific elements
+crw example.com                                   # markdown to stdout
+crw example.com --format html                     # HTML output
+crw example.com --format links                    # extract all links
+crw example.com --js                              # with JS rendering (auto-detects browser)
+crw example.com --css 'article' --raw             # extract specific elements
 ```
 
 **MCP (AI agents — recommended):**

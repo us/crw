@@ -61,7 +61,12 @@ enum Format {
 
 #[tokio::main]
 async fn main() {
-    let cli = Cli::parse();
+    let mut cli = Cli::parse();
+
+    // Auto-prepend https:// if no scheme is provided
+    if !cli.url.contains("://") {
+        cli.url = format!("https://{}", cli.url);
+    }
 
     // Build renderer config — auto-detect browser if --js
     let mut renderer_config = RendererConfig::default();
