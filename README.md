@@ -57,6 +57,11 @@ Markdown output, no server, no config. [Install →](#install)
 # Homebrew:
 brew install us/crw/crw
 
+# APT (Debian/Ubuntu):
+curl -fsSL https://apt.fastcrw.com/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/crw.gpg
+echo "deb [signed-by=/usr/share/keyrings/crw.gpg] https://apt.fastcrw.com stable main" | sudo tee /etc/apt/sources.list.d/crw.list
+sudo apt update && sudo apt install crw
+
 # One-line install (auto-detects OS & arch):
 curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | CRW_BINARY=crw sh
 
@@ -69,6 +74,9 @@ cargo install crw-cli
 ```bash
 # Homebrew:
 brew install us/crw/crw-mcp
+
+# APT (Debian/Ubuntu — add repo once, see CLI section above):
+sudo apt install crw-mcp
 
 # One-line install:
 curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | sh
@@ -93,6 +101,9 @@ docker run -i ghcr.io/us/crw crw-mcp
 ```bash
 # Homebrew:
 brew install us/crw/crw-server
+
+# APT (Debian/Ubuntu — add repo once, see CLI section above):
+sudo apt install crw-server
 
 # One-line install:
 curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | CRW_BINARY=crw-server sh

@@ -308,6 +308,22 @@ jobs:
       - name: Publish to MCP Registry
         run: mcp-publisher publish
 
+  update-apt:
+    needs: publish-binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Trigger APT repo update
+        run: |
+          gh api repos/us/apt-crw/dispatches \
+            -f event_type=crw-release \
+            -f "client_payload[version]=${{ steps.version.outputs.version }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   update-homebrew:
     needs: publish-binaries
     runs-on: ubuntu-latest
