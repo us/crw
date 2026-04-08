@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "release-type": "simple",
   "bump-minor-pre-major": true,
-  "bump-patch-for-minor-pre-major": false,
+  "bump-patch-for-minor-pre-major": true,
   "include-component-in-tag": false,
   "changelog-sections": [
     { "type": "feat", "section": "Features" },
@@ -96,6 +96,11 @@
           "type": "toml",
           "path": "crates/crw-mcp/Cargo.toml",
           "jsonpath": "$.dependencies.crw-core.version"
+        },
+        {
+          "type": "toml",
+          "path": "crates/crw-mcp/Cargo.toml",
+          "jsonpath": "$.dependencies.crw-renderer.version"
         },
         {
           "type": "toml",
