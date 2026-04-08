@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.3.2](https://github.com/us/crw/compare/v0.3.1...v0.3.2) (2026-04-08)
+
+
+### Bug Fixes
+
+* **cli:** auto-prepend https:// when no scheme provided ([1050606](https://github.com/us/crw/commit/105060644acb1ef930555869372f5413947ac194))
+
 ## [0.3.1](https://github.com/us/crw/compare/v0.3.0...v0.3.1) (2026-04-08)
 
 
