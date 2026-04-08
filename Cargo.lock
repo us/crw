@@ -799,8 +799,8 @@ version = "0.3.0"
 dependencies = [
  "clap",
  "crw-core",
+ "crw-renderer",
  "crw-server",
- "dirs",
  "reqwest 0.13.2",
  "serde_json",
  "tokio",
@@ -831,6 +831,7 @@ dependencies = [
  "axum",
  "brotli",
  "crw-core",
+ "dirs",
  "flate2",
  "futures",
  "rand 0.8.5",

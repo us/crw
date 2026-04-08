@@ -33,7 +33,7 @@ use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 #[cfg(feature = "embedded")]
-mod browser;
+use crw_renderer::browser;
 
 const SERVER_NAME: &str = "crw-mcp";
 const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");

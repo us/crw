@@ -28,7 +28,7 @@ struct Cli {
     #[arg(long)]
     raw: bool,
 
-    /// Force JavaScript rendering via CDP (requires CRW_CDP_URL env var)
+    /// Enable JavaScript rendering (auto-detects LightPanda/Chrome, or use CRW_CDP_URL)
     #[arg(long)]
     js: bool,
 
@@ -63,20 +63,35 @@ enum Format {
 async fn main() {
     let cli = Cli::parse();
 
-    // Build renderer config — enable CDP if --js and CRW_CDP_URL is set
+    // Build renderer config — auto-detect browser if --js
     let mut renderer_config = RendererConfig::default();
-    if cli.js {
+    let _browser_guard = if cli.js {
+        // Check if user explicitly set a CDP URL (backwards compat)
         if let Ok(ws_url) = std::env::var("CRW_CDP_URL") {
             renderer_config.lightpanda = Some(crw_core::config::CdpEndpoint { ws_url });
+            None
         } else {
-            eprintln!(
-                "warning: --js requires CRW_CDP_URL env var (e.g. ws://localhost:9222). Falling back to HTTP."
-            );
+            // Auto-detect: LightPanda (PATH/managed/download) → Chrome → Docker
+            match crw_renderer::browser::spawn_headless().await {
+                Some((guard, ws_url)) => {
+                    renderer_config.lightpanda = Some(crw_core::config::CdpEndpoint { ws_url });
+                    Some(guard)
+                }
+                None => {
+                    eprintln!(
+                        "warning: --js requested but no browser found. \
+                         Install LightPanda or Chrome for JS rendering. \
+                         Falling back to HTTP."
+                    );
+                    None
+                }
+            }
         }
     } else {
         // HTTP-only — no CDP
         renderer_config.mode = "none".into();
-    }
+        None
+    };
 
     let stealth_config = StealthConfig {
         enabled: cli.stealth,

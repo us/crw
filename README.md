@@ -15,12 +15,12 @@
     Works with: Claude Code · Cursor · Windsurf · Cline · Copilot · Continue.dev · Codex
   </p>
   <p align="center">
-    <a href="docs/docs/mcp.md">MCP Integration</a> &bull;
-    <a href="docs/docs/installation.md">Installation</a> &bull;
+    <a href="#install">Install</a> &bull;
+    <a href="#choose-your-mode">Modes</a> &bull;
     <a href="docs/docs/rest-api.md">API Reference</a> &bull;
-    <a href="https://fastcrw.com">Cloud</a> &bull;
+    <a href="docs/docs/mcp.md">MCP Integration</a> &bull;
     <a href="docs/docs/js-rendering.md">JS Rendering</a> &bull;
-    <a href="docs/docs/configuration.md">Configuration</a> &bull;
+    <a href="https://fastcrw.com">Cloud</a> &bull;
     <a href="https://discord.gg/kkFh2SC8">Discord</a>
   </p>
   <p align="center">
@@ -30,14 +30,41 @@
 
 ---
 
-> **Don't want to self-host?** [fastcrw.com](https://fastcrw.com) is the managed cloud — global proxy network, auto-scaling, dashboard, and API keys. Same Firecrawl-compatible API. [Get 500 free credits →](https://fastcrw.com)
+> **Don't want to self-host?** [fastcrw.com](https://fastcrw.com) — managed cloud with global proxy network, auto-scaling, web search, and dashboard. Same API, zero infra. [Get 500 free credits →](https://fastcrw.com)
 
-CRW is the open-source web scraper built for AI agents. Built-in MCP server (stdio + HTTP), single binary, ~6 MB idle RAM. Give Claude Code, Cursor, or any MCP client web scraping superpowers in 30 seconds. Firecrawl-compatible API — 5.5x faster, 75x less memory, 92% coverage on 1K real-world URLs.
+## Scrape any URL in one command
 
-**Built-in MCP server. Single binary. No Redis. No Node.js.**
+```bash
+crw example.com
+```
+
+```
+# Example Domain
+
+This domain is for use in illustrative examples in documents.
+You may use this domain in literature without prior coordination or asking for permission.
+
+[More information...](https://www.iana.org/domains/example)
+```
+
+Markdown output, no server, no config. [Install →](#install)
+
+## Install
+
+### CLI (`crw`) — scrape URLs from your terminal
 
 ```bash
 # One-line install (auto-detects OS & arch):
+curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | CRW_BINARY=crw sh
+
+# Cargo:
+cargo install crw-cli
+```
+
+### MCP Server (`crw-mcp`) — give AI agents web scraping tools
+
+```bash
+# One-line install:
 curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | sh
 
 # npm (zero install):
@@ -55,32 +82,103 @@ docker run -i ghcr.io/us/crw crw-mcp
 
 > Listed on the [MCP Registry](https://registry.modelcontextprotocol.io/?q=crw)
 
-## What's New
+### API Server (`crw-server`) — Firecrawl-compatible REST API
 
-### [0.3.0](https://github.com/us/crw/compare/v0.2.2...v0.3.0) (2026-04-02)
+```bash
+# One-line install:
+curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | CRW_BINARY=crw-server sh
 
+# Cargo:
+cargo install crw-server
 
-### Features
+# Docker:
+docker run -p 3000:3000 ghcr.io/us/crw
+```
 
-* add search() method to Python SDK and docs ([591e3fe](https://github.com/us/crw/commit/591e3fed4bbd14b4470fd2f5cbc24c02f7543dba))
+## Choose Your Mode
 
-### [0.2.2](https://github.com/us/crw/compare/v0.2.1...v0.2.2) (2026-04-02)
+| | CLI (`crw`) | MCP (`crw-mcp`) | Server (`crw-server`) | Docker |
+|---|---|---|---|---|
+| **Use case** | Terminal scraping | AI agent tools | REST API backend | Containerized deploy |
+| **Server needed?** | No | No (embedded) | Yes (`:3000`) | Yes (`:3000`) |
+| **JS rendering** | `--js` (auto-detect)^1 | Auto-detect + auto-download^1 | `crw-server setup`^2 | Included (sidecar) |
+| **Single URL scrape** | Yes | Yes | Yes | Yes |
+| **Async crawl** | — | Yes | Yes | Yes |
+| **URL mapping** | — | Yes | Yes | Yes |
+| **REST API** | — | — | Yes (Firecrawl-compat) | Yes (Firecrawl-compat) |
+| **MCP protocol** | — | Yes (stdio + HTTP) | HTTP only | HTTP only |
+| **Output** | stdout | MCP protocol | JSON responses | JSON responses |
+| **LLM extraction** | — | Yes | Yes | Yes |
 
+> ^1 **CLI + MCP:** Same auto-detect chain — LightPanda in PATH → `~/.crw/lightpanda` (auto-downloads if missing) → Chrome/Chromium on system → LightPanda Docker container. Falls back to HTTP-only if no browser found. CLI requires `--js` flag; MCP activates automatically. Both respect `CRW_CDP_URL` env var for manual override.
+>
+> ^2 **Server:** `crw-server setup` downloads LightPanda and creates `config.local.toml`. Start LightPanda separately before running the server. With Docker Compose, LightPanda runs as a sidecar automatically.
 
-### Bug Fixes
+## Quick Start
 
-* **renderer:** escalate to JS renderer on HTTP 401/403 responses ([f515caa](https://github.com/us/crw/commit/f515caa2e315a06df9274967bdc3fb23dbafcbcf))
-* use GitHub latest release instead of pinned version for binary download ([4afcb1a](https://github.com/us/crw/commit/4afcb1a4c67d4e9b36809ed32ce88b6a9fd4c342))
+**CLI:**
 
-### [0.2.1](https://github.com/us/crw/compare/v0.2.0...v0.2.1) (2026-03-28)
+```bash
+crw https://example.com                          # markdown to stdout
+crw https://example.com --format json             # JSON output
+crw https://example.com --js                      # with JS rendering (auto-detects browser)
+crw https://example.com --css 'article' --raw     # extract specific elements
+```
 
+**MCP (AI agents — recommended):**
 
-### Bug Fixes
+```bash
+claude mcp add crw -- npx crw-mcp
+```
 
-* make crw-mcp npm wrapper executable ([576a9eb](https://github.com/us/crw/commit/576a9eb19ae90bc677344045dd70fb96e8b938da))
-* use latest tag in server.json OCI identifier ([7ec3b82](https://github.com/us/crw/commit/7ec3b82ab78aa2c7ff900d07400f8a2426cb955f))
+> That's it. Claude Code now has `crw_scrape`, `crw_crawl`, `crw_map` tools. For Cursor, Windsurf, Cline, and other MCP clients, see [MCP Server](#mcp-server).
 
-[Full changelog →](CHANGELOG.md)
+**Self-hosted server:**
+
+```bash
+crw-server                    # start API server on :3000
+crw-server setup              # optional: set up JS rendering (downloads LightPanda)
+```
+
+**Docker Compose (with JS rendering):**
+
+```bash
+docker compose up
+```
+
+**Scrape a page via API:**
+
+```bash
+curl -X POST http://localhost:3000/v1/scrape \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com"}'
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "markdown": "# Example Domain\nThis domain is for use in ...",
+    "metadata": {
+      "title": "Example Domain",
+      "sourceURL": "https://example.com",
+      "statusCode": 200,
+      "elapsedMs": 32
+    }
+  }
+}
+```
+
+**Cloud (no setup):**
+
+```bash
+curl -X POST https://fastcrw.com/api/v1/scrape \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com"}'
+```
+
+> Get your API key at [fastcrw.com](https://fastcrw.com) — 500 free credits included.
 
 ## Why CRW?
 
@@ -123,110 +221,19 @@ CRW gives you Firecrawl's API with a fraction of the resource usage. No runtime 
 
 ## Features
 
-- **🔧 MCP server** — built-in stdio + HTTP transport for Claude Code, Cursor, Windsurf, and any MCP client
-- **🔌 Firecrawl-compatible API** — same endpoint family and familiar request/response ergonomics
-- **📄 6 output formats** — markdown, HTML, cleaned HTML, raw HTML, plain text, links, structured JSON
-- **🤖 LLM structured extraction** — send a JSON schema, get validated structured data back (Anthropic tool_use + OpenAI function calling)
-- **🌐 JS rendering** — auto-detect SPAs with shell heuristics, render via LightPanda, Playwright, or Chrome (CDP)
-- **🕷️ BFS crawler** — async crawl with rate limiting, robots.txt, sitemap support, concurrent jobs
-- **🔒 Security** — SSRF protection (private IPs, cloud metadata, IPv6), constant-time auth, dangerous URI filtering
-- **🐳 Docker ready** — multi-stage build with LightPanda sidecar
-- **🎯 CSS selector & XPath** — extract specific DOM elements before Markdown conversion
-- **✂️ Chunking & filtering** — split content into topic/sentence/regex chunks; rank by BM25 or cosine similarity
-- **🕵️ Stealth mode** — browser-like UA rotation and header injection to reduce bot detection
-- **🌐 Per-request proxy** — override the global proxy per scrape request
-- **🔍 Web search** — search the web and optionally scrape results, with news and image support (cloud only via [fastcrw.com](https://fastcrw.com))
-
-## Cloud vs Self-Hosted
-
-| Feature | Self-hosted | Cloud ([fastcrw.com](https://fastcrw.com)) |
-|---|---|---|
-| **Setup** | `cargo install crw-server` | Sign up → get API key |
-| **Infrastructure** | You manage | Fully managed |
-| **Proxy** | Bring your own | Global proxy network |
-| **Scaling** | Manual | Auto-scaling |
-| **API** | Firecrawl-compatible | Same Firecrawl-compatible API |
-| **Search** | — (cloud only) | Web search + optional scrape |
-
-Both use the same Firecrawl-compatible API — your code works with either. Switch between self-hosted and cloud by changing the base URL.
-
-## Quick Start
-
-**MCP (AI agents — recommended):**
-
-```bash
-claude mcp add crw -- npx crw-mcp
-```
-
-> That's it. Claude Code now has `crw_scrape`, `crw_crawl`, `crw_map` tools. For Cursor, Windsurf, Cline, and other MCP clients, see [MCP Server](#mcp-server).
-
-**CLI (no server needed):**
-
-```bash
-cargo install crw-cli
-crw https://example.com
-```
-
-**Self-hosted server:**
-
-```bash
-cargo install crw-server
-crw-server
-```
-
-**Enable JS rendering (optional):**
-
-```bash
-crw-server setup
-```
-
-This downloads [LightPanda](https://github.com/lightpanda-io/browser) and creates a `config.local.toml` for JS rendering. See [JS Rendering](#js-rendering) for details.
-
-**Cloud (no setup):**
-
-```bash
-curl -X POST https://fastcrw.com/api/v1/scrape \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://example.com"}'
-```
-
-> Get your API key at [fastcrw.com](https://fastcrw.com) — 500 free credits included.
-
-**Docker:**
-
-```bash
-docker run -p 3000:3000 ghcr.io/us/crw:latest
-```
-
-**Docker Compose (with JS rendering):**
-
-```bash
-docker compose up
-```
-
-**Scrape a page:**
-
-```bash
-curl -X POST http://localhost:3000/v1/scrape \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://example.com"}'
-```
-
-```json
-{
-  "success": true,
-  "data": {
-    "markdown": "# Example Domain\nThis domain is for use in ...",
-    "metadata": {
-      "title": "Example Domain",
-      "sourceURL": "https://example.com",
-      "statusCode": 200,
-      "elapsedMs": 32
-    }
-  }
-}
-```
+- **MCP server** — built-in stdio + HTTP transport for Claude Code, Cursor, Windsurf, and any MCP client
+- **Firecrawl-compatible API** — same endpoint family and familiar request/response ergonomics
+- **6 output formats** — markdown, HTML, cleaned HTML, raw HTML, plain text, links, structured JSON
+- **LLM structured extraction** — send a JSON schema, get validated structured data back (Anthropic tool_use + OpenAI function calling)
+- **JS rendering** — auto-detect SPAs with shell heuristics, render via LightPanda, Playwright, or Chrome (CDP)
+- **BFS crawler** — async crawl with rate limiting, robots.txt, sitemap support, concurrent jobs
+- **Security** — SSRF protection (private IPs, cloud metadata, IPv6), constant-time auth, dangerous URI filtering
+- **Docker ready** — multi-stage build with LightPanda sidecar
+- **CSS selector & XPath** — extract specific DOM elements before Markdown conversion
+- **Chunking & filtering** — split content into topic/sentence/regex chunks; rank by BM25 or cosine similarity
+- **Stealth mode** — browser-like UA rotation and header injection to reduce bot detection
+- **Per-request proxy** — override the global proxy per scrape request
+- **Web search** — search the web and optionally scrape results, with news and image support (cloud only via [fastcrw.com](https://fastcrw.com))
 
 ## Use Cases
 
@@ -696,6 +703,10 @@ Contributions are welcome! Please open an issue or submit a pull request.
 6. Open a Pull Request
 
 The pre-commit hook runs the same checks as CI (`cargo fmt`, `cargo clippy`, `cargo test`). You can also run them manually with `make check`.
+
+## Changelog
+
+[Full changelog →](CHANGELOG.md)
 
 ## License
 

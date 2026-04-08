@@ -57,7 +57,7 @@ detect_platform() {
     Darwin)  PLATFORM="darwin" ;;
     Linux)   PLATFORM="linux"  ;;
     MINGW*|MSYS*|CYGWIN*) PLATFORM="win32" ;;
-    *)       err "Unsupported OS: $OS. Try: cargo install crw-mcp" ;;
+    *)       err "Unsupported OS: $OS. Try: cargo install $BINARY" ;;
   esac
 
   # Rosetta 2 detection — uname returns x86_64 under Rosetta on Apple Silicon
@@ -71,13 +71,13 @@ detect_platform() {
   case "$ARCH" in
     x86_64|amd64)  ARCH_LABEL="x64"   ;;
     aarch64|arm64) ARCH_LABEL="arm64"  ;;
-    *)             err "Unsupported architecture: $ARCH. Try: cargo install crw-mcp" ;;
+    *)             err "Unsupported architecture: $ARCH. Try: cargo install $BINARY" ;;
   esac
 
   # musl libc detection — pre-built binaries require glibc
   if [ "$PLATFORM" = "linux" ]; then
     if command -v ldd >/dev/null 2>&1 && ldd --version 2>&1 | grep -qi musl; then
-      err "musl libc detected (Alpine Linux?). Pre-built binaries require glibc. Try: cargo install crw-mcp"
+      err "musl libc detected (Alpine Linux?). Pre-built binaries require glibc. Try: cargo install $BINARY"
     fi
   fi
 

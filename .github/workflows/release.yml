@@ -108,23 +108,29 @@ jobs:
         include:
           - target: x86_64-apple-darwin
             os: macos-latest
-            asset: crw-mcp-darwin-x64.tar.gz
+            platform: darwin
+            arch_label: x64
           - target: aarch64-apple-darwin
             os: macos-latest
-            asset: crw-mcp-darwin-arm64.tar.gz
+            platform: darwin
+            arch_label: arm64
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            asset: crw-mcp-linux-x64.tar.gz
+            platform: linux
+            arch_label: x64
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
-            asset: crw-mcp-linux-arm64.tar.gz
+            platform: linux
+            arch_label: arm64
             cross: true
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-            asset: crw-mcp-win32-x64.zip
+            platform: win32
+            arch_label: x64
           - target: aarch64-pc-windows-msvc
             os: windows-latest
-            asset: crw-mcp-win32-arm64.zip
+            platform: win32
+            arch_label: arm64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
@@ -141,22 +147,39 @@ jobs:
       - name: Build
         run: |
           if [ "${{ matrix.cross }}" = "true" ]; then
-            cross build --release -p crw-mcp --target ${{ matrix.target }}
+            cross build --release -p crw-mcp -p crw-cli -p crw-server --target ${{ matrix.target }}
           else
-            cargo build --release -p crw-mcp --target ${{ matrix.target }}
+            cargo build --release -p crw-mcp -p crw-cli -p crw-server --target ${{ matrix.target }}
           fi
         shell: bash
 
       - name: Package (unix)
         if: runner.os != 'Windows'
-        run: tar czf ${{ matrix.asset }} -C target/${{ matrix.target }}/release crw-mcp
+        run: |
+          for bin in crw crw-server crw-mcp; do
+            tar czf "${bin}-${{ matrix.platform }}-${{ matrix.arch_label }}.tar.gz" \
+              -C target/${{ matrix.target }}/release "$bin"
+          done
 
       - name: Package (windows)
         if: runner.os == 'Windows'
-        run: Compress-Archive -Path target/${{ matrix.target }}/release/crw-mcp.exe -DestinationPath ${{ matrix.asset }}
+        run: |
+          foreach ($bin in @("crw", "crw-server", "crw-mcp")) {
+            Compress-Archive -Path "target/${{ matrix.target }}/release/${bin}.exe" `
+              -DestinationPath "${bin}-${{ matrix.platform }}-${{ matrix.arch_label }}.zip"
+          }
 
       - name: Upload to release
-        run: gh release upload ${{ github.ref_name }} ${{ matrix.asset }} --clobber
+        run: |
+          for bin in crw crw-server crw-mcp; do
+            if [ "${{ runner.os }}" = "Windows" ]; then
+              ext="zip"
+            else
+              ext="tar.gz"
+            fi
+            gh release upload ${{ github.ref_name }} "${bin}-${{ matrix.platform }}-${{ matrix.arch_label }}.${ext}" --clobber
+          done
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

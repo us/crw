@@ -12,6 +12,7 @@ description = "HTTP and CDP browser rendering engine for the CRW web scraper"
 [features]
 default = []
 cdp = ["tokio-tungstenite"]
+auto-browser = ["dep:dirs"]
 
 [dependencies]
 crw-core = { path = "../crw-core", version = "0.3.0" }
@@ -25,6 +26,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 async-trait = "0.1"
 rand = { workspace = true }
+dirs = { version = "6", optional = true }
 
 [dev-dependencies]
 axum = { workspace = true }

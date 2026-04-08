@@ -32,6 +32,8 @@
 //! # }
 //! ```
 
+#[cfg(feature = "auto-browser")]
+pub mod browser;
 #[cfg(feature = "cdp")]
 pub mod cdp;
 pub mod detector;
