@@ -2,6 +2,26 @@
 
 All notable changes to CRW are documented here.
 
+## [0.3.1](https://github.com/us/crw/compare/v0.3.0...v0.3.1) (2026-04-08)
+
+
+### Features
+
+* add llms.txt, SKILL.md, MCP init command, and docs UI improvements ([1b22d19](https://github.com/us/crw/commit/1b22d194ec9a8b8db8db39a1d44ce38a56716f5d))
+* add one-line install script with auto platform detection ([6354f79](https://github.com/us/crw/commit/6354f7929896bb9a12eeebb9d5bf439731fac874))
+* **docs:** add dark mode logo support and improve docs UI ([047df7b](https://github.com/us/crw/commit/047df7b46485d9cdec76b213db181dc0aa592511))
+* **docs:** align design with SaaS site and update branding ([631d07c](https://github.com/us/crw/commit/631d07c66a34bcc71e8d2494a177182977886a8c))
+* **docs:** unify docs into docs.fastcrw.com with Mintlify-style design ([4994998](https://github.com/us/crw/commit/4994998ae97924100e4415b90a5b78db3b8cf09e))
+* **docs:** update URLs, dark mode, syntax highlighting, and benchmarks ([0678cdf](https://github.com/us/crw/commit/0678cdfde6a9de9b5fa56ec2c6256a63a0342317))
+* release all 3 binaries, CLI auto-browser, README overhaul ([aa2950d](https://github.com/us/crw/commit/aa2950d564cb97f668c0c838713f612bffa33e32))
+* update README banner with new logo ([bcba1ad](https://github.com/us/crw/commit/bcba1ad95e7ac1afd3066827f2327452b60c81f0))
+
+
+### Bug Fixes
+
+* crawl HTTP polling bug + SDK test suite + docs ([#16](https://github.com/us/crw/issues/16)) ([b6d8983](https://github.com/us/crw/commit/b6d898360cb2396683e9e82f778d2ee3b8455625))
+* remove internal implementation detail from roadmap ([a5013f0](https://github.com/us/crw/commit/a5013f07f039615de5c5988e6bbf64629b56aa0e))
+
 ## [0.3.0](https://github.com/us/crw/compare/v0.2.2...v0.3.0) (2026-04-02)
 
 

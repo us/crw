@@ -14,7 +14,7 @@ default = ["pdf"]
 pdf = ["dep:crw-pdf"]
 
 [dependencies]
-crw-core = { path = "../crw-core", version = "0.3.0" }
+crw-core = { path = "../crw-core", version = "0.3.1" }
 crw-pdf = { workspace = true, optional = true }
 lol_html = { workspace = true }
 scraper = { workspace = true }
