@@ -27,11 +27,11 @@
     "skills/SKILL.md"
   ],
   "optionalDependencies": {
-    "crw-mcp-darwin-x64": "0.3.0",
-    "crw-mcp-darwin-arm64": "0.3.0",
-    "crw-mcp-linux-x64": "0.3.0",
-    "crw-mcp-linux-arm64": "0.3.0",
-    "crw-mcp-win32-x64": "0.3.0",
-    "crw-mcp-win32-arm64": "0.3.0"
+    "crw-mcp-darwin-x64": "0.3.5",
+    "crw-mcp-darwin-arm64": "0.3.5",
+    "crw-mcp-linux-x64": "0.3.5",
+    "crw-mcp-linux-arm64": "0.3.5",
+    "crw-mcp-win32-x64": "0.3.5",
+    "crw-mcp-win32-arm64": "0.3.5"
   }
 }
