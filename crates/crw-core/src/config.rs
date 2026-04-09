@@ -272,10 +272,40 @@ impl AppConfig {
         let cfg = builder
             .add_source(
                 config::Environment::with_prefix("CRW")
+                    .prefix_separator("_")
                     .separator("__")
                     .try_parsing(true),
             )
             .build()?;
         cfg.try_deserialize()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn env_var_overrides_toml_defaults() {
+        // Set env vars that should override config.default.toml values.
+        unsafe {
+            std::env::set_var("CRW_SERVER__PORT", "4444");
+            std::env::set_var("CRW_RENDERER__LIGHTPANDA__WS_URL", "ws://test:9999/");
+        }
+
+        let cfg = AppConfig::load().unwrap();
+
+        // Clean up.
+        unsafe {
+            std::env::remove_var("CRW_SERVER__PORT");
+            std::env::remove_var("CRW_RENDERER__LIGHTPANDA__WS_URL");
+        }
+
+        assert_eq!(cfg.server.port, 4444, "env var should override server.port");
+        assert_eq!(
+            cfg.renderer.lightpanda.as_ref().unwrap().ws_url,
+            "ws://test:9999/",
+            "env var should override renderer.lightpanda.ws_url"
+        );
     }
 }
