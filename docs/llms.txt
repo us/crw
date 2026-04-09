@@ -1,41 +1,43 @@
 # CRW Documentation
 
-> CRW is a high-performance, self-hosted web scraper for AI agents. Single Rust binary, ~6 MB idle RAM, Firecrawl-compatible REST API. Source: https://github.com/us/crw
+> CRW is a high-performance web scraper for agents and developer workflows. Start with one `scrape` request, then branch into `crawl`, `map`, `search`, extraction, or MCP as needed. Source: https://github.com/us/crw
 
-## Getting Started
-- [Introduction](https://docs.fastcrw.com/#introduction): What CRW is, architecture overview, and key features
-- [Installation](https://docs.fastcrw.com/#installation): Install via curl, cargo, npm, pip, or Docker
-- [Quick Start](https://docs.fastcrw.com/#quick-start): First scrape in 60 seconds
-- [Configuration](https://docs.fastcrw.com/#configuration): TOML config, env vars, CLI flags
+## Get Started
+- [Introduction](https://raw.githubusercontent.com/us/crw/main/docs/docs/introduction.md): The fastest way to understand what CRW does and where to start
+- [Quick Start](https://raw.githubusercontent.com/us/crw/main/docs/docs/quick-start.md): Make your first successful request in under a minute
+- [Authentication](https://raw.githubusercontent.com/us/crw/main/docs/docs/authentication.md): Hosted API keys and self-hosted Bearer auth
+- [API Playground](https://raw.githubusercontent.com/us/crw/main/docs/docs/playground.md): Interactive testing before you write code
+- [Installation](https://raw.githubusercontent.com/us/crw/main/docs/docs/installation.md): Package-level install options
 
-## API Reference
-- [REST API](https://docs.fastcrw.com/#rest-api): Full endpoint reference for /v1/scrape, /v1/crawl, /v1/map, /v1/search, /v1/extract
-- [Scraping](https://docs.fastcrw.com/#scraping): POST /v1/scrape — single URL content extraction
-- [Crawling](https://docs.fastcrw.com/#crawling): POST /v1/crawl — async BFS multi-page crawl with job polling
-- [Map](https://docs.fastcrw.com/#map): POST /v1/map — URL discovery via sitemap + link traversal
-- [Search](https://docs.fastcrw.com/#search): POST /v1/search — web search with optional scrape (cloud-only)
-- [Extract](https://docs.fastcrw.com/#extract): POST /v1/extract — LLM-powered structured JSON extraction
-- [Output Formats](https://docs.fastcrw.com/#output-formats): markdown, html, rawHtml, plainText, links, json
-- [JavaScript Rendering](https://docs.fastcrw.com/#js-rendering): Auto-detect SPA rendering with LightPanda, Chrome, or Playwright
-- [Error Codes](https://docs.fastcrw.com/#error-codes): HTTP status codes and error response format
-- [Rate Limits](https://docs.fastcrw.com/#rate-limits): Cloud rate limits and retry headers
+## Core APIs
+- [REST API](https://raw.githubusercontent.com/us/crw/main/docs/docs/rest-api.md): Route map and endpoint chooser
+- [Scrape](https://raw.githubusercontent.com/us/crw/main/docs/docs/scraping.md): `POST /v1/scrape` for single-page extraction
+- [Crawl](https://raw.githubusercontent.com/us/crw/main/docs/docs/crawling.md): `POST /v1/crawl` plus `GET /v1/crawl/{id}` for async multi-page jobs
+- [Search](https://raw.githubusercontent.com/us/crw/main/docs/docs/search.md): Hosted search-first workflow when you do not know the URLs yet
+- [Map](https://raw.githubusercontent.com/us/crw/main/docs/docs/map.md): `POST /v1/map` for URL discovery without full scraping
+- [Extract](https://raw.githubusercontent.com/us/crw/main/docs/docs/extract.md): Structured JSON extraction through `scrape` using `formats: ["json"]`
 
 ## Integrations
-- [MCP Server](https://docs.fastcrw.com/#mcp): Built-in MCP server for Claude Code, Cursor, and 10+ AI platforms
-- [Integrations Catalog](https://docs.fastcrw.com/#integrations): CrewAI, LangChain, n8n, OpenClaw, Dify, Firecrawl SDK drop-in
-- [SDK Examples](https://docs.fastcrw.com/#sdk-examples): Python, Node.js, curl code examples
-- [Agent Onboarding](https://docs.fastcrw.com/#agent-onboarding): Machine-readable API guide for AI agents
+- [MCP Server](https://raw.githubusercontent.com/us/crw/main/docs/docs/mcp.md): Built-in MCP server for Claude, Codex, Cursor, and other hosts
+- [MCP Client Setup](https://raw.githubusercontent.com/us/crw/main/docs/docs/mcp-clients.md): Copy-paste setup for Claude Code, Codex, Cursor, Windsurf, Cline, and Continue
+- [SDK Examples](https://raw.githubusercontent.com/us/crw/main/docs/docs/sdk-examples.md): Copy-paste examples in multiple languages
+- [Framework Integrations](https://raw.githubusercontent.com/us/crw/main/docs/docs/integrations.md): CrewAI, LangChain, n8n, OpenClaw, and related integrations
+- [Agent Onboarding](https://raw.githubusercontent.com/us/crw/main/docs/docs/agent-onboarding.md): Machine-readable guidance for tool-using agents
 
-## Deployment
-- [Self-Hosting Guide](https://docs.fastcrw.com/#self-hosting): Binary or Docker deployment
-- [Self-Hosting Hardening](https://docs.fastcrw.com/#self-hosting-hardening): Production security and ops
-- [Docker](https://docs.fastcrw.com/#docker): Container deployment and compose setup
-- [Credit Costs](https://docs.fastcrw.com/#credit-costs): Per-endpoint credit usage (cloud)
+## Deploy
+- [Self-Hosting](https://raw.githubusercontent.com/us/crw/main/docs/docs/self-hosting.md): Local and private deployment path
+- [Docker](https://raw.githubusercontent.com/us/crw/main/docs/docs/docker.md): Container and compose guidance
+- [Configuration](https://raw.githubusercontent.com/us/crw/main/docs/docs/configuration.md): TOML config and env var mapping
+- [Self-Hosting Hardening](https://raw.githubusercontent.com/us/crw/main/docs/docs/self-hosting-hardening.md): Production security guidance
+- [JS Rendering](https://raw.githubusercontent.com/us/crw/main/docs/docs/js-rendering.md): Browser-backed rendering guidance
 
-## Architecture
-- [Architecture](https://docs.fastcrw.com/#architecture): Internal design, crate structure, data flow
-- [Crates](https://docs.fastcrw.com/#crates): Rust workspace crate breakdown
-- [Compatibility](https://docs.fastcrw.com/#compatibility): Firecrawl API compatibility status
-
-## Optional
-- [Changelog](https://docs.fastcrw.com/#changelog): Release notes and version history
+## Reference
+- [Response Shapes](https://raw.githubusercontent.com/us/crw/main/docs/docs/response-shapes.md): Common API envelopes in one place
+- [Output Formats](https://raw.githubusercontent.com/us/crw/main/docs/docs/output-formats.md): `markdown`, `html`, `rawHtml`, `plainText`, `links`, `json`
+- [Error Codes](https://raw.githubusercontent.com/us/crw/main/docs/docs/error-codes.md): Failure semantics and machine-readable codes
+- [Rate Limits](https://raw.githubusercontent.com/us/crw/main/docs/docs/rate-limits.md): Hosted throttling guidance
+- [Credit Costs](https://raw.githubusercontent.com/us/crw/main/docs/docs/credit-costs.md): Hosted billing behavior
+- [Compatibility](https://raw.githubusercontent.com/us/crw/main/docs/docs/compatibility.md): Firecrawl compatibility notes
+- [Changelog](https://raw.githubusercontent.com/us/crw/main/docs/docs/changelog.md): Release notes
+- [Architecture](https://raw.githubusercontent.com/us/crw/main/docs/docs/architecture.md): Internal design overview
+- [Crates](https://raw.githubusercontent.com/us/crw/main/docs/docs/crates.md): Rust workspace breakdown

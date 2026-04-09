@@ -13,6 +13,11 @@ CRW includes a built-in MCP (Model Context Protocol) server that gives any MCP-c
 | **Embedded** (default) | No `--api-url` / `CRW_API_URL` set | scrape, crawl, map | Self-contained. No server needed. The scraping engine runs inside the MCP process. |
 | **Proxy / Cloud** | `--api-url` / `CRW_API_URL` set | scrape, crawl, map + **search** | Forwards tool calls to a remote CRW server. Cloud mode ([fastcrw.com](https://fastcrw.com)) adds `crw_search` for web search. |
 
+## Where to use what
+
+- Use this page for the MCP model, tool list, and transport choices.
+- Use [MCP Client Setup](#mcp-clients) for Claude Code, Codex, Cursor, Windsurf, Cline, Continue, and similar host-specific config snippets.
+
 ## When MCP Helps
 
 MCP is useful when the agent host already expects tools to be registered through a standard interface. That reduces one layer of custom glue code between the agent and your scraping service.
@@ -35,7 +40,7 @@ curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | sh
 # npm (zero install):
 npx crw-mcp
 
-# Python:
+# Python (SDK — use npx or cargo for MCP binary):
 pip install crw
 
 # Cargo:
@@ -56,6 +61,8 @@ codex mcp add crw -- npx crw-mcp
 ```
 
 That's it. The agent starts `crw-mcp`, which contains the full scraping engine. When the agent disconnects, the process dies.
+
+If you want host-by-host config files instead of one-liners, jump to [MCP Client Setup](#mcp-clients).
 
 ### With CDP rendering (LightPanda/Chrome)
 
@@ -87,7 +94,7 @@ Connect to [fastcrw.com](https://fastcrw.com) or any remote CRW instance:
 # Cloud server
 claude mcp add \
   -e CRW_API_URL=https://fastcrw.com/api \
-  -e CRW_API_KEY=fc-xxx \
+  -e CRW_API_KEY=YOUR_API_KEY \
   crw -- npx crw-mcp
 
 # Local crw-server on custom port
@@ -95,6 +102,8 @@ claude mcp add \
   -e CRW_API_URL=http://localhost:4000 \
   crw -- npx crw-mcp
 ```
+
+The same `CRW_API_URL` + `CRW_API_KEY` env block also works in Codex, Claude Desktop, Cursor, Windsurf, Cline, and Continue. See [MCP Client Setup](#mcp-clients) for ready-to-paste config files.
 
 ## Three Transport Options
 
@@ -142,6 +151,30 @@ cargo build -p crw-mcp --no-default-features --release
 | `crw_check_crawl_status` | Poll crawl status and get results | `GET /v1/crawl/:id` | All modes |
 | `crw_map` | Discover all URLs on a site | `POST /v1/map` | All modes |
 | `crw_search` | Search the web → titles, URLs, descriptions | `POST /v1/search` | **Cloud only** |
+
+## Best first setups
+
+### Claude Code
+
+```bash
+# Local embedded
+claude mcp add crw -- npx crw-mcp
+
+# fastcrw.com cloud
+claude mcp add \
+  -e CRW_API_URL=https://fastcrw.com/api \
+  -e CRW_API_KEY=YOUR_API_KEY \
+  crw -- npx crw-mcp
+```
+
+### OpenAI Codex CLI
+
+```bash
+# Local embedded
+codex mcp add crw -- npx crw-mcp
+```
+
+For cloud mode and file-based configs, continue in [MCP Client Setup](#mcp-clients).
 
 ### crw_scrape
 
@@ -211,207 +244,16 @@ Choose MCP when the host environment already expects tool discovery through a sh
 
 In other words, MCP is ideal when the caller is an agent platform. Direct HTTP is often simpler when the caller is your own service code.
 
-## Platform Setup Guides
+## Detailed host setup
 
-### Claude Code
+Use [MCP Client Setup](#mcp-clients) for:
 
-```bash
-# Embedded mode (recommended — no server needed)
-claude mcp add crw -- npx crw-mcp
-
-# Proxy mode (remote server)
-claude mcp add -e CRW_API_URL=https://fastcrw.com/api -e CRW_API_KEY=fc-xxx crw -- npx crw-mcp
-
-# HTTP transport (requires crw-server running)
-claude mcp add --transport http crw http://localhost:3000/mcp
-```
-
-Use `claude mcp list` to verify, `claude mcp remove crw` to uninstall.
-
-### Claude Desktop
-
-Edit the config file for your OS:
-
-| OS | Path |
-|----|------|
-| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-| Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
-| Linux | `~/.config/Claude/claude_desktop_config.json` |
-
-```json
-{
-  "mcpServers": {
-    "crw": {
-      "command": "npx",
-      "args": ["crw-mcp"]
-    }
-  }
-}
-```
-
-Fully quit and restart Claude Desktop.
-
-### Cursor
-
-Create or edit `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project-level):
-
-```json
-{
-  "mcpServers": {
-    "crw": {
-      "command": "npx",
-      "args": ["crw-mcp"]
-    }
-  }
-}
-```
-
-Or use the GUI: **Settings → Developer → MCP Tools → Add Custom MCP**.
-
-### Windsurf
-
-Edit `~/.codeium/windsurf/mcp_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "crw": {
-      "command": "npx",
-      "args": ["crw-mcp"]
-    }
-  }
-}
-```
-
-Windsurf has a limit of 100 total tools across all MCP servers. crw uses only 4.
-
-### Cline (VS Code Extension)
-
-| OS | Path |
-|----|------|
-| macOS | `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` |
-| Windows | `%APPDATA%/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` |
-| Linux | `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` |
-
-```json
-{
-  "mcpServers": {
-    "crw": {
-      "command": "npx",
-      "args": ["crw-mcp"],
-      "alwaysAllow": ["crw_scrape", "crw_map"],
-      "disabled": false
-    }
-  }
-}
-```
-
-Set `alwaysAllow` for tools you trust to skip the approval prompt.
-
-### Continue.dev (VS Code / JetBrains)
-
-Edit `~/.continue/config.yaml`:
-
-```yaml
-mcpServers:
-  - name: crw
-    command: npx
-    args:
-      - crw-mcp
-```
-
-MCP tools only work in Continue's **Agent mode**, not in regular chat.
-
-### OpenAI Codex CLI
-
-Edit `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.crw]
-command = "npx"
-args = ["crw-mcp"]
-```
-
-Or: `codex mcp add crw -- npx crw-mcp`
-
-### Gemini CLI
-
-Edit `~/.gemini/settings.json`:
-
-```json
-{
-  "mcpServers": {
-    "crw": {
-      "command": "npx",
-      "args": ["crw-mcp"]
-    }
-  }
-}
-```
-
-### Roo Code (VS Code Extension)
-
-Create or edit `~/.roo/mcp.json` (global) or `.roo/mcp.json` (project-level):
-
-```json
-{
-  "mcpServers": {
-    "crw": {
-      "command": "npx",
-      "args": ["crw-mcp"]
-    }
-  }
-}
-```
-
-### VS Code (GitHub Copilot Agent)
-
-Add to your VS Code `settings.json` or `.vscode/mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "crw": {
-      "command": "npx",
-      "args": ["crw-mcp"]
-    }
-  }
-}
-```
-
-## Platform Comparison
-
-| Platform | Config Format | Config Path | One-liner |
-|----------|-------------|------------|-----------|
-| Claude Code | JSON | `~/.claude.json` | `claude mcp add crw -- npx crw-mcp` |
-| Claude Desktop | JSON | OS-specific | — |
-| Cursor | JSON | `~/.cursor/mcp.json` | — |
-| Windsurf | JSON | `~/.codeium/windsurf/mcp_config.json` | — |
-| Cline | JSON | VS Code globalStorage | — |
-| Continue.dev | YAML | `~/.continue/config.yaml` | — |
-| OpenAI Codex | TOML | `~/.codex/config.toml` | `codex mcp add crw -- npx crw-mcp` |
-| Gemini CLI | JSON | `~/.gemini/settings.json` | — |
-| Roo Code | JSON | `~/.roo/mcp.json` | — |
-| VS Code (Copilot) | JSON | `.vscode/mcp.json` | — |
-
-## With Proxy Mode Authentication
-
-If connecting to a remote server with auth, add `CRW_API_URL` and `CRW_API_KEY`:
-
-```json
-{
-  "mcpServers": {
-    "crw": {
-      "command": "npx",
-      "args": ["crw-mcp"],
-      "env": {
-        "CRW_API_URL": "https://fastcrw.com/api",
-        "CRW_API_KEY": "your-api-key"
-      }
-    }
-  }
-}
-```
+- Claude Code one-liners and HTTP transport
+- Codex CLI one-liners and `~/.codex/config.toml`
+- Claude Desktop config paths
+- Cursor, Windsurf, and Cline JSON examples
+- Continue YAML examples
+- local embedded and fastcrw.com cloud config variants side by side
 
 ## Verify Installation
 
@@ -429,7 +271,7 @@ Expected:
   "result": {
     "protocolVersion": "2024-11-05",
     "capabilities": {"tools": {}},
-    "serverInfo": {"name": "crw-mcp", "version": "0.3.0"}
+    "serverInfo": {"name": "crw-mcp", "version": "<current>"}
   }
 }
 ```

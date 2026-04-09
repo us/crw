@@ -16,74 +16,99 @@ export default {
   ],
 
   navTabs: [
-    { label: "Documentation", href: "#introduction" },
-    { label: "API Reference", href: "#rest-api" },
-    { label: "MCP Server", href: "#mcp" },
-    { label: "Integrations", href: "#integrations" },
+    {
+      label: "Start",
+      href: "#quick-start",
+      match: ["introduction", "quick-start", "authentication", "playground", "rest-api", "installation"],
+    },
+    {
+      label: "Endpoints",
+      href: "#scraping",
+      match: ["scraping", "search", "map", "crawling", "extract"],
+    },
+    {
+      label: "MCP",
+      href: "#mcp",
+      match: ["mcp", "mcp-clients", "sdk-examples", "integrations", "agent-onboarding"],
+    },
+    {
+      label: "Self-Host",
+      href: "#self-hosting",
+      match: ["self-hosting", "docker", "configuration", "self-hosting-hardening", "js-rendering"],
+    },
+    {
+      label: "Reference",
+      href: "#response-shapes",
+      match: ["response-shapes", "output-formats", "rate-limits", "error-codes", "credit-costs", "compatibility", "changelog", "architecture", "crates"],
+    },
   ],
 
   quickLinks: [
     { title: "Playground", href: "https://fastcrw.com/playground", icon: "play", external: true },
-    { title: "Blog", href: "https://fastcrw.com/blog", icon: "file-text", external: true },
+    { title: "Get API Key", href: "https://fastcrw.com/register", icon: "key", external: true },
     { title: "GitHub", href: "https://github.com/us/crw", icon: "github", external: true },
     { title: "Changelog", href: "#changelog", icon: "list" },
   ],
 
   sidebar: [
     {
-      title: "Getting Started",
+      title: "Get Started",
       children: [
         { title: "Introduction", slug: "introduction", icon: "rocket" },
-        { title: "Installation", slug: "installation" },
-        { title: "Quick Start", slug: "quick-start" },
-        { title: "SDK Examples", slug: "sdk-examples" },
+        { title: "Quick Start", slug: "quick-start", icon: "play" },
+        { title: "Authentication", slug: "authentication", icon: "key" },
+        { title: "API Playground", slug: "playground", icon: "play" },
+        { title: "API Overview", slug: "rest-api", icon: "server" },
+        { title: "Installation", slug: "installation", icon: "box" },
       ],
     },
     {
       title: "Core Endpoints",
       children: [
         { title: "Scrape", slug: "scraping", icon: "code" },
-        { title: "Crawl", slug: "crawling", icon: "globe" },
         { title: "Search", slug: "search", icon: "search" },
+      ],
+    },
+    {
+      title: "More APIs",
+      children: [
         { title: "Map", slug: "map", icon: "map" },
+        { title: "Crawl", slug: "crawling", icon: "globe" },
         { title: "Extract", slug: "extract", icon: "zap" },
       ],
     },
     {
-      title: "Features",
+      title: "Integrations",
       children: [
-        { title: "Output Formats", slug: "output-formats", icon: "layers" },
-        { title: "JS Rendering", slug: "js-rendering" },
-        { title: "Agent Onboarding", slug: "agent-onboarding" },
-      ],
-    },
-    {
-      title: "API & Integration",
-      children: [
-        { title: "REST API", slug: "rest-api", icon: "server" },
         { title: "MCP Server", slug: "mcp", icon: "plug" },
-        { title: "Integrations", slug: "integrations" },
-        { title: "Compatibility", slug: "compatibility" },
+        { title: "MCP Client Setup", slug: "mcp-clients", icon: "settings" },
+        { title: "SDK Examples", slug: "sdk-examples", icon: "code" },
+        { title: "Framework Integrations", slug: "integrations", icon: "layers" },
+        { title: "Agent Onboarding", slug: "agent-onboarding", icon: "book" },
       ],
     },
     {
-      title: "Deployment",
+      title: "Deploy",
       children: [
+        { title: "Self-Hosting", slug: "self-hosting", icon: "server" },
         { title: "Docker", slug: "docker", icon: "box" },
-        { title: "Self-Hosting", slug: "self-hosting" },
-        { title: "Hardening", slug: "self-hosting-hardening" },
         { title: "Configuration", slug: "configuration", icon: "settings" },
+        { title: "Hardening", slug: "self-hosting-hardening", icon: "alert" },
+        { title: "JS Rendering", slug: "js-rendering", icon: "zap" },
       ],
     },
     {
       title: "Reference",
       children: [
-        { title: "Rate Limits", slug: "rate-limits" },
-        { title: "Error Codes", slug: "error-codes" },
-        { title: "Credit Costs", slug: "credit-costs" },
-        { title: "Crates", slug: "crates" },
-        { title: "Architecture", slug: "architecture" },
-        { title: "Changelog", slug: "changelog" },
+        { title: "Response Shapes", slug: "response-shapes", icon: "layers" },
+        { title: "Output Formats", slug: "output-formats", icon: "file-text" },
+        { title: "Rate Limits", slug: "rate-limits", icon: "alert" },
+        { title: "Error Codes", slug: "error-codes", icon: "info" },
+        { title: "Credit Costs", slug: "credit-costs", icon: "list" },
+        { title: "Compatibility", slug: "compatibility", icon: "check" },
+        { title: "Changelog", slug: "changelog", icon: "list" },
+        { title: "Architecture", slug: "architecture", icon: "layers" },
+        { title: "Crates", slug: "crates", icon: "box" },
       ],
     },
   ],
@@ -94,8 +119,8 @@ export default {
     tagline: "The base layer for agentic web intelligence.",
     columns: [
       { title: "Product", links: [
-        { label: "Documentation", href: "#introduction" },
-        { label: "API Reference", href: "#rest-api" },
+        { label: "Quick Start", href: "#quick-start" },
+        { label: "REST API", href: "#rest-api" },
         { label: "MCP Server", href: "#mcp" },
         { label: "Changelog", href: "#changelog" },
       ]},
