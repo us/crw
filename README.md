@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://fastcrw.com">
-    <img src="docs/fastcrw-banner.png" alt="fastCRW" height="120" />
+    <img src="docs/logo.png" alt="fastCRW" height="120" />
   </a>
   <p align="center">The web scraper built for AI agents. Single binary. Zero config.</p>
   <p align="center">
@@ -19,9 +19,9 @@
   <p align="center">
     <a href="#install">Install</a> &bull;
     <a href="#choose-your-mode">Modes</a> &bull;
-    <a href="docs/docs/rest-api.md">API Reference</a> &bull;
-    <a href="docs/docs/mcp.md">MCP Integration</a> &bull;
-    <a href="docs/docs/js-rendering.md">JS Rendering</a> &bull;
+    <a href="https://docs.fastcrw.com/#rest-api">API Reference</a> &bull;
+    <a href="https://docs.fastcrw.com/#mcp">MCP Integration</a> &bull;
+    <a href="https://docs.fastcrw.com/#js-rendering">JS Rendering</a> &bull;
     <a href="https://fastcrw.com">Cloud</a> &bull;
     <a href="https://discord.gg/kkFh2SC8">Discord</a>
   </p>
@@ -528,7 +528,7 @@ respect_robots_txt = true
 # api_keys = ["fc-key-1234"]
 ```
 
-See [full configuration reference](docs/index.md#configuration) for all options.
+See [full configuration reference](https://docs.fastcrw.com/#configuration) for all options.
 
 ## Integration Examples
 
@@ -686,14 +686,14 @@ See [docs/crates.md](docs/crates.md) for usage examples and `cargo add` instruct
 
 ## Documentation
 
-Full documentation: **[docs/index.md](docs/index.md)**
+Full documentation: **[docs.fastcrw.com](https://docs.fastcrw.com/#introduction)**
 
-- [Getting Started](docs/index.md#installation)
-- [Configuration](docs/index.md#configuration)
-- [API Reference](docs/index.md#api-reference)
-- [MCP Server](docs/index.md#mcp-server)
-- [JS Rendering](docs/index.md#js-rendering)
-- [Architecture](docs/index.md#architecture)
+- [Getting Started](https://docs.fastcrw.com/#quick-start)
+- [Configuration](https://docs.fastcrw.com/#configuration)
+- [API Reference](https://docs.fastcrw.com/#rest-api)
+- [MCP Server](https://docs.fastcrw.com/#mcp)
+- [JS Rendering](https://docs.fastcrw.com/#js-rendering)
+- [Architecture](https://docs.fastcrw.com/#architecture)
 
 ## Security
 
