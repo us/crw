@@ -1,49 +1,117 @@
-# Structured Extraction Guide
+<div class="page-intro">
+  <div class="page-kicker">More API</div>
+  <h1>Extract</h1>
+  <p class="page-subtitle">Return structured JSON from a known page. In CRW, extraction is a scrape mode: use <code>formats: ["json"]</code> and provide a schema that describes the fields you want back.</p>
+  <div class="page-capabilities">
+    <div class="page-capability"><strong>Best for:</strong> schema-first output</div>
+    <div class="page-capability"><strong>Route:</strong> <code>/v1/scrape</code></div>
+    <div class="page-capability"><strong>Start with:</strong> a tiny schema</div>
+  </div>
+  <div class="page-actions">
+    <a class="page-btn primary" href="#scraping">View Scrape</a>
+    <a class="page-btn secondary" href="https://fastcrw.com/playground" target="_blank" rel="noopener">Try in Playground</a>
+  </div>
+</div>
 
-## Overview
+<div class="playground-panel">
+  <div class="playground-kicker">Try it in the Playground</div>
+  <div class="playground-title">Verify the page before you verify the schema</div>
+  <div class="playground-copy">A reliable extraction flow is simple: confirm the page scrapes cleanly, then add the smallest possible schema, then expand only if the page really contains the extra fields you want.</div>
+  <div class="playground-actions">
+    <a class="page-btn primary" href="https://fastcrw.com/playground" target="_blank" rel="noopener">Open Playground</a>
+    <a class="page-btn secondary" href="#quick-start">Open Quick Start</a>
+  </div>
+</div>
 
-Use extraction when you need shape, not just text. Send `formats: ["json"]` together with a `jsonSchema` to get structured output.
+## Extracting structured data with CRW
+
+### /v1/scrape
+
+```http
+POST /v1/scrape
+```
+
+Authentication:
+
+- Hosted: send `Authorization: Bearer YOUR_API_KEY`
+- Self-hosted: only required when `auth.api_keys` is configured
+
+### Installation
+
+Extraction uses the same HTTP route as scrape, so you can use the same client code and only change the payload.
+
+### Basic usage
+
+Start with this request:
 
 ```json
 {
-  "url": "https://news.ycombinator.com",
+  "url": "https://example.com/product/123",
   "formats": ["json"],
   "jsonSchema": {
     "type": "object",
     "properties": {
-      "stories": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "properties": {
-            "title": { "type": "string" },
-            "url": { "type": "string" }
-          }
-        }
-      }
-    }
+      "title": { "type": "string" },
+      "price": { "type": "string" },
+      "availability": { "type": "string" }
+    },
+    "required": ["title"]
   }
 }
 ```
 
-:::note
-Firecrawl compatibility: `formats: ["extract"]` is accepted as an alias for `"json"`. Both work identically, but `"json"` is the canonical format name.
-:::
+:::tabs
+::tab{title="Python"}
+```python
+import requests
 
-## When Extraction Is the Right Tool
+resp = requests.post(
+    "https://fastcrw.com/api/v1/scrape",
+    headers={"Authorization": "Bearer YOUR_API_KEY"},
+    json={
+        "url": "https://example.com/product/123",
+        "formats": ["json"],
+        "jsonSchema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "price": {"type": "string"},
+                "availability": {"type": "string"},
+            },
+            "required": ["title"],
+        },
+    },
+)
 
-Use structured extraction when the downstream consumer expects fields, not prose. Common examples:
+print(resp.json()["data"]["json"])
+```
+::tab{title="Node.js"}
+```javascript
+const resp = await fetch("https://fastcrw.com/api/v1/scrape", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer YOUR_API_KEY",
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    url: "https://example.com/product/123",
+    formats: ["json"],
+    jsonSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        price: { type: "string" },
+        availability: { type: "string" }
+      },
+      required: ["title"]
+    }
+  })
+});
 
-- product catalogs,
-- article metadata,
-- event pages,
-- directory listings,
-- and pages that will be turned into records for an app or database.
-
-If your next step is retrieval, summarization, or semantic search, markdown is often the better primary output. If your next step is validation, storage, enrichment, or analytics, JSON is usually the better fit.
-
-## End-to-End Request Example
-
+const body = await resp.json();
+console.log(body.data.json);
+```
+::tab{title="cURL"}
 ```bash
 curl -X POST https://fastcrw.com/api/v1/scrape \
   -H "Authorization: Bearer YOUR_API_KEY" \
@@ -62,115 +130,92 @@ curl -X POST https://fastcrw.com/api/v1/scrape \
     }
   }'
 ```
+:::
 
-Start with the smallest schema that is genuinely useful. Overspecified schemas fail more often and are harder to debug.
-
-## Where It Helps
-
-- e-commerce ingestion,
-- article metadata extraction,
-- directory parsing,
-- and AI workflows that need records rather than prose.
-
-Use extraction when the downstream consumer expects fields, not a markdown blob.
-
-## Designing a Good Schema
-
-Strong extraction schemas share a few traits:
-
-- they ask only for fields that truly matter,
-- they avoid ambiguous nested structures when a flat object will do,
-- and they match the actual information density of the page.
-
-Good first schema:
+### Response
 
 ```json
 {
-  "type": "object",
-  "properties": {
-    "title": { "type": "string" },
-    "author": { "type": "string" },
-    "publishedAt": { "type": "string" }
-  }
-}
-```
-
-Risky first schema:
-
-```json
-{
-  "type": "object",
-  "properties": {
-    "sections": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "title": { "type": "string" },
-          "subsections": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "title": { "type": "string" },
-                "bullets": {
-                  "type": "array",
-                  "items": { "type": "string" }
-                }
-              }
-            }
-          }
-        }
-      }
+  "success": true,
+  "data": {
+    "json": {
+      "title": "Widget",
+      "price": "$19.99",
+      "availability": "In stock"
+    },
+    "metadata": {
+      "sourceURL": "https://example.com/product/123",
+      "statusCode": 200,
+      "elapsedMs": 846
     }
   }
 }
 ```
 
-The second schema may be valid, but it asks the model to infer a lot of structure that may not exist clearly on the page.
+## Parameters
 
-## Bring Your Own Key (BYOK)
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `url` | string | required | Target page URL |
+| `formats` | string[] | required | Use `["json"]` for the canonical extraction path |
+| `jsonSchema` | object | required | JSON schema describing the fields you want back |
+| `extract` | object | -- | Firecrawl-compatible wrapper; `extract.schema` is accepted |
+| `llmApiKey` | string | -- | Per-request BYOK credential |
+| `llmProvider` | string | server default | `anthropic` or `openai` |
+| `llmModel` | string | server default | Extraction model override |
+| `onlyMainContent` | boolean | `true` | Keep extraction focused on the main content block |
+| `cssSelector` | string | -- | Narrow the page before extraction |
+| `xpath` | string | -- | Narrow the page before extraction |
 
-You can pass your own LLM API key per-request instead of relying on server configuration:
+:::note
+Firecrawl-compatible aliases `formats: ["extract"]` and `formats: ["llm-extract"]` are accepted, but `["json"]` is the canonical CRW shape.
+:::
 
-```json
-{
-  "url": "https://example.com",
-  "formats": ["json"],
-  "jsonSchema": {
-    "type": "object",
-    "properties": {
-      "title": { "type": "string" },
-      "description": { "type": "string" }
-    }
-  },
-  "llmApiKey": "sk-ant-your-key-here",
-  "llmProvider": "anthropic",
-  "llmModel": "claude-sonnet-4-20250514"
-}
-```
+:::warning
+On self-hosted deployments, JSON extraction requires either `[extraction.llm]` in `config.toml` or a per-request `llmApiKey`. Without one of those, CRW returns an extraction error instead of guessed output.
+:::
 
-| Field | Default | Description |
-| --- | --- | --- |
-| `llmApiKey` | -- | Your API key. Required if the server has no key configured |
-| `llmProvider` | `"anthropic"` | `"anthropic"` or `"openai"` |
-| `llmModel` | `"claude-sonnet-4-20250514"` | Model for structured extraction |
+## Schema design
 
-When a per-request key is provided, it takes priority over server configuration.
+The easiest extraction schema is a small one:
 
-## Operational Advice
+- ask for the fields you actually need,
+- keep field types simple on the first pass,
+- avoid optional fields until the required ones are stable.
 
-Extraction is usually best as a second step:
+Large schemas are harder to debug because you cannot tell whether the issue is the page, the schema, or both.
 
-1. verify the page with markdown first,
-2. confirm the target page actually contains the data you want,
-3. then layer on the JSON schema.
+## Extraction quality
 
-That saves time when a target page is blocked, incomplete, or structurally noisy.
+Use this workflow:
 
-## Common Mistakes
+1. scrape the page as markdown,
+2. verify the target content is present,
+3. add a minimal schema,
+4. expand the schema only after the first JSON result looks right.
 
-- **Missing `jsonSchema`**: If you send `formats: ["json"]` without a `jsonSchema`, the API returns a 400 error. You must provide a schema.
-- **Wrong format name**: `formats: ["extract"]` works but `"json"` is preferred. `formats: ["llm-extract"]` is also accepted.
-- **No LLM configured**: If neither server config nor `llmApiKey` is set, the API returns a 422 error with guidance.
-- **Schema too ambitious**: Start with a minimal schema and widen it after you verify extraction quality on real examples.
+If the underlying page scrape is weak, the JSON extraction will also be weak.
+
+## BYOK and provider control
+
+Use `llmApiKey`, `llmProvider`, and `llmModel` only when you need per-request control. For most users, server defaults are the right starting point once `[extraction.llm]` is configured.
+
+## Common production patterns
+
+- Validate the target with markdown first, then add extraction.
+- Keep the schema as small as possible on the first pass.
+- Narrow the page with `cssSelector` only when the default extraction is too noisy.
+- Use BYOK only when you need per-request provider separation.
+
+## Common mistakes
+
+- Sending `formats: ["json"]` without a schema
+- Designing a schema that assumes more structure than the page really contains
+- Debugging extraction before confirming the underlying scrape succeeded
+- Treating extraction as a separate route instead of a scrape mode
+
+## When to use something else
+
+- Use [Scrape](#scraping) when prose or markdown is enough
+- Use [Map](#map) when you need discovery before extraction
+- Use [Crawl](#crawling) when you need schema-based extraction across many pages

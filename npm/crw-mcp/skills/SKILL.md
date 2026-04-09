@@ -7,7 +7,7 @@ metadata:
   version: "0.3.0"
   homepage: https://fastcrw.com
   repository: https://github.com/us/crw
-allowed-tools: Bash(npx:crw-mcp*) Bash(curl:*) Read
+allowed-tools: Bash(crw:*) Bash(curl:*) Read
 ---
 
 # fastCRW — Web Data Toolkit for AI Agents
@@ -24,10 +24,10 @@ Use this skill when:
 ## Installation
 
 ```bash
-npx crw-mcp@latest init
+crw fastcrw.com
 ```
 
-This installs the CRW MCP server to all detected AI agents (Claude Code, Cursor, Gemini CLI, Codex, OpenCode, Windsurf, Roo Code).
+This installs the CRW skill and MCP server to all detected AI agents (Claude Code, Cursor, Gemini CLI, Codex, OpenCode, Windsurf, Roo Code).
 
 ## Authentication
 
@@ -70,6 +70,17 @@ Parameters:
 
 Returns: `{ "status": "pending|running|completed|failed", "data": [...] }`
 
+### crw_search
+
+Search the web and return relevant results with titles, URLs, and descriptions.
+
+Parameters:
+- `query` (required) — The search query
+- `limit` — Maximum number of results to return. Default: `5`
+- `lang` — Language code for results (e.g. `"en"`, `"tr"`)
+- `country` — Country code for results (e.g. `"us"`, `"tr"`)
+- `scrapeOptions` — Options for scraping each result page (e.g. `{"formats": ["markdown"]}`)
+
 ### crw_map
 
 Discover all URLs on a website via sitemap + link extraction, without scraping content.
@@ -96,8 +107,10 @@ crw_crawl(url="https://docs.example.com", limit=50)  → extract all content
 crw_check_crawl_status(id="...")  → poll until completed
 ```
 
-**Search the web (cloud mode only):**
-Use the REST API directly — `POST /v1/search` with `{"query": "...", "limit": 5}`. Requires `CRW_API_URL` and `CRW_API_KEY`.
+**Search the web:**
+```
+crw_search(query="your search query", limit=5)
+```
 
 ## Common Edge Cases
 

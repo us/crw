@@ -1,86 +1,64 @@
-# Self-Hosting Guide
+# Self-Hosting
+
+Use self-hosting when you want CRW running inside your own infrastructure. The hosted API is still the fastest first-run path; self-hosting is the better fit when network control, auth, and deployment ownership matter more than zero-setup speed.
 
 ## Quick Start
 
-The fastest way to get CRW running locally -- the install script auto-detects your OS and architecture:
+The shortest self-hosted path is Docker:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | sh
+docker run -p 3000:3000 ghcr.io/us/crw
 ```
 
-This downloads the latest `crw-mcp` binary for your platform (macOS Intel/Apple Silicon, Linux x64/ARM64) and installs it to `/usr/local/bin`. You can customize the install directory:
+Then make a local request:
 
 ```bash
-CRW_INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | sh
+curl -X POST http://localhost:3000/v1/scrape \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com","formats":["markdown"]}'
 ```
-
-Or use Docker if you prefer containers:
-
-```bash
-docker run -p 3000:3000 ghcr.io/us/crw:latest
-```
-
-Either option gives you a local endpoint quickly so you can validate real targets before designing a larger deployment.
 
 ## What You Get
 
-The self-hosted path is useful when you want to:
+- the same core self-hosted routes: `scrape`, `crawl`, `map`, `mcp`, `health`
+- optional auth with Bearer tokens
+- optional browser-backed rendering
+- your own reverse proxy, logging, rate limits, and deployment choices
 
-- keep target traffic inside your own infrastructure,
-- control runtime cost directly,
-- and expose scrape, crawl, and map behind your own auth, network, and observability stack.
+## Recommended Rollout
 
-The API shape stays familiar whether you use the managed cloud or your own deployment.
+1. start with `scrape` on a real target
+2. validate one `map` request
+3. run a bounded `crawl` with a low page cap
+4. add auth, TLS, and edge controls before broader access
+5. add JS rendering only when targets actually need it
 
-## Recommended Workflow
+## When Self-Hosting Is The Right Choice
 
-1. Boot the service locally or on a small VPS.
-2. Validate target URLs with the `scrape`, `map`, and `crawl` routes.
-3. Add LightPanda only when your workload requires browser-backed rendering.
-4. Put a reverse proxy, auth, and rate limits in front of it before exposing it beyond a trusted environment.
+Choose self-hosting when you want:
 
-## Early Validation Checklist
+- private network placement,
+- direct control over operational cost,
+- custom auth and routing,
+- or a local MCP/server flow without depending on the hosted product.
 
-Before calling the deployment production-ready, test:
+## When The Hosted API Is Better
 
-- a simple static page through `scrape`,
-- a JS-heavy page with `renderJs: true`,
-- a small `map` request,
-- a bounded `crawl` request,
-- and failure cases such as invalid selectors or target-side 403 responses.
+Choose the hosted path when:
 
-That gives you a much clearer operational picture than only testing a single happy-path URL.
-
-## Example Deployment Pattern
-
-A practical first production shape is:
-
-1. run CRW behind a reverse proxy,
-2. keep the API private to your own network or VPN,
-3. enable browser rendering only when targets actually need it,
-4. add auth and rate limits at the edge,
-5. then roll a small real workload through the service before broader adoption.
-
-That is enough for many teams. You do not need a large crawler platform on day one just to validate whether the product fits your workload.
-
-## What This Setup Is Good At
-
-This setup is a good fit when you want to keep traffic inside your own infrastructure, control costs closely, or ship a private scraping service without managing a large crawler platform. If you need public, managed capacity instead, use the hosted product (Cloud only -- fastcrw.com) and keep the same API shape.
-
-## When Not To Self-Host
-
-Choose the managed product instead if:
-
-- you want immediate capacity without operating the service,
-- your team does not want to manage browser dependencies,
-- or the main goal is product velocity rather than infrastructure control.
-
-Self-hosting is valuable when ownership matters. It is not automatically the best default for every team.
+- you want your first successful request immediately,
+- you do not want to manage renderer dependencies,
+- or your priority is product velocity rather than infrastructure ownership.
 
 ## Common Mistakes
 
-- Exposing the service publicly before adding auth, TLS, and external rate limits.
-- Enabling browser-backed rendering for every target instead of only the JS-heavy ones that need it.
-- Declaring success after one happy-path scrape instead of testing crawl, map, and failure behavior too.
+- Starting with browser rendering before validating plain HTTP scraping
+- Exposing the service publicly before adding auth, TLS, and rate limits
+- Treating one happy-path scrape as enough deployment validation
 
-If you are continuing toward production, read [self-hosting hardening](/docs/self-hosting-hardening) next and keep [credit costs](/docs/credit-costs) nearby for workload sizing.
+## What To Read Next
+
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Docker](#docker)
+- [Self-Hosting Hardening](#self-hosting-hardening)

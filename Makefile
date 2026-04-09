@@ -1,4 +1,4 @@
-.PHONY: hooks fmt clippy test check
+.PHONY: hooks fmt clippy test build check sync-docs-changelog
 
 # Install git pre-commit hook
 hooks:
@@ -24,3 +24,6 @@ build:
 
 # Run all checks (same as CI)
 check: fmt-check clippy test
+
+sync-docs-changelog:
+	python3 scripts/sync-docs-changelog.py

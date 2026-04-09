@@ -24,6 +24,10 @@ jobs:
       - uses: actions/checkout@v6
         if: ${{ steps.release.outputs.release_created }}
 
+      - name: Sync docs changelog
+        if: ${{ steps.release.outputs.release_created }}
+        run: python3 scripts/sync-docs-changelog.py
+
       - name: Update README What's New
         if: ${{ steps.release.outputs.release_created }}
         run: |
@@ -61,6 +65,6 @@ jobs:
           # Commit the README update
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add README.md
-          git diff --cached --quiet || git commit -m "docs: update README What's New section"
+          git add README.md docs/docs/changelog.md
+          git diff --cached --quiet || git commit -m "docs: sync changelog and update README What's New section"
           git push

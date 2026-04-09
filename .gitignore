@@ -2,6 +2,6 @@
 .claude
 PROGRESS.md
 .gstack/
-python/__pycache__/
+**/__pycache__/
 python/.venv/
 python/uv.lock

@@ -132,8 +132,8 @@ When rendered output looks wrong, check:
 ## Troubleshooting
 
 - **Empty content from JS-heavy sites**: Increase `waitFor` (e.g., `3000`-`5000`). Some SPAs need extra time to hydrate.
-- **`rendered_with: "http_only_fallback"` in metadata**: JS rendering was requested but no renderer is available. Check your deployment configuration.
-- **Internal error on `renderJs: true`**: Verify the LightPanda sidecar is running and reachable. Check `/api/health` for renderer status.
+- **`renderedWith: "http_only_fallback"` in metadata**: JS rendering was requested but no renderer is available. Check your deployment configuration.
+- **Internal error on `renderJs: true`**: Verify the LightPanda sidecar is running and reachable. Check `/health` for renderer status.
 - **Still poor output after increasing `waitFor`**: The issue may be anti-bot protection or authentication flow, not rendering delay.
 
 ## Docker Compose
@@ -146,6 +146,8 @@ services:
     image: ghcr.io/us/crw:latest
     ports:
       - "3000:3000"
+    environment:
+      - CRW_RENDERER__LIGHTPANDA__WS_URL=ws://lightpanda:9222
   lightpanda:
     image: lightpanda/lightpanda:latest
     command: ["serve", "--host", "0.0.0.0", "--port", "9222"]

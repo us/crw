@@ -29,14 +29,8 @@ wget -qO- https://raw.githubusercontent.com/us/crw/main/install.sh | sh
 **Options:**
 
 ```bash
-# Install a specific version:
-curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | CRW_VERSION=v0.3.0 sh
-
 # Install to a custom directory:
 curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | CRW_INSTALL_DIR=~/.local/bin sh
-
-# Avoid GitHub API rate limits:
-curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | GITHUB_TOKEN=ghp_... sh
 ```
 
 Supported platforms: macOS (Intel & Apple Silicon), Linux (x64 & ARM64), Windows (via MSYS2/Git Bash).

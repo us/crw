@@ -1,125 +1,89 @@
-# Introduction
+<div class="page-intro">
+  <div class="page-kicker">Get Started</div>
+  <h1>CRW Docs</h1>
+  <p class="page-subtitle">Turn websites into usable data with one API. Start with a single <code>scrape</code> request, then move into <code>search</code>, <code>map</code>, <code>crawl</code>, <code>extract</code>, or MCP only when your workflow actually needs them.</p>
+  <div class="page-capabilities">
+    <div class="page-capability"><strong>Fastest first win:</strong> one URL, one markdown response</div>
+    <div class="page-capability"><strong>Works for:</strong> agents, ETL, RAG, structured extraction</div>
+    <div class="page-capability"><strong>Deploy:</strong> cloud first, self-host when ready</div>
+  </div>
+  <div class="page-actions">
+    <a class="page-btn primary" href="#quick-start">Make your first request</a>
+    <a class="page-btn secondary" href="#self-hosting">Self-host CRW</a>
+  </div>
+</div>
 
-Scrape, crawl, and extract structured data from any website — all through one self-hosted API.
+<div class="playground-panel">
+  <div class="playground-kicker">30-second example</div>
+  <div class="playground-title">The shortest path to a successful response</div>
+  <div class="playground-copy">If this request works, you already understand the core CRW model: known URL in, clean content out. Everything else in the docs builds on that.</div>
+</div>
+
+```bash
+curl -X POST https://fastcrw.com/api/v1/scrape \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com",
+    "formats": ["markdown"]
+  }'
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "markdown": "# Example Domain\n\nThis domain is for use in illustrative examples...",
+    "metadata": {
+      "title": "Example Domain",
+      "sourceURL": "https://example.com",
+      "statusCode": 200,
+      "elapsedMs": 32
+    }
+  }
+}
+```
+
+## Start here
 
 :::cards
-::card{icon="rocket" title="Quick Start" href="#quick-start" description="Get up and running with CRW in under 2 minutes"}
-::card{icon="code" title="REST API" href="#rest-api" description="Firecrawl-compatible REST API for scraping and crawling"}
-::card{icon="plug" title="MCP Server" href="#mcp" description="Built-in MCP server for Claude Code, Cursor, and 8+ platforms"}
-::card{icon="globe" title="Try Crawling" href="#crawling" description="BFS web crawler with robots.txt and sitemap support"}
+::card{icon="code" title="Scrape a page" href="#scraping" description="Use one URL and get markdown, HTML, links, or JSON back."}
+::card{icon="search" title="Search the web" href="#search" description="Find URLs first, then scrape only the results you care about."}
+::card{icon="plug" title="Add MCP tools" href="#mcp" description="Give Claude, Cursor, Codex, and other hosts live web access."}
 :::
+
+## Choose your path
+
+:::cards
+::card{icon="rocket" title="Cloud API" href="#quick-start" description="The fastest first run: get a key, copy one request, and move."}
+::card{icon="plug" title="MCP" href="#mcp" description="Best when your agent runtime already expects MCP tools."}
+::card{icon="box" title="Self-host" href="#self-hosting" description="Best when you want your own infrastructure, auth, and deployment controls."}
+:::
+
+## Why teams switch to CRW
+
+CRW is meant to feel easy on day one without closing off the more serious use cases:
+
+- one API surface for single-page scrape, discovery, bounded crawl, and extraction,
+- Firecrawl-compatible request shapes where they matter,
+- low-ops self-hosting when you need infra control,
+- and a built-in MCP server for agent workflows.
 
 ## Benchmarks
 
-Tested against [Firecrawl scrape-content-dataset-v1](https://huggingface.co/datasets/firecrawl/scrape-content-dataset-v1) — 1,000 real-world URLs:
+Tested against [Firecrawl scrape-content-dataset-v1](https://huggingface.co/datasets/firecrawl/scrape-content-dataset-v1) on 1,000 real-world URLs:
 
 | Metric | CRW | Firecrawl | Crawl4AI |
 |---|---|---|---|
 | **Coverage (1K URLs)** | **92.0%** | 77.2% | — |
 | **Avg Latency** | **833ms** | 4,600ms | — |
-| **P50 Latency** | **446ms** | — | — |
-| **Noise Rejection** | **88.4%** | noise 6.8% | noise 11.3% |
 | **Idle RAM** | **6.6 MB** | ~500 MB+ | — |
 | **Cold start** | **85 ms** | 30–60 s | — |
-| **HTTP scrape** | **~30 ms** | ~200 ms+ | ~480 ms |
-| **Proxy network** | BYO / Global (cloud) | Built-in | — |
-| **Cost / 1K scrapes** | **$0.49** | $0.83–5.33 | $0 |
 | **Dependencies** | single binary | Node + Redis + PG + RabbitMQ | Python + Playwright |
 
-### How crw compares
+## What to read next
 
-:::tip
-CRW covers 15% more URLs than Firecrawl (92% vs 77.2%), runs 5.5x faster, and uses 75x less RAM.
-:::
-
-**vs Firecrawl** — crw covers 15% more URLs (92% vs 77.2%), runs 5.5x faster on average, and uses ~75x less RAM at idle. Firecrawl requires 5 containers (Node.js, Redis, PostgreSQL, RabbitMQ, Playwright); crw is a single binary. Firecrawl's [independent Scrapeway benchmark](https://scrapeway.com/web-scraping-api/firecrawl) shows 64.3% success rate and $5.11/1K cost, with 0% success on LinkedIn/Twitter.
-
-**vs Crawl4AI** — Both are free and self-hosted. Crawl4AI is Python-based and depends on Playwright (~200 MB RAM per browser). crw ships as a single binary with optional LightPanda sidecar (~3.3 MB idle). crw achieves 187+ pages/sec throughput with 88.4% noise rejection, while Crawl4AI shows 19 pages/sec throughput with 11.3% noise ratio.
-
-## Features
-
-:::features
-::feature{icon="code" title="Firecrawl API" description="Same endpoint family, familiar request/response ergonomics"}
-::feature{icon="layers" title="6 Output Formats" description="Markdown, HTML, cleaned HTML, raw HTML, plain text, links, JSON"}
-::feature{icon="zap" title="LLM Extraction" description="JSON schema in, validated structured data out (Anthropic + OpenAI)"}
-::feature{icon="globe" title="JS Rendering" description="Auto-detect SPAs, render via LightPanda, Playwright, or Chrome CDP"}
-::feature{icon="search" title="BFS Crawler" description="Async crawl with rate limiting, robots.txt, sitemap support"}
-::feature{icon="plug" title="MCP Server" description="Built-in stdio + HTTP transport for Claude Code, Cursor, and 8+ platforms"}
-:::
-
-## Quick Example
-
-:::tabs
-::tab{title="cURL"}
-```bash
-curl -X POST https://fastcrw.com/api/v1/scrape \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -d '{"url": "https://example.com", "formats": ["markdown"]}'
-```
-::tab{title="Python"}
-```python
-import requests
-
-resp = requests.post("https://fastcrw.com/api/v1/scrape", json={
-    "url": "https://example.com",
-    "formats": ["markdown"]
-}, headers={"Authorization": "Bearer YOUR_API_KEY"})
-
-print(resp.json()["data"]["markdown"])
-```
-::tab{title="Node.js"}
-```javascript
-const resp = await fetch("https://fastcrw.com/api/v1/scrape", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    "Authorization": "Bearer YOUR_API_KEY"
-  },
-  body: JSON.stringify({ url: "https://example.com", formats: ["markdown"] })
-});
-
-const { data } = await resp.json();
-console.log(data.markdown);
-```
-:::
-
-## Use Cases
-
-- **RAG pipelines** — Crawl websites and extract structured data for vector databases
-- **AI agents** — Give Claude Code or Claude Desktop web scraping tools via MCP
-- **Content monitoring** — Periodic crawl with LLM extraction to track changes
-- **Data extraction** — Combine CSS selectors + LLM to extract any schema from any page
-- **Web archiving** — Full-site BFS crawl to markdown
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────┐
-│                 crw-server                  │
-│         Axum HTTP API + Auth + MCP          │
-├──────────┬──────────┬───────────────────────┤
-│ crw-crawl│crw-extract│    crw-renderer      │
-│ BFS crawl│ HTML→MD   │  HTTP + CDP(WS)      │
-│ robots   │ LLM/JSON  │  LightPanda/Chrome   │
-│ sitemap  │ clean/read│  auto-detect SPA     │
-├──────────┴──────────┴───────────────────────┤
-│                 crw-core                    │
-│        Types, Config, Errors                │
-└─────────────────────────────────────────────┘
-```
-
-## Security
-
-:::note
-CRW includes comprehensive security protections out of the box. All SSRF vectors are blocked, auth uses constant-time comparison, and dangerous URIs are filtered.
-:::
-
-| Layer | Protection |
-|-------|-----------|
-| SSRF | Blocks loopback, private IPs (10.x, 172.16-31.x, 192.168.x), link-local (169.254.x), IPv6 ULA/link-local, IPv4-mapped IPv6, non-HTTP schemes |
-| Auth | Constant-time Bearer token comparison, multiple API keys |
-| Rate limiting | Configurable requests-per-second for crawling |
-| Resource limits | 1 MB request body, 10 MB HTTP response, max depth 10, max pages 1000 |
-| Link filtering | Removes `javascript:`, `mailto:`, `data:`, `tel:`, `blob:` URIs |
-| robots.txt | RFC 9309 compliant with specificity-based matching |
+- [Quick Start](#quick-start) for the fastest first request
+- [API Overview](#rest-api) for the endpoint map
+- [Scrape](#scraping) for the canonical single-page flow
+- [Authentication](#authentication) for key handling and self-host auth

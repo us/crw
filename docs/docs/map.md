@@ -1,78 +1,163 @@
-# Map Endpoint Guide
+<div class="page-intro">
+  <div class="page-kicker">More API</div>
+  <h1>Map</h1>
+  <p class="page-subtitle">Discover the URLs a site exposes before you scrape or crawl it. Map is the lightest way to understand scope without paying the cost of a full multi-page extraction job.</p>
+  <div class="page-capabilities">
+    <div class="page-capability"><strong>Best for:</strong> site discovery</div>
+    <div class="page-capability"><strong>Returns:</strong> links only</div>
+    <div class="page-capability"><strong>Start with:</strong> sitemap on, low depth</div>
+  </div>
+  <div class="page-actions">
+    <a class="page-btn primary" href="#crawling">View Crawl</a>
+    <a class="page-btn secondary" href="#scraping">View Scrape</a>
+  </div>
+</div>
 
-## Overview
+<div class="playground-panel">
+  <div class="playground-kicker">Try it in the Playground</div>
+  <div class="playground-title">Inspect reachability before you recurse</div>
+  <div class="playground-copy">Use one root URL, keep <code>maxDepth</code> small, and inspect the discovered links. If the map is wrong, the crawl will be wrong too.</div>
+  <div class="playground-actions">
+    <a class="page-btn primary" href="https://fastcrw.com/playground" target="_blank" rel="noopener">Open Playground</a>
+    <a class="page-btn secondary" href="#crawling">Jump to Crawl</a>
+  </div>
+</div>
 
-`map` is the lightweight discovery tool in the stack. Use it before `crawl` when you need to answer:
+## Mapping a site with CRW
 
-- what URLs are reachable from this starting point,
-- which subsection of the site is actually worth scraping,
-- and whether a full crawl is justified at all.
+### /v1/map
 
-```bash
-curl -X POST https://fastcrw.com/api/v1/map \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -d '{"url":"https://example.com"}'
+```http
+POST /v1/map
 ```
 
-## Why `map` Comes First
+Authentication:
 
-A lot of scraping waste comes from starting too broad. `map` helps you inspect the site structure first, which is especially useful when:
+- Hosted: send `Authorization: Bearer YOUR_API_KEY`
+- Self-hosted: only required when `auth.api_keys` is configured
 
-- the site has multiple product areas,
-- navigation is noisy,
-- or an agent needs to choose its next step instead of crawling everything.
+### Installation
 
-## When To Use It
+Map is also a plain HTTP route. No dedicated SDK is required.
 
-Choose `map` when you want to answer:
+### Basic usage
 
-- what URLs are reachable from this starting point,
-- what section of the site should we target next,
-- and whether a full crawl is worth the cost.
+Start with this request:
 
-## A Typical Workflow
+```json
+{
+  "url": "https://example.com",
+  "maxDepth": 1,
+  "useSitemap": true
+}
+```
 
-One common pattern looks like this:
+:::tabs
+::tab{title="Python"}
+```python
+import requests
 
-1. `map` a docs home page or product section.
-2. Filter the returned URLs in your application.
-3. Launch `scrape` for a handful of known-important pages.
-4. Launch `crawl` only for the subset that deserves broader recursion.
+resp = requests.post(
+    "https://fastcrw.com/api/v1/map",
+    headers={"Authorization": "Bearer YOUR_API_KEY"},
+    json={
+        "url": "https://example.com",
+        "maxDepth": 1,
+        "useSitemap": True,
+    },
+)
 
-That works well for AI agents, indexing systems, and human operators doing a first evaluation.
+print(resp.json()["data"]["links"])
+```
+::tab{title="Node.js"}
+```javascript
+const resp = await fetch("https://fastcrw.com/api/v1/map", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer YOUR_API_KEY",
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    url: "https://example.com",
+    maxDepth: 1,
+    useSitemap: true
+  })
+});
 
-## Output Expectations
+const body = await resp.json();
+console.log(body.data.links);
+```
+::tab{title="cURL"}
+```bash
+curl -X POST https://fastcrw.com/api/v1/map \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com",
+    "maxDepth": 1,
+    "useSitemap": true
+  }'
+```
+:::
 
-`map` is for discovery, not deep extraction. Treat it as a planning primitive:
+### Response
 
-- it helps you decide what to fetch,
-- it reduces unnecessary crawl scope,
-- and it makes later scrape or crawl requests more intentional.
+```json
+{
+  "success": true,
+  "data": {
+    "links": [
+      "https://example.com",
+      "https://example.com/about"
+    ]
+  }
+}
+```
 
-If your end goal is page content, `map` should usually be the first step, not the last one.
+## Parameters
 
-## Example: Narrow a Noisy Site Before Crawl
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `url` | string | required | Site or page URL to start discovery from |
+| `maxDepth` | number | `2` | Maximum discovery depth |
+| `useSitemap` | boolean | `true` | Read sitemap hints when available |
+| `timeout` | number | server default | Custom timeout in seconds |
 
-Imagine a large docs domain with product pages, marketing pages, changelogs, and a blog mixed together. Running a broad crawl from the home page creates noise quickly.
+## Sitemap behavior
 
-Instead:
+With `useSitemap: true`, CRW uses sitemap hints when they are available. That usually makes the first discovery pass faster and more complete on structured sites.
 
-1. start with `map` on the docs root,
-2. inspect the returned URLs,
-3. keep only the section that matters,
-4. then launch `crawl` on that smaller scope.
+Good default:
 
-That pattern reduces wasted credits and keeps downstream systems cleaner.
+- keep sitemap on,
+- keep depth low,
+- inspect the discovered links,
+- then decide whether crawl is worth it.
 
-## Common Mistakes
+## When map is better than crawl
 
-- Using `map` when you already know the exact page you need. In that case use [scrape](/docs/scraping) directly.
-- Treating `map` output as if it were extracted content instead of URL discovery.
-- Launching a full crawl from a noisy homepage before inspecting the reachable structure.
+Use map when:
 
-## What To Read Next
+- you need to understand a site's shape before extracting any content,
+- you want a cheap first pass over a large site,
+- or you are deciding which section is worth crawling.
 
-- Use [crawl](/docs/crawling) when you are ready to recurse after discovery.
-- Use [getting started](/docs/quick-start) if you need the shortest path to a working first request.
-- Use [rate limits](/docs/rate-limits) when map-based discovery is feeding many follow-up requests.
+Use crawl only after you already trust the section you want to recurse through.
+
+## Common production patterns
+
+- Run map before crawl when you do not yet trust the start URL scope.
+- Keep `maxDepth` low first so you can inspect the discovered section.
+- Use sitemap hints when you want a faster first pass over structured sites.
+
+## Common mistakes
+
+- Using map when you already know the exact page and only need its content
+- Expecting map to return page bodies; it only returns discovered links
+- Letting depth grow before inspecting whether the discovered section is useful
+
+## When to use something else
+
+- Use [Scrape](#scraping) when you want the content of a known page
+- Use [Crawl](#crawling) when you are ready to recurse through a bounded section
+- Use [Search](#search) when you do not know the site or page set yet

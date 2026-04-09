@@ -1,68 +1,48 @@
-# Web Scraping API
+<div class="page-intro">
+  <div class="page-kicker">Core Endpoint</div>
+  <h1>Scrape</h1>
+  <p class="page-subtitle">Turn any known URL into clean markdown, HTML, links, or structured JSON in one request. This is the default CRW workflow and the fastest path to a first successful integration.</p>
+  <div class="page-capabilities">
+    <div class="page-capability"><strong>Best for:</strong> one known page</div>
+    <div class="page-capability"><strong>Returns:</strong> markdown, HTML, links, JSON</div>
+    <div class="page-capability"><strong>Start with:</strong> markdown only</div>
+  </div>
+  <div class="page-actions">
+    <a class="page-btn primary" href="https://fastcrw.com/playground" target="_blank" rel="noopener">Try it in the Playground</a>
+    <a class="page-btn secondary" href="#quick-start">Open Quick Start</a>
+  </div>
+</div>
 
-CRW scrapes single pages via the `POST /v1/scrape` endpoint — a Firecrawl-compatible web scraping API. It fetches the URL, optionally renders JavaScript via LightPanda or Chrome, cleans the HTML, and returns content in your requested formats (Markdown, HTML, JSON, plain text).
+<div class="playground-panel">
+  <div class="playground-kicker">Try it in the Playground</div>
+  <div class="playground-title">Validate the happy path first</div>
+  <div class="playground-copy">Paste one URL, request <code>formats: ["markdown"]</code>, and confirm you get a clean response back. Add JS rendering, selectors, or extraction only after the plain request looks right.</div>
+  <div class="playground-actions">
+    <a class="page-btn primary" href="https://fastcrw.com/playground" target="_blank" rel="noopener">Open Playground</a>
+    <a class="page-btn secondary" href="#extract">Jump to Extract</a>
+  </div>
+</div>
 
-Use `scrape` when you want one page turned into usable content without starting a wider crawl job. It is the right default for:
+## Scraping a URL with CRW
 
-- first-pass evaluation,
-- RAG ingestion from known URLs,
-- extraction pipelines,
-- and agent workflows that already know which page to fetch.
+### /v1/scrape
 
-## Request
-
-```
+```http
 POST /v1/scrape
 ```
 
-```json
-{
-  "url": "https://example.com",
-  "formats": ["markdown"],
-  "onlyMainContent": true,
-  "renderJs": null,
-  "waitFor": 2000,
-  "includeTags": [],
-  "excludeTags": [],
-  "jsonSchema": null,
-  "headers": {},
-  "cssSelector": null,
-  "xpath": null,
-  "chunkStrategy": null,
-  "query": null,
-  "filterMode": null,
-  "topK": 5,
-  "proxy": null,
-  "stealth": null
-}
-```
+Authentication:
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `url` | string | required | URL to scrape |
-| `formats` | string[] | `["markdown"]` | Output formats: `markdown`, `html`, `rawHtml`, `plainText`, `links`, `json`, `extract` |
-| `onlyMainContent` | bool | `true` | Extract only main content (removes nav, footer, sidebar, etc.) |
-| `renderJs` | bool/null | `null` | `null` = auto-detect, `true` = force CDP, `false` = HTTP only |
-| `waitFor` | int | — | Wait time in ms after JS rendering |
-| `includeTags` | string[] | `[]` | CSS selectors to keep (whitelist) |
-| `excludeTags` | string[] | `[]` | CSS selectors to remove (blacklist) |
-| `jsonSchema` | object | — | JSON schema for LLM structured extraction |
-| `headers` | object | `{}` | Custom HTTP headers to send |
-| `cssSelector` | string | — | Extract only elements matching this CSS selector |
-| `xpath` | string | — | Extract only elements matching this XPath expression |
-| `chunkStrategy` | object | — | Chunk strategy: `{"type":"topic"}`, `{"type":"sentence","maxChars":500}`, `{"type":"regex","pattern":"\\n\\n"}` |
-| `query` | string | — | Query for BM25/cosine chunk ranking |
-| `filterMode` | string | — | `"bm25"` or `"cosine"` |
-| `topK` | int | `5` | Number of top chunks to return |
-| `proxy` | string | — | Per-request proxy (e.g. `"http://user:pass@host:8080"`) |
-| `stealth` | bool | — | Override global stealth setting for this request |
-| `llmApiKey` | string | — | Per-request LLM API key for structured extraction (BYOK). Overrides server config. Available on [fastcrw.com](https://fastcrw.com) (cloud) |
-| `llmProvider` | string | `"anthropic"` | LLM provider: `"anthropic"` or `"openai"` |
-| `llmModel` | string | `"claude-sonnet-4-20250514"` | Model to use for structured extraction |
+- Hosted: send `Authorization: Bearer YOUR_API_KEY`
+- Self-hosted: only required when `auth.api_keys` is configured
 
-## A Good Default Request
+### Installation
 
-If you are not sure where to start, use this shape first:
+CRW is HTTP-first. You can start with cURL immediately and then move to your existing Python or Node.js HTTP client without installing a dedicated SDK.
+
+### Basic usage
+
+Start with this request:
 
 ```json
 {
@@ -73,247 +53,163 @@ If you are not sure where to start, use this shape first:
 }
 ```
 
-That gives you a clean markdown output, keeps extraction focused on the main body, and leaves JavaScript rendering to the engine's default behavior.
+:::tabs
+::tab{title="Python"}
+```python
+import requests
 
-## Choosing the Right Formats
+resp = requests.post(
+    "https://fastcrw.com/api/v1/scrape",
+    headers={
+        "Authorization": "Bearer YOUR_API_KEY",
+        "Content-Type": "application/json",
+    },
+    json={
+        "url": "https://example.com",
+        "formats": ["markdown"],
+        "onlyMainContent": True,
+    },
+)
 
-Most integrations only need one of these patterns:
+print(resp.json()["data"]["markdown"])
+```
+::tab{title="Node.js"}
+```javascript
+const resp = await fetch("https://fastcrw.com/api/v1/scrape", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer YOUR_API_KEY",
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    url: "https://example.com",
+    formats: ["markdown"],
+    onlyMainContent: true
+  })
+});
 
-- `["markdown"]` for retrieval, search, summarization, and LLM inputs.
-- `["markdown", "links"]` when you want the content plus outbound link discovery.
-- `["html"]` when you need cleaned markup instead of markdown.
-- `["rawHtml"]` when downstream logic expects the original HTML source.
-- `["json"]` when you are doing schema-driven extraction.
+const body = await resp.json();
+console.log(body.data.markdown);
+```
+::tab{title="cURL"}
+```bash
+curl -X POST https://fastcrw.com/api/v1/scrape \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com",
+    "formats": ["markdown"],
+    "onlyMainContent": true
+  }'
+```
+:::
 
-Requesting more formats is convenient for debugging, but in production it is better to ask only for what you will actually store or process.
-
-## Content Extraction Pipeline
-
-1. **Fetch** — HTTP request via `reqwest` (or CDP if JS rendering is needed)
-2. **Clean** — Remove `script`, `style`, `noscript`, `iframe`, `svg`, `canvas` tags
-3. **Selector** — If `cssSelector` or `xpath` is set, narrow the DOM to matching elements (readability is skipped)
-4. **Main content** — If `onlyMainContent` is true and no selector was given, remove `nav`, `footer`, `header`, `aside`, `menu`
-5. **CSS filters** — Apply `includeTags` / `excludeTags` allow/deny lists
-6. **Readability** — Extract main content block: `article` → `main` → `[role="main"]` → `.post-content` → `.article-body` → `.entry-content` → `#content` → `.content` → `body`
-7. **Format** — Convert to requested output formats (htmd for Markdown)
-8. **Chunking** — If `chunkStrategy` is set, split Markdown into chunks; rank by `query` if `filterMode` is provided
-9. **Metadata** — Extract `title`, `description`, `og:title`, `og:description`, `og:image`, `canonical`, `lang`
-
-## Auto JS Detection
-
-When `renderJs` is `null` (default), crw uses heuristics to decide whether JS rendering is needed:
-
-- Body text is under 200 characters **and** contains SPA markers (`id="root"`, `id="__next"`, `data-reactroot`, etc.)
-- `<noscript>` tag contains "enable javascript"
-- Body text is under 500 characters and URL matches known SPA hosts (Framer, Webflow, Wix, Squarespace)
-
-If any heuristic matches, crw re-fetches the page using CDP.
-
-## JS Rendering Guidance
-
-Use `renderJs: true` only when the page clearly needs a browser. Browser rendering increases latency and operational cost, so treat it as a deliberate choice rather than the universal default.
-
-When you do need it:
-
-- set `renderJs: true`,
-- start with `waitFor: 1000` or `2000`,
-- and raise `waitFor` only when the page still hydrates too slowly.
-
-If the response metadata shows an HTTP-only fallback or the output is suspiciously empty, read the [JS rendering guide](/docs/js-rendering).
-
-## LLM Structured Extraction
-
-Use the `json` format with a `jsonSchema` to extract structured data using an LLM:
+### Response
 
 ```json
 {
-  "url": "https://example.com/products/widget",
-  "formats": ["json"],
-  "jsonSchema": {
-    "type": "object",
-    "properties": {
-      "name": { "type": "string" },
-      "price": { "type": "number" },
-      "features": {
-        "type": "array",
-        "items": { "type": "string" }
-      }
-    },
-    "required": ["name", "price"]
+  "success": true,
+  "data": {
+    "markdown": "# Example Domain\n\nThis domain is for use in illustrative examples...",
+    "metadata": {
+      "title": "Example Domain",
+      "sourceURL": "https://example.com",
+      "statusCode": 200,
+      "elapsedMs": 32
+    }
   }
 }
 ```
 
-crw sends the page content to the configured LLM provider (Anthropic or OpenAI) and validates the response against the JSON schema.
+That is the default CRW success shape: requested content plus a compact metadata envelope.
 
-Configure the LLM provider in `config.toml`:
+## Parameters
 
-```toml
-[extraction.llm]
-provider = "anthropic"
-api_key = "sk-ant-..."
-model = "claude-sonnet-4-20250514"
-max_tokens = 4096
-```
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `url` | string | required | URL to scrape |
+| `formats` | string[] | `["markdown"]` | `markdown`, `html`, `rawHtml`, `plainText`, `links`, `json` |
+| `onlyMainContent` | boolean | `true` | Remove nav, footer, and boilerplate before conversion |
+| `renderJs` | boolean or null | `null` | `null` auto-detects, `true` forces browser rendering, `false` stays HTTP-only |
+| `waitFor` | number | -- | Milliseconds to wait after JS rendering |
+| `includeTags` | string[] | `[]` | CSS selectors to keep |
+| `excludeTags` | string[] | `[]` | CSS selectors to remove |
+| `headers` | object | `{}` | Custom HTTP headers |
+| `cssSelector` | string | -- | Narrow extraction to one CSS selector |
+| `xpath` | string | -- | Narrow extraction to one XPath expression |
+| `chunkStrategy` | object | -- | Topic, sentence, or regex chunking |
+| `query` | string | -- | Ranking query for chunk filtering |
+| `filterMode` | string | -- | `bm25` or `cosine` |
+| `topK` | number | `5` | Number of top chunks to keep |
+| `proxy` | string | -- | Per-request proxy URL |
+| `stealth` | boolean | -- | Override global stealth setting |
+| `jsonSchema` | object | -- | Schema for structured extraction |
+| `extract` | object | -- | Firecrawl-compatible alias wrapper for extraction schema |
+| `llmApiKey` | string | -- | Per-request LLM API key |
+| `llmProvider` | string | server default | `anthropic` or `openai` |
+| `llmModel` | string | server default | Model override for extraction |
+| `actions` | any | -- | Rejected with a clear error; use `cssSelector` or `xpath` instead |
 
-You do not need a separate endpoint for extraction. `scrape` can also return schema-shaped JSON when `formats` includes `json` and `jsonSchema` is present. That means a single API surface can support markdown for retrieval, links for discovery, and JSON for downstream application logic.
+## Formats
 
-## Targeting the Right Part of a Page
+Use the smallest output shape that solves the job:
 
-The default extraction path works well for many pages, but if you know the site structure, tighten the request:
+- `markdown` is the default and best first request for most pipelines.
+- `html` or `rawHtml` is useful when downstream systems need original structure.
+- `links` is useful when you want lightweight discovery without page bodies.
+- `json` is the extraction path and should be paired with `jsonSchema`.
 
-- use `cssSelector` when there is a stable content container,
-- use `xpath` when selectors are easier to express that way,
-- use `includeTags` and `excludeTags` to keep or remove specific markup families,
-- and leave `onlyMainContent` on unless you explicitly want navigation, footer, or sidebar content.
+If you ask for multiple formats, only those formats are populated in the response.
 
-:::tip
-The common mistake is combining too many narrowing options at once. Start broad, inspect the result, then add one targeting primitive at a time.
-:::
+## Structured extraction
 
-### CSS Selector
-
-Uses standard CSS selector syntax:
-
-```bash
-curl -X POST https://fastcrw.com/api/v1/scrape \
-  -H "Content-Type: application/json" \
-  -d '{
-    "url": "https://news.ycombinator.com",
-    "formats": ["markdown"],
-    "cssSelector": "td.title",
-    "onlyMainContent": false
-  }'
-```
-
-### XPath
-
-Supports XPath 1.0 expressions:
-
-```bash
-curl -X POST https://fastcrw.com/api/v1/scrape \
-  -H "Content-Type: application/json" \
-  -d '{
-    "url": "https://news.ycombinator.com",
-    "formats": ["markdown"],
-    "xpath": "//span[@class='\''titleline'\'']/a",
-    "onlyMainContent": false
-  }'
-```
-
-When a selector is active, the readability pass and `onlyMainContent` filtering are bypassed — only the selected HTML is converted. Multiple matched elements are concatenated.
-
-## Chunking
-
-Split scraped Markdown into chunks for vector databases and RAG pipelines. Results are returned in `data.chunks`.
-
-### Strategies
-
-**Topic** — split on Markdown headings, keeping each section as one chunk:
-
-```json
-{ "chunkStrategy": { "type": "topic" } }
-```
-
-**Sentence** — split on sentence boundaries (`.`, `!`, `?`), merge until `maxChars` is reached:
-
-```json
-{ "chunkStrategy": { "type": "sentence", "maxChars": 500 } }
-```
-
-**Regex** — split on a custom delimiter pattern:
-
-```json
-{ "chunkStrategy": { "type": "regex", "pattern": "\\n\\n" } }
-```
-
-### Chunking & Filtering Behavior
-
-- `chunkStrategy` alone splits the markdown and returns all chunks.
-- `chunkStrategy` + `query` + `filterMode` scores and ranks chunks, returning the top `topK`.
-- `topK` without `query`/`filterMode` still truncates the chunk array to `topK` items (no scoring).
-- `query` or `filterMode` without `chunkStrategy` is silently ignored — chunking must be enabled first.
-
-In practice:
-
-- use `sentence` when you want stable natural-language chunks,
-- use `regex` when you already know the structural separator,
-- and treat `topic` chunking as an advanced option that should be tested on real data before wide rollout.
-
-### Chunk Filtering (BM25 / Cosine)
-
-Rank chunks by relevance to a query and return the top K:
+Extraction is part of `scrape`, not a separate route. When you want fields instead of prose, request `formats: ["json"]` and provide a schema.
 
 ```json
 {
-  "url": "https://en.wikipedia.org/wiki/Rust_(programming_language)",
-  "formats": ["markdown"],
-  "onlyMainContent": true,
-  "chunkStrategy": { "type": "topic" },
-  "query": "memory safety ownership borrow checker",
-  "filterMode": "bm25",
-  "topK": 5
+  "url": "https://example.com/product/123",
+  "formats": ["json"],
+  "jsonSchema": {
+    "type": "object",
+    "properties": {
+      "title": { "type": "string" },
+      "price": { "type": "string" }
+    },
+    "required": ["title"]
+  }
 }
 ```
 
-| `filterMode` | When to use |
-|---|---|
-| `bm25` | Keyword-heavy queries; fast, no dependencies. Recommended for most use cases |
-| `cosine` | Semantic overlap; uses TF-IDF vectors |
+Use [Extract](#extract) for the schema-first version of this flow.
 
-Without `filterMode`, all chunks are returned in document order.
+## JS rendering and targeting
 
-## Stealth Mode
+Keep the first request simple:
 
-Inject browser-like HTTP headers to reduce bot-detection fingerprinting. Enable per request or globally.
+- Leave `renderJs` at `null` until the plain HTTP path clearly fails.
+- Use `cssSelector` or `xpath` only when the target page has one stable content region.
+- Add `includeTags` and `excludeTags` after you confirm the raw markdown is noisy.
 
-**Per request:**
+If you turn on every targeting knob at once, debugging gets harder immediately.
 
-```json
-{
-  "url": "https://example.com",
-  "stealth": true
-}
-```
+## Common production patterns
 
-**Global default** in `config.toml`:
+- Start with `markdown`, then add `links` or `json` only when downstream logic needs them.
+- Validate extraction with markdown first, then add `jsonSchema`.
+- Keep browser rendering as a fallback, not the default.
+- Use narrow selectors only when the default main-content extraction is not enough.
 
-```toml
-[crawler]
-stealth = true
-```
+## Common mistakes
 
-When stealth is active, CRW:
-- Rotates the User-Agent from a pool of real Chrome 131, Firefox 133, and Safari 18 strings
-- Injects `Accept`, `Accept-Language`, `Accept-Encoding`, `Sec-Ch-Ua`, `Sec-Ch-Ua-Mobile`, `Sec-Ch-Ua-Platform`, `Sec-Fetch-Dest`, `Sec-Fetch-Mode`, `Sec-Fetch-Site`, `Sec-Fetch-User`, `Priority`, and `Upgrade-Insecure-Requests` headers
+- Turning on JS rendering before testing the plain HTTP path
+- Requesting too many formats at once in production
+- Combining `cssSelector`, `xpath`, `includeTags`, and `excludeTags` in the first attempt
+- Sending `formats: ["json"]` without a `jsonSchema`
+- Assuming `actions` is supported because Firecrawl accepts it
 
-## Per-Request Proxy
+## When to use something else
 
-Override the global proxy for a single request:
-
-```json
-{
-  "url": "https://example.com",
-  "proxy": "http://user:pass@proxy-host:8080"
-}
-```
-
-The global proxy is configured in `config.toml`:
-
-```toml
-[crawler]
-proxy = "http://proxy-host:8080"
-```
-
-## Response Semantics
-
-The main response pattern is:
-
-- `success` for overall request outcome,
-- `data` for returned content,
-- `warning` for degraded but non-fatal situations,
-- and `metadata` for context such as title, status code, final URL, and elapsed time.
-
-:::warning
-Do not ignore warnings. A page blocked by anti-bot protection can still produce content that looks valid at first glance.
-:::
+- Use [Search](#search) when you do not know the URL yet
+- Use [Map](#map) when you want URL discovery before scraping
+- Use [Crawl](#crawling) when you need many pages from one site
+- Use [Extract](#extract) when the output must be structured JSON

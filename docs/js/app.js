@@ -5,6 +5,47 @@ const features = Object.assign(
   { scrollReveal: true, codeCopyButtons: true, readingProgress: true, skeletonLoading: true },
   config.features || {}
 );
+const allSlugs = new Set(config.sidebar.flatMap((section) => section.children.map((child) => child.slug)));
+const docsBaseUrl = new URL("../docs/", import.meta.url);
+const endpointTryContent = {
+  scraping: {
+    title: "Try this request",
+    code: "POST /v1/scrape",
+    note: "Start with markdown only. It is the fastest path to a first successful response.",
+    primary: { label: "Open Quick Start", href: "#quick-start" },
+    secondary: { label: "Playground", href: "https://fastcrw.com/playground", external: true },
+  },
+  crawling: {
+    title: "Try this request",
+    code: "POST /v1/crawl",
+    note: "Start with a small crawl. maxPages: 5 is usually enough to validate a new site.",
+    primary: { label: "Open Quick Start", href: "#quick-start" },
+    secondary: { label: "View API Index", href: "#rest-api" },
+  },
+  search: {
+    title: "Try this request",
+    code: "POST /v1/search",
+    note: "Cloud-only. Start with limit: 5, then add scrapeOptions only if you need page content.",
+    primary: { label: "Get API Key", href: "https://fastcrw.com/register", external: true },
+    secondary: { label: "Playground", href: "https://fastcrw.com/playground", external: true },
+  },
+  map: {
+    title: "Try this request",
+    code: "POST /v1/map",
+    note: "Use map first when you need discovery before a bounded crawl.",
+    primary: { label: "Open Quick Start", href: "#quick-start" },
+    secondary: { label: "View Crawl Docs", href: "#crawling" },
+  },
+  extract: {
+    title: "Try this request",
+    code: 'formats: ["json"] + jsonSchema',
+    note: "Verify the page with markdown first, then add your schema for extraction.",
+    primary: { label: "View Scrape Docs", href: "#scraping" },
+    secondary: { label: "Playground", href: "https://fastcrw.com/playground", external: true },
+  },
+};
+const endpointSlugs = new Set(Object.keys(endpointTryContent));
+const productPageSlugs = new Set(["introduction", "quick-start", "rest-api", ...endpointSlugs]);
 
 // ========== SVG Icons ==========
 const icons = {
@@ -33,6 +74,32 @@ const icons = {
 
 function getIcon(name) {
   return icons[name] || icons.external;
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function normalizeDocHref(href) {
+  if (!href) return href;
+  if (/^(https?:|mailto:|tel:|#)/i.test(href)) return href;
+  if (/^javascript:/i.test(href)) return "#";
+
+  const [path, anchor] = href.split("#");
+  const cleanPath = path
+    .replace(/^\.?\//, "")
+    .replace(/^docs\/docs\//, "")
+    .replace(/^docs\//, "")
+    .replace(/^\/docs\//, "")
+    .replace(/\.md$/i, "")
+    .replace(/\/$/, "");
+  const slug = cleanPath.split("/").filter(Boolean).pop();
+  if (!slug || !allSlugs.has(slug)) return href;
+  return `#${slug}${anchor ? `::${anchor}` : ""}`;
+}
+
+function getDocUrl(slug) {
+  return new URL(`${slug}.md`, docsBaseUrl).toString();
 }
 
 // ========== Render Navbar ==========
@@ -147,13 +214,13 @@ function parseComponents(md) {
       attrs.replace(/(\w+)="([^"]*)"/g, (___, k, v) => { props[k] = v; });
       cards.push(props);
     });
-    return `<div class="card-grid">${cards.map(c =>
-      `<a href="${c.href || '#'}" class="doc-card"${c.href?.startsWith('http') ? ' target="_blank" rel="noopener"' : ''}>
+    return `\n\n<div class="card-grid">${cards.map(c =>
+      `<a href="${normalizeDocHref(c.href || '#')}" class="doc-card"${c.href?.startsWith('http') ? ' target="_blank" rel="noopener"' : ''}>
         ${c.icon ? `<div class="doc-card-icon">${getIcon(c.icon)}</div>` : ''}
         <div class="doc-card-title">${c.title || ''}</div>
         <div class="doc-card-desc">${c.description || ''}</div>
       </a>`
-    ).join('')}</div>`;
+    ).join('')}</div>\n\n`;
   });
 
   // Features: :::features ... :::
@@ -164,24 +231,24 @@ function parseComponents(md) {
       attrs.replace(/(\w+)="([^"]*)"/g, (___, k, v) => { props[k] = v; });
       items.push(props);
     });
-    return `<div class="feature-grid">${items.map(f =>
+    return `\n\n<div class="feature-grid">${items.map(f =>
       `<div class="feature-card">
         ${f.icon ? `<div class="feature-card-icon">${getIcon(f.icon)}</div>` : ''}
         <div class="feature-card-title">${f.title || ''}</div>
         <div class="feature-card-desc">${f.description || ''}</div>
       </div>`
-    ).join('')}</div>`;
+    ).join('')}</div>\n\n`;
   });
 
   // Callouts: :::note/warning/tip ... :::
   md = md.replace(/:::(note|warning|tip|info)\n([\s\S]*?):::/g, (_, type, content) => {
     const iconName = type === 'warning' ? 'alert' : type === 'tip' ? 'check' : 'info';
-    return `<div class="callout callout-${type}"><div class="callout-icon">${getIcon(iconName)}</div><div class="callout-content">${content.trim()}</div></div>`;
+    return `\n\n<div class="callout callout-${type}"><div class="callout-icon">${getIcon(iconName)}</div><div class="callout-content">${content.trim()}</div></div>\n\n`;
   });
 
   // Collapsible: :::details{title="..."} ... :::
   md = md.replace(/:::details\{title="([^"]*)"\}\n([\s\S]*?):::/g, (_, title, content) => {
-    return `<div class="details-block"><div class="details-summary" onclick="this.parentElement.classList.toggle('open')">${title}<span class="details-chevron">&#9654;</span></div><div class="details-content">${content.trim()}</div></div>`;
+    return `\n\n<div class="details-block"><div class="details-summary" onclick="this.parentElement.classList.toggle('open')">${title}<span class="details-chevron">&#9654;</span></div><div class="details-content">${content.trim()}</div></div>\n\n`;
   });
 
   // Code tabs: :::tabs ... :::
@@ -193,14 +260,14 @@ function parseComponents(md) {
       tabs.push({ title: match[1], content: match[2].trim() });
     }
     const id = 'tabs-' + Math.random().toString(36).slice(2, 8);
-    return `<div class="code-tabs" data-tabs-id="${id}">
+    return `\n\n<div class="code-tabs" data-tabs-id="${id}">
       <div class="code-tabs-header">${tabs.map((t, i) =>
         `<button class="code-tab${i === 0 ? ' active' : ''}" data-tab="${i}">${t.title}</button>`
       ).join('')}</div>
       ${tabs.map((t, i) =>
         `<div class="code-tab-panel${i === 0 ? ' active' : ''}" data-panel="${i}">${t.content}</div>`
       ).join('')}
-    </div>`;
+    </div>\n\n`;
   });
 
   return md;
@@ -208,15 +275,11 @@ function parseComponents(md) {
 
 // ========== Minimal Markdown Parser ==========
 function parseMarkdown(md) {
-  if (/^\s*</.test(md)) return md;
-
-  // Parse components FIRST (before code block extraction)
-  let html = parseComponents(md);
-
   const codeBlocks = [];
   const inlineCodes = [];
 
-  html = html.replace(
+  // Extract fenced code blocks FIRST so component syntax inside them is preserved
+  let html = md.replace(
     /```(\w*)\n([\s\S]*?)```/g,
     (_, lang, code) => {
       const escaped = code.trim()
@@ -227,30 +290,39 @@ function parseMarkdown(md) {
       const dataLang = lang ? ` data-lang="${lang}"` : "";
       const placeholder = `\x00CODEBLOCK${codeBlocks.length}\x00`;
       codeBlocks.push(`<pre${dataLang}><code${langAttr}>${escaped}</code></pre>`);
-      return placeholder;
+      return `\n\n${placeholder}\n\n`;
     }
   );
 
+  // Now parse components (fenced blocks already extracted, so ::: inside code is safe)
+  html = parseComponents(html);
+
   html = html.replace(/`([^`]+)`/g, (_, code) => {
     const placeholder = `\x00INLINECODE${inlineCodes.length}\x00`;
-    inlineCodes.push(`<code>${code}</code>`);
+    inlineCodes.push(`<code>${escapeHtml(code)}</code>`);
     return placeholder;
   });
 
-  html = html.replace(/^#### (.+)$/gm, "<h4>$1</h4>");
-  html = html.replace(/^### (.+)$/gm, "<h3>$1</h3>");
-  html = html.replace(/^## (.+)$/gm, "<h2>$1</h2>");
-  html = html.replace(/^# (.+)$/gm, "<h1>$1</h1>");
-  html = html.replace(/^---$/gm, "<hr>");
+  html = html.replace(/^#### (.+)$/gm, "\n\n<h4>$1</h4>\n\n");
+  html = html.replace(/^### (.+)$/gm, "\n\n<h3>$1</h3>\n\n");
+  html = html.replace(/^## (.+)$/gm, "\n\n<h2>$1</h2>\n\n");
+  html = html.replace(/^# (.+)$/gm, "\n\n<h1>$1</h1>\n\n");
+  html = html.replace(/^---$/gm, "\n\n<hr>\n\n");
   html = html.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
   html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
   html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
   html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" loading="lazy">');
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
-  html = html.replace(/^&gt; (.+)$/gm, "<blockquote><p>$1</p></blockquote>");
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, href) => {
+    const normalizedHref = normalizeDocHref(href);
+    const external = /^https?:/i.test(normalizedHref) ? ' target="_blank" rel="noopener"' : "";
+    return `<a href="${normalizedHref}"${external}>${label}</a>`;
+  });
+  html = html.replace(/^&gt; (.+)$/gm, "\n\n<blockquote><p>$1</p></blockquote>\n\n");
   html = html.replace(/^(\s*)[-*] (.+)$/gm, "$1<li>$2</li>");
   html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, "<ul>$1</ul>");
-  html = html.replace(/^\d+\. (.+)$/gm, "<li>$1</li>");
+  html = html.replace(/^\d+\. (.+)$/gm, '<li data-ordered="true">$1</li>');
+  html = html.replace(/((?:<li data-ordered="true">.*<\/li>\n?)+)/g, "<ol>$1</ol>");
+  html = html.replace(/ data-ordered="true"/g, "");
 
   html = html.replace(
     /^\|(.+)\|\s*\n\|[-| :]+\|\s*\n((?:\|.+\|\s*\n?)*)/gm,
@@ -262,7 +334,7 @@ function parseMarkdown(md) {
       table += "</tr></thead><tbody>";
       rows.forEach((row) => { table += "<tr>"; row.forEach((cell) => (table += `<td>${cell}</td>`)); table += "</tr>"; });
       table += "</tbody></table>";
-      return table;
+      return `\n\n${table}\n\n`;
     }
   );
 
@@ -281,7 +353,16 @@ function parseMarkdown(md) {
 }
 
 function stripMarkdown(md) {
-  return md.replace(/```[\s\S]*?```/g, "").replace(/`[^`]+`/g, "").replace(/:::[^:]*:::/g, "").replace(/::[\w]+\{[^}]*\}/g, "").replace(/[#*_\[\]()>|`-]/g, "").replace(/\n+/g, " ").trim();
+  return md
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`[^`]+`/g, " ")
+    .replace(/:::[^:]*:::/g, " ")
+    .replace(/::[\w]+\{[^}]*\}/g, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/[#*_\[\]()>|`-]/g, " ")
+    .replace(/\n+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 // ========== Sidebar Rendering ==========
@@ -462,6 +543,30 @@ function renderTOC() {
   headings.forEach((h) => tocObserver.observe(h));
 }
 
+function renderTOCHelper(slug) {
+  const helper = document.getElementById("toc-helper");
+  if (!helper) return;
+
+  const content = endpointTryContent[slug];
+  if (!content) {
+    helper.innerHTML = "";
+    return;
+  }
+
+  const primaryAttrs = content.primary.external ? ' target="_blank" rel="noopener"' : "";
+  const secondaryAttrs = content.secondary.external ? ' target="_blank" rel="noopener"' : "";
+
+  helper.innerHTML = `
+    <div class="toc-helper">
+      <div class="toc-helper-title">${content.title}</div>
+      <code class="toc-helper-code">${content.code}</code>
+      <div class="toc-helper-note">${content.note}</div>
+      <a href="${content.primary.href}" class="toc-cta-btn primary"${primaryAttrs}>${content.primary.label}</a>
+      <a href="${content.secondary.href}" class="toc-cta-btn outline"${secondaryAttrs}>${content.secondary.label}</a>
+    </div>
+  `;
+}
+
 // ========== Prev/Next Navigation ==========
 function renderPrevNext(currentSlug) {
   const allPages = config.sidebar.flatMap((s) => s.children);
@@ -484,16 +589,61 @@ function renderPrevNext(currentSlug) {
   article.appendChild(nav);
 }
 
-// ========== Breadcrumb ==========
-function renderBreadcrumb(slug) {
+// ========== Page Topbar ==========
+function renderPageTopbar(slug) {
   const section = config.sidebar.find(s => s.children?.some(c => c.slug === slug));
   if (!section) return '';
-  return `<div class="page-breadcrumb">${section.title}</div>`;
+  return `
+    <div class="page-topbar">
+      <div class="page-breadcrumb">${section.title}</div>
+      <button type="button" class="page-share-btn" data-copy-page>Copy Page</button>
+    </div>
+  `;
+}
+
+async function copyPageMarkdown(markdown, button) {
+  const originalLabel = button.dataset.label || button.textContent;
+
+  try {
+    await navigator.clipboard.writeText(markdown);
+    button.textContent = "Copied";
+    button.classList.add("copied");
+  } catch {
+    button.textContent = "Copy Failed";
+    button.classList.add("copied");
+  }
+
+  button.dataset.label = originalLabel;
+  window.setTimeout(() => {
+    button.textContent = originalLabel;
+    button.classList.remove("copied");
+  }, 1600);
+}
+
+function initPageCopyButton(markdown) {
+  const button = document.querySelector("[data-copy-page]");
+  if (!button) return;
+  button.addEventListener("click", () => {
+    copyPageMarkdown(markdown, button);
+  });
 }
 
 // ========== Routing ==========
+function getCurrentRoute() {
+  const rawHash = window.location.hash.slice(1);
+  if (!rawHash) return { slug: config.defaultPage, anchor: "" };
+
+  const [slugCandidate, ...anchorParts] = rawHash.split("::");
+  if (allSlugs.has(slugCandidate)) {
+    return { slug: slugCandidate, anchor: anchorParts.join("::") };
+  }
+
+  // Unknown hash — load it as slug so loadPage shows the 404 page
+  return { slug: slugCandidate, anchor: "" };
+}
+
 function getCurrentSlug() {
-  return window.location.hash.slice(1) || config.defaultPage;
+  return getCurrentRoute().slug;
 }
 
 function getPageTitle(slug) {
@@ -504,50 +654,77 @@ function getPageTitle(slug) {
   return slug;
 }
 
-async function loadPage(slug) {
+function scrollToRouteAnchor(anchor) {
+  if (!anchor) {
+    window.scrollTo(0, 0);
+    return;
+  }
+
+  const target = document.getElementById(anchor);
+  if (target) {
+    target.scrollIntoView({ behavior: "auto", block: "start" });
+    return;
+  }
+
+  window.scrollTo(0, 0);
+}
+
+async function loadPage(slug, anchor = "") {
   const article = document.getElementById("article");
   showContentSkeleton();
 
   try {
-    const response = await fetch(`docs/${slug}.md`);
+    const response = await fetch(getDocUrl(slug));
     if (!response.ok) throw new Error("Not found");
     const md = await response.text();
-    const breadcrumb = renderBreadcrumb(slug);
-    article.innerHTML = breadcrumb + parseMarkdown(md);
+    const pageTopbar = renderPageTopbar(slug);
+    article.innerHTML = pageTopbar + parseMarkdown(md);
+    article.classList.toggle("endpoint-page", endpointSlugs.has(slug));
+    article.classList.toggle("product-page", productPageSlugs.has(slug));
+    article.dataset.slug = slug;
+    initPageCopyButton(md);
     addCodeCopyButtons(article);
     initCodeTabs(article);
     if (window.hljs) hljs.highlightAll();
     applyRevealToContent(article);
-    renderTOC();
     renderPrevNext(slug);
   } catch {
+    article.classList.remove("endpoint-page", "product-page");
+    delete article.dataset.slug;
     article.innerHTML = `
       <h1>Page Not Found</h1>
-      <p>The page <code>${slug}</code> could not be found.</p>
+      <p>The page <code>${escapeHtml(slug)}</code> could not be found.</p>
       <p><a href="#${config.defaultPage}">Go to ${getPageTitle(config.defaultPage)}</a></p>
     `;
+    renderTOC();
+    renderTOCHelper("");
+    document.title = `Not Found — ${config.name}`;
+    renderSidebar();
+    updateActiveTab(slug);
+    requestAnimationFrame(() => scrollToRouteAnchor(anchor));
+    return;
   }
 
+  renderTOC();
+  renderTOCHelper(slug);
   document.title = `${getPageTitle(slug)} — ${config.name}`;
   renderSidebar();
   updateActiveTab(slug);
-  window.scrollTo(0, 0);
+  requestAnimationFrame(() => scrollToRouteAnchor(anchor));
 }
 
 // ========== Active Tab ==========
 function updateActiveTab(slug) {
-  document.querySelectorAll('.navbar-tab').forEach((tab) => {
+  const tabs = document.querySelectorAll('.navbar-tab');
+  tabs.forEach((tab) => {
     tab.classList.remove('active');
-    const tabSlug = tab.getAttribute('href')?.replace('#', '');
-    if (tabSlug === slug) {
+    const href = tab.getAttribute('href')?.replace('#', '');
+    const tabConfig = config.navTabs?.find((t) => t.href === `#${href}`);
+    const matches = tabConfig?.match || [href];
+    if (matches.includes(slug)) {
       tab.classList.add('active');
     }
   });
-  // Default: first tab active if no match
-  const tabs = document.querySelectorAll('.navbar-tab');
-  if (tabs.length > 0 && !document.querySelector('.navbar-tab.active')) {
-    tabs[0].classList.add('active');
-  }
 }
 
 // ========== Mobile Sidebar ==========
@@ -566,7 +743,7 @@ async function buildSearchIndex() {
   for (const section of config.sidebar) {
     for (const child of section.children) {
       try {
-        const response = await fetch(`docs/${child.slug}.md`);
+        const response = await fetch(getDocUrl(child.slug));
         if (!response.ok) continue;
         const md = await response.text();
         pages.push({ title: child.title, slug: child.slug, content: stripMarkdown(md) });
@@ -580,9 +757,13 @@ async function buildSearchIndex() {
 function init() {
   renderNavbar();
   applyThemeOverrides();
-  loadPage(getCurrentSlug());
+  const initialRoute = getCurrentRoute();
+  loadPage(initialRoute.slug, initialRoute.anchor);
   initReadingProgress();
-  window.addEventListener("hashchange", () => { loadPage(getCurrentSlug()); });
+  window.addEventListener("hashchange", () => {
+    const route = getCurrentRoute();
+    loadPage(route.slug, route.anchor);
+  });
   // Defer search index build to after page is interactive
   if ('requestIdleCallback' in window) {
     requestIdleCallback(() => buildSearchIndex());

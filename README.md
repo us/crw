@@ -489,7 +489,7 @@ Any MCP-compatible client can connect to CRW using the standard JSON format:
 
 > **Tip:** The stdio binary (`crw-mcp`) works with any client. For clients that support HTTP transport, use `http://localhost:3000/mcp` directly — no binary needed. To enable cloud features like web search, add the `env` block from [Cloud / Hosted Mode](#cloud--hosted-mode) to any config above.
 
-See the full [MCP setup guide](docs/mcp-server.md) for detailed instructions, auth configuration, and platform comparison.
+See the full [MCP setup guide](docs/docs/mcp-clients.md) for detailed instructions, auth configuration, and platform comparison.
 
 ## JS Rendering
 

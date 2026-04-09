@@ -83,7 +83,7 @@ Sends the page content to an LLM (Anthropic or OpenAI) and extracts structured d
 }
 ```
 
-The LLM response is validated against the provided schema using the `jsonschema` crate. Markdown fence stripping (`` ```json ``` ``) is handled automatically.
+The LLM response is validated against the provided schema using the `jsonschema` crate. If the model wraps JSON in a fenced code block, CRW strips the fence automatically before validation.
 
 ### Supported LLM providers
 
@@ -158,7 +158,7 @@ The exact shape of `data` depends on what you requested. Do not assume every fie
 | `sourceURL` | `string` | Final URL after redirects |
 | `language` | `string / null` | `<html lang>` value |
 | `statusCode` | `number` | Target HTTP status code |
-| `renderedWith` | `string / null` | `"cdp"`, `"http_only"`, or `"http_only_fallback"` |
+| `renderedWith` | `string / null` | Usually `"http"`, `"lightpanda"`, `"playwright"`, `"chrome"`, `"pdf"`, or `"http_only_fallback"` |
 | `elapsedMs` | `number` | Total processing time in ms |
 
 ### `ChunkResult` object
