@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.3.4](https://github.com/us/crw/compare/v0.3.3...v0.3.4) (2026-04-09)
+
+
+### Bug Fixes
+
+* **config:** env var overrides not applied due to missing prefix_separator ([71c7ae5](https://github.com/us/crw/commit/71c7ae544bd74575cf30101190d65708934bcb1f)), closes [#18](https://github.com/us/crw/issues/18)
+
 ## [0.3.3](https://github.com/us/crw/compare/v0.3.2...v0.3.3) (2026-04-09)
 
 
