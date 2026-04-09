@@ -125,6 +125,7 @@ docker run -p 3000:3000 ghcr.io/us/crw
 | **Server needed?** | No | No (embedded) | Yes (`:3000`) | Yes (`:3000`) |
 | **JS rendering** | `--js` (auto-detect)^1 | Auto-detect + auto-download^1 | `crw-server setup`^2 | Included (sidecar) |
 | **Single URL scrape** | Yes | Yes | Yes | Yes |
+| **Web search** | — | Cloud only^3 | — | — |
 | **Async crawl** | — | Yes | Yes | Yes |
 | **URL mapping** | — | Yes | Yes | Yes |
 | **REST API** | — | — | Yes (Firecrawl-compat) | Yes (Firecrawl-compat) |
@@ -135,6 +136,8 @@ docker run -p 3000:3000 ghcr.io/us/crw
 > ^1 **CLI + MCP:** Same auto-detect chain — LightPanda in PATH → `~/.crw/lightpanda` (auto-downloads if missing) → Chrome/Chromium on system → LightPanda Docker container. Falls back to HTTP-only if no browser found. CLI requires `--js` flag; MCP activates automatically. Both respect `CRW_CDP_URL` env var for manual override.
 >
 > ^2 **Server:** `crw-server setup` downloads LightPanda and creates `config.local.toml`. Start LightPanda separately before running the server. With Docker Compose, LightPanda runs as a sidecar automatically.
+>
+> ^3 **Web search:** `crw_search` is available only when connected to [fastcrw.com](https://fastcrw.com) cloud (`CRW_API_URL` set). In embedded/self-hosted mode, use `crw_map` for site discovery instead.
 
 ## Quick Start
 
@@ -151,10 +154,14 @@ crw example.com --css 'article' --raw             # extract specific elements
 **MCP (AI agents — recommended):**
 
 ```bash
+# Local (embedded — no server needed):
 claude mcp add crw -- npx crw-mcp
+
+# Cloud (fastcrw.com — includes web search):
+claude mcp add -e CRW_API_URL=https://fastcrw.com/api -e CRW_API_KEY=your-key crw -- npx crw-mcp
 ```
 
-> That's it. Claude Code now has `crw_scrape`, `crw_crawl`, `crw_map` tools. For Cursor, Windsurf, Cline, and other MCP clients, see [MCP Server](#mcp-server).
+> **Local mode** gives you `crw_scrape`, `crw_crawl`, `crw_map` tools. **Cloud mode** adds `crw_search` for web search powered by [fastcrw.com](https://fastcrw.com). For Cursor, Windsurf, Cline, and other MCP clients, see [MCP Server](#mcp-server).
 
 **Self-hosted server:**
 
@@ -315,7 +322,7 @@ model = "claude-sonnet-4-20250514"
 
 ## MCP Server
 
-CRW works as an MCP tool server for any AI assistant that supports MCP. It provides 4 tools: `crw_scrape`, `crw_crawl`, `crw_check_crawl_status`, `crw_map`.
+CRW works as an MCP tool server for any AI assistant that supports MCP. It provides 4 tools in local/embedded mode (`crw_scrape`, `crw_crawl`, `crw_check_crawl_status`, `crw_map`) and adds `crw_search` when connected to [fastcrw.com](https://fastcrw.com) cloud.
 
 > Also available on the [MCP Registry](https://registry.modelcontextprotocol.io/?q=crw)
 
@@ -342,8 +349,40 @@ docker run -i ghcr.io/us/crw crw-mcp
 ### Claude Code
 
 ```bash
+# Embedded (self-contained, no server needed):
 claude mcp add crw -- npx crw-mcp
+
+# Cloud (fastcrw.com):
+claude mcp add -e CRW_API_URL=https://fastcrw.com/api -e CRW_API_KEY=your-key crw -- npx crw-mcp
 ```
+
+### Cloud / Hosted Mode
+
+Connect to [fastcrw.com](https://fastcrw.com) instead of running a local engine. Cloud mode unlocks **`crw_search`** — web search powered by fastCRW, in addition to all local tools.
+
+| Mode | Tools | Requires |
+|------|-------|----------|
+| **Embedded** (default) | `crw_scrape`, `crw_crawl`, `crw_check_crawl_status`, `crw_map` | Nothing |
+| **Cloud** (`CRW_API_URL` set) | All embedded tools + **`crw_search`** | [fastcrw.com](https://fastcrw.com) API key |
+
+Set `CRW_API_URL` and `CRW_API_KEY` in any MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "crw": {
+      "command": "npx",
+      "args": ["crw-mcp"],
+      "env": {
+        "CRW_API_URL": "https://fastcrw.com/api",
+        "CRW_API_KEY": "your-api-key"
+      }
+    }
+  }
+}
+```
+
+> Get your API key at [fastcrw.com](https://fastcrw.com). The same `env` block works in Claude Desktop, Cursor, Windsurf, Cline, and any other MCP client below.
 
 ### Claude Desktop
 
@@ -448,7 +487,7 @@ Any MCP-compatible client can connect to CRW using the standard JSON format:
 }
 ```
 
-> **Tip:** The stdio binary (`crw-mcp`) works with any client. For clients that support HTTP transport, use `http://localhost:3000/mcp` directly — no binary needed.
+> **Tip:** The stdio binary (`crw-mcp`) works with any client. For clients that support HTTP transport, use `http://localhost:3000/mcp` directly — no binary needed. To enable cloud features like web search, add the `env` block from [Cloud / Hosted Mode](#cloud--hosted-mode) to any config above.
 
 See the full [MCP setup guide](docs/mcp-server.md) for detailed instructions, auth configuration, and platform comparison.
 

@@ -89,7 +89,7 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
 
 pub async fn handle_request(state: &AppState, req: JsonRpcRequest) -> Option<JsonRpcResponse> {
     // Handle common protocol methods via shared logic.
-    match handle_protocol_method(SERVER_NAME, SERVER_VERSION, &req) {
+    match handle_protocol_method(SERVER_NAME, SERVER_VERSION, &req, false) {
         ProtocolResult::Response(resp) => return Some(resp),
         ProtocolResult::Notification => return None,
         ProtocolResult::NotHandled => {}

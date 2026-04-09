@@ -14,6 +14,7 @@
 //! - `crw_crawl` — start an async BFS crawl
 //! - `crw_check_crawl_status` — poll crawl job status
 //! - `crw_map` — discover URLs on a website
+//! - `crw_search` — web search (proxy/cloud mode only)
 //!
 //! # Usage
 //!
@@ -84,9 +85,13 @@ impl Backend {
         }
     }
 
+    fn is_proxy(&self) -> bool {
+        matches!(self, Backend::Proxy { .. })
+    }
+
     async fn handle_request(&self, req: JsonRpcRequest) -> Option<JsonRpcResponse> {
         // Handle common protocol methods via shared logic.
-        match handle_protocol_method(SERVER_NAME, SERVER_VERSION, &req) {
+        match handle_protocol_method(SERVER_NAME, SERVER_VERSION, &req, self.is_proxy()) {
             ProtocolResult::Response(resp) => return Some(resp),
             ProtocolResult::Notification => return None,
             ProtocolResult::NotHandled => {}
@@ -179,6 +184,16 @@ async fn proxy_call_tool(
         "crw_map" => {
             let resp = client
                 .post(format!("{base_url}/v1/map"))
+                .headers(headers)
+                .json(&args)
+                .send()
+                .await
+                .map_err(|e| format!("HTTP request failed: {e}"))?;
+            parse_response(resp).await
+        }
+        "crw_search" => {
+            let resp = client
+                .post(format!("{base_url}/v1/search"))
                 .headers(headers)
                 .json(&args)
                 .send()

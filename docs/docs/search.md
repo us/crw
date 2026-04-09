@@ -1,58 +1,107 @@
-# Search Endpoint Guide
+<div class="page-intro">
+  <div class="page-kicker">Core Endpoint</div>
+  <h1>Search</h1>
+  <p class="page-subtitle">Search the web first, then optionally scrape the results you care about. This is the discovery-first workflow for the hosted CRW product.</p>
+  <div class="page-capabilities">
+    <div class="page-capability"><strong>Best for:</strong> unknown URLs</div>
+    <div class="page-capability"><strong>Hosted:</strong> cloud path</div>
+    <div class="page-capability"><strong>Start with:</strong> search only, then add scraping</div>
+  </div>
+  <div class="page-actions">
+    <a class="page-btn primary" href="https://fastcrw.com/playground" target="_blank" rel="noopener">Try it in the Playground</a>
+    <a class="page-btn secondary" href="#scraping">View Scrape</a>
+  </div>
+</div>
 
-## Overview
+<div class="playground-panel">
+  <div class="playground-kicker">Try it in the Playground</div>
+  <div class="playground-title">Start with result discovery only</div>
+  <div class="playground-copy">Use a small query and <code>limit: 5</code> first. Add <code>scrapeOptions</code> only when you already know you need page content from those search results.</div>
+  <div class="playground-actions">
+    <a class="page-btn primary" href="https://fastcrw.com/playground" target="_blank" rel="noopener">Open Playground</a>
+    <a class="page-btn secondary" href="https://fastcrw.com/register" target="_blank" rel="noopener">Get API Key</a>
+  </div>
+</div>
 
-Use `search` when you need to find content across the web without knowing specific URLs upfront. It is the right choice for:
+:::note
+`search` is a cloud-only feature. On self-hosted open-core deployments, use [Map](#map) or [Scrape](#scraping) when you already know the target site. When using `crw-mcp` with `CRW_API_URL` pointed at [fastcrw.com](https://fastcrw.com), the `crw_search` tool is automatically available to your AI agent.
+:::
 
-- research workflows where the agent discovers relevant pages,
-- RAG pipelines that need fresh web content on a topic,
-- news monitoring and trend tracking,
-- and competitive analysis across multiple sources.
+## Searching the web with CRW
 
-```bash
-curl -X POST https://fastcrw.com/api/v1/search \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -d '{"query":"web scraping tools","limit":5}'
+### /v1/search
+
+```http
+POST https://fastcrw.com/api/v1/search
 ```
 
-## A Good Default Request
+Authentication:
 
-If you are not sure where to start, use this shape first:
+- Hosted: send `Authorization: Bearer YOUR_API_KEY`
+- Self-hosted open-core binaries do not expose `search`
+
+### Installation
+
+Like the rest of the CRW API, search is HTTP-first. Use cURL or your existing HTTP client.
+
+### Basic usage
+
+Start with this request:
 
 ```json
 {
-  "query": "your search terms here",
+  "query": "web scraping tools",
   "limit": 5
 }
 ```
 
-That gives you the top 5 web results with title, URL, description, and relevance score. Add `scrapeOptions` when you need the actual page content, not just search snippets.
+:::tabs
+::tab{title="Python"}
+```python
+import requests
 
-## Parameters
+resp = requests.post(
+    "https://fastcrw.com/api/v1/search",
+    headers={"Authorization": "Bearer YOUR_API_KEY"},
+    json={
+        "query": "web scraping tools",
+        "limit": 5,
+    },
+)
 
-| Field | Type | Default | Description |
-| --- | --- | --- | --- |
-| `query` | `string` | *required* | The search query (max 2000 characters) |
-| `limit` | `number` | `5` | Maximum number of results per source (1-20) |
-| `lang` | `string` | -- | Language code for results (e.g. `"en"`, `"de"`, `"fr"`) |
-| `tbs` | `string` | -- | Time-based filter: `"qdr:h"` (hour), `"qdr:d"` (day), `"qdr:w"` (week), `"qdr:m"` (month), `"qdr:y"` (year) |
-| `sources` | `string[]` | -- | Result types to return: `"web"`, `"news"`, `"images"`. When set, response is grouped by source |
-| `categories` | `string[]` | -- | Filter by category: `"github"`, `"research"`, `"pdf"` |
-| `scrapeOptions` | `object` | -- | Scrape each result URL. See below |
+for item in resp.json()["data"]:
+    print(item["title"], item["url"])
+```
+::tab{title="Node.js"}
+```javascript
+const resp = await fetch("https://fastcrw.com/api/v1/search", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer YOUR_API_KEY",
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    query: "web scraping tools",
+    limit: 5
+  })
+});
 
-### scrapeOptions
+const body = await resp.json();
+console.log(body.data);
+```
+::tab{title="cURL"}
+```bash
+curl -X POST https://fastcrw.com/api/v1/search \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "web scraping tools",
+    "limit": 5
+  }'
+```
+:::
 
-| Field | Type | Default | Description |
-| --- | --- | --- | --- |
-| `formats` | `string[]` | *required* | Output formats: `"markdown"`, `"html"`, `"rawHtml"`, `"links"` |
-| `onlyMainContent` | `boolean` | `true` | Extract primary content area only |
-
-## Response Format
-
-### Flat response (default -- no `sources`)
-
-When `sources` is not set, results are returned as a flat array sorted by relevance:
+### Response
 
 ```json
 {
@@ -63,159 +112,106 @@ When `sources` is not set, results are returned as a flat array sorted by releva
       "title": "Article Title",
       "description": "A snippet from the search result...",
       "position": 1,
-      "score": 9.5,
-      "category": "general"
+      "score": 9.5
     }
   ]
 }
 ```
 
-### Grouped response (with `sources`)
+That is the flat response shape used when `sources` is not set.
 
-When `sources` is set, results are grouped by type. The `limit` applies per source:
+## Parameters
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `query` | string | required | Search query |
+| `limit` | number | `5` | Maximum number of results per source |
+| `lang` | string | -- | Result language hint such as `"en"` or `"tr"` |
+| `tbs` | string | -- | Recency filter: `qdr:h`, `qdr:d`, `qdr:w`, `qdr:m`, `qdr:y` |
+| `sources` | string[] | -- | Result groups such as `"web"`, `"news"`, `"images"` |
+| `categories` | string[] | -- | Filters such as `"github"`, `"research"`, `"pdf"` |
+| `scrapeOptions` | object | -- | Scrape each result URL after search |
+
+`scrapeOptions`:
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `formats` | string[] | required | Which content formats to fetch for each result |
+| `onlyMainContent` | boolean | `true` | Keep content focused on the main body |
+
+## Search result types
+
+Without `sources`, CRW returns a flat list:
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "url": "https://example.com/article",
+      "title": "Article Title",
+      "description": "Search snippet...",
+      "position": 1,
+      "score": 9.5
+    }
+  ]
+}
+```
+
+With `sources`, CRW returns grouped results:
 
 ```json
 {
   "success": true,
   "data": {
-    "web": [
-      { "url": "...", "title": "...", "description": "...", "position": 1, "score": 9.5 }
-    ],
-    "news": [
-      { "url": "...", "title": "...", "description": "...", "position": 1, "publishedDate": "2026-04-02T14:00:00" }
-    ]
+    "web": [{ "url": "...", "title": "...", "description": "..." }],
+    "news": [{ "url": "...", "title": "...", "publishedDate": "2026-04-02T14:00:00" }],
+    "images": [{ "url": "...", "imageUrl": "...", "thumbnailUrl": "..." }]
   }
 }
 ```
 
-## Search + Scrape
+## Search with content scraping
 
-The real power of the search endpoint is combining search with content scraping in a single call. Add `scrapeOptions` to fetch the full page content for each result:
-
-```bash
-curl -X POST https://fastcrw.com/api/v1/search \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -d '{
-    "query": "machine learning transformers",
-    "limit": 3,
-    "scrapeOptions": {
-      "formats": ["markdown"]
-    }
-  }'
-```
-
-Each result in the response will include the scraped content:
+When you need more than result snippets, add `scrapeOptions`:
 
 ```json
 {
-  "url": "https://example.com/article",
-  "title": "Understanding Transformers",
-  "description": "Search snippet...",
-  "position": 1,
-  "markdown": "# Understanding Transformers\n\nThe transformer architecture...",
-  "metadata": { "statusCode": 200 }
+  "query": "web scraping tools",
+  "limit": 3,
+  "scrapeOptions": {
+    "formats": ["markdown"],
+    "onlyMainContent": true
+  }
 }
 ```
 
-If a particular URL fails to scrape (anti-bot, timeout), the result is still returned with the search metadata but without the scraped content. The credit for that failed scrape is refunded.
+That enriches eligible results with scraped page content. It is powerful, but it is also the moment search becomes more expensive, so keep it off until you need it.
 
-:::note
-When `scrapeOptions` is combined with `sources`, only `web` results are scraped. News and image results return search metadata only.
-:::
+## Freshness, sources, and categories
 
-## News Search
+- Use `tbs` when freshness matters more than broad recall.
+- Use `sources` when you want different result groups such as `web`, `news`, or `images`.
+- Use `categories` to narrow the query domain without rewriting the query itself.
 
-Search specifically for recent news articles:
+Good default: add one narrowing control at a time so you can see which one actually improved the results.
 
-```bash
-curl -X POST https://fastcrw.com/api/v1/search \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -d '{"query":"artificial intelligence","sources":["news"],"limit":5}'
-```
+## Common production patterns
 
-News results include a `publishedDate` field with the article publication timestamp.
+- Start with search only, then add `scrapeOptions` after you verify result quality.
+- Use `sources: ["news"]` or `tbs` when freshness matters more than broad recall.
+- Use `categories: ["github"]` or `["research"]` to narrow noisy queries.
+- Keep `limit` low on the first pass so the result quality is easy to inspect.
 
-## Image Search
+## Common mistakes
 
-Search for images across the web:
+- Adding `scrapeOptions` to every search before you know you need page content
+- Confusing `sources` with `categories`
+- Treating `qdr:h` as truly hourly precision; backend precision can be coarser
+- Assuming search is part of the self-hosted open-core binary
 
-```bash
-curl -X POST https://fastcrw.com/api/v1/search \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -d '{"query":"neural network diagram","sources":["images"],"limit":5}'
-```
+## When to use something else
 
-Image results include `imageUrl`, `thumbnailUrl`, `imageFormat`, and `resolution` fields.
-
-## Time-Based Search
-
-Filter results by recency using the `tbs` parameter:
-
-| Value | Meaning |
-| --- | --- |
-| `qdr:h` | Past hour |
-| `qdr:d` | Past 24 hours |
-| `qdr:w` | Past week |
-| `qdr:m` | Past month |
-| `qdr:y` | Past year |
-
-```json
-{
-  "query": "latest AI announcements",
-  "tbs": "qdr:d",
-  "limit": 5
-}
-```
-
-:::note
-`qdr:h` maps to day-level precision due to backend limitations. Hourly granularity is not available.
-:::
-
-## Category Filtering
-
-Focus your search on specific content categories:
-
-- `"github"` -- search within GitHub repositories, code, and issues
-- `"research"` -- search academic sources (arXiv, Google Scholar, Semantic Scholar)
-- `"pdf"` -- search for PDF documents
-
-```json
-{
-  "query": "web scraping python",
-  "categories": ["github"],
-  "limit": 5
-}
-```
-
-Categories can be combined: `"categories": ["github", "research"]`.
-
-## Credit Cost
-
-:::note
-Cloud only (fastcrw.com) -- self-hosted instances do not have credit-based billing.
-:::
-
-| Operation | Cost |
-| --- | --- |
-| Search (without scraping) | 1 credit |
-| Search + scrape | 1 credit + 1 per scraped result |
-
-If you search with `limit: 5` and `scrapeOptions`, and all 5 results scrape successfully, the total cost is 6 credits (1 search + 5 scrapes). Failed scrapes are refunded.
-
-## Common Mistakes
-
-- **Empty query** -- the `query` field is required and must be at least 1 character.
-- **Too many results** -- `limit` caps at 20. Start with 5 and increase only if needed.
-- **Scraping everything** -- adding `scrapeOptions` multiplies the credit cost. Only use it when you actually need the page content, not just search snippets.
-- **Mixing sources and categories** -- `sources` controls the *type* of results (web, news, images). `categories` controls the *domain* filter (github, research). They work independently.
-
-## What to Read Next
-
-- [Scrape endpoint](/docs/scraping) -- for scraping specific URLs you already know.
-- [Extract endpoint](/docs/extract) -- for structured JSON extraction from pages.
-- [Credit costs](/docs/credit-costs) -- full billing breakdown across all endpoints.
-- [SDK examples](/docs/sdk-examples) -- search examples in TypeScript, Python, and Go.
-- [Integrations](/docs/integrations) -- search support across CrewAI, LangChain, n8n, Dify, and more.
+- Use [Scrape](#scraping) when you already know the exact URL
+- Use [Map](#map) for site-specific discovery
+- Use [Crawl](#crawling) when you need a bounded multi-page job on one site

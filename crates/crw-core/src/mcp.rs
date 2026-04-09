@@ -56,106 +56,145 @@ impl JsonRpcResponse {
 
 // --- Tool definitions ---
 
-pub fn tool_definitions() -> Value {
-    json!({
-        "tools": [
-            {
-                "name": "crw_scrape",
-                "description": "Scrape a single URL and return its content as markdown, HTML, or links. Use this to extract content from any web page.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "url": {
-                            "type": "string",
-                            "description": "The URL to scrape"
-                        },
-                        "formats": {
-                            "type": "array",
-                            "items": { "type": "string", "enum": ["markdown", "html", "links"] },
-                            "description": "Output formats (default: [\"markdown\"])"
-                        },
-                        "onlyMainContent": {
-                            "type": "boolean",
-                            "description": "Extract only the main content, removing nav/footer/etc (default: true)"
-                        },
-                        "includeTags": {
-                            "type": "array",
-                            "items": { "type": "string" },
-                            "description": "CSS selectors to include (only content matching these selectors)"
-                        },
-                        "excludeTags": {
-                            "type": "array",
-                            "items": { "type": "string" },
-                            "description": "CSS selectors to exclude from output"
-                        }
+pub fn tool_definitions(proxy_mode: bool) -> Value {
+    let mut tools = vec![
+        json!({
+            "name": "crw_scrape",
+            "description": "Scrape a single URL and return its content as markdown, HTML, or links. Use this to extract content from any web page.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "The URL to scrape"
                     },
-                    "required": ["url"]
-                }
-            },
-            {
-                "name": "crw_crawl",
-                "description": "Start an async crawl of a website. Returns a job ID that can be polled with crw_check_crawl_status.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "url": {
-                            "type": "string",
-                            "description": "The starting URL to crawl"
-                        },
-                        "maxDepth": {
-                            "type": "integer",
-                            "description": "Maximum crawl depth (default: 2)"
-                        },
-                        "maxPages": {
-                            "type": "integer",
-                            "description": "Maximum number of pages to crawl (default: 10)"
-                        },
-                        "jsonSchema": {
-                            "type": "object",
-                            "description": "JSON schema for LLM-based structured data extraction on each crawled page"
-                        }
+                    "formats": {
+                        "type": "array",
+                        "items": { "type": "string", "enum": ["markdown", "html", "links"] },
+                        "description": "Output formats (default: [\"markdown\"])"
                     },
-                    "required": ["url"]
-                }
-            },
-            {
-                "name": "crw_check_crawl_status",
-                "description": "Check the status of an async crawl job and retrieve results.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "id": {
-                            "type": "string",
-                            "description": "The crawl job ID returned by crw_crawl"
-                        }
+                    "onlyMainContent": {
+                        "type": "boolean",
+                        "description": "Extract only the main content, removing nav/footer/etc (default: true)"
                     },
-                    "required": ["id"]
-                }
-            },
-            {
-                "name": "crw_map",
-                "description": "Discover URLs on a website by crawling and/or reading its sitemap.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "url": {
-                            "type": "string",
-                            "description": "The URL to map"
-                        },
-                        "maxDepth": {
-                            "type": "integer",
-                            "description": "Maximum crawl depth for discovery (default: 2)"
-                        },
-                        "useSitemap": {
-                            "type": "boolean",
-                            "description": "Whether to use the site's sitemap.xml (default: true)"
-                        }
+                    "includeTags": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "CSS selectors to include (only content matching these selectors)"
                     },
-                    "required": ["url"]
-                }
+                    "excludeTags": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "CSS selectors to exclude from output"
+                    }
+                },
+                "required": ["url"]
             }
-        ]
-    })
+        }),
+        json!({
+            "name": "crw_crawl",
+            "description": "Start an async crawl of a website. Returns a job ID that can be polled with crw_check_crawl_status.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "The starting URL to crawl"
+                    },
+                    "maxDepth": {
+                        "type": "integer",
+                        "description": "Maximum crawl depth (default: 2)"
+                    },
+                    "maxPages": {
+                        "type": "integer",
+                        "description": "Maximum number of pages to crawl (default: 10)"
+                    },
+                    "jsonSchema": {
+                        "type": "object",
+                        "description": "JSON schema for LLM-based structured data extraction on each crawled page"
+                    }
+                },
+                "required": ["url"]
+            }
+        }),
+        json!({
+            "name": "crw_check_crawl_status",
+            "description": "Check the status of an async crawl job and retrieve results.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "The crawl job ID returned by crw_crawl"
+                    }
+                },
+                "required": ["id"]
+            }
+        }),
+        json!({
+            "name": "crw_map",
+            "description": "Discover URLs on a website by crawling and/or reading its sitemap.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "The URL to map"
+                    },
+                    "maxDepth": {
+                        "type": "integer",
+                        "description": "Maximum crawl depth for discovery (default: 2)"
+                    },
+                    "useSitemap": {
+                        "type": "boolean",
+                        "description": "Whether to use the site's sitemap.xml (default: true)"
+                    }
+                },
+                "required": ["url"]
+            }
+        }),
+    ];
+
+    if proxy_mode {
+        tools.push(json!({
+            "name": "crw_search",
+            "description": "Search the web and return relevant results with titles, URLs, and descriptions. Powered by fastCRW cloud — only available in proxy mode.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search query"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of results to return (default: 5)"
+                    },
+                    "lang": {
+                        "type": "string",
+                        "description": "Language code for results (e.g. \"en\", \"tr\")"
+                    },
+                    "country": {
+                        "type": "string",
+                        "description": "Country code for results (e.g. \"us\", \"tr\")"
+                    },
+                    "scrapeOptions": {
+                        "type": "object",
+                        "description": "Options for scraping each result page (e.g. {\"formats\": [\"markdown\"]})",
+                        "properties": {
+                            "formats": {
+                                "type": "array",
+                                "items": { "type": "string", "enum": ["markdown", "html", "links"] }
+                            }
+                        }
+                    }
+                },
+                "required": ["query"]
+            }
+        }));
+    }
+
+    json!({ "tools": tools })
 }
 
 /// Result of handling a protocol method.
@@ -173,6 +212,7 @@ pub fn handle_protocol_method(
     server_name: &str,
     server_version: &str,
     req: &JsonRpcRequest,
+    proxy_mode: bool,
 ) -> ProtocolResult {
     if req.jsonrpc != "2.0" {
         let id = req.id.clone().unwrap_or(Value::Null);
@@ -203,7 +243,7 @@ pub fn handle_protocol_method(
 
         "tools/list" => {
             let id = req.id.clone().unwrap_or(Value::Null);
-            ProtocolResult::Response(JsonRpcResponse::success(id, tool_definitions()))
+            ProtocolResult::Response(JsonRpcResponse::success(id, tool_definitions(proxy_mode)))
         }
 
         "ping" => {
