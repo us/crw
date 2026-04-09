@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.3.5](https://github.com/us/crw/compare/v0.3.4...v0.3.5) (2026-04-09)
+
+
+### Features
+
+* **mcp:** add crw_search tool for cloud/proxy mode ([7fe4a8e](https://github.com/us/crw/commit/7fe4a8e79aae9dfcd0b400c17f175af583a33eef))
+
 ## [0.3.4](https://github.com/us/crw/compare/v0.3.3...v0.3.4) (2026-04-09)
 
 
