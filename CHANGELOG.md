@@ -2,6 +2,14 @@
 
 All notable changes to CRW are documented here.
 
+## [0.3.3](https://github.com/us/crw/compare/v0.3.2...v0.3.3) (2026-04-09)
+
+
+### Features
+
+* add APT/Debian package distribution ([c34b8e9](https://github.com/us/crw/commit/c34b8e93563c0f3f4b3fa1a1e395e6041e97766c))
+* **renderer:** spawn all available browsers for multi-renderer fallback ([f546437](https://github.com/us/crw/commit/f546437568eb833684978793e5b79880f2710016))
+
 ## [0.3.2](https://github.com/us/crw/compare/v0.3.1...v0.3.2) (2026-04-08)
 
 

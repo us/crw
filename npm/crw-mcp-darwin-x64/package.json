@@ -1,6 +1,6 @@
 {
   "name": "crw-mcp-darwin-x64",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "CRW MCP server binary for darwin x64",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/us/crw",
