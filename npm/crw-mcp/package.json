@@ -1,6 +1,6 @@
 {
   "name": "crw-mcp",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "MCP server for CRW web scraper — scrape, crawl, and map tools for AI agents",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/us/crw",
