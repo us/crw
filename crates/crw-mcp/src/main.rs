@@ -277,34 +277,41 @@ async fn main() {
                 || std::env::var("CRW_RENDERER__CHROME__WS_URL").is_ok()
                 || std::env::var("CRW_RENDERER__PLAYWRIGHT__WS_URL").is_ok();
 
-            let _browser_guard = if !user_configured_renderer {
-                match browser::spawn_headless().await {
-                    Some((guard, ws_url)) => {
-                        // Set as lightpanda slot (highest priority in the fallback chain).
-                        config.renderer.lightpanda = Some(crw_core::config::CdpEndpoint { ws_url });
-                        Some(guard)
-                    }
-                    None => {
-                        tracing::info!(
-                            "No browser found — JS rendering disabled. \
-                             Install LightPanda or Chrome for full SPA support."
-                        );
-                        None
-                    }
+            let _browser_guards = if !user_configured_renderer {
+                let browsers = browser::spawn_all_headless().await;
+                if browsers.is_empty() {
+                    tracing::info!(
+                        "No browser found — JS rendering disabled. \
+                         Install LightPanda or Chrome for full SPA support."
+                    );
                 }
+                let mut guards = Vec::new();
+                for (guard, ws_url, kind) in browsers {
+                    match kind {
+                        browser::RendererKind::LightPanda => {
+                            config.renderer.lightpanda =
+                                Some(crw_core::config::CdpEndpoint { ws_url });
+                        }
+                        browser::RendererKind::Chrome => {
+                            config.renderer.chrome = Some(crw_core::config::CdpEndpoint { ws_url });
+                        }
+                    }
+                    guards.push(guard);
+                }
+                guards
             } else {
                 tracing::info!("CDP renderer already configured — skipping auto-spawn");
-                None
+                Vec::new()
             };
 
             let state = crw_server::state::AppState::new(config);
 
-            // Run the MCP loop. _browser_guard keeps the browser alive until shutdown.
+            // Run the MCP loop. _browser_guards keeps browsers alive until shutdown.
             let backend = Backend::Embedded { state };
             run_stdio_loop(backend).await;
 
-            // Drop browser guard explicitly (kills the browser process).
-            drop(_browser_guard);
+            // Drop browser guards explicitly (kills browser processes).
+            drop(_browser_guards);
             return;
         }
 

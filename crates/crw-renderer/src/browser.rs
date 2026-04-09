@@ -43,6 +43,13 @@ impl Drop for ManagedBrowser {
     }
 }
 
+/// Which renderer engine was spawned.
+#[derive(Debug, Clone, Copy)]
+pub enum RendererKind {
+    LightPanda,
+    Chrome,
+}
+
 /// Try to spawn a browser. Returns the managed handle + WS URL for CDP.
 ///
 /// Tries in order: LightPanda native → Chrome native → LightPanda Docker.
@@ -59,6 +66,37 @@ pub async fn spawn_headless() -> Option<(ManagedBrowser, String)> {
 
     // 3. Last resort: LightPanda via Docker (requires Docker daemon).
     try_lightpanda_docker().await
+}
+
+/// Spawn all available browsers for a multi-renderer fallback chain.
+///
+/// Unlike `spawn_headless()` which returns the first browser found, this
+/// function spawns every available browser so that `FallbackRenderer` can
+/// try LightPanda first (fast, lightweight) and fall back to Chrome
+/// (heavier but handles complex SPAs).
+///
+/// Docker is only tried if no native browser was found at all.
+pub async fn spawn_all_headless() -> Vec<(ManagedBrowser, String, RendererKind)> {
+    let mut browsers = Vec::new();
+
+    // 1. Try LightPanda native (fast, lightweight).
+    if let Some((guard, ws_url)) = try_lightpanda_native().await {
+        browsers.push((guard, ws_url, RendererKind::LightPanda));
+    }
+
+    // 2. Also try Chrome/Chromium native (robust for complex SPAs).
+    if let Some((guard, ws_url)) = try_chrome_native().await {
+        browsers.push((guard, ws_url, RendererKind::Chrome));
+    }
+
+    // 3. Docker only if nothing native was found (last resort).
+    if browsers.is_empty()
+        && let Some((guard, ws_url)) = try_lightpanda_docker().await
+    {
+        browsers.push((guard, ws_url, RendererKind::LightPanda));
+    }
+
+    browsers
 }
 
 // --- LightPanda native ---

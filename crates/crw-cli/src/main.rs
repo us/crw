@@ -70,32 +70,39 @@ async fn main() {
 
     // Build renderer config — auto-detect browser if --js
     let mut renderer_config = RendererConfig::default();
-    let _browser_guard = if cli.js {
+    let _browser_guards = if cli.js {
         // Check if user explicitly set a CDP URL (backwards compat)
         if let Ok(ws_url) = std::env::var("CRW_CDP_URL") {
             renderer_config.lightpanda = Some(crw_core::config::CdpEndpoint { ws_url });
-            None
+            Vec::new()
         } else {
-            // Auto-detect: LightPanda (PATH/managed/download) → Chrome → Docker
-            match crw_renderer::browser::spawn_headless().await {
-                Some((guard, ws_url)) => {
-                    renderer_config.lightpanda = Some(crw_core::config::CdpEndpoint { ws_url });
-                    Some(guard)
-                }
-                None => {
-                    eprintln!(
-                        "warning: --js requested but no browser found. \
-                         Install LightPanda or Chrome for JS rendering. \
-                         Falling back to HTTP."
-                    );
-                    None
-                }
+            // Auto-detect: spawn all available browsers for fallback chain
+            let browsers = crw_renderer::browser::spawn_all_headless().await;
+            if browsers.is_empty() {
+                eprintln!(
+                    "warning: --js requested but no browser found. \
+                     Install LightPanda or Chrome for JS rendering. \
+                     Falling back to HTTP."
+                );
             }
+            let mut guards = Vec::new();
+            for (guard, ws_url, kind) in browsers {
+                match kind {
+                    crw_renderer::browser::RendererKind::LightPanda => {
+                        renderer_config.lightpanda = Some(crw_core::config::CdpEndpoint { ws_url });
+                    }
+                    crw_renderer::browser::RendererKind::Chrome => {
+                        renderer_config.chrome = Some(crw_core::config::CdpEndpoint { ws_url });
+                    }
+                }
+                guards.push(guard);
+            }
+            guards
         }
     } else {
         // HTTP-only — no CDP
         renderer_config.mode = "none".into();
-        None
+        Vec::new()
     };
 
     let stealth_config = StealthConfig {
