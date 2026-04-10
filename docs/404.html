@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>404 — crw</title>
   <meta name="robots" content="noindex">
+  <script>
+    // Redirect old #slug links (from GitHub README, external sites) to /slug
+    const hash = window.location.hash.slice(1);
+    if (hash) { const slug = hash.split('::')[0]; window.location.replace('/' + slug); }
+  </script>
   <style>
     body { font-family: system-ui, sans-serif; background: #0a0a0a; color: rgba(255,255,255,.84); display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
     .box { text-align: center; }

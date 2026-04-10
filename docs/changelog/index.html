@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Changelog — CRW Docs</title>
+  <meta name="description" content="This page is generated from the root [`CHANGELOG.md`](https://github.com/us/crw/blob/main/CHANGELOG.md), which is maintained by release-please during releases.">
+  <meta name="keywords" content="web scraper, web crawler, firecrawl alternative, crawl4ai alternative, self-hosted scraper, rust web scraper, mcp server, ai web scraping, rag pipeline, llm extraction, open source crawler, headless browser scraper">
+  <link rel="canonical" href="https://docs.fastcrw.com/changelog">
+  <link rel="icon" href="favicon.png?v=2" type="image/png">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://docs.fastcrw.com/changelog">
+  <meta property="og:title" content="Changelog — CRW | Web Scraper in Rust">
+  <meta property="og:description" content="This page is generated from the root [`CHANGELOG.md`](https://github.com/us/crw/blob/main/CHANGELOG.md), which is maintained by release-please during releases.">
+  <meta property="og:site_name" content="CRW">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Changelog — CRW Docs">
+  <meta name="twitter:description" content="This page is generated from the root [`CHANGELOG.md`](https://github.com/us/crw/blob/main/CHANGELOG.md), which is maintained by release-please during releases.">
+
+  <!-- Structured Data (JSON-LD) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "CRW",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Linux, macOS, Windows (WSL)",
+    "description": "Open-source, self-hosted web scraper and crawler written in Rust. A fast, lightweight Firecrawl alternative with MCP server support for AI agents, LLM structured extraction, and Firecrawl-compatible workflows.",
+    "url": "https://docs.fastcrw.com/",
+    "downloadUrl": "https://crates.io/crates/crw-server",
+    "softwareVersion": "0.3.5",
+    "license": "https://opensource.org/licenses/AGPL-3.0",
+    "programmingLanguage": "Rust",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "featureList": [
+      "Firecrawl-compatible REST API",
+      "MCP server for Claude Code, Cursor, Windsurf",
+      "LLM structured extraction (Anthropic, OpenAI)",
+      "JavaScript rendering via LightPanda CDP",
+      "BFS web crawler with robots.txt and sitemap support",
+      "6 output formats: Markdown, HTML, JSON, plain text, links",
+      "CSS selector and XPath extraction",
+      "Chunking with BM25 and cosine ranking for RAG pipelines",
+      "Single binary, 6.6 MB idle RAM"
+    ]
+  }
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css" id="hljs-theme">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+  <link rel="stylesheet" href="/css/style.css">  <link rel="modulepreload" href="/js/app.js">
+  <link rel="modulepreload" href="/js/search.js">
+  <link rel="modulepreload" href="/site.config.js">
+</head>
+<body>
+  <div class="reading-progress" id="reading-progress"></div>
+
+  <header class="navbar">
+    <div class="navbar-top">
+      <div class="navbar-left">
+        <button class="hamburger" id="hamburger" aria-label="Toggle sidebar">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <a href="https://fastcrw.com" class="logo">
+          <img src="/logo-icon.svg" alt="CRW" height="24" class="logo-img logo-light" />
+          <img src="/logo-dark.svg" alt="CRW" height="24" class="logo-img logo-dark" />
+          <span class="logo-text">fast<span class="logo-accent">crw</span></span>
+        </a>
+      </div>
+      <div class="navbar-center">
+        <button class="search-trigger" id="search-trigger" aria-label="Search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <span class="search-placeholder">Search...</span>
+          <span class="search-shortcut">⌘K</span>
+        </button>
+      </div>
+      <div class="navbar-right">
+        <a href="https://github.com/us/crw" target="_blank" rel="noopener" class="navbar-github" id="navbar-github" aria-label="CRW on GitHub">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          <span>us/crw</span>
+        </a>
+        <a href="https://fastcrw.com" target="_blank" rel="noopener" class="navbar-link">Status</a>
+        <a href="https://fastcrw.com/register" target="_blank" rel="noopener" class="navbar-signup">Sign Up</a>
+        <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+          <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+          <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="navbar-tabs" id="navbar-tabs"></div>
+  </header>
+
+  <div class="overlay" id="overlay"></div>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <nav id="sidebar-nav"></nav>
+    </aside>
+
+    <main class="content" id="content">
+      <article id="article" role="main"><h1>Changelog</h1>
+<p>This page is generated from the root <a href="https://github.com/us/crw/blob/main/CHANGELOG.md"><code>CHANGELOG.md</code></a>, which is maintained by release-please during releases.</p>
+<p>:::note
+The source of truth is the repository root changelog. Do not edit this docs page manually.
+:::</p>
+<p>All notable changes to CRW are documented here.</p>
+<h2><a href="https://github.com/us/crw/compare/v0.3.3...v0.3.4">0.3.4</a> (2026-04-09)</h2>
+<h3>Bug Fixes</h3>
+<ul>
+<li><strong>config:</strong> env var overrides not applied due to missing prefix_separator (<a href="https://github.com/us/crw/commit/71c7ae544bd74575cf30101190d65708934bcb1f">71c7ae5</a>), closes <a href="https://github.com/us/crw/issues/18">#18</a></li>
+</ul>
+<h2><a href="https://github.com/us/crw/compare/v0.3.2...v0.3.3">0.3.3</a> (2026-04-09)</h2>
+<h3>Features</h3>
+<ul>
+<li>add APT/Debian package distribution (<a href="https://github.com/us/crw/commit/c34b8e93563c0f3f4b3fa1a1e395e6041e97766c">c34b8e9</a>)</li>
+<li><strong>renderer:</strong> spawn all available browsers for multi-renderer fallback (<a href="https://github.com/us/crw/commit/f546437568eb833684978793e5b79880f2710016">f546437</a>)</li>
+</ul>
+<h2><a href="https://github.com/us/crw/compare/v0.3.1...v0.3.2">0.3.2</a> (2026-04-08)</h2>
+<h3>Bug Fixes</h3>
+<ul>
+<li><strong>cli:</strong> auto-prepend https:// when no scheme provided (<a href="https://github.com/us/crw/commit/105060644acb1ef930555869372f5413947ac194">1050606</a>)</li>
+</ul>
+<h2><a href="https://github.com/us/crw/compare/v0.3.0...v0.3.1">0.3.1</a> (2026-04-08)</h2>
+<h3>Features</h3>
+<ul>
+<li>add llms.txt, SKILL.md, MCP init command, and docs UI improvements (<a href="https://github.com/us/crw/commit/1b22d194ec9a8b8db8db39a1d44ce38a56716f5d">1b22d19</a>)</li>
+<li>add one-line install script with auto platform detection (<a href="https://github.com/us/crw/commit/6354f7929896bb9a12eeebb9d5bf439731fac874">6354f79</a>)</li>
+<li><strong>docs:</strong> add dark mode logo support and improve docs UI (<a href="https://github.com/us/crw/commit/047df7b46485d9cdec76b213db181dc0aa592511">047df7b</a>)</li>
+<li><strong>docs:</strong> align design with SaaS site and update branding (<a href="https://github.com/us/crw/commit/631d07c66a34bcc71e8d2494a177182977886a8c">631d07c</a>)</li>
+<li><strong>docs:</strong> unify docs into docs.fastcrw.com with Mintlify-style design (<a href="https://github.com/us/crw/commit/4994998ae97924100e4415b90a5b78db3b8cf09e">4994998</a>)</li>
+<li><strong>docs:</strong> update URLs, dark mode, syntax highlighting, and benchmarks (<a href="https://github.com/us/crw/commit/0678cdfde6a9de9b5fa56ec2c6256a63a0342317">0678cdf</a>)</li>
+<li>release all 3 binaries, CLI auto-browser, README overhaul (<a href="https://github.com/us/crw/commit/aa2950d564cb97f668c0c838713f612bffa33e32">aa2950d</a>)</li>
+<li>update README banner with new logo (<a href="https://github.com/us/crw/commit/bcba1ad95e7ac1afd3066827f2327452b60c81f0">bcba1ad</a>)</li>
+</ul>
+<h3>Bug Fixes</h3>
+<ul>
+<li>crawl HTTP polling bug + SDK test suite + docs (<a href="https://github.com/us/crw/issues/16">#16</a>) (<a href="https://github.com/us/crw/commit/b6d898360cb2396683e9e82f778d2ee3b8455625">b6d8983</a>)</li>
+<li>remove internal implementation detail from roadmap (<a href="https://github.com/us/crw/commit/a5013f07f039615de5c5988e6bbf64629b56aa0e">a5013f0</a>)</li>
+</ul>
+<h2><a href="https://github.com/us/crw/compare/v0.2.2...v0.3.0">0.3.0</a> (2026-04-02)</h2>
+<h3>Features</h3>
+<ul>
+<li>add search() method to Python SDK and docs (<a href="https://github.com/us/crw/commit/591e3fed4bbd14b4470fd2f5cbc24c02f7543dba">591e3fe</a>)</li>
+</ul>
+<h2><a href="https://github.com/us/crw/compare/v0.2.1...v0.2.2">0.2.2</a> (2026-04-02)</h2>
+<h3>Bug Fixes</h3>
+<ul>
+<li><strong>renderer:</strong> escalate to JS renderer on HTTP 401/403 responses (<a href="https://github.com/us/crw/commit/f515caa2e315a06df9274967bdc3fb23dbafcbcf">f515caa</a>)</li>
+<li>use GitHub latest release instead of pinned version for binary download (<a href="https://github.com/us/crw/commit/4afcb1a4c67d4e9b36809ed32ce88b6a9fd4c342">4afcb1a</a>)</li>
+</ul>
+<h2><a href="https://github.com/us/crw/compare/v0.2.0...v0.2.1">0.2.1</a> (2026-03-28)</h2>
+<h3>Bug Fixes</h3>
+<ul>
+<li>make crw-mcp npm wrapper executable (<a href="https://github.com/us/crw/commit/576a9eb19ae90bc677344045dd70fb96e8b938da">576a9eb</a>)</li>
+<li>use latest tag in server.json OCI identifier (<a href="https://github.com/us/crw/commit/7ec3b82ab78aa2c7ff900d07400f8a2426cb955f">7ec3b82</a>)</li>
+</ul>
+<h2><a href="https://github.com/us/crw/compare/v0.1.2...v0.2.0">0.2.0</a> (2026-03-28)</h2>
+<h3>Features</h3>
+<ul>
+<li>add MCP Registry support for official server discovery (<a href="https://github.com/us/crw/commit/154b9f520015260d012ebf899513c3af1f9dfe3d">154b9f5</a>)</li>
+</ul>
+<h2><a href="https://github.com/us/crw/compare/v0.1.1...v0.1.2">0.1.2</a> (2026-03-27)</h2>
+<h3>Bug Fixes</h3>
+<ul>
+<li>vendor pdf-inspector as crw-pdf for crates.io publishability (<a href="https://github.com/us/crw/commit/3f7681dde0b78ff2c0c11d232d21a714edb94d75">3f7681d</a>)</li>
+</ul>
+<h2><a href="https://github.com/us/crw/compare/v0.1.0...v0.1.1">0.1.1</a> (2026-03-26)</h2>
+<h3>Bug Fixes</h3>
+<ul>
+<li>skip already-published crates without masking real errors (<a href="https://github.com/us/crw/commit/010649c522e4e49edcf51873d4c1065e08d510b1">010649c</a>)</li>
+</ul>
+<h2><a href="https://github.com/us/crw/compare/v0.0.14...v0.1.0">0.1.0</a> (2026-03-26)</h2>
+<h3>Features</h3>
+<ul>
+<li>add PDF extraction support via pdf-inspector (<a href="https://github.com/us/crw/commit/06dd5bf89caf004929f22d41d00f8a297d09b825">06dd5bf</a>)</li>
+</ul>
+<h2><a href="https://github.com/us/crw/compare/v0.0.13...v0.0.14">0.0.14</a> (2026-03-25)</h2>
+<h3>Features</h3>
+<ul>
+<li><strong>mcp:</strong> auto-download LightPanda binary for zero-config JS rendering (<a href="https://github.com/us/crw/commit/41f443b885326401b653cfcba0054cb943672ca6">41f443b</a>)</li>
+<li><strong>mcp:</strong> auto-spawn headless Chrome for JS rendering in embedded mode (<a href="https://github.com/us/crw/commit/9a6b0ae3f16399f8f9f233109e431f74a882d973">9a6b0ae</a>)</li>
+</ul>
+<h3>Bug Fixes</h3>
+<ul>
+<li><strong>ci:</strong> move crw-mcp to Tier 4 in release workflow and add workflow_dispatch (<a href="https://github.com/us/crw/commit/d7584a82c0dd4ac0c6cd8b169b19939d92eb4e95">d7584a8</a>)</li>
+</ul>
+<h2><a href="https://github.com/us/crw/compare/v0.0.12...v0.0.13">0.0.13</a> (2026-03-24)</h2>
+<h3>Features</h3>
+<ul>
+<li><strong>mcp:</strong> add embedded mode — self-contained MCP server, no crw-server needed (<a href="https://github.com/us/crw/commit/75e54504487f24ee30c0272bb83eb9aab807a284">75e5450</a>)</li>
+</ul>
+<h3>Bug Fixes</h3>
+<ul>
+<li><strong>ci:</strong> switch release-please to simple type for Rust workspace support (<a href="https://github.com/us/crw/commit/51cd420ab77e4bd58bf1a6a7ab0c28287896a0b7">51cd420</a>)</li>
+</ul>
+<h2>v0.0.12</h2>
+<ul>
+<li><strong>Readability drill-down</strong> — when <code>&lt;main&gt;</code> or <code>&lt;article&gt;</code> wraps &gt;90% of body, the extractor now searches inside for narrower content elements (<code>.main-page-content</code>, <code>.article-content</code>, <code>.entry-content</code>, etc.) instead of discarding. Fixes MDN pages returning 35 chars and StackOverflow returning only the question</li>
+<li><strong>Base64 image stripping</strong> — <code>data:</code> URI images are removed in both HTML cleaning (lol_html) and markdown post-processing (regex safety net). Eliminates massive base64 blobs from Reddit and similar sites</li>
+<li><strong>Select/dropdown removal</strong> — <code>&lt;select&gt;</code> elements removed in <code>onlyMainContent</code> mode; dropdown/city-selector/location-selector noise patterns added. Fixes Hürriyet city dropdown leaking into content</li>
+<li><strong>Extended scored selectors</strong> — added <code>.main-page-content</code>, <code>.js-post-body</code>, <code>.s-prose</code>, <code>#question</code>, <code>.page-content</code>, <code>#page-content</code>, <code>[role=&quot;article&quot;]</code> for better MDN, StackOverflow, and generic site coverage</li>
+<li><strong>Smarter fallback chain</strong> — when primary extraction produces too-short markdown, both fallbacks (cleaned HTML and basic clean) are tried and the longer result is picked, instead of short-circuiting on non-empty but insufficient content</li>
+</ul>
+<h2>v0.0.11</h2>
+<ul>
+<li><strong>Stealth anti-bot bypass</strong> — automatic stealth JS injection via <code>Page.addScriptToEvaluateOnNewDocument</code> before every CDP navigation. Spoofs <code>navigator.webdriver</code>, Chrome runtime object, plugins array, languages, permissions API, iframe <code>contentWindow</code>, and <code>toString()</code> proxy to bypass Cloudflare, PerimeterX, and other bot detection systems</li>
+<li><strong>Cloudflare challenge auto-retry</strong> — detects Cloudflare JS challenge pages (&quot;Just a moment&quot;, <code>cf-browser-verification</code>, <code>challenge-platform</code>) after page load and polls up to 3 times at 3-second intervals for non-interactive challenges to auto-resolve</li>
+<li><strong>HTTP → CDP auto-escalation</strong> — <code>FallbackRenderer::fetch()</code> in auto mode now checks HTTP responses for anti-bot challenge signatures and automatically escalates to JS rendering when detected, instead of returning the challenge HTML</li>
+<li><strong>Chrome failover in Docker</strong> — full automatic failover chain: HTTP → LightPanda → Chrome. Added <code>chromedp/headless-shell</code> as a Docker Compose sidecar service with 2GB shared memory. If LightPanda crashes on complex SPAs (React, Angular), Chrome handles the render</li>
+<li><strong>Chrome WS URL auto-discovery</strong> — CDP renderer resolves Chrome DevTools WebSocket URL via the <code>/json/version</code> HTTP endpoint with <code>Host: localhost</code> header (required for chromedp/headless-shell&#39;s socat proxy). Uses <code>OnceCell</code> for lazy one-time resolution</li>
+<li><strong>Proxy configuration docs</strong> — expanded proxy config comments with examples for HTTP, SOCKS5, and residential proxy providers (IPRoyal, Oxylabs, Smartproxy)</li>
+<li><strong>Raw string delimiter fix</strong> — fixed <code>markdown.rs</code> test that used <code>r#&quot;...&quot;#</code> with a string containing <code>&quot;#</code>, changed to <code>r##&quot;...&quot;##</code></li>
+</ul>
+<h2>v0.0.10 / v0.0.9</h2>
+<ul>
+<li><strong>Crawl cancel endpoint</strong> — <code>DELETE /v1/crawl/{id}</code> cancels a running crawl job via <code>AbortHandle</code> and returns <code>{ success: true }</code></li>
+<li><strong>API rate limiting</strong> — token-bucket rate limiter (configurable <code>rate_limit_rps</code>, default 10). Returns 429 with <code>error_code: &quot;rate_limited&quot;</code> when exceeded</li>
+<li><strong>Machine-readable error codes</strong> — all error responses now include an <code>error_code</code> field (e.g. <code>&quot;invalid_url&quot;</code>, <code>&quot;http_error&quot;</code>, <code>&quot;rate_limited&quot;</code>, <code>&quot;not_found&quot;</code>)</li>
+<li><strong>Map response envelope</strong> — <code>/v1/map</code> now returns <code>{ success, data: { links } }</code> instead of <code>{ success, links }</code> for consistency with other endpoints</li>
+<li><strong>Fenced code blocks</strong> — indented code blocks (4-space) are post-processed into fenced (```) blocks for better LLM/RAG compatibility</li>
+<li><strong>Sphinx footer cleanup</strong> — <code>&quot;footer&quot;</code> added to exact-token noise patterns, catching <code>&lt;div class=&quot;footer&quot;&gt;</code> in Sphinx/documentation sites</li>
+<li><strong><code>renderedWith: &quot;http&quot;</code></strong> — HTTP-only fetches now report <code>rendered_with: &quot;http&quot;</code> in metadata instead of <code>null</code></li>
+<li><strong>405 JSON responses</strong> — all routes now have <code>.fallback(method_not_allowed)</code> returning structured JSON with <code>error_code: &quot;method_not_allowed&quot;</code> instead of empty bodies</li>
+<li><strong>Anchor link cleanup</strong> — empty anchor links (<code>[](#id)</code>, <code>[¶](#id)</code>) and pilcrow/section signs stripped from Markdown output</li>
+<li><strong><code>role=&quot;contentinfo&quot;</code> cleanup</strong> — elements with ARIA roles <code>contentinfo</code>, <code>navigation</code>, <code>banner</code>, <code>complementary</code> removed during cleaning</li>
+<li><strong>Tiny chunk merging</strong> — topic chunking merges heading-only chunks (&lt;50 chars) with the next chunk to improve RAG embedding quality</li>
+</ul>
+<h2>v0.0.8</h2>
+<ul>
+<li><strong>Wikipedia / MediaWiki onlyMainContent fix</strong> — <code>onlyMainContent: true</code> now correctly extracts article text from Wikipedia pages (~49% size reduction). Previously the <code>&lt;html&gt;</code> element&#39;s <code>class=&quot;vector-toc-available&quot;</code> matched the <code>&quot;toc&quot;</code> noise pattern via substring, removing the entire page</li>
+<li><strong>3-tier noise pattern matching</strong> — noise class/id matching now uses substring (long patterns), exact-token (short/ambiguous: <code>toc</code>, <code>share</code>, <code>social</code>, <code>comment</code>, <code>related</code>), and prefix (<code>ad-</code>, <code>ads-</code>) matching to avoid false positives</li>
+<li><strong>Structural element guard</strong> — noise handler never removes <code>&lt;html&gt;</code>, <code>&lt;head&gt;</code>, <code>&lt;body&gt;</code>, or <code>&lt;main&gt;</code> elements</li>
+<li><strong>Re-clean after readability</strong> — readability output is re-cleaned to strip residual noise (infobox, navbox, catlinks) that survives inside broad containers</li>
+<li><strong>Wikipedia-aware readability</strong> — added <code>.mw-parser-output</code>, <code>#mw-content-text</code>, <code>#bodyContent</code> to scored selectors; priority/scored selectors that wrap &gt;90% of body are skipped</li>
+<li><strong>BYOK LLM extraction</strong> — per-request <code>llmApiKey</code>, <code>llmProvider</code>, <code>llmModel</code> fields for bring-your-own-key structured extraction without server config</li>
+<li><strong>JSON format validation</strong> — <code>formats: [&quot;json&quot;]</code> without <code>jsonSchema</code> now returns a 400 error instead of a warning</li>
+<li><strong>Block detection skip</strong> — pages &gt;50 KB skip interstitial/block detection (no more false &quot;blocked by anti-bot&quot; on Wikipedia)</li>
+<li><strong>Null byte URL rejection</strong> — URLs with <code>%00</code> or null bytes rejected at validation</li>
+<li><strong>Request timeout</strong> — default timeout bumped from 60s to 120s</li>
+<li><strong>Dockerfile fix</strong> — corrected <code>cargo build</code> flags, added <code>config.docker.toml</code></li>
+</ul>
+<h2>v0.0.7</h2>
+<ul>
+<li><strong><code>success: false</code> on 4xx targets</strong> — scraping a 403/404/429 target with minimal body now correctly returns <code>success: false</code> with error details, instead of <code>success: true</code> with a warning. Targets with real content (custom error pages) still return <code>success: true</code> with a warning</li>
+<li><strong>JS renderer fallback warning</strong> — when <code>renderJs: true</code> is requested but no CDP renderer is available, the response now includes <code>rendered_with: &quot;http_only_fallback&quot;</code> and a warning instead of silently falling back</li>
+<li><strong>CDP health check</strong> — <code>is_available()</code> now runs a real <code>Browser.getVersion</code> command instead of just testing the WebSocket connection</li>
+<li><strong>Specific error messages</strong> — unknown formats now return descriptive errors (e.g., <code>&quot;Unknown format &#39;extract&#39;. Valid formats: ...&quot;</code>) instead of generic 422</li>
+<li><strong><code>&quot;extract&quot;</code> format alias</strong> — <code>formats: [&quot;extract&quot;]</code> and <code>formats: [&quot;llm-extract&quot;]</code> are now accepted as aliases for <code>&quot;json&quot;</code> (Firecrawl compatibility)</li>
+<li><strong>Chunk dedup by default</strong> — deduplication is now enabled by default for all chunking strategies; separator-only chunks (<code>---</code>, <code>***</code>) are filtered out</li>
+<li><strong>Chunk relevance scores</strong> — chunks now return <code>{ content, score, index }</code> objects instead of plain strings when a query is provided</li>
+<li><strong>Map timeout</strong> — <code>/v1/map</code> accepts a <code>timeout</code> parameter (default 120s, max 300s) to prevent 502s on large sites</li>
+<li><strong>Stealth + JS rendering fix</strong> — <code>stealth: true</code> with <code>renderJs: true</code> no longer bypasses CDP; the shared renderer is used with stealth headers injected</li>
+<li><strong>BM25 NaN guard</strong> — prevents <code>NaN</code> scores when all chunks are empty</li>
+</ul>
+<h2>v0.0.6</h2>
+<ul>
+<li><strong>Crate READMEs on crates.io</strong> — all 7 crates now have detailed README documentation visible on their crates.io pages, with usage examples, API docs, and installation instructions</li>
+</ul>
+<h2>v0.0.5</h2>
+<ul>
+<li><strong><code>crw-cli</code> now on crates.io</strong> — install the standalone CLI with <code>cargo install crw-cli</code> and scrape URLs without running a server</li>
+<li><strong>Parallelized release workflow</strong> — crate publishing uses tiered parallelism, cutting release time by ~2.25 minutes</li>
+<li><strong>CLI and MCP install docs</strong> — README now includes <code>cargo install</code> instructions for both <code>crw-cli</code> and <code>crw-mcp</code></li>
+</ul>
+<h2>v0.0.4</h2>
+<ul>
+<li><strong>Hardened rendering and warning semantics</strong> — improved reliability of the rendering pipeline and warning detection logic</li>
+<li><strong>XPath output escaping</strong> — XPath extraction results are now properly escaped to prevent injection</li>
+<li><strong>Broadened status warnings</strong> — expanded HTTP status code range that triggers warning metadata</li>
+<li><strong>Capped interstitial scan</strong> — bounded interstitial page detection to avoid excessive scanning</li>
+<li><strong>Clippy cleanup</strong> — simplified status code checks for cleaner, idiomatic Rust</li>
+</ul>
+<h2>v0.0.3</h2>
+<ul>
+<li><strong>Warning-aware target handling</strong> — 4xx and anti-bot targets now return <code>success: true</code> with <code>warning</code> and <code>metadata.statusCode</code></li>
+<li><strong>More reliable JS rendering</strong> — CDP navigation now waits for real page lifecycle completion before applying <code>waitFor</code></li>
+<li><strong>Stealth decompression fix</strong> — gzip and brotli responses decode cleanly instead of leaking garbled binary payloads</li>
+<li><strong>Crawl compatibility</strong> — <code>limit</code>, <code>maxPages</code>, and <code>max_pages</code> now normalize to the same crawl cap</li>
+<li><strong>XPath and chunking fixes</strong> — XPath returns all matches, chunk overlap/dedupe is supported, and scorer rank order is preserved</li>
+</ul>
+<h2>v0.0.2</h2>
+<ul>
+<li><strong>CSS selector &amp; XPath</strong> — target specific DOM elements before Markdown conversion (<code>cssSelector</code>, <code>xpath</code>)</li>
+<li><strong>Chunking strategies</strong> — split content into topic, sentence, or regex-delimited chunks for RAG pipelines (<code>chunkStrategy</code>)</li>
+<li><strong>BM25 &amp; cosine filtering</strong> — rank chunks by relevance to a query and return top-K results (<code>filterMode</code>, <code>topK</code>)</li>
+<li><strong>Better Markdown</strong> — switched to <code>htmd</code> (Turndown.js port): tables, code block languages, nested lists all render correctly</li>
+<li><strong>Stealth mode</strong> — rotate User-Agent from a built-in Chrome/Firefox/Safari pool and inject 12 browser-like headers (<code>stealth: true</code>)</li>
+<li><strong>Per-request proxy</strong> — override the global proxy on a per-request basis (<code>proxy: &quot;http://...&quot;</code>)</li>
+<li><strong>Rate limit jitter</strong> — randomized delay between requests to avoid uniform traffic fingerprinting</li>
+<li><strong><code>crw-server setup</code></strong> — one-command JS rendering setup: downloads LightPanda, creates <code>config.local.toml</code></li>
+</ul>
+<h2>v0.0.1</h2>
+<ul>
+<li><strong>Firecrawl-compatible REST API</strong> — <code>/v1/scrape</code>, <code>/v1/crawl</code>, <code>/v1/map</code> with identical request/response format</li>
+<li><strong>6 output formats</strong> — markdown, HTML, cleaned HTML, raw HTML, plain text, links, structured JSON</li>
+<li><strong>LLM structured extraction</strong> — JSON schema in, validated structured data out (Anthropic tool_use + OpenAI function calling)</li>
+<li><strong>JS rendering</strong> — auto-detect SPAs via heuristics, render via LightPanda, Playwright, or Chrome (CDP)</li>
+<li><strong>BFS crawler</strong> — async crawl with rate limiting, robots.txt, sitemap support, concurrent jobs</li>
+<li><strong>MCP server</strong> — built-in stdio + HTTP transport for Claude Code and Claude Desktop</li>
+<li><strong>SSRF protection</strong> — private IPs, cloud metadata, IPv6, dangerous URI filtering</li>
+<li><strong>Docker ready</strong> — multi-stage build with LightPanda sidecar</li>
+</ul>
+</article>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-header">On this page</div>
+      <nav id="toc-nav"></nav>
+      <div id="toc-helper"></div>
+      <div class="toc-cta">
+        <div class="toc-cta-brand">
+          <img src="/logo-icon.svg" alt="CRW" height="18" class="logo-img logo-light" />
+          <img src="/logo-dark.svg" alt="CRW" height="18" class="logo-img logo-dark" />
+          <span>CRW</span>
+        </div>
+        <div class="toc-cta-title">Ready to scrape?</div>
+        <div class="toc-cta-desc">Sign up and get 500 free credits instantly. No credit card required.</div>
+        <a href="https://fastcrw.com/register" target="_blank" rel="noopener" class="toc-cta-btn primary">Get started — 500 free credits</a>
+        <a href="https://github.com/us/crw" target="_blank" rel="noopener" class="toc-cta-btn outline">View on GitHub</a>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="footer" id="footer">
+    <div class="footer-inner">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="footer-brand-logo">
+            <img src="/logo-icon.svg" alt="CRW" class="logo-img logo-light" />
+            <img src="/logo-dark.svg" alt="CRW" class="logo-img logo-dark" />
+            <span>CRW</span>
+          </div>
+          <div class="footer-tagline">The base layer for agentic web intelligence.</div>
+          <div class="footer-socials"><a href="https://github.com/us/crw" target="_blank" rel="noopener" class="footer-social" aria-label="GitHub"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg></a></div>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Product</div>
+          <div class="footer-col-links">
+            <a href="#introduction">Documentation</a>
+            <a href="#rest-api">API Reference</a>
+            <a href="#mcp">MCP Server</a>
+            <a href="#changelog">Changelog</a>
+          </div>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Community</div>
+          <div class="footer-col-links">
+            <a href="https://github.com/us/crw" target="_blank" rel="noopener">GitHub</a>
+            <a href="https://github.com/us/crw/issues" target="_blank" rel="noopener">Issues</a>
+          </div>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Legal</div>
+          <div class="footer-col-links">
+            <a href="https://github.com/us/crw/blob/main/LICENSE" target="_blank" rel="noopener">License (AGPL-3.0)</a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <div class="footer-copyright">&copy; 2026 CRW. All rights reserved.</div>
+        <div class="footer-status"><span class="footer-status-dot"></span> All systems operational</div>
+      </div>
+    </div>
+  </footer>
+
+  <div class="search-modal" id="search-modal">
+    <div class="search-modal-content">
+      <div class="search-input-wrapper">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" id="search-input" placeholder="Search documentation..." autocomplete="off">
+        <kbd>esc</kbd>
+      </div>
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/theme.js"></script>
+  <script type="module" src="/js/search.js"></script>
+  <script type="module" src="/js/app.js"></script>
+  <script>window.__INITIAL_SLUG__ = "changelog";</script>
+</body>
+</html>

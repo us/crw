@@ -6,9 +6,10 @@ on:
       - main
     paths:
       - "docs/**"
+      - "scripts/build-docs-pages.mjs"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   notify:
@@ -41,20 +42,29 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install google-auth-library
+      - name: Install dependencies
         if: steps.changed.outputs.has_changes == 'true'
-        run: npm install google-auth-library
+        run: npm install google-auth-library marked
 
-      - name: Submit changed URLs to Google Indexing API
+      - name: Generate static doc pages
+        if: steps.changed.outputs.has_changes == 'true'
+        run: node scripts/build-docs-pages.mjs
+
+      - name: Commit generated pages
+        if: steps.changed.outputs.has_changes == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/*/index.html docs/sitemap.xml
+          git diff --staged --quiet || git commit -m "chore: regenerate static doc pages [skip ci]"
+          git push
+
+      - name: Submit all URLs to Google Indexing API
         if: steps.changed.outputs.has_changes == 'true'
         env:
           GOOGLE_INDEXING_KEY: ${{ secrets.GOOGLE_INDEXING_KEY }}
         run: |
           echo "$GOOGLE_INDEXING_KEY" > /tmp/gcloud-key.json
-
-          # docs is a single-page site, always submit the root
-          URL="https://docs.fastcrw.com/"
-          echo "Submitting: $URL"
 
           TOKEN=$(node -e "
             const { GoogleAuth } = require('google-auth-library');
@@ -66,10 +76,24 @@ jobs:
             })();
           ")
 
-          curl -s -X POST "https://indexing.googleapis.com/v3/urlNotifications:publish" \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "{\"url\": \"$URL\", \"type\": \"URL_UPDATED\"}"
+          # Build URL list: root + all slugs from site.config.js
+          URLS=$(node -e "
+            import('./docs/site.config.js').then(m => {
+              const config = m.default;
+              const slugs = config.sidebar.flatMap(s => s.children.map(c => c.slug));
+              const urls = ['https://docs.fastcrw.com/', ...slugs.map(s => 'https://docs.fastcrw.com/' + s)];
+              console.log(urls.join('\n'));
+            });
+          ")
 
-          echo ""
+          while IFS= read -r URL; do
+            [ -z "$URL" ] && continue
+            echo "Submitting: $URL"
+            curl -s -X POST "https://indexing.googleapis.com/v3/urlNotifications:publish" \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"url\": \"$URL\", \"type\": \"URL_UPDATED\"}" | head -c 200
+            echo ""
+          done <<< "$URLS"
+
           rm -f /tmp/gcloud-key.json

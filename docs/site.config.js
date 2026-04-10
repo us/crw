@@ -9,36 +9,36 @@ export default {
   },
 
   navLinks: [
-    { label: "Docs", href: "#introduction" },
-    { label: "API", href: "#rest-api" },
-    { label: "MCP", href: "#mcp" },
+    { label: "Docs", href: "/introduction" },
+    { label: "API", href: "/rest-api" },
+    { label: "MCP", href: "/mcp" },
     { label: "GitHub", href: "https://github.com/us/crw", external: true },
   ],
 
   navTabs: [
     {
       label: "Start",
-      href: "#quick-start",
+      href: "/quick-start",
       match: ["introduction", "quick-start", "authentication", "playground", "rest-api", "installation"],
     },
     {
       label: "Endpoints",
-      href: "#scraping",
+      href: "/scraping",
       match: ["scraping", "search", "map", "crawling", "extract"],
     },
     {
       label: "MCP",
-      href: "#mcp",
+      href: "/mcp",
       match: ["mcp", "mcp-clients", "sdk-examples", "integrations", "agent-onboarding"],
     },
     {
       label: "Self-Host",
-      href: "#self-hosting",
+      href: "/self-hosting",
       match: ["self-hosting", "docker", "configuration", "self-hosting-hardening", "js-rendering"],
     },
     {
       label: "Reference",
-      href: "#response-shapes",
+      href: "/response-shapes",
       match: ["response-shapes", "output-formats", "rate-limits", "error-codes", "credit-costs", "compatibility", "changelog", "architecture", "crates"],
     },
   ],
@@ -47,7 +47,7 @@ export default {
     { title: "Playground", href: "https://fastcrw.com/playground", icon: "play", external: true },
     { title: "Get API Key", href: "https://fastcrw.com/register", icon: "key", external: true },
     { title: "GitHub", href: "https://github.com/us/crw", icon: "github", external: true },
-    { title: "Changelog", href: "#changelog", icon: "list" },
+    { title: "Changelog", href: "/changelog", icon: "list" },
   ],
 
   sidebar: [
@@ -119,10 +119,10 @@ export default {
     tagline: "The base layer for agentic web intelligence.",
     columns: [
       { title: "Product", links: [
-        { label: "Quick Start", href: "#quick-start" },
-        { label: "REST API", href: "#rest-api" },
-        { label: "MCP Server", href: "#mcp" },
-        { label: "Changelog", href: "#changelog" },
+        { label: "Quick Start", href: "/quick-start" },
+        { label: "REST API", href: "/rest-api" },
+        { label: "MCP Server", href: "/mcp" },
+        { label: "Changelog", href: "/changelog" },
       ]},
       { title: "Community", links: [
         { label: "GitHub", href: "https://github.com/us/crw", external: true },

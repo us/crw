@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Search — CRW Docs</title>
+  <meta name="description" content="Search the web first, then optionally scrape the results you care about. This is the discovery-first workflow for the hosted CRW product.">
+  <meta name="keywords" content="web scraper, web crawler, firecrawl alternative, crawl4ai alternative, self-hosted scraper, rust web scraper, mcp server, ai web scraping, rag pipeline, llm extraction, open source crawler, headless browser scraper">
+  <link rel="canonical" href="https://docs.fastcrw.com/search">
+  <link rel="icon" href="favicon.png?v=2" type="image/png">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://docs.fastcrw.com/search">
+  <meta property="og:title" content="Search — CRW | Web Scraper in Rust">
+  <meta property="og:description" content="Search the web first, then optionally scrape the results you care about. This is the discovery-first workflow for the hosted CRW product.">
+  <meta property="og:site_name" content="CRW">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Search — CRW Docs">
+  <meta name="twitter:description" content="Search the web first, then optionally scrape the results you care about. This is the discovery-first workflow for the hosted CRW product.">
+
+  <!-- Structured Data (JSON-LD) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "CRW",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Linux, macOS, Windows (WSL)",
+    "description": "Open-source, self-hosted web scraper and crawler written in Rust. A fast, lightweight Firecrawl alternative with MCP server support for AI agents, LLM structured extraction, and Firecrawl-compatible workflows.",
+    "url": "https://docs.fastcrw.com/",
+    "downloadUrl": "https://crates.io/crates/crw-server",
+    "softwareVersion": "0.3.5",
+    "license": "https://opensource.org/licenses/AGPL-3.0",
+    "programmingLanguage": "Rust",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "featureList": [
+      "Firecrawl-compatible REST API",
+      "MCP server for Claude Code, Cursor, Windsurf",
+      "LLM structured extraction (Anthropic, OpenAI)",
+      "JavaScript rendering via LightPanda CDP",
+      "BFS web crawler with robots.txt and sitemap support",
+      "6 output formats: Markdown, HTML, JSON, plain text, links",
+      "CSS selector and XPath extraction",
+      "Chunking with BM25 and cosine ranking for RAG pipelines",
+      "Single binary, 6.6 MB idle RAM"
+    ]
+  }
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css" id="hljs-theme">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+  <link rel="stylesheet" href="/css/style.css">  <link rel="modulepreload" href="/js/app.js">
+  <link rel="modulepreload" href="/js/search.js">
+  <link rel="modulepreload" href="/site.config.js">
+</head>
+<body>
+  <div class="reading-progress" id="reading-progress"></div>
+
+  <header class="navbar">
+    <div class="navbar-top">
+      <div class="navbar-left">
+        <button class="hamburger" id="hamburger" aria-label="Toggle sidebar">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <a href="https://fastcrw.com" class="logo">
+          <img src="/logo-icon.svg" alt="CRW" height="24" class="logo-img logo-light" />
+          <img src="/logo-dark.svg" alt="CRW" height="24" class="logo-img logo-dark" />
+          <span class="logo-text">fast<span class="logo-accent">crw</span></span>
+        </a>
+      </div>
+      <div class="navbar-center">
+        <button class="search-trigger" id="search-trigger" aria-label="Search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <span class="search-placeholder">Search...</span>
+          <span class="search-shortcut">⌘K</span>
+        </button>
+      </div>
+      <div class="navbar-right">
+        <a href="https://github.com/us/crw" target="_blank" rel="noopener" class="navbar-github" id="navbar-github" aria-label="CRW on GitHub">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          <span>us/crw</span>
+        </a>
+        <a href="https://fastcrw.com" target="_blank" rel="noopener" class="navbar-link">Status</a>
+        <a href="https://fastcrw.com/register" target="_blank" rel="noopener" class="navbar-signup">Sign Up</a>
+        <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+          <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+          <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="navbar-tabs" id="navbar-tabs"></div>
+  </header>
+
+  <div class="overlay" id="overlay"></div>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <nav id="sidebar-nav"></nav>
+    </aside>
+
+    <main class="content" id="content">
+      <article id="article" role="main"><div class="page-intro">
+  <div class="page-kicker">Core Endpoint</div>
+  <h1>Search</h1>
+  <p class="page-subtitle">Search the web first, then optionally scrape the results you care about. This is the discovery-first workflow for the hosted CRW product.</p>
+  <div class="page-capabilities">
+    <div class="page-capability"><strong>Best for:</strong> unknown URLs</div>
+    <div class="page-capability"><strong>Hosted:</strong> cloud path</div>
+    <div class="page-capability"><strong>Start with:</strong> search only, then add scraping</div>
+  </div>
+  <div class="page-actions">
+    <a class="page-btn primary" href="https://fastcrw.com/playground" target="_blank" rel="noopener">Try it in the Playground</a>
+    <a class="page-btn secondary" href="/scraping">View Scrape</a>
+  </div>
+</div><div class="playground-panel">
+  <div class="playground-kicker">Try it in the Playground</div>
+  <div class="playground-title">Start with result discovery only</div>
+  <div class="playground-copy">Use a small query and <code>limit: 5</code> first. Add <code>scrapeOptions</code> only when you already know you need page content from those search results.</div>
+  <div class="playground-actions">
+    <a class="page-btn primary" href="https://fastcrw.com/playground" target="_blank" rel="noopener">Open Playground</a>
+    <a class="page-btn secondary" href="https://fastcrw.com/register" target="_blank" rel="noopener">Get API Key</a>
+  </div>
+</div><p>:::note
+<code>search</code> is a cloud-only feature. On self-hosted open-core deployments, use <a href="/map">Map</a> or <a href="/scraping">Scrape</a> when you already know the target site. When using <code>crw-mcp</code> with <code>CRW_API_URL</code> pointed at <a href="https://fastcrw.com">fastcrw.com</a>, the <code>crw_search</code> tool is automatically available to your AI agent.
+:::</p>
+<h2>Searching the web with CRW</h2>
+<h3>/v1/search</h3>
+<pre><code class="language-http">POST https://fastcrw.com/api/v1/search
+</code></pre>
+<p>Authentication:</p>
+<ul>
+<li>Hosted: send <code>Authorization: Bearer YOUR_API_KEY</code></li>
+<li>Self-hosted open-core binaries do not expose <code>search</code></li>
+</ul>
+<h3>Installation</h3>
+<p>Like the rest of the CRW API, search is HTTP-first. Use cURL or your existing HTTP client.</p>
+<h3>Basic usage</h3>
+<p>Start with this request:</p>
+<pre><code class="language-json">{
+  &quot;query&quot;: &quot;web scraping tools&quot;,
+  &quot;limit&quot;: 5
+}
+</code></pre>
+<p>:::tabs
+::tab{title=&quot;Python&quot;}</p>
+<pre><code class="language-python">import requests
+
+resp = requests.post(
+    &quot;https://fastcrw.com/api/v1/search&quot;,
+    headers={&quot;Authorization&quot;: &quot;Bearer YOUR_API_KEY&quot;},
+    json={
+        &quot;query&quot;: &quot;web scraping tools&quot;,
+        &quot;limit&quot;: 5,
+    },
+)
+
+for item in resp.json()[&quot;data&quot;]:
+    print(item[&quot;title&quot;], item[&quot;url&quot;])
+</code></pre>
+<p>::tab{title=&quot;Node.js&quot;}</p>
+<pre><code class="language-javascript">const resp = await fetch(&quot;https://fastcrw.com/api/v1/search&quot;, {
+  method: &quot;POST&quot;,
+  headers: {
+    &quot;Authorization&quot;: &quot;Bearer YOUR_API_KEY&quot;,
+    &quot;Content-Type&quot;: &quot;application/json&quot;
+  },
+  body: JSON.stringify({
+    query: &quot;web scraping tools&quot;,
+    limit: 5
+  })
+});
+
+const body = await resp.json();
+console.log(body.data);
+</code></pre>
+<p>::tab{title=&quot;cURL&quot;}</p>
+<pre><code class="language-bash">curl -X POST https://fastcrw.com/api/v1/search \
+  -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d &#39;{
+    &quot;query&quot;: &quot;web scraping tools&quot;,
+    &quot;limit&quot;: 5
+  }&#39;
+</code></pre>
+<p>:::</p>
+<h3>Response</h3>
+<pre><code class="language-json">{
+  &quot;success&quot;: true,
+  &quot;data&quot;: [
+    {
+      &quot;url&quot;: &quot;https://example.com/article&quot;,
+      &quot;title&quot;: &quot;Article Title&quot;,
+      &quot;description&quot;: &quot;A snippet from the search result...&quot;,
+      &quot;position&quot;: 1,
+      &quot;score&quot;: 9.5
+    }
+  ]
+}
+</code></pre>
+<p>That is the flat response shape used when <code>sources</code> is not set.</p>
+<h2>Parameters</h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>query</code></td>
+<td>string</td>
+<td>required</td>
+<td>Search query</td>
+</tr>
+<tr>
+<td><code>limit</code></td>
+<td>number</td>
+<td><code>5</code></td>
+<td>Maximum number of results per source</td>
+</tr>
+<tr>
+<td><code>lang</code></td>
+<td>string</td>
+<td>--</td>
+<td>Result language hint such as <code>&quot;en&quot;</code> or <code>&quot;tr&quot;</code></td>
+</tr>
+<tr>
+<td><code>tbs</code></td>
+<td>string</td>
+<td>--</td>
+<td>Recency filter: <code>qdr:h</code>, <code>qdr:d</code>, <code>qdr:w</code>, <code>qdr:m</code>, <code>qdr:y</code></td>
+</tr>
+<tr>
+<td><code>sources</code></td>
+<td>string[]</td>
+<td>--</td>
+<td>Result groups such as <code>&quot;web&quot;</code>, <code>&quot;news&quot;</code>, <code>&quot;images&quot;</code></td>
+</tr>
+<tr>
+<td><code>categories</code></td>
+<td>string[]</td>
+<td>--</td>
+<td>Filters such as <code>&quot;github&quot;</code>, <code>&quot;research&quot;</code>, <code>&quot;pdf&quot;</code></td>
+</tr>
+<tr>
+<td><code>scrapeOptions</code></td>
+<td>object</td>
+<td>--</td>
+<td>Scrape each result URL after search</td>
+</tr>
+</tbody></table>
+<p><code>scrapeOptions</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>formats</code></td>
+<td>string[]</td>
+<td>required</td>
+<td>Which content formats to fetch for each result</td>
+</tr>
+<tr>
+<td><code>onlyMainContent</code></td>
+<td>boolean</td>
+<td><code>true</code></td>
+<td>Keep content focused on the main body</td>
+</tr>
+</tbody></table>
+<h2>Search result types</h2>
+<p>Without <code>sources</code>, CRW returns a flat list:</p>
+<pre><code class="language-json">{
+  &quot;success&quot;: true,
+  &quot;data&quot;: [
+    {
+      &quot;url&quot;: &quot;https://example.com/article&quot;,
+      &quot;title&quot;: &quot;Article Title&quot;,
+      &quot;description&quot;: &quot;Search snippet...&quot;,
+      &quot;position&quot;: 1,
+      &quot;score&quot;: 9.5
+    }
+  ]
+}
+</code></pre>
+<p>With <code>sources</code>, CRW returns grouped results:</p>
+<pre><code class="language-json">{
+  &quot;success&quot;: true,
+  &quot;data&quot;: {
+    &quot;web&quot;: [{ &quot;url&quot;: &quot;...&quot;, &quot;title&quot;: &quot;...&quot;, &quot;description&quot;: &quot;...&quot; }],
+    &quot;news&quot;: [{ &quot;url&quot;: &quot;...&quot;, &quot;title&quot;: &quot;...&quot;, &quot;publishedDate&quot;: &quot;2026-04-02T14:00:00&quot; }],
+    &quot;images&quot;: [{ &quot;url&quot;: &quot;...&quot;, &quot;imageUrl&quot;: &quot;...&quot;, &quot;thumbnailUrl&quot;: &quot;...&quot; }]
+  }
+}
+</code></pre>
+<h2>Search with content scraping</h2>
+<p>When you need more than result snippets, add <code>scrapeOptions</code>:</p>
+<pre><code class="language-json">{
+  &quot;query&quot;: &quot;web scraping tools&quot;,
+  &quot;limit&quot;: 3,
+  &quot;scrapeOptions&quot;: {
+    &quot;formats&quot;: [&quot;markdown&quot;],
+    &quot;onlyMainContent&quot;: true
+  }
+}
+</code></pre>
+<p>That enriches eligible results with scraped page content. It is powerful, but it is also the moment search becomes more expensive, so keep it off until you need it.</p>
+<h2>Freshness, sources, and categories</h2>
+<ul>
+<li>Use <code>tbs</code> when freshness matters more than broad recall.</li>
+<li>Use <code>sources</code> when you want different result groups such as <code>web</code>, <code>news</code>, or <code>images</code>.</li>
+<li>Use <code>categories</code> to narrow the query domain without rewriting the query itself.</li>
+</ul>
+<p>Good default: add one narrowing control at a time so you can see which one actually improved the results.</p>
+<h2>Common production patterns</h2>
+<ul>
+<li>Start with search only, then add <code>scrapeOptions</code> after you verify result quality.</li>
+<li>Use <code>sources: [&quot;news&quot;]</code> or <code>tbs</code> when freshness matters more than broad recall.</li>
+<li>Use <code>categories: [&quot;github&quot;]</code> or <code>[&quot;research&quot;]</code> to narrow noisy queries.</li>
+<li>Keep <code>limit</code> low on the first pass so the result quality is easy to inspect.</li>
+</ul>
+<h2>Common mistakes</h2>
+<ul>
+<li>Adding <code>scrapeOptions</code> to every search before you know you need page content</li>
+<li>Confusing <code>sources</code> with <code>categories</code></li>
+<li>Treating <code>qdr:h</code> as truly hourly precision; backend precision can be coarser</li>
+<li>Assuming search is part of the self-hosted open-core binary</li>
+</ul>
+<h2>When to use something else</h2>
+<ul>
+<li>Use <a href="/scraping">Scrape</a> when you already know the exact URL</li>
+<li>Use <a href="/map">Map</a> for site-specific discovery</li>
+<li>Use <a href="/crawling">Crawl</a> when you need a bounded multi-page job on one site</li>
+</ul>
+</article>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-header">On this page</div>
+      <nav id="toc-nav"></nav>
+      <div id="toc-helper"></div>
+      <div class="toc-cta">
+        <div class="toc-cta-brand">
+          <img src="/logo-icon.svg" alt="CRW" height="18" class="logo-img logo-light" />
+          <img src="/logo-dark.svg" alt="CRW" height="18" class="logo-img logo-dark" />
+          <span>CRW</span>
+        </div>
+        <div class="toc-cta-title">Ready to scrape?</div>
+        <div class="toc-cta-desc">Sign up and get 500 free credits instantly. No credit card required.</div>
+        <a href="https://fastcrw.com/register" target="_blank" rel="noopener" class="toc-cta-btn primary">Get started — 500 free credits</a>
+        <a href="https://github.com/us/crw" target="_blank" rel="noopener" class="toc-cta-btn outline">View on GitHub</a>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="footer" id="footer">
+    <div class="footer-inner">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="footer-brand-logo">
+            <img src="/logo-icon.svg" alt="CRW" class="logo-img logo-light" />
+            <img src="/logo-dark.svg" alt="CRW" class="logo-img logo-dark" />
+            <span>CRW</span>
+          </div>
+          <div class="footer-tagline">The base layer for agentic web intelligence.</div>
+          <div class="footer-socials"><a href="https://github.com/us/crw" target="_blank" rel="noopener" class="footer-social" aria-label="GitHub"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg></a></div>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Product</div>
+          <div class="footer-col-links">
+            <a href="#introduction">Documentation</a>
+            <a href="#rest-api">API Reference</a>
+            <a href="#mcp">MCP Server</a>
+            <a href="#changelog">Changelog</a>
+          </div>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Community</div>
+          <div class="footer-col-links">
+            <a href="https://github.com/us/crw" target="_blank" rel="noopener">GitHub</a>
+            <a href="https://github.com/us/crw/issues" target="_blank" rel="noopener">Issues</a>
+          </div>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Legal</div>
+          <div class="footer-col-links">
+            <a href="https://github.com/us/crw/blob/main/LICENSE" target="_blank" rel="noopener">License (AGPL-3.0)</a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <div class="footer-copyright">&copy; 2026 CRW. All rights reserved.</div>
+        <div class="footer-status"><span class="footer-status-dot"></span> All systems operational</div>
+      </div>
+    </div>
+  </footer>
+
+  <div class="search-modal" id="search-modal">
+    <div class="search-modal-content">
+      <div class="search-input-wrapper">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" id="search-input" placeholder="Search documentation..." autocomplete="off">
+        <kbd>esc</kbd>
+      </div>
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/theme.js"></script>
+  <script type="module" src="/js/search.js"></script>
+  <script type="module" src="/js/app.js"></script>
+  <script>window.__INITIAL_SLUG__ = "search";</script>
+</body>
+</html>

@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Output Formats — CRW Docs</title>
+  <meta name="description" content="crw supports 6 output formats. Request multiple formats in a single scrape call.">
+  <meta name="keywords" content="web scraper, web crawler, firecrawl alternative, crawl4ai alternative, self-hosted scraper, rust web scraper, mcp server, ai web scraping, rag pipeline, llm extraction, open source crawler, headless browser scraper">
+  <link rel="canonical" href="https://docs.fastcrw.com/output-formats">
+  <link rel="icon" href="favicon.png?v=2" type="image/png">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://docs.fastcrw.com/output-formats">
+  <meta property="og:title" content="Output Formats — CRW | Web Scraper in Rust">
+  <meta property="og:description" content="crw supports 6 output formats. Request multiple formats in a single scrape call.">
+  <meta property="og:site_name" content="CRW">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Output Formats — CRW Docs">
+  <meta name="twitter:description" content="crw supports 6 output formats. Request multiple formats in a single scrape call.">
+
+  <!-- Structured Data (JSON-LD) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "CRW",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Linux, macOS, Windows (WSL)",
+    "description": "Open-source, self-hosted web scraper and crawler written in Rust. A fast, lightweight Firecrawl alternative with MCP server support for AI agents, LLM structured extraction, and Firecrawl-compatible workflows.",
+    "url": "https://docs.fastcrw.com/",
+    "downloadUrl": "https://crates.io/crates/crw-server",
+    "softwareVersion": "0.3.5",
+    "license": "https://opensource.org/licenses/AGPL-3.0",
+    "programmingLanguage": "Rust",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "featureList": [
+      "Firecrawl-compatible REST API",
+      "MCP server for Claude Code, Cursor, Windsurf",
+      "LLM structured extraction (Anthropic, OpenAI)",
+      "JavaScript rendering via LightPanda CDP",
+      "BFS web crawler with robots.txt and sitemap support",
+      "6 output formats: Markdown, HTML, JSON, plain text, links",
+      "CSS selector and XPath extraction",
+      "Chunking with BM25 and cosine ranking for RAG pipelines",
+      "Single binary, 6.6 MB idle RAM"
+    ]
+  }
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css" id="hljs-theme">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+  <link rel="stylesheet" href="/css/style.css">  <link rel="modulepreload" href="/js/app.js">
+  <link rel="modulepreload" href="/js/search.js">
+  <link rel="modulepreload" href="/site.config.js">
+</head>
+<body>
+  <div class="reading-progress" id="reading-progress"></div>
+
+  <header class="navbar">
+    <div class="navbar-top">
+      <div class="navbar-left">
+        <button class="hamburger" id="hamburger" aria-label="Toggle sidebar">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <a href="https://fastcrw.com" class="logo">
+          <img src="/logo-icon.svg" alt="CRW" height="24" class="logo-img logo-light" />
+          <img src="/logo-dark.svg" alt="CRW" height="24" class="logo-img logo-dark" />
+          <span class="logo-text">fast<span class="logo-accent">crw</span></span>
+        </a>
+      </div>
+      <div class="navbar-center">
+        <button class="search-trigger" id="search-trigger" aria-label="Search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <span class="search-placeholder">Search...</span>
+          <span class="search-shortcut">⌘K</span>
+        </button>
+      </div>
+      <div class="navbar-right">
+        <a href="https://github.com/us/crw" target="_blank" rel="noopener" class="navbar-github" id="navbar-github" aria-label="CRW on GitHub">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          <span>us/crw</span>
+        </a>
+        <a href="https://fastcrw.com" target="_blank" rel="noopener" class="navbar-link">Status</a>
+        <a href="https://fastcrw.com/register" target="_blank" rel="noopener" class="navbar-signup">Sign Up</a>
+        <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+          <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+          <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="navbar-tabs" id="navbar-tabs"></div>
+  </header>
+
+  <div class="overlay" id="overlay"></div>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <nav id="sidebar-nav"></nav>
+    </aside>
+
+    <main class="content" id="content">
+      <article id="article" role="main"><h1>Output Formats</h1>
+<p>crw supports 6 output formats. Request multiple formats in a single scrape call.</p>
+<h2>Formats</h2>
+<table>
+<thead>
+<tr>
+<th>Format</th>
+<th>Key</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Markdown</td>
+<td><code>markdown</code></td>
+<td>HTML converted to Markdown via <code>fast_html2md</code></td>
+</tr>
+<tr>
+<td>HTML</td>
+<td><code>html</code></td>
+<td>Cleaned HTML with main content extraction</td>
+</tr>
+<tr>
+<td>Raw HTML</td>
+<td><code>rawHtml</code></td>
+<td>Original unmodified HTML</td>
+</tr>
+<tr>
+<td>Plain Text</td>
+<td><code>plainText</code></td>
+<td>Stripped to plain text, no formatting</td>
+</tr>
+<tr>
+<td>Links</td>
+<td><code>links</code></td>
+<td>All <code>&lt;a href&gt;</code> links extracted (excludes <code>#</code> and <code>javascript:</code>)</td>
+</tr>
+<tr>
+<td>JSON</td>
+<td><code>json</code></td>
+<td>LLM structured extraction with JSON schema validation</td>
+</tr>
+<tr>
+<td>Extract</td>
+<td><code>extract</code></td>
+<td>Alias for <code>json</code> — accepted for Firecrawl compatibility</td>
+</tr>
+</tbody></table>
+<h2>Which Format Should You Choose?</h2>
+<p>The practical rule is simple:</p>
+<ul>
+<li>choose <code>markdown</code> when the output is headed into search, RAG, summarization, or LLM prompts,</li>
+<li>choose <code>html</code> when you still want cleaned structure,</li>
+<li>choose <code>rawHtml</code> only when you truly need the original source,</li>
+<li>choose <code>links</code> when discovery matters as much as page content,</li>
+<li>and choose <code>json</code> when the end result needs to be schema-shaped.</li>
+</ul>
+<p>For most product and retrieval workflows, <code>markdown</code> is the best default because it is compact, readable, and easier to inspect than raw markup.</p>
+<h2>Common Format Combinations</h2>
+<table>
+<thead>
+<tr>
+<th>Combination</th>
+<th>Good for</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>[&quot;markdown&quot;]</code></td>
+<td>Default page extraction</td>
+</tr>
+<tr>
+<td><code>[&quot;markdown&quot;, &quot;links&quot;]</code></td>
+<td>Content plus local link discovery</td>
+</tr>
+<tr>
+<td><code>[&quot;html&quot;, &quot;rawHtml&quot;]</code></td>
+<td>Debugging the extraction pipeline</td>
+</tr>
+<tr>
+<td><code>[&quot;json&quot;]</code></td>
+<td>Structured extraction only</td>
+</tr>
+<tr>
+<td><code>[&quot;markdown&quot;, &quot;json&quot;]</code></td>
+<td>Human-readable content plus structured fields</td>
+</tr>
+</tbody></table>
+<p>:::tip
+In production, request only the formats you will actually store or process. Requesting more formats is convenient for debugging but adds unnecessary overhead.
+:::</p>
+<h2>Markdown</h2>
+<p>The default and most commonly used format. crw uses <code>fast_html2md</code> for conversion with a multi-step fallback chain:</p>
+<ol>
+<li>Convert main-content HTML to Markdown</li>
+<li>If output is too short, try full cleaned HTML</li>
+<li>If still short, try without <code>onlyMainContent</code></li>
+<li>If still short, try raw HTML</li>
+<li>Last resort: fall back to plain text</li>
+</ol>
+<p>This ensures you always get meaningful output, even from unusual page structures.</p>
+<h2>HTML</h2>
+<p>Returns cleaned HTML after the extraction pipeline:</p>
+<ul>
+<li>Scripts, styles, iframes removed</li>
+<li>Navigation, footer, sidebar removed (if <code>onlyMainContent</code>)</li>
+<li>CSS selector filters applied (<code>includeTags</code> / <code>excludeTags</code>)</li>
+</ul>
+<h2>Links</h2>
+<p>Extracts all anchor hrefs from the page. Useful for site mapping and link analysis.</p>
+<p>Excluded: <code>#</code> fragment-only links and <code>javascript:</code> URLs.</p>
+<h2>JSON (LLM Extraction)</h2>
+<p>Sends the page content to an LLM (Anthropic or OpenAI) and extracts structured data matching a JSON schema.</p>
+<pre><code class="language-json">{
+  &quot;url&quot;: &quot;https://example.com/product&quot;,
+  &quot;formats&quot;: [&quot;json&quot;],
+  &quot;jsonSchema&quot;: {
+    &quot;type&quot;: &quot;object&quot;,
+    &quot;properties&quot;: {
+      &quot;title&quot;: { &quot;type&quot;: &quot;string&quot; },
+      &quot;price&quot;: { &quot;type&quot;: &quot;number&quot; }
+    }
+  }
+}
+</code></pre>
+<p>The LLM response is validated against the provided schema using the <code>jsonschema</code> crate. If the model wraps JSON in a fenced code block, CRW strips the fence automatically before validation.</p>
+<h3>Supported LLM providers</h3>
+<table>
+<thead>
+<tr>
+<th>Provider</th>
+<th>Tool mechanism</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Anthropic</td>
+<td><code>tool_use</code> with <code>input_schema</code></td>
+</tr>
+<tr>
+<td>OpenAI</td>
+<td>Function calling with <code>parameters</code></td>
+</tr>
+</tbody></table>
+<p>Configure in <code>config.toml</code>:</p>
+<pre><code class="language-toml">[extraction.llm]
+provider = &quot;anthropic&quot;          # or &quot;openai&quot;
+api_key = &quot;sk-...&quot;
+model = &quot;claude-sonnet-4-20250514&quot;
+max_tokens = 4096
+# base_url = &quot;https://...&quot;     # for OpenAI-compatible endpoints
+</code></pre>
+<h2>Response Shape</h2>
+<p>Each format populates a corresponding field in the response <code>data</code> object:</p>
+<table>
+<thead>
+<tr>
+<th>Format</th>
+<th>Response field</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>markdown</code></td>
+<td><code>markdown</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>html</code></td>
+<td><code>html</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>rawHtml</code></td>
+<td><code>rawHtml</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>plainText</code></td>
+<td><code>plainText</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>links</code></td>
+<td><code>links</code></td>
+<td><code>string[]</code></td>
+</tr>
+<tr>
+<td><code>json</code> / <code>extract</code></td>
+<td><code>json</code></td>
+<td><code>object</code></td>
+</tr>
+</tbody></table>
+<h2>Full Response Schema</h2>
+<p>Every API response follows this envelope:</p>
+<pre><code class="language-json">{
+  &quot;success&quot;: true,
+  &quot;data&quot;: { ... },
+  &quot;error&quot;: &quot;...&quot;,
+  &quot;warning&quot;: &quot;...&quot;
+}
+</code></pre>
+<p>The exact shape of <code>data</code> depends on what you requested. Do not assume every field is always present.</p>
+<h3><code>data</code> object (scrape)</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Present when</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>markdown</code></td>
+<td><code>string / null</code></td>
+<td><code>formats</code> includes <code>markdown</code> or <code>json</code></td>
+</tr>
+<tr>
+<td><code>html</code></td>
+<td><code>string / null</code></td>
+<td><code>formats</code> includes <code>html</code></td>
+</tr>
+<tr>
+<td><code>rawHtml</code></td>
+<td><code>string / null</code></td>
+<td><code>formats</code> includes <code>rawHtml</code></td>
+</tr>
+<tr>
+<td><code>plainText</code></td>
+<td><code>string / null</code></td>
+<td><code>formats</code> includes <code>plainText</code></td>
+</tr>
+<tr>
+<td><code>links</code></td>
+<td><code>string[] / null</code></td>
+<td><code>formats</code> includes <code>links</code></td>
+</tr>
+<tr>
+<td><code>json</code></td>
+<td><code>object / null</code></td>
+<td><code>formats</code> includes <code>json</code> AND <code>jsonSchema</code> provided AND LLM configured</td>
+</tr>
+<tr>
+<td><code>chunks</code></td>
+<td><code>ChunkResult[] / null</code></td>
+<td><code>chunkStrategy</code> provided</td>
+</tr>
+<tr>
+<td><code>warning</code></td>
+<td><code>string / null</code></td>
+<td>Target returned error status, anti-bot detected, etc.</td>
+</tr>
+<tr>
+<td><code>metadata</code></td>
+<td><code>object</code></td>
+<td>Always</td>
+</tr>
+</tbody></table>
+<h3><code>metadata</code> object</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>title</code></td>
+<td><code>string / null</code></td>
+<td>Page <code>&lt;title&gt;</code></td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td><code>string / null</code></td>
+<td>Meta description</td>
+</tr>
+<tr>
+<td><code>ogTitle</code></td>
+<td><code>string / null</code></td>
+<td>Open Graph title</td>
+</tr>
+<tr>
+<td><code>ogDescription</code></td>
+<td><code>string / null</code></td>
+<td>Open Graph description</td>
+</tr>
+<tr>
+<td><code>ogImage</code></td>
+<td><code>string / null</code></td>
+<td>Open Graph image URL</td>
+</tr>
+<tr>
+<td><code>canonicalUrl</code></td>
+<td><code>string / null</code></td>
+<td>Canonical link</td>
+</tr>
+<tr>
+<td><code>sourceURL</code></td>
+<td><code>string</code></td>
+<td>Final URL after redirects</td>
+</tr>
+<tr>
+<td><code>language</code></td>
+<td><code>string / null</code></td>
+<td><code>&lt;html lang&gt;</code> value</td>
+</tr>
+<tr>
+<td><code>statusCode</code></td>
+<td><code>number</code></td>
+<td>Target HTTP status code</td>
+</tr>
+<tr>
+<td><code>renderedWith</code></td>
+<td><code>string / null</code></td>
+<td>Usually <code>&quot;http&quot;</code>, <code>&quot;lightpanda&quot;</code>, <code>&quot;playwright&quot;</code>, <code>&quot;chrome&quot;</code>, <code>&quot;pdf&quot;</code>, or <code>&quot;http_only_fallback&quot;</code></td>
+</tr>
+<tr>
+<td><code>elapsedMs</code></td>
+<td><code>number</code></td>
+<td>Total processing time in ms</td>
+</tr>
+</tbody></table>
+<h3><code>ChunkResult</code> object</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>content</code></td>
+<td><code>string</code></td>
+<td>Chunk text</td>
+</tr>
+<tr>
+<td><code>score</code></td>
+<td><code>number / null</code></td>
+<td>Relevance score (present when <code>query</code> + <code>filterMode</code> set)</td>
+</tr>
+<tr>
+<td><code>index</code></td>
+<td><code>number</code></td>
+<td>Original chunk position</td>
+</tr>
+</tbody></table>
+<h2>Format Aliases</h2>
+<p><code>&quot;extract&quot;</code> and <code>&quot;llm-extract&quot;</code> are accepted as aliases for <code>&quot;json&quot;</code>. The canonical name is <code>json</code>. All three behave identically — they require <code>jsonSchema</code> for structured extraction.</p>
+<h2>Implementation Guidance</h2>
+<p>Three habits keep format usage sane in production:</p>
+<ul>
+<li>request only the formats you really consume,</li>
+<li>keep <code>metadata</code> with the stored output so later debugging is easier,</li>
+<li>and validate <code>data.json</code> in your own application before trusting it as final truth.</li>
+</ul>
+<p>If you are debugging extraction quality, request both <code>markdown</code> and <code>json</code> for a while. That makes it easy to compare the page text against the structured output.</p>
+<h2>Not Supported in This Release</h2>
+<ul>
+<li><code>screenshot</code> — not implemented. Requesting it will return a 422 error.</li>
+<li><code>actions</code> — click/scroll/wait actions are not yet supported. Sending <code>actions</code> will return a 400 error with a message suggesting <code>cssSelector</code> or <code>xpath</code> as alternatives.</li>
+</ul>
+</article>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-header">On this page</div>
+      <nav id="toc-nav"></nav>
+      <div id="toc-helper"></div>
+      <div class="toc-cta">
+        <div class="toc-cta-brand">
+          <img src="/logo-icon.svg" alt="CRW" height="18" class="logo-img logo-light" />
+          <img src="/logo-dark.svg" alt="CRW" height="18" class="logo-img logo-dark" />
+          <span>CRW</span>
+        </div>
+        <div class="toc-cta-title">Ready to scrape?</div>
+        <div class="toc-cta-desc">Sign up and get 500 free credits instantly. No credit card required.</div>
+        <a href="https://fastcrw.com/register" target="_blank" rel="noopener" class="toc-cta-btn primary">Get started — 500 free credits</a>
+        <a href="https://github.com/us/crw" target="_blank" rel="noopener" class="toc-cta-btn outline">View on GitHub</a>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="footer" id="footer">
+    <div class="footer-inner">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="footer-brand-logo">
+            <img src="/logo-icon.svg" alt="CRW" class="logo-img logo-light" />
+            <img src="/logo-dark.svg" alt="CRW" class="logo-img logo-dark" />
+            <span>CRW</span>
+          </div>
+          <div class="footer-tagline">The base layer for agentic web intelligence.</div>
+          <div class="footer-socials"><a href="https://github.com/us/crw" target="_blank" rel="noopener" class="footer-social" aria-label="GitHub"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg></a></div>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Product</div>
+          <div class="footer-col-links">
+            <a href="#introduction">Documentation</a>
+            <a href="#rest-api">API Reference</a>
+            <a href="#mcp">MCP Server</a>
+            <a href="#changelog">Changelog</a>
+          </div>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Community</div>
+          <div class="footer-col-links">
+            <a href="https://github.com/us/crw" target="_blank" rel="noopener">GitHub</a>
+            <a href="https://github.com/us/crw/issues" target="_blank" rel="noopener">Issues</a>
+          </div>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Legal</div>
+          <div class="footer-col-links">
+            <a href="https://github.com/us/crw/blob/main/LICENSE" target="_blank" rel="noopener">License (AGPL-3.0)</a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <div class="footer-copyright">&copy; 2026 CRW. All rights reserved.</div>
+        <div class="footer-status"><span class="footer-status-dot"></span> All systems operational</div>
+      </div>
+    </div>
+  </footer>
+
+  <div class="search-modal" id="search-modal">
+    <div class="search-modal-content">
+      <div class="search-input-wrapper">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" id="search-input" placeholder="Search documentation..." autocomplete="off">
+        <kbd>esc</kbd>
+      </div>
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/theme.js"></script>
+  <script type="module" src="/js/search.js"></script>
+  <script type="module" src="/js/app.js"></script>
+  <script>window.__INITIAL_SLUG__ = "output-formats";</script>
+</body>
+</html>

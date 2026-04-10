@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MCP Client Setup — CRW Docs</title>
+  <meta name="description" content="Add CRW to Claude Code, Codex, Cursor, Windsurf, Cline, Continue, and similar MCP hosts. This page is the copy-paste setup reference for both local embedded mode and fastcrw.com cloud mode.">
+  <meta name="keywords" content="web scraper, web crawler, firecrawl alternative, crawl4ai alternative, self-hosted scraper, rust web scraper, mcp server, ai web scraping, rag pipeline, llm extraction, open source crawler, headless browser scraper">
+  <link rel="canonical" href="https://docs.fastcrw.com/mcp-clients">
+  <link rel="icon" href="favicon.png?v=2" type="image/png">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://docs.fastcrw.com/mcp-clients">
+  <meta property="og:title" content="MCP Client Setup — CRW | Web Scraper in Rust">
+  <meta property="og:description" content="Add CRW to Claude Code, Codex, Cursor, Windsurf, Cline, Continue, and similar MCP hosts. This page is the copy-paste setup reference for both local embedded mode and fastcrw.com cloud mode.">
+  <meta property="og:site_name" content="CRW">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="MCP Client Setup — CRW Docs">
+  <meta name="twitter:description" content="Add CRW to Claude Code, Codex, Cursor, Windsurf, Cline, Continue, and similar MCP hosts. This page is the copy-paste setup reference for both local embedded mode and fastcrw.com cloud mode.">
+
+  <!-- Structured Data (JSON-LD) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "CRW",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Linux, macOS, Windows (WSL)",
+    "description": "Open-source, self-hosted web scraper and crawler written in Rust. A fast, lightweight Firecrawl alternative with MCP server support for AI agents, LLM structured extraction, and Firecrawl-compatible workflows.",
+    "url": "https://docs.fastcrw.com/",
+    "downloadUrl": "https://crates.io/crates/crw-server",
+    "softwareVersion": "0.3.5",
+    "license": "https://opensource.org/licenses/AGPL-3.0",
+    "programmingLanguage": "Rust",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "featureList": [
+      "Firecrawl-compatible REST API",
+      "MCP server for Claude Code, Cursor, Windsurf",
+      "LLM structured extraction (Anthropic, OpenAI)",
+      "JavaScript rendering via LightPanda CDP",
+      "BFS web crawler with robots.txt and sitemap support",
+      "6 output formats: Markdown, HTML, JSON, plain text, links",
+      "CSS selector and XPath extraction",
+      "Chunking with BM25 and cosine ranking for RAG pipelines",
+      "Single binary, 6.6 MB idle RAM"
+    ]
+  }
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css" id="hljs-theme">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+  <link rel="stylesheet" href="/css/style.css">  <link rel="modulepreload" href="/js/app.js">
+  <link rel="modulepreload" href="/js/search.js">
+  <link rel="modulepreload" href="/site.config.js">
+</head>
+<body>
+  <div class="reading-progress" id="reading-progress"></div>
+
+  <header class="navbar">
+    <div class="navbar-top">
+      <div class="navbar-left">
+        <button class="hamburger" id="hamburger" aria-label="Toggle sidebar">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <a href="https://fastcrw.com" class="logo">
+          <img src="/logo-icon.svg" alt="CRW" height="24" class="logo-img logo-light" />
+          <img src="/logo-dark.svg" alt="CRW" height="24" class="logo-img logo-dark" />
+          <span class="logo-text">fast<span class="logo-accent">crw</span></span>
+        </a>
+      </div>
+      <div class="navbar-center">
+        <button class="search-trigger" id="search-trigger" aria-label="Search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <span class="search-placeholder">Search...</span>
+          <span class="search-shortcut">⌘K</span>
+        </button>
+      </div>
+      <div class="navbar-right">
+        <a href="https://github.com/us/crw" target="_blank" rel="noopener" class="navbar-github" id="navbar-github" aria-label="CRW on GitHub">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          <span>us/crw</span>
+        </a>
+        <a href="https://fastcrw.com" target="_blank" rel="noopener" class="navbar-link">Status</a>
+        <a href="https://fastcrw.com/register" target="_blank" rel="noopener" class="navbar-signup">Sign Up</a>
+        <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+          <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+          <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="navbar-tabs" id="navbar-tabs"></div>
+  </header>
+
+  <div class="overlay" id="overlay"></div>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <nav id="sidebar-nav"></nav>
+    </aside>
+
+    <main class="content" id="content">
+      <article id="article" role="main"><div class="page-intro">
+  <div class="page-kicker">Integrations</div>
+  <h1>MCP Client Setup</h1>
+  <p class="page-subtitle">Add CRW to Claude Code, Codex, Cursor, Windsurf, Cline, Continue, and similar MCP hosts. This page is the copy-paste setup reference for both local embedded mode and fastcrw.com cloud mode.</p>
+  <div class="page-capabilities">
+    <div class="page-capability"><strong>Best for:</strong> host-by-host setup</div>
+    <div class="page-capability"><strong>Local mode:</strong> <code>npx crw-mcp</code></div>
+    <div class="page-capability"><strong>Cloud mode:</strong> <code>CRW_API_URL + CRW_API_KEY</code></div>
+  </div>
+  <div class="page-actions">
+    <a class="page-btn primary" href="/mcp">Open MCP Overview</a>
+    <a class="page-btn secondary" href="https://fastcrw.com" target="_blank" rel="noopener">Get fastcrw.com API Key</a>
+  </div>
+</div><h2>Start here</h2>
+<p>Use one of these three patterns:</p>
+<table>
+<thead>
+<tr>
+<th>Pattern</th>
+<th>Best when</th>
+<th>Copy-paste shape</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Embedded local</td>
+<td>You want zero server setup and local scrape/map/crawl tools</td>
+<td><code>command: npx</code>, <code>args: [&quot;crw-mcp&quot;]</code></td>
+</tr>
+<tr>
+<td>fastcrw.com cloud</td>
+<td>You want hosted infrastructure and <code>crw_search</code></td>
+<td>same as local plus <code>CRW_API_URL</code> and <code>CRW_API_KEY</code></td>
+</tr>
+<tr>
+<td>HTTP transport</td>
+<td>Your host supports HTTP MCP and you already run <code>crw-server</code></td>
+<td>point the client at <code>http://localhost:3000/mcp</code></td>
+</tr>
+</tbody></table>
+<h2>What tools you get</h2>
+<p>Embedded local mode exposes:</p>
+<ul>
+<li><code>crw_scrape</code></li>
+<li><code>crw_crawl</code></li>
+<li><code>crw_check_crawl_status</code></li>
+<li><code>crw_map</code></li>
+</ul>
+<p>fastcrw.com cloud mode exposes all of the above plus:</p>
+<ul>
+<li><code>crw_search</code></li>
+</ul>
+<p>:::tip
+If you only remember one rule, remember this one: local embedded mode is the easiest setup, and fastcrw.com cloud mode is the easiest way to add web search.
+:::</p>
+<h2>Claude Code</h2>
+<h3>Local embedded</h3>
+<pre><code class="language-bash">claude mcp add crw -- npx crw-mcp
+</code></pre>
+<h3>fastcrw.com cloud</h3>
+<pre><code class="language-bash">claude mcp add \
+  -e CRW_API_URL=https://fastcrw.com/api \
+  -e CRW_API_KEY=YOUR_API_KEY \
+  crw -- npx crw-mcp
+</code></pre>
+<h3>Local HTTP transport</h3>
+<pre><code class="language-bash">claude mcp add --transport http crw http://localhost:3000/mcp
+</code></pre>
+<p>Useful commands:</p>
+<ul>
+<li><code>claude mcp list</code></li>
+<li><code>claude mcp remove crw</code></li>
+</ul>
+<h2>OpenAI Codex CLI</h2>
+<h3>Local embedded</h3>
+<pre><code class="language-bash">codex mcp add crw -- npx crw-mcp
+</code></pre>
+<p>Or edit <code>~/.codex/config.toml</code>:</p>
+<pre><code class="language-toml">[mcp_servers.crw]
+command = &quot;npx&quot;
+args = [&quot;crw-mcp&quot;]
+</code></pre>
+<h3>fastcrw.com cloud</h3>
+<pre><code class="language-toml">[mcp_servers.crw]
+command = &quot;npx&quot;
+args = [&quot;crw-mcp&quot;]
+
+[mcp_servers.crw.env]
+CRW_API_URL = &quot;https://fastcrw.com/api&quot;
+CRW_API_KEY = &quot;YOUR_API_KEY&quot;
+</code></pre>
+<p>:::note
+Codex uses the same stdio MCP server as Claude Code. The only difference is where you register it.
+:::</p>
+<h2>Claude Desktop</h2>
+<p>Edit the config file for your OS:</p>
+<table>
+<thead>
+<tr>
+<th>OS</th>
+<th>Path</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>macOS</td>
+<td><code>~/Library/Application Support/Claude/claude_desktop_config.json</code></td>
+</tr>
+<tr>
+<td>Windows</td>
+<td><code>%APPDATA%/Claude/claude_desktop_config.json</code></td>
+</tr>
+<tr>
+<td>Linux</td>
+<td><code>~/.config/Claude/claude_desktop_config.json</code></td>
+</tr>
+</tbody></table>
+<h3>Local embedded</h3>
+<pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;crw&quot;: {
+      &quot;command&quot;: &quot;npx&quot;,
+      &quot;args&quot;: [&quot;crw-mcp&quot;]
+    }
+  }
+}
+</code></pre>
+<h3>fastcrw.com cloud</h3>
+<pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;crw&quot;: {
+      &quot;command&quot;: &quot;npx&quot;,
+      &quot;args&quot;: [&quot;crw-mcp&quot;],
+      &quot;env&quot;: {
+        &quot;CRW_API_URL&quot;: &quot;https://fastcrw.com/api&quot;,
+        &quot;CRW_API_KEY&quot;: &quot;YOUR_API_KEY&quot;
+      }
+    }
+  }
+}
+</code></pre>
+<p>Fully quit and restart Claude Desktop after editing the file.</p>
+<h2>Cursor</h2>
+<p>Create or edit <code>~/.cursor/mcp.json</code> for global setup, or <code>.cursor/mcp.json</code> inside one project.</p>
+<h3>Local embedded</h3>
+<pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;crw&quot;: {
+      &quot;command&quot;: &quot;npx&quot;,
+      &quot;args&quot;: [&quot;crw-mcp&quot;]
+    }
+  }
+}
+</code></pre>
+<h3>fastcrw.com cloud</h3>
+<pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;crw&quot;: {
+      &quot;command&quot;: &quot;npx&quot;,
+      &quot;args&quot;: [&quot;crw-mcp&quot;],
+      &quot;env&quot;: {
+        &quot;CRW_API_URL&quot;: &quot;https://fastcrw.com/api&quot;,
+        &quot;CRW_API_KEY&quot;: &quot;YOUR_API_KEY&quot;
+      }
+    }
+  }
+}
+</code></pre>
+<p>You can also add the same config from Cursor&#39;s MCP UI under Settings.</p>
+<h2>Windsurf</h2>
+<p>Edit <code>~/.codeium/windsurf/mcp_config.json</code>.</p>
+<h3>Local embedded</h3>
+<pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;crw&quot;: {
+      &quot;command&quot;: &quot;npx&quot;,
+      &quot;args&quot;: [&quot;crw-mcp&quot;]
+    }
+  }
+}
+</code></pre>
+<h3>fastcrw.com cloud</h3>
+<pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;crw&quot;: {
+      &quot;command&quot;: &quot;npx&quot;,
+      &quot;args&quot;: [&quot;crw-mcp&quot;],
+      &quot;env&quot;: {
+        &quot;CRW_API_URL&quot;: &quot;https://fastcrw.com/api&quot;,
+        &quot;CRW_API_KEY&quot;: &quot;YOUR_API_KEY&quot;
+      }
+    }
+  }
+}
+</code></pre>
+<p>:::note
+Windsurf has a total MCP tool limit. CRW stays lightweight: local mode exposes 4 tools, cloud mode exposes 5.
+:::</p>
+<h2>Cline</h2>
+<p>Edit the Cline MCP settings file:</p>
+<table>
+<thead>
+<tr>
+<th>OS</th>
+<th>Path</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>macOS</td>
+<td><code>~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json</code></td>
+</tr>
+<tr>
+<td>Windows</td>
+<td><code>%APPDATA%/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json</code></td>
+</tr>
+<tr>
+<td>Linux</td>
+<td><code>~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json</code></td>
+</tr>
+</tbody></table>
+<h3>Local embedded</h3>
+<pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;crw&quot;: {
+      &quot;command&quot;: &quot;npx&quot;,
+      &quot;args&quot;: [&quot;crw-mcp&quot;],
+      &quot;alwaysAllow&quot;: [&quot;crw_scrape&quot;, &quot;crw_map&quot;],
+      &quot;disabled&quot;: false
+    }
+  }
+}
+</code></pre>
+<h3>fastcrw.com cloud</h3>
+<pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;crw&quot;: {
+      &quot;command&quot;: &quot;npx&quot;,
+      &quot;args&quot;: [&quot;crw-mcp&quot;],
+      &quot;alwaysAllow&quot;: [&quot;crw_scrape&quot;, &quot;crw_map&quot;, &quot;crw_search&quot;],
+      &quot;disabled&quot;: false,
+      &quot;env&quot;: {
+        &quot;CRW_API_URL&quot;: &quot;https://fastcrw.com/api&quot;,
+        &quot;CRW_API_KEY&quot;: &quot;YOUR_API_KEY&quot;
+      }
+    }
+  }
+}
+</code></pre>
+<h2>Continue</h2>
+<p>Edit <code>~/.continue/config.yaml</code>.</p>
+<h3>Local embedded</h3>
+<pre><code class="language-yaml">mcpServers:
+  - name: crw
+    command: npx
+    args:
+      - crw-mcp
+</code></pre>
+<h3>fastcrw.com cloud</h3>
+<pre><code class="language-yaml">mcpServers:
+  - name: crw
+    command: npx
+    args:
+      - crw-mcp
+    env:
+      CRW_API_URL: https://fastcrw.com/api
+      CRW_API_KEY: YOUR_API_KEY
+</code></pre>
+<p>MCP tools in Continue only work in Agent mode, not plain chat mode.</p>
+<h2>Gemini CLI</h2>
+<h3>Local embedded</h3>
+<pre><code class="language-bash">gemini mcp add crw -- npx crw-mcp
+</code></pre>
+<p>Or edit <code>~/.gemini/settings.json</code>:</p>
+<pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;crw&quot;: {
+      &quot;command&quot;: &quot;npx&quot;,
+      &quot;args&quot;: [&quot;crw-mcp&quot;]
+    }
+  }
+}
+</code></pre>
+<h3>fastcrw.com cloud</h3>
+<pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;crw&quot;: {
+      &quot;command&quot;: &quot;npx&quot;,
+      &quot;args&quot;: [&quot;crw-mcp&quot;],
+      &quot;env&quot;: {
+        &quot;CRW_API_URL&quot;: &quot;https://fastcrw.com/api&quot;,
+        &quot;CRW_API_KEY&quot;: &quot;YOUR_API_KEY&quot;
+      }
+    }
+  }
+}
+</code></pre>
+<p>Useful commands:</p>
+<ul>
+<li><code>gemini mcp list</code></li>
+<li><code>gemini mcp remove crw</code></li>
+</ul>
+<h2>Any MCP client</h2>
+<p>If your client accepts the standard JSON <code>mcpServers</code> shape, start here:</p>
+<h3>Local embedded</h3>
+<pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;crw&quot;: {
+      &quot;command&quot;: &quot;npx&quot;,
+      &quot;args&quot;: [&quot;crw-mcp&quot;]
+    }
+  }
+}
+</code></pre>
+<h3>fastcrw.com cloud</h3>
+<pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;crw&quot;: {
+      &quot;command&quot;: &quot;npx&quot;,
+      &quot;args&quot;: [&quot;crw-mcp&quot;],
+      &quot;env&quot;: {
+        &quot;CRW_API_URL&quot;: &quot;https://fastcrw.com/api&quot;,
+        &quot;CRW_API_KEY&quot;: &quot;YOUR_API_KEY&quot;
+      }
+    }
+  }
+}
+</code></pre>
+<h2>Local rendering and config</h2>
+<p>Local embedded mode uses the same config chain as <code>crw-server</code>:</p>
+<ul>
+<li><code>config.default.toml</code></li>
+<li><code>config.local.toml</code></li>
+<li><code>CRW_...</code> environment overrides</li>
+</ul>
+<p>If you need JavaScript rendering in local MCP mode, pass a renderer URL:</p>
+<pre><code class="language-bash">claude mcp add \
+  -e CRW_RENDERER__LIGHTPANDA__WS_URL=ws://127.0.0.1:9222 \
+  crw -- npx crw-mcp
+</code></pre>
+<p>Without a configured renderer, CRW still works in HTTP-only mode.</p>
+<h2>How to choose local vs fastcrw.com</h2>
+<p>Use local embedded mode when:</p>
+<ul>
+<li>you want zero infrastructure,</li>
+<li>scrape/map/crawl are enough,</li>
+<li>or you want everything to stay on your own machine.</li>
+</ul>
+<p>Use fastcrw.com when:</p>
+<ul>
+<li>you want managed infrastructure,</li>
+<li>you want the <code>crw_search</code> tool,</li>
+<li>or you do not want to manage a local renderer or server.</li>
+</ul>
+<h2>What to read next</h2>
+<ul>
+<li><a href="/mcp">MCP Server</a> for the mode overview</li>
+<li><a href="/search">Search</a> to see what cloud mode adds</li>
+<li><a href="/js-rendering">JS Rendering</a> if local embedded mode needs browser rendering</li>
+<li><a href="/authentication">Authentication</a> if you are using a self-hosted CRW server</li>
+</ul>
+</article>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-header">On this page</div>
+      <nav id="toc-nav"></nav>
+      <div id="toc-helper"></div>
+      <div class="toc-cta">
+        <div class="toc-cta-brand">
+          <img src="/logo-icon.svg" alt="CRW" height="18" class="logo-img logo-light" />
+          <img src="/logo-dark.svg" alt="CRW" height="18" class="logo-img logo-dark" />
+          <span>CRW</span>
+        </div>
+        <div class="toc-cta-title">Ready to scrape?</div>
+        <div class="toc-cta-desc">Sign up and get 500 free credits instantly. No credit card required.</div>
+        <a href="https://fastcrw.com/register" target="_blank" rel="noopener" class="toc-cta-btn primary">Get started — 500 free credits</a>
+        <a href="https://github.com/us/crw" target="_blank" rel="noopener" class="toc-cta-btn outline">View on GitHub</a>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="footer" id="footer">
+    <div class="footer-inner">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="footer-brand-logo">
+            <img src="/logo-icon.svg" alt="CRW" class="logo-img logo-light" />
+            <img src="/logo-dark.svg" alt="CRW" class="logo-img logo-dark" />
+            <span>CRW</span>
+          </div>
+          <div class="footer-tagline">The base layer for agentic web intelligence.</div>
+          <div class="footer-socials"><a href="https://github.com/us/crw" target="_blank" rel="noopener" class="footer-social" aria-label="GitHub"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg></a></div>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Product</div>
+          <div class="footer-col-links">
+            <a href="#introduction">Documentation</a>
+            <a href="#rest-api">API Reference</a>
+            <a href="#mcp">MCP Server</a>
+            <a href="#changelog">Changelog</a>
+          </div>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Community</div>
+          <div class="footer-col-links">
+            <a href="https://github.com/us/crw" target="_blank" rel="noopener">GitHub</a>
+            <a href="https://github.com/us/crw/issues" target="_blank" rel="noopener">Issues</a>
+          </div>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Legal</div>
+          <div class="footer-col-links">
+            <a href="https://github.com/us/crw/blob/main/LICENSE" target="_blank" rel="noopener">License (AGPL-3.0)</a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <div class="footer-copyright">&copy; 2026 CRW. All rights reserved.</div>
+        <div class="footer-status"><span class="footer-status-dot"></span> All systems operational</div>
+      </div>
+    </div>
+  </footer>
+
+  <div class="search-modal" id="search-modal">
+    <div class="search-modal-content">
+      <div class="search-input-wrapper">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" id="search-input" placeholder="Search documentation..." autocomplete="off">
+        <kbd>esc</kbd>
+      </div>
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/theme.js"></script>
+  <script type="module" src="/js/search.js"></script>
+  <script type="module" src="/js/app.js"></script>
+  <script>window.__INITIAL_SLUG__ = "mcp-clients";</script>
+</body>
+</html>

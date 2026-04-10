@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JS Rendering — CRW Docs</title>
+  <meta name="description" content="crw supports JavaScript rendering for single-page applications (SPAs) and JS-heavy sites via the Chrome DevTools Protocol (CDP).">
+  <meta name="keywords" content="web scraper, web crawler, firecrawl alternative, crawl4ai alternative, self-hosted scraper, rust web scraper, mcp server, ai web scraping, rag pipeline, llm extraction, open source crawler, headless browser scraper">
+  <link rel="canonical" href="https://docs.fastcrw.com/js-rendering">
+  <link rel="icon" href="favicon.png?v=2" type="image/png">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://docs.fastcrw.com/js-rendering">
+  <meta property="og:title" content="JS Rendering — CRW | Web Scraper in Rust">
+  <meta property="og:description" content="crw supports JavaScript rendering for single-page applications (SPAs) and JS-heavy sites via the Chrome DevTools Protocol (CDP).">
+  <meta property="og:site_name" content="CRW">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="JS Rendering — CRW Docs">
+  <meta name="twitter:description" content="crw supports JavaScript rendering for single-page applications (SPAs) and JS-heavy sites via the Chrome DevTools Protocol (CDP).">
+
+  <!-- Structured Data (JSON-LD) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "CRW",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Linux, macOS, Windows (WSL)",
+    "description": "Open-source, self-hosted web scraper and crawler written in Rust. A fast, lightweight Firecrawl alternative with MCP server support for AI agents, LLM structured extraction, and Firecrawl-compatible workflows.",
+    "url": "https://docs.fastcrw.com/",
+    "downloadUrl": "https://crates.io/crates/crw-server",
+    "softwareVersion": "0.3.5",
+    "license": "https://opensource.org/licenses/AGPL-3.0",
+    "programmingLanguage": "Rust",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "featureList": [
+      "Firecrawl-compatible REST API",
+      "MCP server for Claude Code, Cursor, Windsurf",
+      "LLM structured extraction (Anthropic, OpenAI)",
+      "JavaScript rendering via LightPanda CDP",
+      "BFS web crawler with robots.txt and sitemap support",
+      "6 output formats: Markdown, HTML, JSON, plain text, links",
+      "CSS selector and XPath extraction",
+      "Chunking with BM25 and cosine ranking for RAG pipelines",
+      "Single binary, 6.6 MB idle RAM"
+    ]
+  }
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css" id="hljs-theme">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+  <link rel="stylesheet" href="/css/style.css">  <link rel="modulepreload" href="/js/app.js">
+  <link rel="modulepreload" href="/js/search.js">
+  <link rel="modulepreload" href="/site.config.js">
+</head>
+<body>
+  <div class="reading-progress" id="reading-progress"></div>
+
+  <header class="navbar">
+    <div class="navbar-top">
+      <div class="navbar-left">
+        <button class="hamburger" id="hamburger" aria-label="Toggle sidebar">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <a href="https://fastcrw.com" class="logo">
+          <img src="/logo-icon.svg" alt="CRW" height="24" class="logo-img logo-light" />
+          <img src="/logo-dark.svg" alt="CRW" height="24" class="logo-img logo-dark" />
+          <span class="logo-text">fast<span class="logo-accent">crw</span></span>
+        </a>
+      </div>
+      <div class="navbar-center">
+        <button class="search-trigger" id="search-trigger" aria-label="Search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <span class="search-placeholder">Search...</span>
+          <span class="search-shortcut">⌘K</span>
+        </button>
+      </div>
+      <div class="navbar-right">
+        <a href="https://github.com/us/crw" target="_blank" rel="noopener" class="navbar-github" id="navbar-github" aria-label="CRW on GitHub">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          <span>us/crw</span>
+        </a>
+        <a href="https://fastcrw.com" target="_blank" rel="noopener" class="navbar-link">Status</a>
+        <a href="https://fastcrw.com/register" target="_blank" rel="noopener" class="navbar-signup">Sign Up</a>
+        <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+          <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+          <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="navbar-tabs" id="navbar-tabs"></div>
+  </header>
+
+  <div class="overlay" id="overlay"></div>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <nav id="sidebar-nav"></nav>
+    </aside>
+
+    <main class="content" id="content">
+      <article id="article" role="main"><h1>JS Rendering</h1>
+<p>crw supports JavaScript rendering for single-page applications (SPAs) and JS-heavy sites via the Chrome DevTools Protocol (CDP).</p>
+<h2>Rendering Modes</h2>
+<p>Set the rendering mode in your config:</p>
+<pre><code class="language-toml">[renderer]
+mode = &quot;auto&quot;          # auto | lightpanda | playwright | chrome | none
+page_timeout_ms = 30000
+pool_size = 4
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>auto</code></td>
+<td>Use HTTP first, detect SPAs, fall back to CDP if needed</td>
+</tr>
+<tr>
+<td><code>lightpanda</code></td>
+<td>Always use LightPanda for JS rendering</td>
+</tr>
+<tr>
+<td><code>playwright</code></td>
+<td>Always use Playwright for JS rendering</td>
+</tr>
+<tr>
+<td><code>chrome</code></td>
+<td>Always use Chrome for JS rendering</td>
+</tr>
+<tr>
+<td><code>none</code></td>
+<td>HTTP only, never render JS</td>
+</tr>
+</tbody></table>
+<h2>Per-request control</h2>
+<p>Override the rendering mode per request using <code>renderJs</code>:</p>
+<pre><code class="language-json">{
+  &quot;url&quot;: &quot;https://spa-app.com&quot;,
+  &quot;renderJs&quot;: true,
+  &quot;waitFor&quot;: 3000
+}
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>null</code> (default)</td>
+<td>Auto-detect based on heuristics</td>
+</tr>
+<tr>
+<td><code>true</code></td>
+<td>Force CDP rendering</td>
+</tr>
+<tr>
+<td><code>false</code></td>
+<td>HTTP only</td>
+</tr>
+</tbody></table>
+<h2>When To Turn It On</h2>
+<p>Enable JS rendering when the page content is not present in the initial HTML response. Typical examples:</p>
+<ul>
+<li>single-page applications,</li>
+<li>pages that fetch content after hydration,</li>
+<li>and sites where the meaningful body is assembled client-side.</li>
+</ul>
+<p>Do not enable it blindly for every request. HTTP-only fetches are faster and cheaper.</p>
+<h2>Choosing a <code>waitFor</code> Value</h2>
+<p>Start with the smallest value that works:</p>
+<ul>
+<li><code>500</code> to <code>1000</code> for lightly hydrated pages,</li>
+<li><code>2000</code> for typical JS-heavy pages,</li>
+<li><code>3000</code> to <code>5000</code> only when you have confirmed the target hydrates slowly.</li>
+</ul>
+<p>:::warning
+Long waits are not automatically safer. They increase latency and can hide the fact that the page is blocked rather than merely slow.
+:::</p>
+<h2>Auto-detection</h2>
+<p>When <code>renderJs</code> is <code>null</code>, crw fetches the page via HTTP first, then checks for SPA signals:</p>
+<p><strong>Triggered when body text &lt; 200 chars and:</strong></p>
+<ul>
+<li>Contains <code>id=&quot;root&quot;</code>, <code>id=&quot;app&quot;</code>, <code>id=&quot;__next&quot;</code>, <code>id=&quot;__nuxt&quot;</code>, <code>id=&quot;__gatsby&quot;</code>, <code>id=&quot;svelte&quot;</code></li>
+<li>Contains <code>ng-app</code>, <code>data-reactroot</code></li>
+<li>Contains <code>window.__initial_state__</code>, <code>__next_data__</code>, <code>window.__remixcontext</code>, <code>window.__astro</code></li>
+</ul>
+<p><strong>Triggered when:</strong></p>
+<ul>
+<li><code>&lt;noscript&gt;</code> contains &quot;enable javascript&quot;</li>
+<li>Body text &lt; 500 chars and URL matches Framer, Webflow, Wix, or Squarespace domains</li>
+</ul>
+<h2>CDP Backends</h2>
+<h3>LightPanda (Recommended)</h3>
+<p>Fastest option. Lightweight browser engine purpose-built for scraping.</p>
+<pre><code class="language-bash"># Auto-install
+crw-server setup
+
+# Manual start
+lightpanda serve --host 127.0.0.1 --port 9222 &amp;
+</code></pre>
+<pre><code class="language-toml">[renderer.lightpanda]
+ws_url = &quot;ws://127.0.0.1:9222/&quot;
+</code></pre>
+<h3>Playwright</h3>
+<pre><code class="language-toml">[renderer.playwright]
+ws_url = &quot;ws://playwright:9222&quot;
+</code></pre>
+<h3>Chrome / Chromium</h3>
+<pre><code class="language-toml">[renderer.chrome]
+ws_url = &quot;ws://chrome:9222&quot;
+</code></pre>
+<h2>How CDP rendering works</h2>
+<ol>
+<li>Open a new browser tab via <code>Target.createTarget</code></li>
+<li>Navigate to the URL</li>
+<li>Attach to the target via <code>Target.attachToTarget</code></li>
+<li>Wait for the configured time (<code>waitFor</code> or default 2000ms)</li>
+<li>Execute <code>Runtime.evaluate(&quot;document.documentElement.outerHTML&quot;)</code> to get rendered HTML</li>
+<li>Close the tab via <code>Target.closeTarget</code></li>
+</ol>
+<h2>Cloud vs Self-hosted</h2>
+<ul>
+<li><strong>Cloud</strong>: JS rendering is always available. The managed infrastructure runs a LightPanda sidecar alongside the engine. Available on <a href="https://fastcrw.com">fastcrw.com</a> (cloud).</li>
+<li><strong>Self-hosted</strong>: You must run <code>crw-server setup</code> or configure a CDP browser (LightPanda, Chrome, or Playwright) in your <code>config.toml</code> under <code>[renderer]</code>. If no JS renderer is configured, requests with <code>renderJs: true</code> will fall back to HTTP-only fetching and include a warning.</li>
+</ul>
+<h2>What To Inspect in the Response</h2>
+<p>When rendered output looks wrong, check:</p>
+<ul>
+<li><code>metadata.renderedWith</code> to verify a browser was actually used,</li>
+<li><code>metadata.elapsedMs</code> to understand the cost of the request,</li>
+<li>and <code>warning</code> to catch anti-bot or fallback situations.</li>
+</ul>
+<h2>Troubleshooting</h2>
+<ul>
+<li><strong>Empty content from JS-heavy sites</strong>: Increase <code>waitFor</code> (e.g., <code>3000</code>-<code>5000</code>). Some SPAs need extra time to hydrate.</li>
+<li><strong><code>renderedWith: &quot;http_only_fallback&quot;</code> in metadata</strong>: JS rendering was requested but no renderer is available. Check your deployment configuration.</li>
+<li><strong>Internal error on <code>renderJs: true</code></strong>: Verify the LightPanda sidecar is running and reachable. Check <code>/health</code> for renderer status.</li>
+<li><strong>Still poor output after increasing <code>waitFor</code></strong>: The issue may be anti-bot protection or authentication flow, not rendering delay.</li>
+</ul>
+<h2>Docker Compose</h2>
+<p>The included <code>docker-compose.yml</code> runs crw with a LightPanda sidecar:</p>
+<pre><code class="language-yaml">services:
+  crw:
+    image: ghcr.io/us/crw:latest
+    ports:
+      - &quot;3000:3000&quot;
+    environment:
+      - CRW_RENDERER__LIGHTPANDA__WS_URL=ws://lightpanda:9222
+  lightpanda:
+    image: lightpanda/lightpanda:latest
+    command: [&quot;serve&quot;, &quot;--host&quot;, &quot;0.0.0.0&quot;, &quot;--port&quot;, &quot;9222&quot;]
+</code></pre>
+</article>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-header">On this page</div>
+      <nav id="toc-nav"></nav>
+      <div id="toc-helper"></div>
+      <div class="toc-cta">
+        <div class="toc-cta-brand">
+          <img src="/logo-icon.svg" alt="CRW" height="18" class="logo-img logo-light" />
+          <img src="/logo-dark.svg" alt="CRW" height="18" class="logo-img logo-dark" />
+          <span>CRW</span>
+        </div>
+        <div class="toc-cta-title">Ready to scrape?</div>
+        <div class="toc-cta-desc">Sign up and get 500 free credits instantly. No credit card required.</div>
+        <a href="https://fastcrw.com/register" target="_blank" rel="noopener" class="toc-cta-btn primary">Get started — 500 free credits</a>
+        <a href="https://github.com/us/crw" target="_blank" rel="noopener" class="toc-cta-btn outline">View on GitHub</a>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="footer" id="footer">
+    <div class="footer-inner">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="footer-brand-logo">
+            <img src="/logo-icon.svg" alt="CRW" class="logo-img logo-light" />
+            <img src="/logo-dark.svg" alt="CRW" class="logo-img logo-dark" />
+            <span>CRW</span>
+          </div>
+          <div class="footer-tagline">The base layer for agentic web intelligence.</div>
+          <div class="footer-socials"><a href="https://github.com/us/crw" target="_blank" rel="noopener" class="footer-social" aria-label="GitHub"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg></a></div>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Product</div>
+          <div class="footer-col-links">
+            <a href="#introduction">Documentation</a>
+            <a href="#rest-api">API Reference</a>
+            <a href="#mcp">MCP Server</a>
+            <a href="#changelog">Changelog</a>
+          </div>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Community</div>
+          <div class="footer-col-links">
+            <a href="https://github.com/us/crw" target="_blank" rel="noopener">GitHub</a>
+            <a href="https://github.com/us/crw/issues" target="_blank" rel="noopener">Issues</a>
+          </div>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Legal</div>
+          <div class="footer-col-links">
+            <a href="https://github.com/us/crw/blob/main/LICENSE" target="_blank" rel="noopener">License (AGPL-3.0)</a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <div class="footer-copyright">&copy; 2026 CRW. All rights reserved.</div>
+        <div class="footer-status"><span class="footer-status-dot"></span> All systems operational</div>
+      </div>
+    </div>
+  </footer>
+
+  <div class="search-modal" id="search-modal">
+    <div class="search-modal-content">
+      <div class="search-input-wrapper">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" id="search-input" placeholder="Search documentation..." autocomplete="off">
+        <kbd>esc</kbd>
+      </div>
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/theme.js"></script>
+  <script type="module" src="/js/search.js"></script>
+  <script type="module" src="/js/app.js"></script>
+  <script>window.__INITIAL_SLUG__ = "js-rendering";</script>
+</body>
+</html>

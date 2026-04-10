@@ -12,15 +12,15 @@ const endpointTryContent = {
     title: "Try this request",
     code: "POST /v1/scrape",
     note: "Start with markdown only. It is the fastest path to a first successful response.",
-    primary: { label: "Open Quick Start", href: "#quick-start" },
+    primary: { label: "Open Quick Start", href: "/quick-start" },
     secondary: { label: "Playground", href: "https://fastcrw.com/playground", external: true },
   },
   crawling: {
     title: "Try this request",
     code: "POST /v1/crawl",
     note: "Start with a small crawl. maxPages: 5 is usually enough to validate a new site.",
-    primary: { label: "Open Quick Start", href: "#quick-start" },
-    secondary: { label: "View API Index", href: "#rest-api" },
+    primary: { label: "Open Quick Start", href: "/quick-start" },
+    secondary: { label: "View API Index", href: "/rest-api" },
   },
   search: {
     title: "Try this request",
@@ -33,14 +33,14 @@ const endpointTryContent = {
     title: "Try this request",
     code: "POST /v1/map",
     note: "Use map first when you need discovery before a bounded crawl.",
-    primary: { label: "Open Quick Start", href: "#quick-start" },
-    secondary: { label: "View Crawl Docs", href: "#crawling" },
+    primary: { label: "Open Quick Start", href: "/quick-start" },
+    secondary: { label: "View Crawl Docs", href: "/crawling" },
   },
   extract: {
     title: "Try this request",
     code: 'formats: ["json"] + jsonSchema',
     note: "Verify the page with markdown first, then add your schema for extraction.",
-    primary: { label: "View Scrape Docs", href: "#scraping" },
+    primary: { label: "View Scrape Docs", href: "/scraping" },
     secondary: { label: "Playground", href: "https://fastcrw.com/playground", external: true },
   },
 };
@@ -95,7 +95,7 @@ function normalizeDocHref(href) {
     .replace(/\/$/, "");
   const slug = cleanPath.split("/").filter(Boolean).pop();
   if (!slug || !allSlugs.has(slug)) return href;
-  return `#${slug}${anchor ? `::${anchor}` : ""}`;
+  return `/${slug}${anchor ? `#${anchor}` : ""}`;
 }
 
 function getDocUrl(slug) {
@@ -386,7 +386,7 @@ function renderSidebar() {
       // Sections are always open (flat, Mintlify-style)
       const childrenHTML = section.children.map((child) => {
         const iconHTML = child.icon ? `<span class="sidebar-item-icon">${getIcon(child.icon)}</span>` : '';
-        return `<a href="#${child.slug}" class="sidebar-link ${child.slug === currentSlug ? "active" : ""}">${iconHTML}${child.title}</a>`;
+        return `<a href="/${child.slug}" class="sidebar-link ${child.slug === currentSlug ? "active" : ""}">${iconHTML}${child.title}</a>`;
       }).join("");
 
       return `
@@ -581,7 +581,7 @@ function renderPrevNext(currentSlug) {
   nav.className = 'prev-next-nav';
   nav.innerHTML = `
     <div></div>
-    <a href="#${next.slug}" class="prev-next next">
+    <a href="/${next.slug}" class="prev-next next">
       <span class="prev-next-title">${next.title}</span>
       <span class="prev-next-label">Next &rsaquo;</span>
     </a>
@@ -630,6 +630,13 @@ function initPageCopyButton(markdown) {
 
 // ========== Routing ==========
 function getCurrentRoute() {
+  // 1. Pathname routing (static pre-rendered pages)
+  const pathname = window.location.pathname.replace(/^\//, "").replace(/\/$/, "");
+  if (pathname && allSlugs.has(pathname)) {
+    return { slug: pathname, anchor: "" };
+  }
+
+  // 2. Hash fallback (backward compat for old #slug links)
   const rawHash = window.location.hash.slice(1);
   if (!rawHash) return { slug: config.defaultPage, anchor: "" };
 
@@ -694,7 +701,7 @@ async function loadPage(slug, anchor = "") {
     article.innerHTML = `
       <h1>Page Not Found</h1>
       <p>The page <code>${escapeHtml(slug)}</code> could not be found.</p>
-      <p><a href="#${config.defaultPage}">Go to ${getPageTitle(config.defaultPage)}</a></p>
+      <p><a href="/${config.defaultPage}">Go to ${getPageTitle(config.defaultPage)}</a></p>
     `;
     renderTOC();
     renderTOCHelper("");
@@ -718,8 +725,8 @@ function updateActiveTab(slug) {
   const tabs = document.querySelectorAll('.navbar-tab');
   tabs.forEach((tab) => {
     tab.classList.remove('active');
-    const href = tab.getAttribute('href')?.replace('#', '');
-    const tabConfig = config.navTabs?.find((t) => t.href === `#${href}`);
+    const href = tab.getAttribute('href')?.replace(/^[#\/]/, '');
+    const tabConfig = config.navTabs?.find((t) => t.href === `/${href}` || t.href === `#${href}`);
     const matches = tabConfig?.match || [href];
     if (matches.includes(slug)) {
       tab.classList.add('active');
@@ -758,12 +765,57 @@ function init() {
   renderNavbar();
   applyThemeOverrides();
   const initialRoute = getCurrentRoute();
-  loadPage(initialRoute.slug, initialRoute.anchor);
+
+  // Static pre-rendered pages already have content in <article> — skip fetch
+  const article = document.getElementById('article');
+  if (window.__INITIAL_SLUG__ && article && article.innerHTML.trim().length > 100) {
+    const slug = window.__INITIAL_SLUG__;
+    article.classList.toggle("endpoint-page", endpointSlugs.has(slug));
+    article.classList.toggle("product-page", productPageSlugs.has(slug));
+    article.dataset.slug = slug;
+    addCodeCopyButtons(article);
+    initCodeTabs(article);
+    if (window.hljs) hljs.highlightAll();
+    applyRevealToContent(article);
+    renderPrevNext(slug);
+    renderTOC();
+    renderTOCHelper(slug);
+    document.title = `${getPageTitle(slug)} — ${config.name}`;
+    renderSidebar();
+    updateActiveTab(slug);
+  } else {
+    loadPage(initialRoute.slug, initialRoute.anchor);
+  }
+
   initReadingProgress();
+
+  // Hash backward compat
   window.addEventListener("hashchange", () => {
     const route = getCurrentRoute();
     loadPage(route.slug, route.anchor);
   });
+
+  // Pathname navigation (history.pushState)
+  window.addEventListener("popstate", () => {
+    const route = getCurrentRoute();
+    loadPage(route.slug, route.anchor);
+  });
+
+  // Intercept /slug clicks for SPA navigation (no full reload)
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('a[href]');
+    if (!a) return;
+    const href = a.getAttribute('href');
+    if (!href) return;
+    const match = href.match(/^\/([a-z][a-z0-9-]*)\/?\s*$/);
+    if (match && allSlugs.has(match[1])) {
+      e.preventDefault();
+      const slug = match[1];
+      history.pushState({ slug }, '', '/' + slug);
+      loadPage(slug);
+    }
+  });
+
   // Defer search index build to after page is interactive
   if ('requestIdleCallback' in window) {
     requestIdleCallback(() => buildSearchIndex());

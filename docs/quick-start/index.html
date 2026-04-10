@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quick Start — CRW Docs</title>
+  <meta name="description" content="Get one successful CRW response as fast as possible. The shortest path is the hosted API on fastcrw.com ; MCP and self-hosting come right after that.">
+  <meta name="keywords" content="web scraper, web crawler, firecrawl alternative, crawl4ai alternative, self-hosted scraper, rust web scraper, mcp server, ai web scraping, rag pipeline, llm extraction, open source crawler, headless browser scraper">
+  <link rel="canonical" href="https://docs.fastcrw.com/quick-start">
+  <link rel="icon" href="favicon.png?v=2" type="image/png">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://docs.fastcrw.com/quick-start">
+  <meta property="og:title" content="Quick Start — CRW | Web Scraper in Rust">
+  <meta property="og:description" content="Get one successful CRW response as fast as possible. The shortest path is the hosted API on fastcrw.com ; MCP and self-hosting come right after that.">
+  <meta property="og:site_name" content="CRW">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Quick Start — CRW Docs">
+  <meta name="twitter:description" content="Get one successful CRW response as fast as possible. The shortest path is the hosted API on fastcrw.com ; MCP and self-hosting come right after that.">
+
+  <!-- Structured Data (JSON-LD) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "CRW",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Linux, macOS, Windows (WSL)",
+    "description": "Open-source, self-hosted web scraper and crawler written in Rust. A fast, lightweight Firecrawl alternative with MCP server support for AI agents, LLM structured extraction, and Firecrawl-compatible workflows.",
+    "url": "https://docs.fastcrw.com/",
+    "downloadUrl": "https://crates.io/crates/crw-server",
+    "softwareVersion": "0.3.5",
+    "license": "https://opensource.org/licenses/AGPL-3.0",
+    "programmingLanguage": "Rust",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "featureList": [
+      "Firecrawl-compatible REST API",
+      "MCP server for Claude Code, Cursor, Windsurf",
+      "LLM structured extraction (Anthropic, OpenAI)",
+      "JavaScript rendering via LightPanda CDP",
+      "BFS web crawler with robots.txt and sitemap support",
+      "6 output formats: Markdown, HTML, JSON, plain text, links",
+      "CSS selector and XPath extraction",
+      "Chunking with BM25 and cosine ranking for RAG pipelines",
+      "Single binary, 6.6 MB idle RAM"
+    ]
+  }
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css" id="hljs-theme">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+  <link rel="stylesheet" href="/css/style.css">  <link rel="modulepreload" href="/js/app.js">
+  <link rel="modulepreload" href="/js/search.js">
+  <link rel="modulepreload" href="/site.config.js">
+</head>
+<body>
+  <div class="reading-progress" id="reading-progress"></div>
+
+  <header class="navbar">
+    <div class="navbar-top">
+      <div class="navbar-left">
+        <button class="hamburger" id="hamburger" aria-label="Toggle sidebar">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <a href="https://fastcrw.com" class="logo">
+          <img src="/logo-icon.svg" alt="CRW" height="24" class="logo-img logo-light" />
+          <img src="/logo-dark.svg" alt="CRW" height="24" class="logo-img logo-dark" />
+          <span class="logo-text">fast<span class="logo-accent">crw</span></span>
+        </a>
+      </div>
+      <div class="navbar-center">
+        <button class="search-trigger" id="search-trigger" aria-label="Search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <span class="search-placeholder">Search...</span>
+          <span class="search-shortcut">⌘K</span>
+        </button>
+      </div>
+      <div class="navbar-right">
+        <a href="https://github.com/us/crw" target="_blank" rel="noopener" class="navbar-github" id="navbar-github" aria-label="CRW on GitHub">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          <span>us/crw</span>
+        </a>
+        <a href="https://fastcrw.com" target="_blank" rel="noopener" class="navbar-link">Status</a>
+        <a href="https://fastcrw.com/register" target="_blank" rel="noopener" class="navbar-signup">Sign Up</a>
+        <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+          <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+          <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="navbar-tabs" id="navbar-tabs"></div>
+  </header>
+
+  <div class="overlay" id="overlay"></div>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <nav id="sidebar-nav"></nav>
+    </aside>
+
+    <main class="content" id="content">
+      <article id="article" role="main"><div class="page-intro">
+  <div class="page-kicker">Get Started</div>
+  <h1>Quick Start</h1>
+  <p class="page-subtitle">Get one successful CRW response as fast as possible. The shortest path is the hosted API on <code>fastcrw.com</code>; MCP and self-hosting come right after that.</p>
+  <div class="page-capabilities">
+    <div class="page-capability"><strong>Goal:</strong> first success in under a minute</div>
+    <div class="page-capability"><strong>Start with:</strong> cloud API</div>
+    <div class="page-capability"><strong>Then branch to:</strong> MCP or self-host</div>
+  </div>
+  <div class="page-actions">
+    <a class="page-btn primary" href="https://fastcrw.com/register" target="_blank" rel="noopener">Get API key</a>
+    <a class="page-btn secondary" href="https://fastcrw.com/playground" target="_blank" rel="noopener">Open Playground</a>
+  </div>
+</div><h2>Start here</h2>
+<ol>
+<li>Get an API key.</li>
+<li>Copy the request below.</li>
+<li>Confirm you got a markdown response back.</li>
+</ol>
+<p>If you reach step 3, you are unblocked for almost every other page in this docs set.</p>
+<h2>Authentication</h2>
+<p>Create an account at <a href="https://fastcrw.com/register">fastcrw.com/register</a>, then send the key in the <code>Authorization</code> header:</p>
+<pre><code class="language-http">Authorization: Bearer YOUR_API_KEY
+</code></pre>
+<h2>First request</h2>
+<pre><code class="language-bash">curl -X POST https://fastcrw.com/api/v1/scrape \
+  -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d &#39;{
+    &quot;url&quot;: &quot;https://example.com&quot;,
+    &quot;formats&quot;: [&quot;markdown&quot;]
+  }&#39;
+</code></pre>
+<h2>First response</h2>
+<pre><code class="language-json">{
+  &quot;success&quot;: true,
+  &quot;data&quot;: {
+    &quot;markdown&quot;: &quot;# Example Domain\n\nThis domain is for use in illustrative examples...&quot;,
+    &quot;metadata&quot;: {
+      &quot;title&quot;: &quot;Example Domain&quot;,
+      &quot;sourceURL&quot;: &quot;https://example.com&quot;,
+      &quot;statusCode&quot;: 200,
+      &quot;elapsedMs&quot;: 32
+    }
+  }
+}
+</code></pre>
+<p>That is the default CRW shape most users should start with: one URL, one markdown output, no extra knobs.</p>
+<h2>The same request in code</h2>
+<p>:::tabs
+::tab{title=&quot;cURL&quot;}</p>
+<pre><code class="language-bash">curl -X POST https://fastcrw.com/api/v1/scrape \
+  -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d &#39;{&quot;url&quot;:&quot;https://example.com&quot;,&quot;formats&quot;:[&quot;markdown&quot;]}&#39;
+</code></pre>
+<p>::tab{title=&quot;Python&quot;}</p>
+<pre><code class="language-python">import requests
+
+resp = requests.post(
+    &quot;https://fastcrw.com/api/v1/scrape&quot;,
+    headers={
+        &quot;Authorization&quot;: &quot;Bearer YOUR_API_KEY&quot;,
+        &quot;Content-Type&quot;: &quot;application/json&quot;,
+    },
+    json={
+        &quot;url&quot;: &quot;https://example.com&quot;,
+        &quot;formats&quot;: [&quot;markdown&quot;],
+    },
+)
+
+print(resp.json()[&quot;data&quot;][&quot;markdown&quot;])
+</code></pre>
+<p>::tab{title=&quot;Node.js&quot;}</p>
+<pre><code class="language-javascript">const resp = await fetch(&quot;https://fastcrw.com/api/v1/scrape&quot;, {
+  method: &quot;POST&quot;,
+  headers: {
+    &quot;Authorization&quot;: &quot;Bearer YOUR_API_KEY&quot;,
+    &quot;Content-Type&quot;: &quot;application/json&quot;
+  },
+  body: JSON.stringify({
+    url: &quot;https://example.com&quot;,
+    formats: [&quot;markdown&quot;]
+  })
+});
+
+const body = await resp.json();
+console.log(body.data.markdown);
+</code></pre>
+<p>:::</p>
+<h2>Pick the next page</h2>
+<p>:::cards
+::card{icon=&quot;code&quot; title=&quot;Need a known URL?&quot; href=&quot;#scraping&quot; description=&quot;Stay with scrape and add formats, selectors, JS rendering, or extraction.&quot;}
+::card{icon=&quot;search&quot; title=&quot;Need unknown URLs?&quot; href=&quot;#search&quot; description=&quot;Use search first, then scrape only the results you care about.&quot;}
+::card{icon=&quot;map&quot; title=&quot;Need discovery on one site?&quot; href=&quot;#map&quot; description=&quot;Use map when you need reachability before you recurse.&quot;}
+::card{icon=&quot;globe&quot; title=&quot;Need multiple pages?&quot; href=&quot;#crawling&quot; description=&quot;Use crawl for bounded recursion after you validate the target section.&quot;}
+:::</p>
+<h2>MCP path</h2>
+<p>If your real goal is to give an AI tool live web access, go straight to MCP:</p>
+<pre><code class="language-bash">claude mcp add crw -- npx crw-mcp
+</code></pre>
+<p>For Codex, Cursor, Windsurf, and others, continue in <a href="/mcp">MCP Server</a>.</p>
+<h2>Self-host path</h2>
+<p>If you want a local or private deployment instead of the hosted API:</p>
+<pre><code class="language-bash">docker run -p 3000:3000 ghcr.io/us/crw
+</code></pre>
+<p>Then call the local API:</p>
+<pre><code class="language-bash">curl -X POST http://localhost:3000/v1/scrape \
+  -H &quot;Content-Type: application/json&quot; \
+  -d &#39;{&quot;url&quot;:&quot;https://example.com&quot;,&quot;formats&quot;:[&quot;markdown&quot;]}&#39;
+</code></pre>
+<p>Use <a href="/self-hosting">Self-Hosting</a> for the full deployment path and <a href="/installation">Installation</a> for package-level install options.</p>
+<h2>Common mistakes</h2>
+<ul>
+<li>Using too many options in the first request. Start with <code>formats: [&quot;markdown&quot;]</code>.</li>
+<li>Turning on JS rendering before checking whether plain HTTP already works.</li>
+<li>Jumping into <code>crawl</code> before validating the target with <code>scrape</code>.</li>
+<li>Treating <code>search</code> as self-hosted. In these docs, <code>search</code> is the hosted/cloud path unless noted otherwise.</li>
+</ul>
+<h2>What to read next</h2>
+<ul>
+<li><a href="/scraping">Scrape</a> for the canonical single-page flow</li>
+<li><a href="/search">Search</a> for discovery-first workflows</li>
+<li><a href="/authentication">Authentication</a> for key handling</li>
+<li><a href="/self-hosting">Self-Hosting</a> if you want to move off the hosted path</li>
+</ul>
+</article>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-header">On this page</div>
+      <nav id="toc-nav"></nav>
+      <div id="toc-helper"></div>
+      <div class="toc-cta">
+        <div class="toc-cta-brand">
+          <img src="/logo-icon.svg" alt="CRW" height="18" class="logo-img logo-light" />
+          <img src="/logo-dark.svg" alt="CRW" height="18" class="logo-img logo-dark" />
+          <span>CRW</span>
+        </div>
+        <div class="toc-cta-title">Ready to scrape?</div>
+        <div class="toc-cta-desc">Sign up and get 500 free credits instantly. No credit card required.</div>
+        <a href="https://fastcrw.com/register" target="_blank" rel="noopener" class="toc-cta-btn primary">Get started — 500 free credits</a>
+        <a href="https://github.com/us/crw" target="_blank" rel="noopener" class="toc-cta-btn outline">View on GitHub</a>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="footer" id="footer">
+    <div class="footer-inner">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="footer-brand-logo">
+            <img src="/logo-icon.svg" alt="CRW" class="logo-img logo-light" />
+            <img src="/logo-dark.svg" alt="CRW" class="logo-img logo-dark" />
+            <span>CRW</span>
+          </div>
+          <div class="footer-tagline">The base layer for agentic web intelligence.</div>
+          <div class="footer-socials"><a href="https://github.com/us/crw" target="_blank" rel="noopener" class="footer-social" aria-label="GitHub"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg></a></div>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Product</div>
+          <div class="footer-col-links">
+            <a href="#introduction">Documentation</a>
+            <a href="#rest-api">API Reference</a>
+            <a href="#mcp">MCP Server</a>
+            <a href="#changelog">Changelog</a>
+          </div>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Community</div>
+          <div class="footer-col-links">
+            <a href="https://github.com/us/crw" target="_blank" rel="noopener">GitHub</a>
+            <a href="https://github.com/us/crw/issues" target="_blank" rel="noopener">Issues</a>
+          </div>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Legal</div>
+          <div class="footer-col-links">
+            <a href="https://github.com/us/crw/blob/main/LICENSE" target="_blank" rel="noopener">License (AGPL-3.0)</a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <div class="footer-copyright">&copy; 2026 CRW. All rights reserved.</div>
+        <div class="footer-status"><span class="footer-status-dot"></span> All systems operational</div>
+      </div>
+    </div>
+  </footer>
+
+  <div class="search-modal" id="search-modal">
+    <div class="search-modal-content">
+      <div class="search-input-wrapper">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" id="search-input" placeholder="Search documentation..." autocomplete="off">
+        <kbd>esc</kbd>
+      </div>
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/theme.js"></script>
+  <script type="module" src="/js/search.js"></script>
+  <script type="module" src="/js/app.js"></script>
+  <script>window.__INITIAL_SLUG__ = "quick-start";</script>
+</body>
+</html>
