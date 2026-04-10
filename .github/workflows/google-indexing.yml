@@ -1,0 +1,75 @@
+name: Google Indexing Notify
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/**"
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Collect changed docs files
+        id: changed
+        run: |
+          if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            git show --pretty="" --name-only "${{ github.sha }}" -- docs/ > changed-files.txt
+          else
+            git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" -- docs/ > changed-files.txt
+          fi
+
+          if [ -s changed-files.txt ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node
+        if: steps.changed.outputs.has_changes == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install google-auth-library
+        if: steps.changed.outputs.has_changes == 'true'
+        run: npm install google-auth-library
+
+      - name: Submit changed URLs to Google Indexing API
+        if: steps.changed.outputs.has_changes == 'true'
+        env:
+          GOOGLE_INDEXING_KEY: ${{ secrets.GOOGLE_INDEXING_KEY }}
+        run: |
+          echo "$GOOGLE_INDEXING_KEY" > /tmp/gcloud-key.json
+
+          # docs is a single-page site, always submit the root
+          URL="https://docs.fastcrw.com/"
+          echo "Submitting: $URL"
+
+          TOKEN=$(node -e "
+            const { GoogleAuth } = require('google-auth-library');
+            (async () => {
+              const auth = new GoogleAuth({ keyFile: '/tmp/gcloud-key.json', scopes: ['https://www.googleapis.com/auth/indexing'] });
+              const client = await auth.getClient();
+              const token = await client.getAccessToken();
+              console.log(token.token);
+            })();
+          ")
+
+          curl -s -X POST "https://indexing.googleapis.com/v3/urlNotifications:publish" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"url\": \"$URL\", \"type\": \"URL_UPDATED\"}"
+
+          echo ""
+          rm -f /tmp/gcloud-key.json
