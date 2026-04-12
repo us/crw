@@ -24,6 +24,12 @@ jobs:
       - uses: actions/checkout@v6
         if: ${{ steps.release.outputs.release_created }}
 
+      - name: Trigger release workflow
+        if: ${{ steps.release.outputs.release_created }}
+        run: gh workflow run release.yml --ref ${{ steps.release.outputs.tag_name }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Sync docs changelog
         if: ${{ steps.release.outputs.release_created }}
         run: python3 scripts/sync-docs-changelog.py
