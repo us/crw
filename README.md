@@ -49,10 +49,6 @@
 
 > **Don't want to self-host?** [**Sign up free →**](https://fastcrw.com) — managed cloud with global proxy network, web search, and dashboard. Same API, zero infra. **500 free credits, no credit card required.**
 
-<a href="https://github.com/us/crw">
-  <img src="https://img.shields.io/github/stars/us/crw.svg?style=social&label=Star&maxAge=2592000" alt="GitHub stars">
-</a>
-
 ---
 
 ## Why CRW? — Firecrawl & Crawl4AI Alternative
