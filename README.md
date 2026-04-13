@@ -62,6 +62,18 @@
 - **Built for RAG pipelines** — clean LLM-ready markdown output for vector databases and AI data ingestion
 - **Open source** — AGPL-3.0, developed transparently. [Join our community](https://discord.gg/kkFh2SC8)
 
+| Metric | CRW (self-hosted) | fastcrw.com (cloud) | Firecrawl | Tavily | Crawl4AI |
+|---|---|---|---|---|---|
+| **Coverage (1K URLs)** | **92.0%** | **92.0%** | 77.2% | — | — |
+| **Avg Scrape Latency** | **833ms** | **833ms** | 4,600ms | — | — |
+| **Avg Search Latency** | **880ms** | **880ms** | 954ms | 2,000ms | — |
+| **Search Win Rate** | **73/100** | **73/100** | 25/100 | 2/100 | — |
+| **Idle RAM** | 6.6 MB | 0 (managed) | ~500 MB+ | — (cloud) | — |
+| **Cold start** | 85 ms | 0 (always-on) | 30–60 s | — | — |
+| **Self-hosting** | **Single binary** | — | Multi-container | No | Python + Playwright |
+| **Cost / 1K scrapes** | **$0** (self-hosted) | From $13/mo | $0.83–5.33 | — | $0 |
+| **License** | AGPL-3.0 | Managed | AGPL-3.0 | Proprietary | Apache-2.0 |
+
 ---
 
 ## Web Scraping & Crawling Features
