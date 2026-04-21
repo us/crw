@@ -2,6 +2,21 @@
 
 All notable changes to CRW are documented here.
 
+## [0.3.6](https://github.com/us/crw/compare/v0.3.5...v0.3.6) (2026-04-21)
+
+
+### Features
+
+* **ci:** add Google Indexing API notification for docs changes ([3b5a340](https://github.com/us/crw/commit/3b5a3404e91a1d776275ac312ad08cad86339a98))
+* **docs:** generate static HTML pages for SEO indexability ([7b321c0](https://github.com/us/crw/commit/7b321c0a26cea0da32d42e952f6327b468bdb099))
+
+
+### Bug Fixes
+
+* **ci:** trigger release workflow after release-please creates tag ([27f2b67](https://github.com/us/crw/commit/27f2b67d0b9db4f7b1bacc6c901e9c92131a3a95))
+* **mcp:** bump npm optionalDependencies from 0.3.0 to 0.3.5 ([0e363e0](https://github.com/us/crw/commit/0e363e0fc512eb18bcb8284a9723b00f50e2dfd0))
+* **renderer:** detect loading placeholders and poll for content stability ([d3b642b](https://github.com/us/crw/commit/d3b642b2736b4568fa8a3502e521b8bede60317f))
+
 ## [0.3.5](https://github.com/us/crw/compare/v0.3.4...v0.3.5) (2026-04-09)
 
 

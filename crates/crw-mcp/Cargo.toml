@@ -18,8 +18,8 @@ default = ["embedded"]
 embedded = ["dep:crw-server"]
 
 [dependencies]
-crw-core = { path = "../crw-core", version = "0.3.5" }
-crw-renderer = { path = "../crw-renderer", version = "0.3.5", features = ["auto-browser"] }
+crw-core = { path = "../crw-core", version = "0.3.6" }
+crw-renderer = { path = "../crw-renderer", version = "0.3.6", features = ["auto-browser"] }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 reqwest = { workspace = true }
@@ -28,4 +28,4 @@ tracing-subscriber = { workspace = true }
 clap = { workspace = true }
 
 # Embedded mode: pulls in full scraping engine
-crw-server = { path = "../crw-server", version = "0.3.5", optional = true, features = ["cdp"] }
+crw-server = { path = "../crw-server", version = "0.3.6", optional = true, features = ["cdp"] }
