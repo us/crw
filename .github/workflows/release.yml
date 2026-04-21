@@ -322,7 +322,7 @@ jobs:
             -f event_type=crw-release \
             -f "client_payload[version]=${{ steps.version.outputs.version }}"
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_DISPATCH_PAT }}
 
   update-homebrew:
     needs: publish-binaries
@@ -338,4 +338,4 @@ jobs:
             -f event_type=crw-release \
             -f "client_payload[version]=${{ steps.version.outputs.version }}"
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_DISPATCH_PAT }}
