@@ -536,9 +536,17 @@ crw-server setup   # downloads LightPanda, creates config.local.toml
 
 | Renderer | Protocol | Best for |
 |----------|----------|----------|
-| LightPanda | CDP over WebSocket | Low-resource environments (default) |
-| Chrome | CDP over WebSocket | Existing Chrome infrastructure |
+| LightPanda | CDP over WebSocket | Low-resource environments (default); simple sites |
+| Chrome | CDP over WebSocket | Modern React/Vite/Next SPAs; recommended for production |
 | Playwright | CDP over WebSocket | Full browser compatibility |
+
+> **Renderer choice matters for SPAs.** LightPanda is fast and cheap but its
+> JS runtime does not fully cover every modern bundle format. For React /
+> Vite / Next sites whose content appears only after hydration, configure
+> Chrome (or Playwright) alongside LightPanda — CRW will fall back to Chrome
+> automatically when LightPanda returns a loading placeholder. Leaving
+> LightPanda as the *only* renderer may silently return
+> `"Loading..."`-style shell content for these sites.
 
 With Docker Compose, LightPanda runs as a sidecar automatically:
 

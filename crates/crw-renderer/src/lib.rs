@@ -237,13 +237,15 @@ impl FallbackRenderer {
             match renderer.fetch(url, headers, wait_for_ms).await {
                 Ok(result) => {
                     let text_len = html_body_text_len(&result.html);
-                    if text_len >= Self::MIN_RENDERED_TEXT_LEN {
+                    let is_placeholder = detector::looks_like_loading_placeholder(&result.html);
+                    if text_len >= Self::MIN_RENDERED_TEXT_LEN && !is_placeholder {
                         return Ok(result);
                     }
                     tracing::info!(
                         renderer = renderer.name(),
                         text_len,
-                        "JS renderer returned thin content, trying next renderer"
+                        is_placeholder,
+                        "JS renderer returned thin/placeholder content, trying next renderer"
                     );
                     if thin_result.is_none() {
                         thin_result = Some(result);

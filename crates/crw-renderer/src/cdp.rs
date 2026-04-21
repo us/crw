@@ -26,6 +26,11 @@ const DEFAULT_JS_WAIT_MS: u64 = 2000;
 const CHALLENGE_MAX_RETRIES: u32 = 3;
 /// Delay between challenge retry polls (ms).
 const CHALLENGE_POLL_INTERVAL_MS: u64 = 3000;
+/// Maximum time to poll for content stability when a loading placeholder
+/// is detected after the initial wait.
+const CONTENT_STABILITY_MAX_MS: u64 = 6000;
+/// Interval between content-stability polls.
+const CONTENT_STABILITY_TICK_MS: u64 = 500;
 
 /// JavaScript injected via `Page.addScriptToEvaluateOnNewDocument` before every
 /// navigation to prevent headless browser detection by anti-bot systems.
@@ -364,12 +369,19 @@ impl PageFetcher for CdpRenderer {
         _headers: &HashMap<String, String>,
         wait_for_ms: Option<u64>,
     ) -> CrwResult<FetchResult> {
-        // Overall hard timeout: page_timeout + wait_for + challenge retry budget + overhead.
-        // Challenge retries can add up to CHALLENGE_MAX_RETRIES * CHALLENGE_POLL_INTERVAL_MS.
+        // Overall hard timeout: page_timeout + wait_for + challenge retry budget
+        // + content-stability budget (auto-mode only) + overhead. Challenge retries
+        // can add up to CHALLENGE_MAX_RETRIES * CHALLENGE_POLL_INTERVAL_MS.
         let wait_dur = Duration::from_millis(wait_for_ms.unwrap_or(DEFAULT_JS_WAIT_MS));
         let challenge_budget =
             Duration::from_millis(CHALLENGE_POLL_INTERVAL_MS * u64::from(CHALLENGE_MAX_RETRIES));
-        let overall_timeout = self.page_timeout + wait_dur + challenge_budget + FETCH_OVERHEAD;
+        let stability_budget = if wait_for_ms.is_none() {
+            Duration::from_millis(CONTENT_STABILITY_MAX_MS)
+        } else {
+            Duration::ZERO
+        };
+        let overall_timeout =
+            self.page_timeout + wait_dur + challenge_budget + stability_budget + FETCH_OVERHEAD;
 
         tokio::time::timeout(overall_timeout, self.fetch_with_ws(url, wait_for_ms))
             .await
@@ -536,6 +548,43 @@ impl CdpRenderer {
             .to_string())
     }
 
+    /// Poll `document.documentElement.outerHTML` at a fixed interval until the
+    /// rendered HTML stabilises and no longer looks like a loading placeholder,
+    /// or until the stability budget is exhausted. Returns the most recent HTML
+    /// observed regardless of whether stability was reached.
+    ///
+    /// Minimum wall time on success: 3 ticks (~1500 ms) — two consecutive
+    /// stable observations plus the first reference tick.
+    async fn poll_until_content_stable(
+        write: &mut WsWrite,
+        read: &mut WsRead,
+        session_id: &str,
+        timeout: Duration,
+    ) -> CrwResult<String> {
+        let deadline = Instant::now() + Duration::from_millis(CONTENT_STABILITY_MAX_MS);
+        let mut prev_len: u64 = 0;
+        let mut stable_ticks: u32 = 0;
+        let mut last_html = String::new();
+
+        while Instant::now() < deadline {
+            tokio::time::sleep(Duration::from_millis(CONTENT_STABILITY_TICK_MS)).await;
+            let html = Self::eval_html(write, read, session_id, timeout).await?;
+            let len = html.len() as u64;
+            let placeholder_gone = !crate::detector::looks_like_loading_placeholder(&html);
+            if is_content_stable(prev_len, len, placeholder_gone) {
+                stable_ticks += 1;
+                if stable_ticks >= 2 {
+                    return Ok(html);
+                }
+            } else {
+                stable_ticks = 0;
+            }
+            prev_len = len;
+            last_html = html;
+        }
+        Ok(last_html)
+    }
+
     async fn fetch_inner(
         &self,
         write: &mut WsWrite,
@@ -671,6 +720,22 @@ impl CdpRenderer {
             }
         };
 
+        // 4b. If the page still looks like a loading placeholder (React/Vite SPAs often
+        //     fire `load` well before content renders), poll the DOM until the body
+        //     content stabilises or the stability budget runs out. Only triggered on
+        //     auto-waits — callers who set wait_for explicitly opted out.
+        if wait_for_ms.is_none() && crate::detector::looks_like_loading_placeholder(&html) {
+            tracing::info!(
+                url,
+                "Loading placeholder detected, polling for content stability"
+            );
+            match Self::poll_until_content_stable(write, read, &session_id, self.page_timeout).await
+            {
+                Ok(stable) => html = stable,
+                Err(e) => tracing::warn!("Content stability polling failed: {e}"),
+            }
+        }
+
         // 5. Challenge retry loop: if we see a Cloudflare/anti-bot interstitial,
         //    wait and re-evaluate — non-interactive JS challenges auto-resolve in ~5s.
         if is_challenge_page(&html) {
@@ -699,5 +764,67 @@ impl CdpRenderer {
         close_target(write, read, &target_id).await;
 
         Ok((html, status_code))
+    }
+}
+
+/// Pure decision: does the current poll tick indicate the rendered page has
+/// stabilised? Returns `false` on the first tick (`prev_len == 0`) so that at
+/// least two observations are required. `placeholder_gone` must be `true`
+/// (the rendered HTML no longer looks like a loading placeholder).
+///
+/// Size tolerance is 5% of `prev_len` with a 500-byte floor, so noise from
+/// small DOM updates (timestamps, counters) does not reset stability.
+fn is_content_stable(prev_len: u64, curr_len: u64, placeholder_gone: bool) -> bool {
+    if prev_len == 0 || !placeholder_gone {
+        return false;
+    }
+    let tolerance = (prev_len / 20).max(500);
+    curr_len.abs_diff(prev_len) <= tolerance
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_content_stable;
+
+    #[test]
+    fn first_tick_never_stable() {
+        // prev_len=0 always returns false (one-tick state cannot be "stable")
+        assert!(!is_content_stable(0, 0, true));
+        assert!(!is_content_stable(0, 10_000, true));
+    }
+
+    #[test]
+    fn identical_sizes_are_stable_when_placeholder_gone() {
+        assert!(is_content_stable(5_000, 5_000, true));
+    }
+
+    #[test]
+    fn placeholder_still_present_blocks_stability() {
+        // Size unchanged but placeholder still visible → not stable.
+        assert!(!is_content_stable(5_000, 5_000, false));
+    }
+
+    #[test]
+    fn small_delta_within_tolerance_is_stable() {
+        // 5% of 10_000 = 500; delta 400 is below tolerance.
+        assert!(is_content_stable(10_000, 10_400, true));
+    }
+
+    #[test]
+    fn large_delta_outside_tolerance_is_unstable() {
+        // Delta 2_000 against 10_000 (tolerance 500) → unstable.
+        assert!(!is_content_stable(10_000, 12_000, true));
+    }
+
+    #[test]
+    fn small_page_uses_500_byte_floor() {
+        // Tolerance floor is 500 bytes; prev=100, curr=450 (delta 350 < 500) → stable.
+        assert!(is_content_stable(100, 450, true));
+    }
+
+    #[test]
+    fn shrink_past_tolerance_is_unstable() {
+        // DOM can also shrink (nodes removed); unstable if delta exceeds tolerance.
+        assert!(!is_content_stable(10_000, 5_000, true));
     }
 }
