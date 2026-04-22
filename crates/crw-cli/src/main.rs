@@ -40,7 +40,7 @@ struct Cli {
     #[arg(long, value_name = "EXPR")]
     xpath: Option<String>,
 
-    /// HTTP/HTTPS proxy URL (e.g. http://user:pass@host:port)
+    /// HTTP, HTTPS, or SOCKS5 proxy URL (e.g. http://user:pass@host:port or socks5://user:pass@host:1080)
     #[arg(long, value_name = "URL")]
     proxy: Option<String>,
 

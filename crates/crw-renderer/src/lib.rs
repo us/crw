@@ -36,6 +36,8 @@
 pub mod browser;
 #[cfg(feature = "cdp")]
 pub mod cdp;
+#[cfg(feature = "cdp")]
+pub mod cdp_conn;
 pub mod detector;
 pub mod http_only;
 pub mod traits;
@@ -54,10 +56,9 @@ fn pick_ua<'a>(default_ua: &'a str, stealth: &'a StealthConfig) -> String {
             BUILTIN_UA_POOL
         } else {
             // Safe: user_agents is non-empty in this branch.
-            return stealth.user_agents[rand::random::<usize>() % stealth.user_agents.len()]
-                .clone();
+            return stealth.user_agents[rand::random_range(0..stealth.user_agents.len())].clone();
         };
-        pool[rand::random::<usize>() % pool.len()].to_string()
+        pool[rand::random_range(0..pool.len())].to_string()
     } else {
         default_ua.to_string()
     }

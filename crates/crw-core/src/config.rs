@@ -151,7 +151,8 @@ pub struct CrawlerConfig {
     pub default_max_depth: u32,
     #[serde(default = "default_max_pages")]
     pub default_max_pages: u32,
-    /// HTTP/HTTPS proxy URL (e.g. "http://proxy:8080")
+    /// Proxy URL for crawler requests. Supports HTTP, HTTPS, and SOCKS5
+    /// (e.g. "http://proxy:8080" or "socks5://user:pass@proxy:1080").
     #[serde(default)]
     pub proxy: Option<String>,
     /// TTL in seconds for completed crawl jobs before cleanup (default: 3600)

@@ -38,7 +38,7 @@ pub async fn scrape_url(
         // Rotate UA from built-in pool when stealth is active, so the request
         // looks like a real browser even for per-request stealth overrides.
         let effective_ua = if inject_stealth {
-            BUILTIN_UA_POOL[rand::random::<usize>() % BUILTIN_UA_POOL.len()].to_string()
+            BUILTIN_UA_POOL[rand::random_range(0..BUILTIN_UA_POOL.len())].to_string()
         } else {
             user_agent.to_string()
         };

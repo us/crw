@@ -1,0 +1,47 @@
+[package]
+name = "crw-browse"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "MCP server for interactive browser automation over CDP"
+
+[dependencies]
+crw-core = { path = "../crw-core", version = "0.3.6" }
+crw-renderer = { path = "../crw-renderer", version = "0.3.6", features = ["cdp"] }
+
+rmcp = { version = "1.5", features = ["server", "macros", "transport-io"] }
+clap = { workspace = true }
+tracing-subscriber = { workspace = true }
+schemars = { workspace = true }
+
+tokio = { workspace = true }
+tokio-tungstenite = { workspace = true }
+futures = { workspace = true }
+async-trait = "0.1"
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+dashmap = { workspace = true }
+rand = { workspace = true }
+uuid = { workspace = true }
+url = { workspace = true }
+regex = { workspace = true }
+base62 = "2"
+anyhow = "1"
+
+[dev-dependencies]
+tokio = { workspace = true }
+tokio-tungstenite = { workspace = true }
+wiremock = { workspace = true }
+tempfile = "3"
+
+[[bin]]
+name = "crw-browse"
+path = "src/main.rs"

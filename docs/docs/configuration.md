@@ -41,7 +41,8 @@ user_agent = "CRW/0.0.1"
 default_max_depth = 2
 default_max_pages = 100
 job_ttl_secs = 3600
-# proxy = "http://proxy:8080"   # global proxy for all requests
+# proxy = "http://proxy:8080"                 # HTTP proxy
+# proxy = "socks5://user:pass@proxy:1080"     # SOCKS5 proxy (also supports http://, https://)
 # stealth = false               # inject browser-like headers + rotate UA globally
 
 [extraction]

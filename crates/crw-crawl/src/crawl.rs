@@ -28,7 +28,9 @@ pub struct CrawlOptions<'a> {
     pub user_agent: &'a str,
     pub state_tx: tokio::sync::watch::Sender<CrawlState>,
     pub llm_config: Option<&'a LlmConfig>,
-    /// HTTP proxy URL for the crawler's reqwest client (robots.txt fetching).
+    /// Proxy URL for the crawler's reqwest client (robots.txt fetching).
+    /// Supports HTTP, HTTPS, and SOCKS5
+    /// (e.g. `http://proxy:8080` or `socks5://user:pass@proxy:1080`).
     pub proxy: Option<String>,
     /// Jitter factor for rate limiting (0.0–1.0). 0.2 = ±20% of sleep duration.
     pub jitter_factor: f64,
@@ -422,7 +424,9 @@ pub struct DiscoverOptions<'a> {
     pub max_concurrency: usize,
     pub requests_per_second: f64,
     pub user_agent: &'a str,
-    /// HTTP proxy URL for the discovery client.
+    /// Proxy URL for the discovery client.
+    /// Supports HTTP, HTTPS, and SOCKS5
+    /// (e.g. `http://proxy:8080` or `socks5://user:pass@proxy:1080`).
     pub proxy: Option<String>,
 }
 

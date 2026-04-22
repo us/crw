@@ -132,7 +132,9 @@ pub struct ScrapeRequest {
     /// Number of top chunks to return (default: 5).
     #[serde(default)]
     pub top_k: Option<usize>,
-    /// Per-request HTTP proxy URL (overrides global config).
+    /// Per-request proxy URL (overrides global config).
+    /// Supports HTTP, HTTPS, and SOCKS5
+    /// (e.g. "http://proxy:8080" or "socks5://user:pass@proxy:1080").
     #[serde(default)]
     pub proxy: Option<String>,
     /// Override stealth mode for this request (None = use global config).

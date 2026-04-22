@@ -14,7 +14,7 @@ Standalone CLI tool for scraping URLs to markdown, JSON, HTML, or plain text —
 - **CSS selector & XPath** — extract specific elements before conversion
 - **Stealth mode** — User-Agent rotation and browser-like headers
 - **JS rendering** — optional CDP-based rendering for SPAs (via `--js` flag)
-- **Proxy support** — per-request HTTP/HTTPS proxy
+- **Proxy support** — per-request HTTP, HTTPS, or SOCKS5 proxy
 - **File output** — write directly to a file with `-o`
 
 ## Installation
@@ -130,7 +130,7 @@ Options:
       --js                   Force JS rendering (requires CRW_CDP_URL env var)
       --css <SELECTOR>       Extract only elements matching this CSS selector
       --xpath <EXPR>         Extract only elements matching this XPath expression
-      --proxy <URL>          HTTP/HTTPS proxy URL
+      --proxy <URL>          HTTP, HTTPS, or SOCKS5 proxy URL (e.g. socks5://user:pass@host:1080)
       --stealth              Enable stealth mode (UA rotation + browser headers)
   -h, --help                 Print help
 ```

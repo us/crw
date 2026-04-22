@@ -7,6 +7,8 @@ members = [
     "crates/crw-crawl",
     "crates/crw-server",
     "crates/crw-mcp",
+    "crates/crw-mcp-proto",
+    "crates/crw-browse",
     "crates/crw-cli",
 ]
 resolver = "2"
@@ -30,7 +32,7 @@ tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "trace", "timeout", "set-header"] }
 
 # HTTP client
-reqwest = { version = "0.13", default-features = false, features = ["json", "cookies", "rustls", "gzip", "brotli", "deflate"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "cookies", "rustls", "gzip", "brotli", "deflate", "socks"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -50,11 +52,17 @@ crw-pdf = { path = "crates/crw-pdf", version = "0.3.6" }
 regex = "1"
 
 # Randomness
-rand = "0.8"
+rand = "0.9"
 
 # Async utilities
 futures = "0.3"
 dashmap = "6"
+
+# WebSocket client (shared by crw-renderer and crw-browse)
+tokio-tungstenite = { version = "0.28", features = ["rustls-tls-native-roots"] }
+
+# JSON schema generation (used by rmcp #[tool] macro)
+schemars = "1.0"
 
 # Config
 config = "0.15"

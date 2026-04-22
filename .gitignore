@@ -5,3 +5,6 @@ PROGRESS.md
 **/__pycache__/
 python/.venv/
 python/uv.lock
+.DS_Store
+node_modules/
+package-lock.json
