@@ -26,9 +26,12 @@ jobs:
 
       - name: Trigger release workflow
         if: ${{ steps.release.outputs.release_created }}
+        # Must use a PAT — the default GITHUB_TOKEN cannot dispatch workflows
+        # (HTTP 403: Resource not accessible by integration). The same secret
+        # is already used by release.yml for cross-repo dispatches.
         run: gh workflow run release.yml --ref ${{ steps.release.outputs.tag_name }}
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GH_DISPATCH_PAT }}
 
       - name: Sync docs changelog
         if: ${{ steps.release.outputs.release_created }}
