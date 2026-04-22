@@ -2,6 +2,18 @@
 
 All notable changes to CRW are documented here.
 
+## [0.4.0](https://github.com/us/crw/compare/v0.3.6...v0.4.0) (2026-04-22)
+
+
+### Features
+
+* add crw-browse MCP server, SOCKS5 proxy, extract mcp-proto ([9a53753](https://github.com/us/crw/commit/9a53753baf6d87272bd2417fc87102a8ed34d41b))
+
+
+### Miscellaneous
+
+* release 0.4.0 ([e15fc74](https://github.com/us/crw/commit/e15fc74cf0dfc7c02ca7e6b82258aeff57f74f17))
+
 ## [0.3.6](https://github.com/us/crw/compare/v0.3.5...v0.3.6) (2026-04-21)
 
 

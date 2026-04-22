@@ -16,10 +16,10 @@ pdf = ["crw-crawl/pdf"]
 test-utils = []
 
 [dependencies]
-crw-core = { path = "../crw-core", version = "0.3.6" }
-crw-renderer = { path = "../crw-renderer", version = "0.3.6" }
-crw-extract = { path = "../crw-extract", version = "0.3.6" }
-crw-crawl = { path = "../crw-crawl", version = "0.3.6" }
+crw-core = { path = "../crw-core", version = "0.4.0" }
+crw-renderer = { path = "../crw-renderer", version = "0.4.0" }
+crw-extract = { path = "../crw-extract", version = "0.4.0" }
+crw-crawl = { path = "../crw-crawl", version = "0.4.0" }
 axum = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
