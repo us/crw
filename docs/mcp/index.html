@@ -341,6 +341,34 @@ claude mcp add \
 <td><strong>Cloud only</strong></td>
 </tr>
 </tbody></table>
+<h2>Browser Automation (<code>crw-browse</code>)</h2>
+<p><code>crw-browse</code> is a <strong>separate MCP server</strong> (since v0.4.0) that drives a real Chrome-family browser over CDP for stateful interaction. Use it when the agent needs to navigate multi-step flows, click, or read the DOM — cases where a one-shot scrape is not enough.</p>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>goto</code></td>
+<td>Navigate the session browser to an <code>http(s)</code> URL and wait for load. Creates a session on first call.</td>
+</tr>
+<tr>
+<td><code>tree</code></td>
+<td>Snapshot the current page as an indented accessibility tree (<code>[nodeId] role: name</code>). Requires a prior <code>goto</code>.</td>
+</tr>
+</tbody></table>
+<p>More interaction tools (<code>click</code>, <code>fill_form</code>, <code>evaluate</code>) are on the roadmap. Session state is automatically swept after an idle TTL.</p>
+<p>Install and launch:</p>
+<pre><code class="language-bash"># From crates.io
+cargo install crw-browse
+crw-browse
+
+# Or grab a prebuilt binary from the v0.4.0 GitHub release
+# https://github.com/us/crw/releases/tag/v0.4.0
+</code></pre>
+<p>Wire it into your client the same way you do <code>crw-mcp</code> — it uses stdio transport and is a self-hosted binary (no cloud account required).</p>
 <h2>Best first setups</h2>
 <h3>Claude Code</h3>
 <pre><code class="language-bash"># Local embedded

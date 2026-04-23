@@ -165,9 +165,14 @@
 <td>Your host supports HTTP MCP and you already run <code>crw-server</code></td>
 <td>point the client at <code>http://localhost:3000/mcp</code></td>
 </tr>
+<tr>
+<td>Browser automation</td>
+<td>You need a real, stateful browser (click, nav, tree)</td>
+<td><code>command: crw-browse</code> (separate MCP server — self-hosted)</td>
+</tr>
 </tbody></table>
 <h2>What tools you get</h2>
-<p>Embedded local mode exposes:</p>
+<p>Embedded local mode (<code>crw-mcp</code>) exposes:</p>
 <ul>
 <li><code>crw_scrape</code></li>
 <li><code>crw_crawl</code></li>
@@ -177,6 +182,11 @@
 <p>fastcrw.com cloud mode exposes all of the above plus:</p>
 <ul>
 <li><code>crw_search</code></li>
+</ul>
+<p>Browser automation mode (<code>crw-browse</code>, separate server — v0.4.0+) exposes:</p>
+<ul>
+<li><code>goto</code> — navigate the browser to an URL</li>
+<li><code>tree</code> — accessibility snapshot of the current page</li>
 </ul>
 <p>:::tip
 If you only remember one rule, remember this one: local embedded mode is the easiest setup, and fastcrw.com cloud mode is the easiest way to add web search.
