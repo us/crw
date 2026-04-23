@@ -1,7 +1,7 @@
 <div class="page-intro">
   <div class="page-kicker">Get Started</div>
   <h1>CRW Docs</h1>
-  <p class="page-subtitle">Turn websites into usable data with one API. Start with a single <code>scrape</code> request, then move into <code>search</code>, <code>map</code>, <code>crawl</code>, <code>extract</code>, or MCP only when your workflow actually needs them.</p>
+  <p class="page-subtitle">Turn websites into usable data with one API. Start with a single <code>scrape</code> request, then move into <code>search</code>, <code>map</code>, <code>crawl</code>, <code>extract</code>, <code>browse</code> (interactive browser automation), or MCP only when your workflow actually needs them.</p>
   <div class="page-capabilities">
     <div class="page-capability"><strong>Fastest first win:</strong> one URL, one markdown response</div>
     <div class="page-capability"><strong>Works for:</strong> agents, ETL, RAG, structured extraction</div>
@@ -49,6 +49,7 @@ curl -X POST https://fastcrw.com/api/v1/scrape \
 :::cards
 ::card{icon="code" title="Scrape a page" href="#scraping" description="Use one URL and get markdown, HTML, links, or JSON back."}
 ::card{icon="search" title="Search the web" href="#search" description="Find URLs first, then scrape only the results you care about."}
+::card{icon="cursor" title="Browse interactively" href="#mcp" description="Drive a real browser from your agent — multi-step flows, clicks, stateful sessions (v0.4.0)."}
 ::card{icon="plug" title="Add MCP tools" href="#mcp" description="Give Claude, Cursor, Codex, and other hosts live web access."}
 :::
 

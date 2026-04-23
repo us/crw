@@ -152,6 +152,30 @@ cargo build -p crw-mcp --no-default-features --release
 | `crw_map` | Discover all URLs on a site | `POST /v1/map` | All modes |
 | `crw_search` | Search the web → titles, URLs, descriptions | `POST /v1/search` | **Cloud only** |
 
+## Browser Automation (`crw-browse`)
+
+`crw-browse` is a **separate MCP server** (since v0.4.0) that drives a real Chrome-family browser over CDP for stateful interaction. Use it when the agent needs to navigate multi-step flows, click, or read the DOM — cases where a one-shot scrape is not enough.
+
+| Tool | Description |
+|------|-------------|
+| `goto` | Navigate the session browser to an `http(s)` URL and wait for load. Creates a session on first call. |
+| `tree` | Snapshot the current page as an indented accessibility tree (`[nodeId] role: name`). Requires a prior `goto`. |
+
+More interaction tools (`click`, `fill_form`, `evaluate`) are on the roadmap. Session state is automatically swept after an idle TTL.
+
+Install and launch:
+
+```bash
+# From crates.io
+cargo install crw-browse
+crw-browse
+
+# Or grab a prebuilt binary from the v0.4.0 GitHub release
+# https://github.com/us/crw/releases/tag/v0.4.0
+```
+
+Wire it into your client the same way you do `crw-mcp` — it uses stdio transport and is a self-hosted binary (no cloud account required).
+
 ## Best first setups
 
 ### Claude Code

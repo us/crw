@@ -22,10 +22,11 @@ Use one of these three patterns:
 | Embedded local | You want zero server setup and local scrape/map/crawl tools | `command: npx`, `args: ["crw-mcp"]` |
 | fastcrw.com cloud | You want hosted infrastructure and `crw_search` | same as local plus `CRW_API_URL` and `CRW_API_KEY` |
 | HTTP transport | Your host supports HTTP MCP and you already run `crw-server` | point the client at `http://localhost:3000/mcp` |
+| Browser automation | You need a real, stateful browser (click, nav, tree) | `command: crw-browse` (separate MCP server — self-hosted) |
 
 ## What tools you get
 
-Embedded local mode exposes:
+Embedded local mode (`crw-mcp`) exposes:
 
 - `crw_scrape`
 - `crw_crawl`
@@ -35,6 +36,11 @@ Embedded local mode exposes:
 fastcrw.com cloud mode exposes all of the above plus:
 
 - `crw_search`
+
+Browser automation mode (`crw-browse`, separate server — v0.4.0+) exposes:
+
+- `goto` — navigate the browser to an URL
+- `tree` — accessibility snapshot of the current page
 
 :::tip
 If you only remember one rule, remember this one: local embedded mode is the easiest setup, and fastcrw.com cloud mode is the easiest way to add web search.

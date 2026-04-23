@@ -14,6 +14,7 @@ Cloud only (fastcrw.com) -- self-hosted instances do not have credit-based billi
 | `crawl` polling | New pages discovered since the previous poll |
 | `search` | 1 credit |
 | `search` + scrape | 1 credit + 1 per scraped result |
+| `browse` session | 1 credit (planned cloud rate; the self-hosted `crw-browse` binary is free) |
 
 ## Why crawl billing looks different
 

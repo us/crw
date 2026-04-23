@@ -43,6 +43,18 @@
 
 ---
 
+## What's New
+
+### v0.4.0 (2026-04-22)
+
+* feat: add `crw-browse` — interactive browser automation MCP server over CDP
+* feat: add SOCKS5 proxy support in `crw-renderer`
+* feat: extract `crw-mcp-proto` crate — shared JSON-RPC 2.0 types
+
+[Full changelog →](CHANGELOG.md)
+
+---
+
 # fastCRW — Open Source Web Scraping API for AI Agents
 
 **Power AI agents with clean web data.** Single Rust binary, zero config, Firecrawl-compatible API. The open-source Firecrawl alternative you can self-host for free — or use our [managed cloud](https://fastcrw.com).
