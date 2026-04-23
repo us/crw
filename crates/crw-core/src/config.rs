@@ -52,14 +52,40 @@ fn default_request_timeout() -> u64 {
     60
 }
 
+/// Selects which JS renderer(s) the [`FallbackRenderer`] will build.
+///
+/// - `Auto` (default): try every configured CDP endpoint (Lightpanda, Playwright, Chrome)
+///   in order. If none is configured, JS rendering is disabled but HTTP still works.
+/// - `None`: HTTP-only. Never attempt JS rendering.
+/// - `Lightpanda` / `Chrome` / `Playwright`: require the matching `[renderer.<name>]`
+///   endpoint; fail startup if missing. Only the named backend is used.
+///
+/// [`FallbackRenderer`]: https://docs.rs/crw-renderer/latest/crw_renderer/struct.FallbackRenderer.html
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RendererMode {
+    #[default]
+    Auto,
+    None,
+    Lightpanda,
+    Chrome,
+    Playwright,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct RendererConfig {
-    #[serde(default = "default_renderer_mode")]
-    pub mode: String,
+    #[serde(default)]
+    pub mode: RendererMode,
     #[serde(default = "default_page_timeout")]
     pub page_timeout_ms: u64,
     #[serde(default = "default_pool_size")]
     pub pool_size: usize,
+    /// If set, applies to every request that doesn't specify `renderJs` explicitly.
+    /// `Some(true)` = force JS rendering; `Some(false)` = skip JS; `None` = auto-detect.
+    ///
+    /// Accepts the `force_js` alias for backward compatibility.
+    #[serde(default, alias = "force_js")]
+    pub render_js_default: Option<bool>,
     #[serde(default)]
     pub lightpanda: Option<CdpEndpoint>,
     #[serde(default)]
@@ -71,18 +97,15 @@ pub struct RendererConfig {
 impl Default for RendererConfig {
     fn default() -> Self {
         Self {
-            mode: default_renderer_mode(),
+            mode: RendererMode::default(),
             page_timeout_ms: default_page_timeout(),
             pool_size: default_pool_size(),
+            render_js_default: None,
             lightpanda: None,
             playwright: None,
             chrome: None,
         }
     }
-}
-
-fn default_renderer_mode() -> String {
-    "auto".into()
 }
 fn default_page_timeout() -> u64 {
     30000
@@ -286,21 +309,111 @@ impl AppConfig {
 mod tests {
     use super::*;
 
+    /// Env var tests modify process-wide state; serialize them to avoid cross-test
+    /// interference (e.g. `force_js` alias + `render_js_default` direct both set).
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn clear_renderer_env() {
+        for k in [
+            "CRW_RENDERER__MODE",
+            "CRW_RENDERER__FORCE_JS",
+            "CRW_RENDERER__RENDER_JS_DEFAULT",
+            "CRW_RENDERER__LIGHTPANDA__WS_URL",
+            "CRW_SERVER__PORT",
+        ] {
+            unsafe { std::env::remove_var(k) };
+        }
+    }
+
+    #[test]
+    fn renderer_mode_parses_variants() {
+        #[derive(Deserialize)]
+        struct Wrap {
+            mode: RendererMode,
+        }
+        let cases = [
+            ("mode = \"auto\"", RendererMode::Auto),
+            ("mode = \"none\"", RendererMode::None),
+            ("mode = \"lightpanda\"", RendererMode::Lightpanda),
+            ("mode = \"chrome\"", RendererMode::Chrome),
+            ("mode = \"playwright\"", RendererMode::Playwright),
+        ];
+        for (toml_str, expected) in cases {
+            let w: Wrap = toml::from_str(toml_str).unwrap();
+            assert_eq!(w.mode, expected, "toml: {toml_str}");
+        }
+    }
+
+    #[test]
+    fn renderer_mode_bogus_errors() {
+        #[derive(Deserialize)]
+        struct Wrap {
+            #[allow(dead_code)]
+            mode: RendererMode,
+        }
+        let err: Result<Wrap, _> = toml::from_str("mode = \"bogus\"");
+        assert!(err.is_err(), "bogus mode should fail to parse");
+    }
+
+    #[test]
+    fn renderer_config_default_mode_is_auto() {
+        let cfg = RendererConfig::default();
+        assert_eq!(cfg.mode, RendererMode::Auto);
+        assert_eq!(cfg.render_js_default, None);
+    }
+
+    #[test]
+    fn render_js_default_force_js_alias() {
+        let cfg: RendererConfig = toml::from_str("force_js = true").unwrap();
+        assert_eq!(cfg.render_js_default, Some(true));
+    }
+
+    #[test]
+    fn render_js_default_direct_field() {
+        let cfg: RendererConfig = toml::from_str("render_js_default = false").unwrap();
+        assert_eq!(cfg.render_js_default, Some(false));
+    }
+
+    #[test]
+    fn env_var_renderer_mode_chrome() {
+        let _g = ENV_LOCK.lock().unwrap();
+        clear_renderer_env();
+        unsafe { std::env::set_var("CRW_RENDERER__MODE", "chrome") };
+        let cfg = AppConfig::load().unwrap();
+        clear_renderer_env();
+        assert_eq!(cfg.renderer.mode, RendererMode::Chrome);
+    }
+
+    #[test]
+    fn env_var_force_js_alias_works() {
+        let _g = ENV_LOCK.lock().unwrap();
+        clear_renderer_env();
+        unsafe { std::env::set_var("CRW_RENDERER__FORCE_JS", "true") };
+        let cfg = AppConfig::load().unwrap();
+        clear_renderer_env();
+        assert_eq!(cfg.renderer.render_js_default, Some(true));
+    }
+
+    #[test]
+    fn env_var_render_js_default_direct() {
+        let _g = ENV_LOCK.lock().unwrap();
+        clear_renderer_env();
+        unsafe { std::env::set_var("CRW_RENDERER__RENDER_JS_DEFAULT", "true") };
+        let cfg = AppConfig::load().unwrap();
+        clear_renderer_env();
+        assert_eq!(cfg.renderer.render_js_default, Some(true));
+    }
+
     #[test]
     fn env_var_overrides_toml_defaults() {
-        // Set env vars that should override config.default.toml values.
+        let _g = ENV_LOCK.lock().unwrap();
+        clear_renderer_env();
         unsafe {
             std::env::set_var("CRW_SERVER__PORT", "4444");
             std::env::set_var("CRW_RENDERER__LIGHTPANDA__WS_URL", "ws://test:9999/");
         }
-
         let cfg = AppConfig::load().unwrap();
-
-        // Clean up.
-        unsafe {
-            std::env::remove_var("CRW_SERVER__PORT");
-            std::env::remove_var("CRW_RENDERER__LIGHTPANDA__WS_URL");
-        }
+        clear_renderer_env();
 
         assert_eq!(cfg.server.port, 4444, "env var should override server.port");
         assert_eq!(

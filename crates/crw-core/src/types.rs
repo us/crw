@@ -284,6 +284,88 @@ pub struct CrawlRequest {
     pub only_main_content: bool,
     #[serde(default, alias = "json_schema")]
     pub json_schema: Option<serde_json::Value>,
+    /// null = auto-detect (use global default), true = force JS, false = skip JS.
+    /// Applies to every page fetched during the crawl.
+    #[serde(default, alias = "render_js")]
+    pub render_js: Option<bool>,
+    /// Milliseconds to wait after JS rendering on each page.
+    #[serde(default, alias = "wait_for")]
+    pub wait_for: Option<u64>,
+}
+
+/// Resolve the effective `render_js` decision from a per-request value and the
+/// global default. Per-request always wins when set; otherwise fall back to the
+/// default. `None` at both ends means "auto-detect".
+///
+/// Precedence table:
+///
+/// | request       | default       | effective    |
+/// |---------------|---------------|--------------|
+/// | `Some(true)`  | any           | `Some(true)` |
+/// | `Some(false)` | any           | `Some(false)`|
+/// | `None`        | `Some(true)`  | `Some(true)` |
+/// | `None`        | `Some(false)` | `Some(false)`|
+/// | `None`        | `None`        | `None`       |
+pub fn resolve_render_js(request: Option<bool>, default: Option<bool>) -> Option<bool> {
+    request.or(default)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_render_js_request_wins_true() {
+        assert_eq!(resolve_render_js(Some(true), Some(false)), Some(true));
+    }
+
+    #[test]
+    fn resolve_render_js_request_wins_false() {
+        assert_eq!(resolve_render_js(Some(false), Some(true)), Some(false));
+    }
+
+    #[test]
+    fn resolve_render_js_falls_back_to_default() {
+        assert_eq!(resolve_render_js(None, Some(true)), Some(true));
+        assert_eq!(resolve_render_js(None, Some(false)), Some(false));
+    }
+
+    #[test]
+    fn resolve_render_js_both_none() {
+        assert_eq!(resolve_render_js(None, None), None);
+    }
+
+    #[test]
+    fn crawl_request_accepts_render_js_camel_case() {
+        let json = serde_json::json!({
+            "url": "https://example.com",
+            "renderJs": true,
+            "waitFor": 2000
+        });
+        let req: CrawlRequest = serde_json::from_value(json).unwrap();
+        assert_eq!(req.render_js, Some(true));
+        assert_eq!(req.wait_for, Some(2000));
+    }
+
+    #[test]
+    fn crawl_request_accepts_render_js_snake_case() {
+        let json = serde_json::json!({
+            "url": "https://example.com",
+            "render_js": false,
+            "wait_for": 1500
+        });
+        let req: CrawlRequest = serde_json::from_value(json).unwrap();
+        assert_eq!(req.render_js, Some(false));
+        assert_eq!(req.wait_for, Some(1500));
+    }
+
+    #[test]
+    fn crawl_request_render_fields_optional() {
+        let json = serde_json::json!({ "url": "https://example.com" });
+        let req: CrawlRequest = serde_json::from_value(json).unwrap();
+        assert_eq!(req.render_js, None);
+        assert_eq!(req.wait_for, None);
+    }
 }
 
 /// Status of an async crawl job.

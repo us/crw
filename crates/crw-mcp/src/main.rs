@@ -319,7 +319,13 @@ async fn main() {
                 Vec::new()
             };
 
-            let state = crw_server::state::AppState::new(config);
+            let state = match crw_server::state::AppState::new(config) {
+                Ok(s) => s,
+                Err(e) => {
+                    tracing::error!("Failed to build application state: {e}");
+                    std::process::exit(1);
+                }
+            };
 
             // Run the MCP loop. _browser_guards keeps browsers alive until shutdown.
             let backend = Backend::Embedded { state };

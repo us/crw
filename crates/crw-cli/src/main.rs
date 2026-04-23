@@ -1,5 +1,5 @@
 use clap::{Parser, ValueEnum};
-use crw_core::config::{RendererConfig, StealthConfig};
+use crw_core::config::{RendererConfig, RendererMode, StealthConfig};
 use crw_core::types::{OutputFormat, ScrapeRequest};
 use crw_crawl::single::scrape_url;
 use crw_renderer::FallbackRenderer;
@@ -101,7 +101,7 @@ async fn main() {
         }
     } else {
         // HTTP-only — no CDP
-        renderer_config.mode = "none".into();
+        renderer_config.mode = RendererMode::None;
         Vec::new()
     };
 
@@ -111,12 +111,18 @@ async fn main() {
         ..Default::default()
     };
 
-    let renderer = Arc::new(FallbackRenderer::new(
+    let renderer = match FallbackRenderer::new(
         &renderer_config,
         "crw/0.0.3",
         cli.proxy.as_deref(),
         &stealth_config,
-    ));
+    ) {
+        Ok(r) => Arc::new(r),
+        Err(e) => {
+            eprintln!("error: failed to build renderer: {e}");
+            std::process::exit(1);
+        }
+    };
 
     let output_format = match cli.format {
         Format::Markdown => OutputFormat::Markdown,
@@ -152,7 +158,7 @@ async fn main() {
         llm_model: None,
     };
 
-    let data = match scrape_url(&req, &renderer, None, "crw/0.0.3", cli.stealth).await {
+    let data = match scrape_url(&req, &renderer, None, "crw/0.0.3", cli.stealth, None).await {
         Ok(d) => d,
         Err(e) => {
             eprintln!("error: {e}");

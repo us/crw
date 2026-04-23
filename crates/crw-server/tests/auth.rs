@@ -14,14 +14,14 @@ api_keys = {:?}
         api_keys
     );
     let config: AppConfig = toml::from_str(&toml_str).unwrap();
-    let state = AppState::new(config);
+    let state = AppState::new(config).expect("AppState::new failed");
     let app = create_app(state);
     TestServer::new(app)
 }
 
 fn test_app_no_auth() -> TestServer {
     let config: AppConfig = toml::from_str("").unwrap();
-    let state = AppState::new(config);
+    let state = AppState::new(config).expect("AppState::new failed");
     let app = create_app(state);
     TestServer::new(app)
 }

@@ -1,6 +1,6 @@
 use crw_core::config::{BUILTIN_UA_POOL, LlmConfig};
 use crw_core::error::CrwResult;
-use crw_core::types::{FetchResult, OutputFormat, ScrapeData, ScrapeRequest};
+use crw_core::types::{FetchResult, OutputFormat, ScrapeData, ScrapeRequest, resolve_render_js};
 use crw_renderer::FallbackRenderer;
 use crw_renderer::http_only::HttpFetcher;
 use crw_renderer::traits::PageFetcher;
@@ -10,12 +10,16 @@ use std::sync::Arc;
 ///
 /// - `user_agent`: base user-agent string from global config.
 /// - `default_stealth`: whether stealth headers are active by global config.
+/// - `render_js_default`: global `[renderer] render_js_default` config; used only
+///   for the `needs_temp_fetcher` HTTP-only gating. The shared renderer applies
+///   the same default internally, so we don't forward it to the renderer call.
 pub async fn scrape_url(
     req: &ScrapeRequest,
     renderer: &Arc<FallbackRenderer>,
     llm_config: Option<&LlmConfig>,
     user_agent: &str,
     default_stealth: bool,
+    render_js_default: Option<bool>,
 ) -> CrwResult<ScrapeData> {
     // Reject unsupported `actions` parameter early with a clear error.
     if req.actions.is_some() {
@@ -26,6 +30,11 @@ pub async fn scrape_url(
 
     // Determine whether stealth headers should be injected for this request.
     let inject_stealth = req.stealth.unwrap_or(default_stealth);
+
+    // Resolve the effective render_js decision (per-request overrides global default).
+    // Used for the temp-fetcher HTTP-only gate below so a user with
+    // render_js_default=true and a per-request proxy still reaches the JS renderer.
+    let effective_render_js = resolve_render_js(req.render_js, render_js_default);
 
     // Use a temporary HttpFetcher when:
     // (a) per-request proxy overrides global proxy, OR
@@ -43,7 +52,7 @@ pub async fn scrape_url(
             user_agent.to_string()
         };
 
-        if req.render_js == Some(false) {
+        if effective_render_js == Some(false) {
             // HTTP-only: safe to use a temp HttpFetcher with custom proxy/stealth.
             let temp_http = HttpFetcher::new(&effective_ua, proxy, inject_stealth);
             temp_http

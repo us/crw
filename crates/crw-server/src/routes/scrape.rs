@@ -27,6 +27,7 @@ pub async fn scrape(
         llm_config,
         user_agent,
         default_stealth,
+        state.config.renderer.render_js_default,
     )
     .await?;
 

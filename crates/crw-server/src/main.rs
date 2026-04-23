@@ -49,22 +49,43 @@ async fn run_server() {
 
     let addr = format!("{}:{}", config.server.host, config.server.port);
     tracing::info!("Starting CRW on {addr}");
-    tracing::info!("Renderer mode: {}", config.renderer.mode);
+    tracing::info!("Renderer mode: {:?}", config.renderer.mode);
+    tracing::info!(
+        "Renderer render_js_default: {:?}",
+        config.renderer.render_js_default
+    );
     if let Some(lp) = &config.renderer.lightpanda {
         tracing::info!("Lightpanda CDP: {}", lp.ws_url);
     }
     if let Some(ch) = &config.renderer.chrome {
         tracing::info!("Chrome CDP: {}", ch.ws_url);
     }
-    if config.renderer.lightpanda.is_none() && config.renderer.chrome.is_none() {
-        tracing::warn!("No CDP renderer configured — JS rendering disabled");
+    if std::env::var("CRW_CDP_URL").is_ok() {
+        tracing::warn!(
+            "CRW_CDP_URL is set but is only honored by `crw` (CLI). \
+             In server/MCP mode use [renderer.lightpanda.ws_url] / [renderer.chrome.ws_url] \
+             or CRW_RENDERER__LIGHTPANDA__WS_URL / CRW_RENDERER__CHROME__WS_URL."
+        );
     }
 
     if config.extraction.llm.is_some() {
         tracing::info!("LLM structured extraction: enabled");
     }
 
-    let state = AppState::new(config);
+    let state = match AppState::new(config) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::error!("Failed to build application state: {e}");
+            std::process::exit(1);
+        }
+    };
+    tracing::info!(
+        "JS renderers in fallback order: {:?}",
+        state.renderer.js_renderer_names()
+    );
+    if state.renderer.js_renderer_names().is_empty() {
+        tracing::warn!("No CDP renderer active — JS rendering disabled");
+    }
     let app = crw_server::app::create_app(state);
 
     let listener = match tokio::net::TcpListener::bind(&addr).await {

@@ -25,7 +25,7 @@
 //! use crw_core::config::StealthConfig;
 //! let config = RendererConfig::default();
 //! let stealth = StealthConfig::default();
-//! let renderer = FallbackRenderer::new(&config, "crw/0.1", None, &stealth);
+//! let renderer = FallbackRenderer::new(&config, "crw/0.1", None, &stealth)?;
 //! let result = renderer.fetch("https://example.com", &HashMap::new(), None, None).await?;
 //! println!("status: {}", result.status_code);
 //! # Ok(())
@@ -42,9 +42,9 @@ pub mod detector;
 pub mod http_only;
 pub mod traits;
 
-use crw_core::config::{BUILTIN_UA_POOL, RendererConfig, StealthConfig};
+use crw_core::config::{BUILTIN_UA_POOL, RendererConfig, RendererMode, StealthConfig};
 use crw_core::error::{CrwError, CrwResult};
-use crw_core::types::FetchResult;
+use crw_core::types::{FetchResult, resolve_render_js};
 use std::collections::HashMap;
 use std::sync::Arc;
 use traits::PageFetcher;
@@ -68,6 +68,25 @@ fn pick_ua<'a>(default_ua: &'a str, stealth: &'a StealthConfig) -> String {
 pub struct FallbackRenderer {
     http: Arc<dyn PageFetcher>,
     js_renderers: Vec<Arc<dyn PageFetcher>>,
+    /// Global default for `render_js` when a request doesn't specify one.
+    render_js_default: Option<bool>,
+}
+
+impl std::fmt::Debug for FallbackRenderer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FallbackRenderer")
+            .field("http", &self.http.name())
+            .field(
+                "js_renderers",
+                &self
+                    .js_renderers
+                    .iter()
+                    .map(|r| r.name())
+                    .collect::<Vec<_>>(),
+            )
+            .field("render_js_default", &self.render_js_default)
+            .finish()
+    }
 }
 
 impl FallbackRenderer {
@@ -76,7 +95,7 @@ impl FallbackRenderer {
         user_agent: &str,
         proxy: Option<&str>,
         stealth: &StealthConfig,
-    ) -> Self {
+    ) -> CrwResult<Self> {
         let effective_ua = pick_ua(user_agent, stealth);
         let inject_headers = stealth.enabled && stealth.inject_headers;
         let http = Arc::new(http_only::HttpFetcher::new(
@@ -85,49 +104,111 @@ impl FallbackRenderer {
             inject_headers,
         )) as Arc<dyn PageFetcher>;
 
+        // A pinned backend (Lightpanda/Chrome/Playwright) must have CDP compiled in
+        // AND its matching endpoint configured. `Auto` and `None` remain functional
+        // without CDP — they just won't spawn any JS renderer.
+        #[cfg(not(feature = "cdp"))]
+        if matches!(
+            config.mode,
+            RendererMode::Lightpanda | RendererMode::Chrome | RendererMode::Playwright
+        ) {
+            return Err(CrwError::ConfigError(format!(
+                "renderer.mode = {:?} requires the 'cdp' feature, but this build was \
+                 compiled without it. Rebuild with --features cdp or set mode = \"auto\"/\"none\".",
+                config.mode
+            )));
+        }
+
         #[allow(unused_mut)]
         let mut js_renderers: Vec<Arc<dyn PageFetcher>> = Vec::new();
 
-        if config.mode == "none" {
-            return Self { http, js_renderers };
+        if matches!(config.mode, RendererMode::None) {
+            if config.render_js_default == Some(true) {
+                tracing::warn!(
+                    "render_js_default=true has no effect with mode=none; \
+                     requests will fall back to HTTP via http_only_fallback"
+                );
+            }
+            return Ok(Self {
+                http,
+                js_renderers,
+                render_js_default: config.render_js_default,
+            });
         }
 
         #[cfg(feature = "cdp")]
         {
-            if let Some(lp) = &config.lightpanda {
-                js_renderers.push(Arc::new(cdp::CdpRenderer::new(
-                    "lightpanda",
-                    &lp.ws_url,
-                    config.page_timeout_ms,
-                    config.pool_size,
-                )));
+            let want = |m: RendererMode| -> bool {
+                matches!(config.mode, RendererMode::Auto) || config.mode == m
+            };
+
+            if want(RendererMode::Lightpanda) {
+                if let Some(lp) = &config.lightpanda {
+                    js_renderers.push(Arc::new(cdp::CdpRenderer::new(
+                        "lightpanda",
+                        &lp.ws_url,
+                        config.page_timeout_ms,
+                        config.pool_size,
+                    )));
+                } else if matches!(config.mode, RendererMode::Lightpanda) {
+                    return Err(CrwError::ConfigError(
+                        "renderer.mode = \"lightpanda\" but [renderer.lightpanda] ws_url is not \
+                         configured"
+                            .into(),
+                    ));
+                }
             }
-            if let Some(pw) = &config.playwright {
-                js_renderers.push(Arc::new(cdp::CdpRenderer::new(
-                    "playwright",
-                    &pw.ws_url,
-                    config.page_timeout_ms,
-                    config.pool_size,
-                )));
+            if want(RendererMode::Playwright) {
+                if let Some(pw) = &config.playwright {
+                    js_renderers.push(Arc::new(cdp::CdpRenderer::new(
+                        "playwright",
+                        &pw.ws_url,
+                        config.page_timeout_ms,
+                        config.pool_size,
+                    )));
+                } else if matches!(config.mode, RendererMode::Playwright) {
+                    return Err(CrwError::ConfigError(
+                        "renderer.mode = \"playwright\" but [renderer.playwright] ws_url is not \
+                         configured"
+                            .into(),
+                    ));
+                }
             }
-            if let Some(ch) = &config.chrome {
-                js_renderers.push(Arc::new(cdp::CdpRenderer::new(
-                    "chrome",
-                    &ch.ws_url,
-                    config.page_timeout_ms,
-                    config.pool_size,
-                )));
+            if want(RendererMode::Chrome) {
+                if let Some(ch) = &config.chrome {
+                    js_renderers.push(Arc::new(cdp::CdpRenderer::new(
+                        "chrome",
+                        &ch.ws_url,
+                        config.page_timeout_ms,
+                        config.pool_size,
+                    )));
+                } else if matches!(config.mode, RendererMode::Chrome) {
+                    return Err(CrwError::ConfigError(
+                        "renderer.mode = \"chrome\" but [renderer.chrome] ws_url is not configured"
+                            .into(),
+                    ));
+                }
             }
         }
 
-        #[cfg(not(feature = "cdp"))]
-        if config.lightpanda.is_some() || config.playwright.is_some() || config.chrome.is_some() {
+        if config.render_js_default == Some(true) && js_renderers.is_empty() {
             tracing::warn!(
-                "CDP renderers configured but 'cdp' feature not enabled. JS rendering disabled."
+                "render_js_default=true but no JS renderer is available; \
+                 requests will fall back to HTTP via http_only_fallback"
             );
         }
 
-        Self { http, js_renderers }
+        Ok(Self {
+            http,
+            js_renderers,
+            render_js_default: config.render_js_default,
+        })
+    }
+
+    /// Names of the configured JS renderers in fallback order.
+    /// Used for startup logs and tests — does not leak internal types.
+    pub fn js_renderer_names(&self) -> Vec<&str> {
+        self.js_renderers.iter().map(|r| r.name()).collect()
     }
 
     /// Fetch a URL with smart mode: HTTP first, then JS if needed.
@@ -144,7 +225,15 @@ impl FallbackRenderer {
         render_js: Option<bool>,
         wait_for_ms: Option<u64>,
     ) -> CrwResult<FetchResult> {
-        match render_js {
+        let effective = resolve_render_js(render_js, self.render_js_default);
+        tracing::debug!(
+            url,
+            request_render_js = ?render_js,
+            default_render_js = ?self.render_js_default,
+            effective_render_js = ?effective,
+            "FallbackRenderer::fetch dispatching"
+        );
+        match effective {
             Some(false) => self.http.fetch(url, headers, None).await,
             Some(true) => {
                 // Fetch via HTTP first to check content type — PDFs can't be JS-rendered.
@@ -313,4 +402,110 @@ fn html_body_text_len(html: &str) -> usize {
         }
     }
     text_len
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crw_core::config::CdpEndpoint;
+
+    fn base_cfg(mode: RendererMode) -> RendererConfig {
+        RendererConfig {
+            mode,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn new_mode_none_ok_no_js_renderers() {
+        let cfg = base_cfg(RendererMode::None);
+        let r = FallbackRenderer::new(&cfg, "crw-test", None, &StealthConfig::default()).unwrap();
+        assert!(r.js_renderer_names().is_empty());
+        assert_eq!(r.render_js_default, None);
+    }
+
+    #[test]
+    fn new_mode_auto_no_endpoints_ok_http_only() {
+        let cfg = base_cfg(RendererMode::Auto);
+        let r = FallbackRenderer::new(&cfg, "crw-test", None, &StealthConfig::default()).unwrap();
+        assert!(r.js_renderer_names().is_empty());
+    }
+
+    #[cfg(feature = "cdp")]
+    #[test]
+    fn new_mode_chrome_without_endpoint_errors() {
+        let cfg = base_cfg(RendererMode::Chrome);
+        let err =
+            FallbackRenderer::new(&cfg, "crw-test", None, &StealthConfig::default()).unwrap_err();
+        let msg = err.to_string().to_lowercase();
+        assert!(msg.contains("chrome"), "expected chrome in error: {msg}");
+        assert!(
+            msg.contains("ws_url") || msg.contains("not configured"),
+            "expected ws_url hint in error: {msg}"
+        );
+    }
+
+    #[cfg(feature = "cdp")]
+    #[test]
+    fn new_mode_chrome_with_endpoint_ok_only_chrome() {
+        let cfg = RendererConfig {
+            mode: RendererMode::Chrome,
+            chrome: Some(CdpEndpoint {
+                ws_url: "ws://127.0.0.1:9222/".into(),
+            }),
+            lightpanda: Some(CdpEndpoint {
+                ws_url: "ws://127.0.0.1:9223/".into(),
+            }),
+            ..Default::default()
+        };
+        let r = FallbackRenderer::new(&cfg, "crw-test", None, &StealthConfig::default()).unwrap();
+        assert_eq!(r.js_renderer_names(), vec!["chrome"]);
+    }
+
+    #[cfg(feature = "cdp")]
+    #[test]
+    fn new_mode_lightpanda_without_endpoint_errors() {
+        let cfg = base_cfg(RendererMode::Lightpanda);
+        let err =
+            FallbackRenderer::new(&cfg, "crw-test", None, &StealthConfig::default()).unwrap_err();
+        assert!(err.to_string().to_lowercase().contains("lightpanda"));
+    }
+
+    #[cfg(feature = "cdp")]
+    #[test]
+    fn new_mode_auto_with_both_endpoints_preserves_order() {
+        let cfg = RendererConfig {
+            mode: RendererMode::Auto,
+            lightpanda: Some(CdpEndpoint {
+                ws_url: "ws://127.0.0.1:9222/".into(),
+            }),
+            chrome: Some(CdpEndpoint {
+                ws_url: "ws://127.0.0.1:9223/".into(),
+            }),
+            ..Default::default()
+        };
+        let r = FallbackRenderer::new(&cfg, "crw-test", None, &StealthConfig::default()).unwrap();
+        assert_eq!(r.js_renderer_names(), vec!["lightpanda", "chrome"]);
+    }
+
+    #[cfg(not(feature = "cdp"))]
+    #[test]
+    fn new_mode_chrome_errors_without_cdp_feature() {
+        let cfg = base_cfg(RendererMode::Chrome);
+        let err =
+            FallbackRenderer::new(&cfg, "crw-test", None, &StealthConfig::default()).unwrap_err();
+        let msg = err.to_string().to_lowercase();
+        assert!(msg.contains("cdp"), "expected cdp in error: {msg}");
+    }
+
+    #[test]
+    fn new_render_js_default_stored() {
+        let cfg = RendererConfig {
+            mode: RendererMode::None,
+            render_js_default: Some(true),
+            ..Default::default()
+        };
+        let r = FallbackRenderer::new(&cfg, "crw-test", None, &StealthConfig::default()).unwrap();
+        assert_eq!(r.render_js_default, Some(true));
+    }
 }

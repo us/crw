@@ -6,7 +6,7 @@ use serde_json::json;
 
 fn test_app() -> TestServer {
     let config: AppConfig = toml::from_str("").unwrap();
-    let state = AppState::new(config);
+    let state = AppState::new(config).expect("AppState::new failed");
     let app = create_app(state);
     TestServer::new(app)
 }

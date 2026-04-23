@@ -37,6 +37,7 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
                 llm_config,
                 user_agent,
                 default_stealth,
+                state.config.renderer.render_js_default,
             )
             .await
             .map_err(|e| format!("{e}"))?;

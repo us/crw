@@ -156,6 +156,8 @@ Poll response:
 | `formats` | string[] | `["markdown"]` | Output formats for each page |
 | `onlyMainContent` | boolean | `true` | Remove boilerplate content before conversion |
 | `jsonSchema` | object | -- | Optional schema for structured extraction per page |
+| `renderJs` | boolean or null | `null` | `true` forces JS on every page, `false` skips JS, `null` uses auto-detect or the server's `render_js_default` |
+| `waitFor` | number | -- | Milliseconds to wait after JS rendering on each page |
 
 ## Scrape options and extraction
 

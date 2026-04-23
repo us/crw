@@ -14,7 +14,7 @@
 //! use crw_server::app::create_app;
 //! use crw_server::state::AppState;
 //!
-//! let state = AppState::new(config).await;
+//! let state = AppState::new(config)?;
 //! let app = create_app(state);
 //! let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
 //! axum::serve(listener, app).await?;

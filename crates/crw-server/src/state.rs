@@ -1,4 +1,5 @@
 use crw_core::config::AppConfig;
+use crw_core::error::CrwResult;
 use crw_core::types::{CrawlRequest, CrawlState, CrawlStatus};
 use crw_crawl::crawl::{CrawlOptions, run_crawl};
 use crw_renderer::FallbackRenderer;
@@ -31,14 +32,14 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(config: AppConfig) -> Self {
+    pub fn new(config: AppConfig) -> CrwResult<Self> {
         let proxy = config.crawler.proxy.as_deref();
         let renderer = FallbackRenderer::new(
             &config.renderer,
             &config.crawler.user_agent,
             proxy,
             &config.crawler.stealth,
-        );
+        )?;
 
         let state = Self {
             config: Arc::new(config),
@@ -47,6 +48,7 @@ impl AppState {
             crawl_semaphore: Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_CRAWLS)),
         };
 
+        // Wrap the not-yet-returned state in a block to keep the Ok() shape at the end.
         // Spawn background job cleanup task.
         let cleanup_state = state.clone();
         tokio::spawn(async move {
@@ -74,7 +76,7 @@ impl AppState {
             }
         });
 
-        state
+        Ok(state)
     }
 
     /// Start a new crawl job and return its UUID.

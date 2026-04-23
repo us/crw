@@ -86,6 +86,14 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
                         "type": "array",
                         "items": { "type": "string" },
                         "description": "CSS selectors to exclude from output"
+                    },
+                    "renderJs": {
+                        "type": "boolean",
+                        "description": "Render JavaScript before extracting (true = force JS, false = HTTP only, omit = auto-detect or use the server's render_js_default)"
+                    },
+                    "waitFor": {
+                        "type": "integer",
+                        "description": "Milliseconds to wait after JS rendering for late content/XHRs"
                     }
                 },
                 "required": ["url"]
@@ -112,6 +120,14 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
                     "jsonSchema": {
                         "type": "object",
                         "description": "JSON schema for LLM-based structured data extraction on each crawled page"
+                    },
+                    "renderJs": {
+                        "type": "boolean",
+                        "description": "Render JavaScript on every crawled page (true = force JS, false = HTTP only, omit = auto-detect or use the server's render_js_default)"
+                    },
+                    "waitFor": {
+                        "type": "integer",
+                        "description": "Milliseconds to wait after JS rendering on each page"
                     }
                 },
                 "required": ["url"]
@@ -274,5 +290,83 @@ pub fn tool_result_response(id: Value, result: Result<Value, String>) -> JsonRpc
                 "isError": true
             }),
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tool_by_name<'a>(tools: &'a Value, name: &str) -> &'a Value {
+        tools["tools"]
+            .as_array()
+            .expect("tools array")
+            .iter()
+            .find(|t| t["name"] == name)
+            .unwrap_or_else(|| panic!("tool {name} not found"))
+    }
+
+    #[test]
+    fn crw_scrape_schema_advertises_render_js() {
+        let defs = tool_definitions(false);
+        let scrape = tool_by_name(&defs, "crw_scrape");
+        let props = &scrape["inputSchema"]["properties"];
+        assert_eq!(
+            props["renderJs"]["type"], "boolean",
+            "renderJs must be a plain boolean in the advertised schema"
+        );
+        assert!(
+            props["renderJs"].get("default").is_none(),
+            "renderJs must not advertise a default — server resolves it"
+        );
+    }
+
+    #[test]
+    fn crw_scrape_schema_advertises_wait_for() {
+        let defs = tool_definitions(false);
+        let scrape = tool_by_name(&defs, "crw_scrape");
+        let props = &scrape["inputSchema"]["properties"];
+        assert_eq!(props["waitFor"]["type"], "integer");
+    }
+
+    #[test]
+    fn crw_scrape_render_js_not_required() {
+        let defs = tool_definitions(false);
+        let scrape = tool_by_name(&defs, "crw_scrape");
+        let required = scrape["inputSchema"]["required"]
+            .as_array()
+            .expect("required array");
+        assert!(
+            !required.iter().any(|v| v == "renderJs"),
+            "renderJs must not be in required"
+        );
+        assert!(
+            !required.iter().any(|v| v == "waitFor"),
+            "waitFor must not be in required"
+        );
+    }
+
+    #[test]
+    fn crw_crawl_schema_advertises_render_js_and_wait_for() {
+        let defs = tool_definitions(false);
+        let crawl = tool_by_name(&defs, "crw_crawl");
+        let props = &crawl["inputSchema"]["properties"];
+        assert_eq!(props["renderJs"]["type"], "boolean");
+        assert_eq!(props["waitFor"]["type"], "integer");
+    }
+
+    #[test]
+    fn schemas_do_not_set_additional_properties_false() {
+        // Deferred to a follow-up issue. Guard against accidentally enabling
+        // this before the schemas are expanded to full ScrapeRequest parity.
+        let defs = tool_definitions(false);
+        for name in ["crw_scrape", "crw_crawl", "crw_map"] {
+            let tool = tool_by_name(&defs, name);
+            let ap = &tool["inputSchema"].get("additionalProperties");
+            assert!(
+                ap.is_none() || ap.as_ref().and_then(|v| v.as_bool()) != Some(false),
+                "{name}: additionalProperties:false must remain off until schemas are complete"
+            );
+        }
     }
 }

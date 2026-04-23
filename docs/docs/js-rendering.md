@@ -35,9 +35,29 @@ Override the rendering mode per request using `renderJs`:
 
 | Value | Behavior |
 |-------|----------|
-| `null` (default) | Auto-detect based on heuristics |
+| `null` (default) | Auto-detect based on heuristics, or fall back to the global `render_js_default` if set |
 | `true` | Force CDP rendering |
 | `false` | HTTP only |
+
+## Global default
+
+To force JS rendering for every request that doesn't specify `renderJs` explicitly, set `render_js_default` in your config:
+
+```toml
+[renderer]
+mode = "chrome"
+render_js_default = true   # alias: force_js = true
+```
+
+```bash
+# Or via environment variables
+CRW_RENDERER__MODE=chrome
+CRW_RENDERER__RENDER_JS_DEFAULT=true
+# Backward-compat alias:
+CRW_RENDERER__FORCE_JS=true
+```
+
+Precedence: a per-request `renderJs` always wins over the global default. Unset (`null`) on the request falls back to the default; if the default is also unset, the auto-detection heuristics below apply.
 
 ## When To Turn It On
 

@@ -23,6 +23,8 @@ rate_limit_rps = 10              # Max requests/second (global). 0 = unlimited.
 mode = "auto"               # auto | lightpanda | playwright | chrome | none
 page_timeout_ms = 30000
 pool_size = 4
+# render_js_default = true  # alias: force_js = true
+                            # forces JS rendering when a request omits `renderJs`
 
 [renderer.lightpanda]
 ws_url = "ws://127.0.0.1:9222/"
@@ -84,6 +86,7 @@ Use the `CRW_` prefix with `__` as a nesting separator:
 | `server.port` | `CRW_SERVER__PORT` |
 | `server.host` | `CRW_SERVER__HOST` |
 | `renderer.mode` | `CRW_RENDERER__MODE` |
+| `renderer.render_js_default` | `CRW_RENDERER__RENDER_JS_DEFAULT` (alias: `CRW_RENDERER__FORCE_JS`) |
 | `crawler.max_concurrency` | `CRW_CRAWLER__MAX_CONCURRENCY` |
 | `crawler.requests_per_second` | `CRW_CRAWLER__REQUESTS_PER_SECOND` |
 | `server.rate_limit_rps` | `CRW_SERVER__RATE_LIMIT_RPS` |

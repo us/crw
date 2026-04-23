@@ -5,9 +5,12 @@ request_timeout_secs = 120
 rate_limit_rps = 10              # Max requests/second (global). 0 = unlimited.
 
 [renderer]
-mode = "auto"                     # auto | none
+mode = "auto"                     # auto | lightpanda | playwright | chrome | none
 page_timeout_ms = 30000
 pool_size = 4
+# render_js_default = true        # alias: force_js = true
+                                  # Forces JS rendering when a request omits `renderJs`.
+                                  # Per-request `renderJs` always wins over this default.
 
 # Failover order: LightPanda → Chrome. Configure one or both.
 # In auto mode, CRW tries each renderer in order. If LightPanda crashes

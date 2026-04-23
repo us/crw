@@ -104,15 +104,21 @@ crw https://example.com --proxy http://user:pass@proxy:8080
 
 ### JavaScript rendering
 
-For SPAs that require JavaScript, use `--js` with a CDP endpoint:
+For SPAs that require JavaScript, use `--js`. The CLI auto-detects a locally
+installed LightPanda or Chrome; you can also point at an existing CDP WebSocket
+with `CRW_CDP_URL`:
 
 ```bash
-# Start LightPanda (or any CDP-compatible browser)
-lightpanda serve --host 127.0.0.1 --port 9222 &
+# Auto-detect (spawns LightPanda/Chrome if installed)
+crw https://spa-app.com --js
 
-# Scrape with JS rendering
+# Or point at a running CDP endpoint
 CRW_CDP_URL=ws://127.0.0.1:9222 crw https://spa-app.com --js
 ```
+
+Note: `CRW_CDP_URL` is only honored by `crw` (the CLI). In server/MCP mode use
+`[renderer.lightpanda.ws_url]` / `[renderer.chrome.ws_url]` (or the matching
+`CRW_RENDERER__*__WS_URL` env vars).
 
 ## All options
 
@@ -127,7 +133,7 @@ Options:
                               [values: markdown, json, html, rawhtml, text, links]
   -o, --output <FILE>        Write output to file instead of stdout
       --raw                  Disable main content extraction (full page)
-      --js                   Force JS rendering (requires CRW_CDP_URL env var)
+      --js                   Force JS rendering (auto-detects LightPanda/Chrome, or CRW_CDP_URL)
       --css <SELECTOR>       Extract only elements matching this CSS selector
       --xpath <EXPR>         Extract only elements matching this XPath expression
       --proxy <URL>          HTTP, HTTPS, or SOCKS5 proxy URL (e.g. socks5://user:pass@host:1080)

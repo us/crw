@@ -287,7 +287,10 @@ pub async fn run_crawl(opts: CrawlOptions<'_>) {
             tokio::time::sleep(sleep_dur).await;
         }
 
-        let fetch_result = match renderer.fetch(&url, &Default::default(), None, None).await {
+        let fetch_result = match renderer
+            .fetch(&url, &Default::default(), req.render_js, req.wait_for)
+            .await
+        {
             Ok(r) => r,
             Err(e) => {
                 tracing::warn!(url, error = %e, "Crawl: failed to fetch page");

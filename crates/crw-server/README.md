@@ -103,6 +103,7 @@ rate_limit_rps = 10        # Max requests/second (global). 0 = unlimited.
 
 [renderer]
 mode = "auto"  # auto | lightpanda | playwright | chrome | none
+# render_js_default = true   # alias: force_js = true — force JS for every request that omits `renderJs`
 
 [crawler]
 max_concurrency = 10
