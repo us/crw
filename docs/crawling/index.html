@@ -306,6 +306,18 @@ console.log((await status.json()).status);
 <td>--</td>
 <td>Optional schema for structured extraction per page</td>
 </tr>
+<tr>
+<td><code>renderJs</code></td>
+<td>boolean or null</td>
+<td><code>null</code></td>
+<td><code>true</code> forces JS on every page, <code>false</code> skips JS, <code>null</code> uses auto-detect or the server&#39;s <code>render_js_default</code></td>
+</tr>
+<tr>
+<td><code>waitFor</code></td>
+<td>number</td>
+<td>--</td>
+<td>Milliseconds to wait after JS rendering on each page</td>
+</tr>
 </tbody></table>
 <h2>Scrape options and extraction</h2>
 <p>Crawl inherits the same content-format logic as scrape:</p>

@@ -147,6 +147,8 @@ rate_limit_rps = 10              # Max requests/second (global). 0 = unlimited.
 mode = &quot;auto&quot;               # auto | lightpanda | playwright | chrome | none
 page_timeout_ms = 30000
 pool_size = 4
+# render_js_default = true  # alias: force_js = true
+                            # forces JS rendering when a request omits `renderJs`
 
 [renderer.lightpanda]
 ws_url = &quot;ws://127.0.0.1:9222/&quot;
@@ -214,6 +216,10 @@ stealth = true
 <tr>
 <td><code>renderer.mode</code></td>
 <td><code>CRW_RENDERER__MODE</code></td>
+</tr>
+<tr>
+<td><code>renderer.render_js_default</code></td>
+<td><code>CRW_RENDERER__RENDER_JS_DEFAULT</code> (alias: <code>CRW_RENDERER__FORCE_JS</code>)</td>
 </tr>
 <tr>
 <td><code>crawler.max_concurrency</code></td>
