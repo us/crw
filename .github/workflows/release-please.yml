@@ -29,6 +29,9 @@ jobs:
         # Must use a PAT — the default GITHUB_TOKEN cannot dispatch workflows
         # (HTTP 403: Resource not accessible by integration). The same secret
         # is already used by release.yml for cross-repo dispatches.
+        # continue-on-error: if the PAT is expired/invalid the dispatch fails,
+        # but the docs-sync steps below must still run — they are independent.
+        continue-on-error: true
         run: gh workflow run release.yml --ref ${{ steps.release.outputs.tag_name }}
         env:
           GH_TOKEN: ${{ secrets.GH_DISPATCH_PAT }}
