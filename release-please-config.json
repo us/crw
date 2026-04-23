@@ -109,6 +109,21 @@
         },
         {
           "type": "toml",
+          "path": "crates/crw-core/Cargo.toml",
+          "jsonpath": "$.dependencies.crw-mcp-proto.version"
+        },
+        {
+          "type": "toml",
+          "path": "crates/crw-browse/Cargo.toml",
+          "jsonpath": "$.dependencies.crw-core.version"
+        },
+        {
+          "type": "toml",
+          "path": "crates/crw-browse/Cargo.toml",
+          "jsonpath": "$.dependencies.crw-renderer.version"
+        },
+        {
+          "type": "toml",
           "path": "Cargo.toml",
           "jsonpath": "$.workspace.dependencies.crw-pdf.version"
         },
