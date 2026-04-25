@@ -168,8 +168,8 @@ function renderFooter() {
       <div class="footer-grid">
         <div class="footer-brand">
           <div class="footer-brand-logo">
-            <img src="logo-icon.svg" alt="CRW" class="logo-img logo-light" />
-            <img src="logo-dark.svg" alt="CRW" class="logo-img logo-dark" />
+            <img src="/logo-icon.svg" alt="CRW" class="logo-img logo-light" />
+            <img src="/logo-dark.svg" alt="CRW" class="logo-img logo-dark" />
             <span>CRW</span>
           </div>
           <div class="footer-tagline">${tagline}</div>
