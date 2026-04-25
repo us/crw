@@ -49,7 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stealth = StealthConfig::default();
     let renderer = FallbackRenderer::new(&config, "my-app/1.0", None, &stealth);
 
-    let result = renderer.fetch("https://example.com", &HashMap::new(), None, None).await?;
+    let result = renderer.fetch("https://example.com", &HashMap::new(), None, None, None).await?;
     println!("Status: {}", result.status_code);
     println!("HTML length: {}", result.html.len());
     Ok(())
@@ -74,8 +74,14 @@ let stealth = StealthConfig::default();
 let renderer = FallbackRenderer::new(&config, "my-app/1.0", None, &stealth);
 
 // Auto mode: HTTP first, JS rendering if SPA detected
-let result = renderer.fetch("https://spa-app.com", &HashMap::new(), None, None).await?;
+let result = renderer.fetch("https://spa-app.com", &HashMap::new(), None, None, None).await?;
 ```
+
+### Pinned renderer (per-request)
+
+The 5th `fetch` argument is `requested_renderer: Option<&str>`. Pass `Some("chrome")`, `Some("lightpanda")`, or `Some("playwright")` to hard-pin a single renderer (no fallback). `None` or `Some("auto")` uses the configured chain.
+
+> **Breaking change in 0.5:** `FallbackRenderer::fetch` (and `fetch_with_js`) gained a 5th argument. Direct consumers of this crate need to pass `None` to preserve previous behavior.
 
 ### SPA detection
 

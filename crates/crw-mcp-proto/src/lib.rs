@@ -94,6 +94,11 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
                     "waitFor": {
                         "type": "integer",
                         "description": "Milliseconds to wait after JS rendering for late content/XHRs"
+                    },
+                    "renderer": {
+                        "type": "string",
+                        "enum": ["auto", "lightpanda", "chrome", "playwright"],
+                        "description": "Pin this request to a specific renderer. \"auto\" (default if omitted) uses the configured fallback chain. Other values hard-pin to a single renderer with no fallback. Pinning a non-auto value implies renderJs:true unless renderJs:false is set explicitly."
                     }
                 },
                 "required": ["url"]
@@ -128,6 +133,11 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
                     "waitFor": {
                         "type": "integer",
                         "description": "Milliseconds to wait after JS rendering on each page"
+                    },
+                    "renderer": {
+                        "type": "string",
+                        "enum": ["auto", "lightpanda", "chrome", "playwright"],
+                        "description": "Pin every crawled page to a specific renderer. \"auto\" (default if omitted) uses the configured fallback chain. Other values hard-pin with no fallback. Pinning a non-auto value implies renderJs:true unless renderJs:false is set explicitly."
                     }
                 },
                 "required": ["url"]
@@ -353,6 +363,52 @@ mod tests {
         let props = &crawl["inputSchema"]["properties"];
         assert_eq!(props["renderJs"]["type"], "boolean");
         assert_eq!(props["waitFor"]["type"], "integer");
+    }
+
+    #[test]
+    fn crw_scrape_schema_advertises_renderer() {
+        let defs = tool_definitions(false);
+        let scrape = tool_by_name(&defs, "crw_scrape");
+        let props = &scrape["inputSchema"]["properties"];
+        assert_eq!(props["renderer"]["type"], "string");
+        let enum_vals = props["renderer"]["enum"]
+            .as_array()
+            .expect("renderer.enum must be an array");
+        assert_eq!(
+            enum_vals,
+            &vec![
+                json!("auto"),
+                json!("lightpanda"),
+                json!("chrome"),
+                json!("playwright"),
+            ]
+        );
+    }
+
+    #[test]
+    fn crw_scrape_renderer_not_required() {
+        let defs = tool_definitions(false);
+        let scrape = tool_by_name(&defs, "crw_scrape");
+        let required = scrape["inputSchema"]["required"]
+            .as_array()
+            .expect("required array");
+        assert!(!required.iter().any(|v| v == "renderer"));
+    }
+
+    #[test]
+    fn crw_crawl_schema_advertises_renderer() {
+        let defs = tool_definitions(false);
+        let crawl = tool_by_name(&defs, "crw_crawl");
+        let props = &crawl["inputSchema"]["properties"];
+        assert_eq!(props["renderer"]["type"], "string");
+        let enum_vals = props["renderer"]["enum"]
+            .as_array()
+            .expect("renderer.enum must be an array");
+        assert_eq!(enum_vals.len(), 4);
+        assert!(enum_vals.iter().any(|v| v == "chrome"));
+        assert!(enum_vals.iter().any(|v| v == "lightpanda"));
+        assert!(enum_vals.iter().any(|v| v == "auto"));
+        assert!(enum_vals.iter().any(|v| v == "playwright"));
     }
 
     #[test]

@@ -1,6 +1,9 @@
 use crw_core::config::{BUILTIN_UA_POOL, LlmConfig};
 use crw_core::error::CrwResult;
-use crw_core::types::{FetchResult, OutputFormat, ScrapeData, ScrapeRequest, resolve_render_js};
+use crw_core::types::{
+    FetchResult, OutputFormat, ScrapeData, ScrapeRequest, resolve_pinned_renderer,
+    resolve_render_js,
+};
 use crw_renderer::FallbackRenderer;
 use crw_renderer::http_only::HttpFetcher;
 use crw_renderer::traits::PageFetcher;
@@ -31,10 +34,37 @@ pub async fn scrape_url(
     // Determine whether stealth headers should be injected for this request.
     let inject_stealth = req.stealth.unwrap_or(default_stealth);
 
+    let pinned = resolve_pinned_renderer(req.renderer);
+
+    // "Pinned implies JS" — if user named a non-auto renderer but didn't set
+    // renderJs, force JS so auto-gating doesn't silently bypass the pin.
+    let effective_render_js_request = if pinned.is_some() && req.render_js.is_none() {
+        Some(true)
+    } else {
+        req.render_js
+    };
+
     // Resolve the effective render_js decision (per-request overrides global default).
     // Used for the temp-fetcher HTTP-only gate below so a user with
     // render_js_default=true and a per-request proxy still reaches the JS renderer.
-    let effective_render_js = resolve_render_js(req.render_js, render_js_default);
+    let effective_render_js = resolve_render_js(effective_render_js_request, render_js_default);
+
+    // Validate pinned renderer is available — fail fast with a 400 instead of
+    // letting the request reach the dispatcher with a hard-pin to a missing pool.
+    // Skip validation when renderJs:false is honored (HTTP-only ignores the pin).
+    if let Some(name) = pinned
+        && effective_render_js != Some(false)
+    {
+        let available = renderer.js_renderer_names();
+        if !available.contains(&name) {
+            return Err(crw_core::error::CrwError::InvalidRequest(format!(
+                "renderer '{}' not available; configured renderers: [{}]. \
+                 Update server config or omit the 'renderer' field.",
+                name,
+                available.join(", ")
+            )));
+        }
+    }
 
     // Use a temporary HttpFetcher when:
     // (a) per-request proxy overrides global proxy, OR
@@ -69,12 +99,24 @@ pub async fn scrape_url(
                     .or_insert(effective_ua);
             }
             renderer
-                .fetch(&req.url, &merged_headers, req.render_js, req.wait_for)
+                .fetch(
+                    &req.url,
+                    &merged_headers,
+                    effective_render_js_request,
+                    req.wait_for,
+                    pinned,
+                )
                 .await?
         }
     } else {
         renderer
-            .fetch(&req.url, &req.headers, req.render_js, req.wait_for)
+            .fetch(
+                &req.url,
+                &req.headers,
+                effective_render_js_request,
+                req.wait_for,
+                pinned,
+            )
             .await?
     };
 

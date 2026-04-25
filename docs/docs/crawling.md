@@ -158,6 +158,7 @@ Poll response:
 | `jsonSchema` | object | -- | Optional schema for structured extraction per page |
 | `renderJs` | boolean or null | `null` | `true` forces JS on every page, `false` skips JS, `null` uses auto-detect or the server's `render_js_default` |
 | `waitFor` | number | -- | Milliseconds to wait after JS rendering on each page |
+| `renderer` | string | `auto` | Pin every crawled page to a specific renderer: `auto`, `lightpanda`, `chrome`, or `playwright`. Non-`auto` values hard-pin (no fallback) and imply `renderJs:true` unless `renderJs:false` is set. Validation runs once at crawl start — invalid combinations return HTTP 400 before the job is queued. Per-page failures of a pinned renderer are logged and skipped, so failed pages may be missing from results — see [JS rendering](#js-rendering) for the resilience tradeoff |
 
 ## Scrape options and extraction
 

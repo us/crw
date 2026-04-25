@@ -156,6 +156,7 @@ async fn main() {
         llm_api_key: None,
         llm_provider: None,
         llm_model: None,
+        renderer: None,
     };
 
     let data = match scrape_url(&req, &renderer, None, "crw/0.0.3", cli.stealth, None).await {

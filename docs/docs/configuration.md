@@ -105,6 +105,8 @@ Use the `CRW_` prefix with `__` as a nesting separator:
 | `chrome` | Always use Chrome via CDP |
 | `none` | HTTP only, no JS rendering |
 
+The server `mode` controls **availability** of renderers in the pool. Per-request `renderer` selects from what's available — see [JS rendering](#js-rendering). A request that pins an unavailable renderer returns HTTP 400 with the configured pool listed.
+
 ## Docker configuration
 
 For Docker deployments, use `config.docker.toml` or environment variables:

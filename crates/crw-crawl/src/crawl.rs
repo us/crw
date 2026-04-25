@@ -1,6 +1,8 @@
 use crw_core::config::LlmConfig;
 use crw_core::error::CrwResult;
-use crw_core::types::{CrawlRequest, CrawlState, CrawlStatus, ScrapeData};
+use crw_core::types::{
+    CrawlRequest, CrawlState, CrawlStatus, RequestedRenderer, ScrapeData, resolve_pinned_renderer,
+};
 use crw_extract::readability::extract_links;
 use crw_renderer::FallbackRenderer;
 use dashmap::DashMap;
@@ -211,6 +213,17 @@ pub async fn run_crawl(opts: CrawlOptions<'_>) {
     let max_depth = req.max_depth.unwrap_or(2).min(10);
     let max_pages = req.max_pages.unwrap_or(100).min(1000) as usize;
 
+    // Apply "pinned implies JS" once per crawl, mirroring single.rs.
+    let pinned_renderer = resolve_pinned_renderer(req.renderer);
+    let effective_render_js = if req.renderer.is_some()
+        && req.renderer != Some(RequestedRenderer::Auto)
+        && req.render_js.is_none()
+    {
+        Some(true)
+    } else {
+        req.render_js
+    };
+
     let base_url = match url::Url::parse(&req.url) {
         Ok(u) if is_safe_url(&u) => u,
         Ok(_) => {
@@ -288,7 +301,13 @@ pub async fn run_crawl(opts: CrawlOptions<'_>) {
         }
 
         let fetch_result = match renderer
-            .fetch(&url, &Default::default(), req.render_js, req.wait_for)
+            .fetch(
+                &url,
+                &Default::default(),
+                effective_render_js,
+                req.wait_for,
+                pinned_renderer,
+            )
             .await
         {
             Ok(r) => r,
@@ -529,7 +548,7 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<Vec<String>> 
         }
 
         let fetch = renderer
-            .fetch(&url, &Default::default(), Some(false), None)
+            .fetch(&url, &Default::default(), Some(false), None, None)
             .await;
 
         if let Ok(result) = fetch {

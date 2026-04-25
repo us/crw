@@ -26,7 +26,7 @@
 //! let config = RendererConfig::default();
 //! let stealth = StealthConfig::default();
 //! let renderer = FallbackRenderer::new(&config, "crw/0.1", None, &stealth)?;
-//! let result = renderer.fetch("https://example.com", &HashMap::new(), None, None).await?;
+//! let result = renderer.fetch("https://example.com", &HashMap::new(), None, None, None).await?;
 //! println!("status: {}", result.status_code);
 //! # Ok(())
 //! # }
@@ -224,6 +224,7 @@ impl FallbackRenderer {
         headers: &HashMap<String, String>,
         render_js: Option<bool>,
         wait_for_ms: Option<u64>,
+        requested_renderer: Option<&str>,
     ) -> CrwResult<FetchResult> {
         let effective = resolve_render_js(render_js, self.render_js_default);
         tracing::debug!(
@@ -231,8 +232,11 @@ impl FallbackRenderer {
             request_render_js = ?render_js,
             default_render_js = ?self.render_js_default,
             effective_render_js = ?effective,
+            requested_renderer,
             "FallbackRenderer::fetch dispatching"
         );
+        // A non-"auto" pinned renderer is a hard pin — failures must surface.
+        let is_hard_pinned = matches!(requested_renderer, Some(name) if name != "auto");
         match effective {
             Some(false) => self.http.fetch(url, headers, None).await,
             Some(true) => {
@@ -252,7 +256,8 @@ impl FallbackRenderer {
                     result.warning = Some("JS rendering was requested but no renderer is available. Content was fetched via HTTP only.".to_string());
                     Ok(result)
                 } else {
-                    self.fetch_with_js(url, headers, wait_for_ms).await
+                    self.fetch_with_js(url, headers, wait_for_ms, requested_renderer)
+                        .await
                 }
             }
             None => {
@@ -283,8 +288,16 @@ impl FallbackRenderer {
                     } else {
                         tracing::info!(url, "SPA shell detected, retrying with JS renderer");
                     }
-                    match self.fetch_with_js(url, headers, wait_for_ms).await {
+                    match self
+                        .fetch_with_js(url, headers, wait_for_ms, requested_renderer)
+                        .await
+                    {
                         Ok(js_result) => Ok(js_result),
+                        Err(e) if is_hard_pinned => {
+                            // User explicitly pinned a renderer — surface the error
+                            // instead of silently returning the (likely useless) HTTP body.
+                            Err(e)
+                        }
                         Err(e) => {
                             tracing::warn!("JS rendering failed, falling back to HTTP result: {e}");
                             Ok(result)
@@ -320,10 +333,30 @@ impl FallbackRenderer {
         url: &str,
         headers: &HashMap<String, String>,
         wait_for_ms: Option<u64>,
+        requested_renderer: Option<&str>,
     ) -> CrwResult<FetchResult> {
+        // Filter the JS pool down to a hard-pinned renderer when one was named.
+        // "auto" or `None` means "use the configured chain".
+        let renderers: Vec<&Arc<dyn PageFetcher>> = match requested_renderer {
+            Some(name) if name != "auto" => self
+                .js_renderers
+                .iter()
+                .filter(|r| r.name() == name)
+                .collect(),
+            _ => self.js_renderers.iter().collect(),
+        };
+        if renderers.is_empty() {
+            let available = self.js_renderer_names();
+            return Err(CrwError::RendererError(format!(
+                "requested renderer '{}' not in pool [{}]",
+                requested_renderer.unwrap_or("auto"),
+                available.join(", ")
+            )));
+        }
+
         let mut last_error = None;
         let mut thin_result: Option<FetchResult> = None;
-        for renderer in &self.js_renderers {
+        for renderer in renderers {
             match renderer.fetch(url, headers, wait_for_ms).await {
                 Ok(result) => {
                     let text_len = html_body_text_len(&result.html);
@@ -507,5 +540,166 @@ mod tests {
         };
         let r = FallbackRenderer::new(&cfg, "crw-test", None, &StealthConfig::default()).unwrap();
         assert_eq!(r.render_js_default, Some(true));
+    }
+
+    /// Mock fetcher for unit-testing dispatch logic without real CDP/HTTP.
+    struct MockFetcher {
+        name: &'static str,
+        behavior: MockBehavior,
+    }
+
+    #[derive(Clone)]
+    enum MockBehavior {
+        Ok(String),
+        Err(String),
+    }
+
+    #[async_trait::async_trait]
+    impl PageFetcher for MockFetcher {
+        async fn fetch(
+            &self,
+            url: &str,
+            _headers: &HashMap<String, String>,
+            _wait_for_ms: Option<u64>,
+        ) -> CrwResult<FetchResult> {
+            match &self.behavior {
+                MockBehavior::Ok(html) => Ok(FetchResult {
+                    url: url.to_string(),
+                    status_code: 200,
+                    html: html.clone(),
+                    content_type: Some("text/html".to_string()),
+                    raw_bytes: None,
+                    rendered_with: Some(self.name.to_string()),
+                    elapsed_ms: 0,
+                    warning: None,
+                }),
+                MockBehavior::Err(msg) => Err(CrwError::RendererError(msg.clone())),
+            }
+        }
+
+        fn name(&self) -> &str {
+            self.name
+        }
+        fn supports_js(&self) -> bool {
+            true
+        }
+        async fn is_available(&self) -> bool {
+            true
+        }
+    }
+
+    fn rich_html(marker: &str) -> String {
+        format!(
+            "<html><body><article>{}{}</article></body></html>",
+            marker,
+            "x".repeat(200)
+        )
+    }
+
+    fn make_renderer_with_mocks(mocks: Vec<Arc<dyn PageFetcher>>) -> FallbackRenderer {
+        // Build a real HTTP fetcher (won't be hit when render_js=Some(true)).
+        let cfg = base_cfg(RendererMode::None);
+        let mut r =
+            FallbackRenderer::new(&cfg, "crw-test", None, &StealthConfig::default()).unwrap();
+        r.js_renderers = mocks;
+        r
+    }
+
+    #[tokio::test]
+    async fn fetch_with_pinned_renderer_filters_pool() {
+        let lp = Arc::new(MockFetcher {
+            name: "lightpanda",
+            behavior: MockBehavior::Ok(rich_html("LP-")),
+        }) as Arc<dyn PageFetcher>;
+        let chrome = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Ok(rich_html("CHROME-")),
+        }) as Arc<dyn PageFetcher>;
+        let r = make_renderer_with_mocks(vec![lp, chrome]);
+
+        let result = r
+            .fetch(
+                "https://example.com",
+                &HashMap::new(),
+                Some(true),
+                None,
+                Some("chrome"),
+            )
+            .await
+            .unwrap();
+        assert!(result.html.contains("CHROME-"), "expected chrome output");
+        assert_eq!(result.rendered_with.as_deref(), Some("chrome"));
+    }
+
+    #[tokio::test]
+    async fn fetch_with_pinned_renderer_unknown_returns_error() {
+        let chrome = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Ok(rich_html("CHROME-")),
+        }) as Arc<dyn PageFetcher>;
+        let r = make_renderer_with_mocks(vec![chrome]);
+
+        let err = r
+            .fetch(
+                "https://example.com",
+                &HashMap::new(),
+                Some(true),
+                None,
+                Some("lightpanda"),
+            )
+            .await
+            .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("lightpanda") && msg.contains("chrome"),
+            "expected error to name pinned + available: {msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn fetch_with_renderer_auto_uses_full_chain() {
+        let lp = Arc::new(MockFetcher {
+            name: "lightpanda",
+            behavior: MockBehavior::Ok(rich_html("LP-")),
+        }) as Arc<dyn PageFetcher>;
+        let chrome = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Ok(rich_html("CHROME-")),
+        }) as Arc<dyn PageFetcher>;
+        let r = make_renderer_with_mocks(vec![lp, chrome]);
+
+        let result = r
+            .fetch(
+                "https://example.com",
+                &HashMap::new(),
+                Some(true),
+                None,
+                Some("auto"),
+            )
+            .await
+            .unwrap();
+        // First renderer in the chain wins when both succeed.
+        assert!(result.html.contains("LP-"), "expected lightpanda first");
+    }
+
+    #[tokio::test]
+    async fn fetch_pinned_renderer_failure_propagates() {
+        let chrome = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Err("boom".into()),
+        }) as Arc<dyn PageFetcher>;
+        let r = make_renderer_with_mocks(vec![chrome]);
+
+        let err = r
+            .fetch(
+                "https://example.com",
+                &HashMap::new(),
+                Some(true),
+                None,
+                Some("chrome"),
+            )
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("boom"));
     }
 }

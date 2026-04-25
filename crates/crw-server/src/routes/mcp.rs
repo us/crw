@@ -10,7 +10,7 @@ use crw_crawl::single::scrape_url;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use crate::state::AppState;
+use crate::state::{AppState, validate_crawl_renderer};
 
 const SERVER_NAME: &str = "crw";
 const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -47,6 +47,7 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
             let req: CrawlRequest =
                 serde_json::from_value(args).map_err(|e| format!("invalid arguments: {e}"))?;
             validate_url(&req.url)?;
+            validate_crawl_renderer(&req, state).map_err(|e| format!("{e}"))?;
             let id = state.start_crawl_job(req).await;
             Ok(json!({"success": true, "id": id.to_string()}))
         }

@@ -89,6 +89,57 @@ async fn crawl_start_invalid_url() {
 }
 
 #[tokio::test]
+async fn scrape_with_renderer_unavailable_returns_400() {
+    // test_app uses default config (mode=auto with no CDP endpoints) → empty
+    // JS pool. Pinning a specific renderer should fail-fast with 400 before
+    // any network activity.
+    let server = test_app();
+    let resp = server
+        .post("/v1/scrape")
+        .json(&json!({"url": "https://example.com", "renderer": "chrome"}))
+        .await;
+    resp.assert_status(axum::http::StatusCode::BAD_REQUEST);
+    let json: serde_json::Value = resp.json();
+    assert_eq!(json["success"], false);
+    let error = json["error"].as_str().unwrap();
+    assert!(
+        error.contains("renderer 'chrome' not available"),
+        "expected pinned-renderer error, got: {error}"
+    );
+}
+
+#[tokio::test]
+async fn crawl_with_renderer_unavailable_returns_400() {
+    // Crawl validates the pinned renderer before accepting the job — the
+    // user gets HTTP 400 immediately rather than a queued-then-failed job.
+    let server = test_app();
+    let resp = server
+        .post("/v1/crawl")
+        .json(&json!({"url": "https://example.com", "renderer": "chrome"}))
+        .await;
+    resp.assert_status(axum::http::StatusCode::BAD_REQUEST);
+    let json: serde_json::Value = resp.json();
+    assert_eq!(json["success"], false);
+    let error = json["error"].as_str().unwrap();
+    assert!(
+        error.contains("renderer 'chrome' not available"),
+        "expected pinned-renderer error, got: {error}"
+    );
+}
+
+#[tokio::test]
+async fn crawl_with_renderer_auto_accepted() {
+    // renderer:"auto" is the explicit-equivalent of omitting the field; should
+    // not trigger availability validation.
+    let server = test_app();
+    let resp = server
+        .post("/v1/crawl")
+        .json(&json!({"url": "https://example.com", "renderer": "auto"}))
+        .await;
+    resp.assert_status_ok();
+}
+
+#[tokio::test]
 async fn map_endpoint_invalid_url() {
     let server = test_app();
     let resp = server

@@ -83,6 +83,32 @@ pub enum FilterMode {
     Cosine,
 }
 
+/// Per-request renderer override. Sibling to `renderJs` for finer control.
+///
+/// `Auto` is equivalent to omitting the field — uses the configured fallback chain.
+/// Other variants hard-pin to a specific renderer with no fallback.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RequestedRenderer {
+    Auto,
+    Lightpanda,
+    Chrome,
+    Playwright,
+}
+
+impl RequestedRenderer {
+    /// Returns `Some(name)` for renderers that should be hard-pinned in dispatch.
+    /// `Auto` returns `None` — equivalent to omitting the field.
+    pub fn pinned_name(self) -> Option<&'static str> {
+        match self {
+            RequestedRenderer::Auto => None,
+            RequestedRenderer::Lightpanda => Some("lightpanda"),
+            RequestedRenderer::Chrome => Some("chrome"),
+            RequestedRenderer::Playwright => Some("playwright"),
+        }
+    }
+}
+
 /// Firecrawl-compatible extraction options (used via `extract: { schema: {...} }`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -156,6 +182,12 @@ pub struct ScrapeRequest {
     /// Per-request LLM model override.
     #[serde(default, alias = "llm_model")]
     pub llm_model: Option<String>,
+    /// Pin this request to a specific renderer. `None` or `Auto` = use the
+    /// configured chain. Hard-pin: pinned renderer failures surface as errors,
+    /// no silent fallback to a different renderer or HTTP. Pinning a non-Auto
+    /// value implies `renderJs:true` unless `renderJs:false` is set explicitly.
+    #[serde(default)]
+    pub renderer: Option<RequestedRenderer>,
 }
 
 fn default_formats() -> Vec<OutputFormat> {
@@ -291,6 +323,9 @@ pub struct CrawlRequest {
     /// Milliseconds to wait after JS rendering on each page.
     #[serde(default, alias = "wait_for")]
     pub wait_for: Option<u64>,
+    /// Pin every page in this crawl to a specific renderer. See `ScrapeRequest::renderer`.
+    #[serde(default)]
+    pub renderer: Option<RequestedRenderer>,
 }
 
 /// Resolve the effective `render_js` decision from a per-request value and the
@@ -308,6 +343,14 @@ pub struct CrawlRequest {
 /// | `None`        | `None`        | `None`       |
 pub fn resolve_render_js(request: Option<bool>, default: Option<bool>) -> Option<bool> {
     request.or(default)
+}
+
+/// Resolve the effective pinned renderer name from a per-request value.
+///
+/// Returns the renderer name (e.g. `"chrome"`) when a non-`Auto` renderer is pinned.
+/// `None` and `Some(Auto)` both return `None` — meaning "use the configured chain".
+pub fn resolve_pinned_renderer(req: Option<RequestedRenderer>) -> Option<&'static str> {
+    req.and_then(|r| r.pinned_name())
 }
 
 #[cfg(test)]
@@ -365,6 +408,87 @@ mod tests {
         let req: CrawlRequest = serde_json::from_value(json).unwrap();
         assert_eq!(req.render_js, None);
         assert_eq!(req.wait_for, None);
+    }
+
+    #[test]
+    fn requested_renderer_deserializes_lowercase() {
+        for (s, expected) in [
+            ("\"auto\"", RequestedRenderer::Auto),
+            ("\"lightpanda\"", RequestedRenderer::Lightpanda),
+            ("\"chrome\"", RequestedRenderer::Chrome),
+            ("\"playwright\"", RequestedRenderer::Playwright),
+        ] {
+            let parsed: RequestedRenderer = serde_json::from_str(s).unwrap();
+            assert_eq!(parsed, expected, "input {s} should parse to {expected:?}");
+        }
+    }
+
+    #[test]
+    fn requested_renderer_rejects_unknown() {
+        let result: Result<RequestedRenderer, _> = serde_json::from_str("\"firefox\"");
+        assert!(
+            result.is_err(),
+            "unknown renderer should fail to deserialize"
+        );
+    }
+
+    #[test]
+    fn scrape_request_accepts_renderer_field() {
+        let json = serde_json::json!({
+            "url": "https://example.com",
+            "renderer": "chrome"
+        });
+        let req: ScrapeRequest = serde_json::from_value(json).unwrap();
+        assert_eq!(req.renderer, Some(RequestedRenderer::Chrome));
+    }
+
+    #[test]
+    fn scrape_request_renderer_explicit_null() {
+        let json = serde_json::json!({
+            "url": "https://example.com",
+            "renderer": null
+        });
+        let req: ScrapeRequest = serde_json::from_value(json).unwrap();
+        assert_eq!(req.renderer, None);
+    }
+
+    #[test]
+    fn scrape_request_renderer_omitted() {
+        let json = serde_json::json!({ "url": "https://example.com" });
+        let req: ScrapeRequest = serde_json::from_value(json).unwrap();
+        assert_eq!(req.renderer, None);
+    }
+
+    #[test]
+    fn crawl_request_accepts_renderer_field() {
+        let json = serde_json::json!({
+            "url": "https://example.com",
+            "renderer": "lightpanda"
+        });
+        let req: CrawlRequest = serde_json::from_value(json).unwrap();
+        assert_eq!(req.renderer, Some(RequestedRenderer::Lightpanda));
+    }
+
+    #[test]
+    fn resolve_pinned_renderer_auto_returns_none() {
+        assert_eq!(resolve_pinned_renderer(Some(RequestedRenderer::Auto)), None);
+        assert_eq!(resolve_pinned_renderer(None), None);
+    }
+
+    #[test]
+    fn resolve_pinned_renderer_chrome_returns_name() {
+        assert_eq!(
+            resolve_pinned_renderer(Some(RequestedRenderer::Chrome)),
+            Some("chrome")
+        );
+        assert_eq!(
+            resolve_pinned_renderer(Some(RequestedRenderer::Lightpanda)),
+            Some("lightpanda")
+        );
+        assert_eq!(
+            resolve_pinned_renderer(Some(RequestedRenderer::Playwright)),
+            Some("playwright")
+        );
     }
 }
 

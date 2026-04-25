@@ -6,7 +6,7 @@ use crw_core::types::{CrawlRequest, CrawlStartResponse, CrawlState, CrawlStatus}
 use uuid::Uuid;
 
 use crate::error::AppError;
-use crate::state::AppState;
+use crate::state::{AppState, validate_crawl_renderer};
 
 /// POST /v1/crawl — start a crawl job.
 /// Response format matches Firecrawl: { success: true, id: "..." }
@@ -18,6 +18,8 @@ pub async fn start_crawl(
     let parsed_url = url::Url::parse(&req.url)
         .map_err(|e| CrwError::InvalidRequest(format!("Invalid URL: {e}")))?;
     crw_core::url_safety::validate_safe_url(&parsed_url).map_err(CrwError::InvalidRequest)?;
+
+    validate_crawl_renderer(&req, &state)?;
 
     let id = state.start_crawl_job(req).await;
 

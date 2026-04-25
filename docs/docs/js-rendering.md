@@ -59,6 +59,48 @@ CRW_RENDERER__FORCE_JS=true
 
 Precedence: a per-request `renderJs` always wins over the global default. Unset (`null`) on the request falls back to the default; if the default is also unset, the auto-detection heuristics below apply.
 
+## Per-request renderer override
+
+When `mode = "auto"` and you have multiple renderers configured (e.g., LightPanda + Chrome), the auto-detect chain decides which one to use. Sometimes you already know that a specific site needs Chrome (Cloudflare-protected SPAs) or LightPanda (fast static-JS sites). Pin the renderer per request with the `renderer` field:
+
+```json
+{
+  "url": "https://x.com/elonmusk",
+  "renderer": "chrome"
+}
+```
+
+| Value | Behavior |
+|-------|----------|
+| omitted / `auto` | Use the configured fallback chain (existing behavior) |
+| `lightpanda` | Hard-pin to LightPanda — no fallback |
+| `chrome` | Hard-pin to Chrome — no fallback |
+| `playwright` | Hard-pin to Playwright — no fallback |
+
+### Pinned implies JS
+
+A non-`auto` `renderer` value implies `renderJs:true`. If you set `renderJs:false` explicitly, the request stays HTTP-only and the pin is silently ignored — `renderJs:false` always wins. This means the availability check is also skipped when `renderJs:false` is set, so combinations like `{"mode":"none","renderJs":false,"renderer":"chrome"}` are accepted.
+
+### Errors and validation
+
+If the named renderer isn't available in the server's pool, the request returns HTTP 400 immediately with `errorCode: "invalid_request"` and a message listing the configured renderers:
+
+```json
+{
+  "success": false,
+  "error": "renderer 'chrome' not available; configured renderers: [lightpanda]. Update server config or omit the 'renderer' field.",
+  "errorCode": "invalid_request"
+}
+```
+
+For `/v1/crawl`, this validation runs **once at job acceptance** — bad combinations return 400 before the job is queued.
+
+### Pinning reduces resilience
+
+Hard-pinning a renderer means transient failures of that renderer surface as errors instead of silently falling back to HTTP. If you need maximum resilience, omit `renderer` (or set it to `auto`) so the auto-detect chain can fall back. If you need determinism — "I know this site needs Chrome and a LightPanda success would be a wrong answer" — pin it.
+
+For crawls, per-page failures of a pinned renderer are still logged and skipped; the rest of the crawl continues. Pages that fail will not appear in the results.
+
 ## When To Turn It On
 
 Enable JS rendering when the page content is not present in the initial HTML response. Typical examples:

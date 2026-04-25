@@ -183,6 +183,62 @@ async fn mcp_integer_id() {
 }
 
 #[tokio::test]
+async fn mcp_crw_scrape_advertises_renderer_in_tools_list() {
+    let server = test_app();
+    let resp = server
+        .post("/mcp")
+        .content_type("application/json")
+        .json(&mcp_request("tools/list", json!(99), json!({})))
+        .await;
+    resp.assert_status_ok();
+    let json: serde_json::Value = resp.json();
+    let tools = json["result"]["tools"].as_array().unwrap();
+    let scrape = tools
+        .iter()
+        .find(|t| t["name"] == "crw_scrape")
+        .expect("crw_scrape tool");
+    let renderer = &scrape["inputSchema"]["properties"]["renderer"];
+    assert_eq!(renderer["type"], "string");
+    let enum_vals = renderer["enum"].as_array().expect("renderer.enum");
+    assert_eq!(enum_vals.len(), 4);
+    for v in ["auto", "lightpanda", "chrome", "playwright"] {
+        assert!(
+            enum_vals.iter().any(|e| e == v),
+            "renderer enum missing {v}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn mcp_crw_crawl_renderer_unavailable_returns_tool_error() {
+    // mcp tools/call → crw_crawl with unavailable renderer should surface an
+    // error via the MCP tool-error wrapper (isError:true), mirroring the HTTP
+    // route's pre-acceptance 400.
+    let server = test_app();
+    let resp = server
+        .post("/mcp")
+        .content_type("application/json")
+        .json(&mcp_request(
+            "tools/call",
+            json!(100),
+            json!({
+                "name": "crw_crawl",
+                "arguments": {"url": "https://example.com", "renderer": "chrome"}
+            }),
+        ))
+        .await;
+    resp.assert_status_ok();
+    let json: serde_json::Value = resp.json();
+    let result = &json["result"];
+    assert_eq!(result["isError"], true);
+    let text = result["content"][0]["text"].as_str().unwrap();
+    assert!(
+        text.contains("renderer 'chrome' not available"),
+        "expected pinned-renderer error in MCP tool error, got: {text}"
+    );
+}
+
+#[tokio::test]
 async fn mcp_missing_method_field() {
     let server = test_app();
     let body = json!({
