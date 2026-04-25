@@ -318,6 +318,12 @@ console.log((await status.json()).status);
 <td>--</td>
 <td>Milliseconds to wait after JS rendering on each page</td>
 </tr>
+<tr>
+<td><code>renderer</code></td>
+<td>string</td>
+<td><code>auto</code></td>
+<td>Pin every crawled page to a specific renderer: <code>auto</code>, <code>lightpanda</code>, <code>chrome</code>, or <code>playwright</code>. Non-<code>auto</code> values hard-pin (no fallback) and imply <code>renderJs:true</code> unless <code>renderJs:false</code> is set. Validation runs once at crawl start — invalid combinations return HTTP 400 before the job is queued. Per-page failures of a pinned renderer are logged and skipped, so failed pages may be missing from results — see <a href="/js-rendering">JS rendering</a> for the resilience tradeoff</td>
+</tr>
 </tbody></table>
 <h2>Scrape options and extraction</h2>
 <p>Crawl inherits the same content-format logic as scrape:</p>

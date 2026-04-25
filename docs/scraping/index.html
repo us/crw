@@ -271,6 +271,12 @@ console.log(body.data.markdown);
 <td>Milliseconds to wait after JS rendering</td>
 </tr>
 <tr>
+<td><code>renderer</code></td>
+<td>string</td>
+<td><code>auto</code></td>
+<td>Pin to a specific renderer: <code>auto</code>, <code>lightpanda</code>, <code>chrome</code>, or <code>playwright</code>. Non-<code>auto</code> values hard-pin (no fallback) and imply <code>renderJs:true</code> unless <code>renderJs:false</code> is set explicitly. See <a href="/js-rendering">JS rendering</a></td>
+</tr>
+<tr>
 <td><code>includeTags</code></td>
 <td>string[]</td>
 <td><code>[]</code></td>

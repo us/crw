@@ -279,6 +279,7 @@ stealth = true
 <td>HTTP only, no JS rendering</td>
 </tr>
 </tbody></table>
+<p>The server <code>mode</code> controls <strong>availability</strong> of renderers in the pool. Per-request <code>renderer</code> selects from what&#39;s available — see <a href="/js-rendering">JS rendering</a>. A request that pins an unavailable renderer returns HTTP 400 with the configured pool listed.</p>
 <h2>Docker configuration</h2>
 <p>For Docker deployments, use <code>config.docker.toml</code> or environment variables:</p>
 <pre><code class="language-bash">docker run -p 3000:3000 \
