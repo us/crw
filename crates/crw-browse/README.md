@@ -60,6 +60,30 @@ Environment variables (all optional):
 | `CRW_BROWSE_PAGE_TIMEOUT_MS` | `30000` | Per-page load timeout |
 | `RUST_LOG` | unset | `tracing_subscriber` filter, e.g. `crw_browse=debug` |
 
+### `--ws-url` vs `--chrome-ws-url`: when to use which
+
+`crw-browse` accepts two CDP endpoint flags. They serve different roles:
+
+- **`--ws-url`** is the **primary** CDP endpoint that backs every interactive
+  tool (`goto`, `tree`, `click`, `type_text`, `fill`, `wait`, …). It can point
+  at either Chrome **or** Lightpanda. Lightpanda is faster and lighter, so
+  it's a good default when you don't need screenshots.
+- **`--chrome-ws-url`** is a **screenshot-only fallback** that *must* point at
+  real Chrome/Chromium. Lightpanda's `Page.captureScreenshot` returns a
+  30-byte fake stub, so we route screenshot calls through a separate Chrome
+  connection if one is configured.
+
+Three common configurations:
+
+| Setup | `--ws-url` | `--chrome-ws-url` | Tradeoff |
+|-------|-----------|-------------------|----------|
+| Lightpanda + Chrome screenshot | `ws://lightpanda:9222` | `ws://chrome:9223` | Fast interactive, working screenshots |
+| Chrome only (simplest) | `ws://chrome:9222` | `ws://chrome:9222` (same!) | Single browser, screenshots work, slower |
+| Lightpanda only (no screenshots) | `ws://lightpanda:9222` | _(unset)_ | Lightest; `screenshot` returns `NOT_IMPLEMENTED` |
+
+Both flags can point at the **same** Chrome instance — there's no harm in
+configuring `--chrome-ws-url` when `--ws-url` is also Chrome.
+
 ## Claude Code configuration
 
 ```json

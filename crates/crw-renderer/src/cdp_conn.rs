@@ -21,6 +21,26 @@ use tokio_tungstenite::{connect_async, tungstenite::Message};
 const WS_CLOSE_TIMEOUT: Duration = Duration::from_secs(3);
 const EVENT_CHANNEL_CAPACITY: usize = 1024;
 
+/// Classify a tungstenite error into a category name without leaking the
+/// underlying URL or HTTP response details. Detail goes to traces; this
+/// returns just the category for inclusion in user-facing errors.
+fn classify_ws_error(e: &tokio_tungstenite::tungstenite::Error) -> &'static str {
+    use tokio_tungstenite::tungstenite::Error as E;
+    match e {
+        E::ConnectionClosed | E::AlreadyClosed => "connection closed",
+        E::Io(_) => "io error",
+        E::Tls(_) => "tls error",
+        E::Url(_) => "invalid websocket url",
+        E::Http(_) => "http handshake rejected",
+        E::HttpFormat(_) => "http format error",
+        E::Capacity(_) => "message too large",
+        E::Protocol(_) => "websocket protocol error",
+        E::WriteBufferFull(_) => "write buffer full",
+        E::Utf8(_) => "invalid utf-8",
+        E::AttackAttempt => "rejected websocket attack",
+    }
+}
+
 type WsStream =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 type WsWrite = futures::stream::SplitSink<WsStream, Message>;
@@ -52,7 +72,16 @@ impl CdpConnection {
         let (ws, _) = tokio::time::timeout(connect_timeout, connect_async(ws_url))
             .await
             .map_err(|_| CrwError::Timeout(connect_timeout.as_millis() as u64))?
-            .map_err(|e| CrwError::RendererError(format!("CDP connect: {e}")))?;
+            .map_err(|e| {
+                // tungstenite's Display can echo the full ws_url back (Url
+                // variant) or HTTP response details. The ws_url may be
+                // attacker-influenceable via config / proxy headers, so we
+                // log the raw error for operators and surface only a
+                // sanitized class name to the caller. This keeps prod
+                // error responses free of WebSocket URLs and embedded paths.
+                tracing::warn!(error = %e, "CDP connect failed");
+                CrwError::RendererError(format!("CDP connect failed: {}", classify_ws_error(&e)))
+            })?;
         let (write, read) = ws.split();
 
         let write = Arc::new(Mutex::new(write));

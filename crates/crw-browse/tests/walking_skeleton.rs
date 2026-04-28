@@ -73,8 +73,31 @@ async fn walking_skeleton_goto_then_tree() {
         .iter()
         .map(|t| t["name"].as_str().unwrap().to_string())
         .collect();
-    assert!(tool_names.contains(&"goto".to_string()), "{tool_names:?}");
-    assert!(tool_names.contains(&"tree".to_string()), "{tool_names:?}");
+    // Phase 2 surface — every Tier-2/3/4 tool must be advertised. If a tool
+    // is renamed or removed, this assertion will fail loudly so the change
+    // gets noticed before it ships.
+    let expected = [
+        "goto",
+        "tree",
+        "evaluate",
+        "text",
+        "html",
+        "console",
+        "network",
+        "storage",
+        "click",
+        "fill",
+        "type_text",
+        "wait",
+        "screenshot",
+        "script",
+    ];
+    for name in expected {
+        assert!(
+            tool_names.contains(&name.to_string()),
+            "missing tool {name:?} in advertised list: {tool_names:?}"
+        );
+    }
 
     // tools/call goto
     send_line(

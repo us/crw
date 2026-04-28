@@ -738,6 +738,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "base62",
+ "base64",
  "clap",
  "crw-core",
  "crw-renderer",

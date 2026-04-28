@@ -8,16 +8,42 @@ use serde::Serialize;
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ErrorCode {
     NodeStale,
+    /// `@e<N>` ref was never produced by any snapshot in this session
+    /// (typo, hallucinated ref, or N exceeds last known max). Distinct from
+    /// NodeStale, which means the ref *was* valid and has since expired.
+    NodeUnknown,
+    /// Element exists but is not a sensible interaction target for the
+    /// requested action: e.g. `click` on `<html>` / `<body>` / root document,
+    /// or `type_text` against a node that is not focusable
+    /// (no input/textarea/contenteditable). Caller should pick a different
+    /// ref. Despite the historical name, this covers both click and focus
+    /// targeting failures — the recovery is identical (resnap and pick
+    /// another @e ref).
+    NodeNotClickable,
     Timeout,
     NavBlocked,
     SessionClosed,
     NotFound,
+    /// Generic input validation failure (empty string where one is required,
+    /// out-of-range numeric, malformed JSON shape, mutually-exclusive option
+    /// combinations like `wait{ms,selector}`). Tools should prefer this
+    /// generic code over inventing per-field codes; reserve specialized codes
+    /// for cases that have a distinct recovery action.
     InvalidArgs,
     BrowserUnavailable,
     CdpError,
     PolicyViolation,
     RateLimited,
     Internal,
+    /// Caller invoked a target tool (`click`, `fill`) without specifying the
+    /// element to act on, or specified both `selector` AND `ref`. This is a
+    /// distinct code from `INVALID_ARGS` because the recovery is specific —
+    /// the LLM should pick exactly one of the two ways to identify the
+    /// element. For other input validation failures, use `INVALID_ARGS`.
+    NoSelector,
+    ElementNotFound,
+    InvalidExpression,
+    NotImplemented,
 }
 
 /// Hint for how the caller should recover.
@@ -54,6 +80,13 @@ pub struct ErrorResponse {
     /// Tools that ARE allowed (populated on POLICY_VIOLATION).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub allowed_tools: Option<Vec<String>>,
+
+    /// Number of items processed before the failure. Tool-specific unit —
+    /// `type_text` reports characters typed; future tools that loop over
+    /// items (batch click, multi-fill) populate it with their own count.
+    /// Lets the caller decide whether the partial state is recoverable.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub partial_count: Option<usize>,
 }
 
 impl ErrorResponse {
@@ -66,11 +99,17 @@ impl ErrorResponse {
             stale_anchor: None,
             allowed_pattern: None,
             allowed_tools: None,
+            partial_count: None,
         }
     }
 
     pub fn with_retry(mut self, retry: RetryHint) -> Self {
         self.retry = Some(retry);
+        self
+    }
+
+    pub fn with_partial_count(mut self, count: usize) -> Self {
+        self.partial_count = Some(count);
         self
     }
 
@@ -125,12 +164,29 @@ mod tests {
         assert!(!json.contains("stale_anchor"));
         assert!(!json.contains("allowed_pattern"));
         assert!(!json.contains("retry"));
+        assert!(!json.contains("partial_count"));
+    }
+
+    #[test]
+    fn serializes_partial_count_when_set() {
+        let err = ErrorResponse::new(ErrorCode::CdpError, "boom").with_partial_count(3);
+        let json: serde_json::Value = serde_json::from_str(&err.to_json()).unwrap();
+        assert_eq!(json["partial_count"], 3);
+    }
+
+    #[test]
+    fn omits_partial_count_when_none() {
+        let err = ErrorResponse::new(ErrorCode::CdpError, "boom");
+        let json: serde_json::Value = serde_json::from_str(&err.to_json()).unwrap();
+        assert!(json.get("partial_count").is_none());
     }
 
     #[test]
     fn all_codes_roundtrip_to_screaming_snake() {
         let cases = [
             (ErrorCode::NodeStale, "NODE_STALE"),
+            (ErrorCode::NodeUnknown, "NODE_UNKNOWN"),
+            (ErrorCode::NodeNotClickable, "NODE_NOT_CLICKABLE"),
             (ErrorCode::Timeout, "TIMEOUT"),
             (ErrorCode::NavBlocked, "NAV_BLOCKED"),
             (ErrorCode::SessionClosed, "SESSION_CLOSED"),
@@ -141,6 +197,10 @@ mod tests {
             (ErrorCode::PolicyViolation, "POLICY_VIOLATION"),
             (ErrorCode::RateLimited, "RATE_LIMITED"),
             (ErrorCode::Internal, "INTERNAL"),
+            (ErrorCode::NoSelector, "NO_SELECTOR"),
+            (ErrorCode::ElementNotFound, "ELEMENT_NOT_FOUND"),
+            (ErrorCode::InvalidExpression, "INVALID_EXPRESSION"),
+            (ErrorCode::NotImplemented, "NOT_IMPLEMENTED"),
         ];
         for (code, expected) in cases {
             let err = ErrorResponse::new(code, "x");

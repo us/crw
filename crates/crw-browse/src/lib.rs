@@ -5,3 +5,4 @@ pub mod response;
 pub mod server;
 pub mod session;
 pub mod snapshot;
+pub mod tools;
