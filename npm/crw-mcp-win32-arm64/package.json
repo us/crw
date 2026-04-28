@@ -1,6 +1,6 @@
 {
   "name": "crw-mcp-win32-arm64",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "CRW MCP server binary for win32 arm64",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/us/crw",
