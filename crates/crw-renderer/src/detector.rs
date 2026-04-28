@@ -50,6 +50,70 @@ pub fn needs_js_rendering(html: &str) -> bool {
     false
 }
 
+/// Reason a rendered page is considered a failed render. Returned by
+/// [`looks_like_failed_render`] so callers can include the cause in failover
+/// warnings or telemetry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FailedRenderReason {
+    /// Next.js error boundary HTML was injected into the document. Indicates
+    /// the framework caught an unhandled exception during hydration or
+    /// rendering — the page the user wanted is not present.
+    NextJsClientError,
+    /// React rendered its production "Minified React error" placeholder. Same
+    /// failure class as Next.js, but framework-agnostic.
+    ReactMinifiedError,
+}
+
+impl FailedRenderReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FailedRenderReason::NextJsClientError => "nextjs_client_error",
+            FailedRenderReason::ReactMinifiedError => "react_minified_error",
+        }
+    }
+}
+
+/// Detect framework-level render failures *in the HTML markup*. Only matches
+/// DOM-specific markers (element ids, data attributes) — never visible body
+/// text — to avoid false positives on pages that legitimately mention the
+/// error string (e.g. a blog post about Next.js debugging).
+///
+/// Returns `None` when the page looks healthy.
+pub fn looks_like_failed_render(html: &str) -> Option<FailedRenderReason> {
+    // Bail out fast for very large pages — error boundary markup is small and
+    // appears near the body root; scanning megabytes would cost more than it
+    // gains. Most failed renders produce <30KB of HTML.
+    if html.len() > 200_000 {
+        return None;
+    }
+    let lower = html.to_lowercase();
+
+    // Next.js App Router error boundary. Next renders an error UI with these
+    // marker attributes when a client-side exception bubbles to the root.
+    // Sources: next.js/packages/next/src/client/components/error-boundary.tsx
+    if lower.contains("id=\"__next-error-") || lower.contains("data-nextjs-error") {
+        return Some(FailedRenderReason::NextJsClientError);
+    }
+
+    // Next.js Pages Router error overlay (visible in dev) and the production
+    // "Application error" fallback both render this id. The marker is a DOM
+    // element id and only appears when Next chose to render its error path.
+    if lower.contains("id=\"__next_error__\"") {
+        return Some(FailedRenderReason::NextJsClientError);
+    }
+
+    // React production error: surfaces as a minified message with a numeric
+    // code linking back to react.dev. Match the canonical anchor href since
+    // that combination only exists when React rendered the error explainer.
+    if lower.contains("https://react.dev/errors/")
+        || lower.contains("https://reactjs.org/docs/error-decoder")
+    {
+        return Some(FailedRenderReason::ReactMinifiedError);
+    }
+
+    None
+}
+
 /// Check if rendered HTML is dominated by loading placeholders, spinners,
 /// or chat-widget-only content. Used *after* JS rendering to detect cases
 /// where the renderer returned early before the real content appeared
@@ -250,6 +314,74 @@ mod tests {
         let filler = "x".repeat(100_000);
         let html = format!("<html><body><p>Loading...</p>{filler}</body></html>");
         assert!(!looks_like_loading_placeholder(&html));
+    }
+
+    #[test]
+    fn detects_nextjs_app_router_error_boundary() {
+        let html = r#"<html><body><div id="__next-error-0"><h2>Application error: a client-side exception has occurred.</h2></div></body></html>"#;
+        assert_eq!(
+            looks_like_failed_render(html),
+            Some(FailedRenderReason::NextJsClientError)
+        );
+    }
+
+    #[test]
+    fn detects_nextjs_pages_router_error() {
+        let html = r#"<html><body><div id="__next_error__">oops</div></body></html>"#;
+        assert_eq!(
+            looks_like_failed_render(html),
+            Some(FailedRenderReason::NextJsClientError)
+        );
+    }
+
+    #[test]
+    fn detects_react_minified_error() {
+        let html = r#"<html><body><a href="https://react.dev/errors/418">Minified React error #418</a></body></html>"#;
+        assert_eq!(
+            looks_like_failed_render(html),
+            Some(FailedRenderReason::ReactMinifiedError)
+        );
+    }
+
+    #[test]
+    fn detects_legacy_react_error_decoder_url() {
+        let html = r#"<html><body><a href="https://reactjs.org/docs/error-decoder.html?invariant=31">React</a></body></html>"#;
+        assert_eq!(
+            looks_like_failed_render(html),
+            Some(FailedRenderReason::ReactMinifiedError)
+        );
+    }
+
+    #[test]
+    fn blog_post_about_error_is_not_failed_render() {
+        // Regression: a blog post that *describes* the Next.js error must NOT
+        // be flagged as a failed render. The string appears only in body text
+        // (and not in a __next-error- element id), so the detector must let
+        // it through.
+        let html = r#"<html><body><article><h1>Debugging Next.js</h1>
+            <p>When you see "Application error: a client-side exception has occurred",
+            it usually means a hydration mismatch.</p>
+            <pre><code>console.log('debug')</code></pre>
+        </article></body></html>"#;
+        assert!(looks_like_failed_render(html).is_none());
+    }
+
+    #[test]
+    fn healthy_page_is_not_failed_render() {
+        let html =
+            r#"<html><body><main><h1>Hello</h1><p>Real content here.</p></main></body></html>"#;
+        assert!(looks_like_failed_render(html).is_none());
+    }
+
+    #[test]
+    fn huge_page_is_not_scanned() {
+        // Pages over 200KB are exempt. Even with a marker that would normally
+        // trigger, the function must short-circuit to None.
+        let mut html = String::from(r#"<html><body><div id="__next-error-0"></div>"#);
+        html.push_str(&"<p>filler</p>".repeat(20_000));
+        html.push_str("</body></html>");
+        assert!(html.len() > 200_000);
+        assert!(looks_like_failed_render(&html).is_none());
     }
 
     #[test]

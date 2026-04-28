@@ -1,7 +1,8 @@
 use crw_core::config::AppConfig;
 use crw_core::error::{CrwError, CrwResult};
 use crw_core::types::{
-    CrawlRequest, CrawlState, CrawlStatus, resolve_pinned_renderer, resolve_render_js,
+    CrawlRequest, CrawlState, CrawlStatus, RequestedRenderer, resolve_pinned_renderer,
+    resolve_render_js,
 };
 use crw_crawl::crawl::{CrawlOptions, run_crawl};
 use crw_renderer::FallbackRenderer;
@@ -11,22 +12,37 @@ use std::time::{Duration, Instant};
 use tokio::sync::{RwLock, watch};
 use uuid::Uuid;
 
-/// Validate that a crawl request's pinned renderer is available before
-/// accepting the job. Returns `InvalidRequest` (→ HTTP 400) when the named
-/// renderer is not in the configured pool. Skipped when `renderJs:false`
-/// is set, since HTTP-only ignores the pin.
-pub(crate) fn validate_crawl_renderer(req: &CrawlRequest, state: &AppState) -> CrwResult<()> {
-    let pinned = resolve_pinned_renderer(req.renderer);
-    let Some(name) = pinned else {
+/// Validate that a request's pinned renderer is available before accepting
+/// the job. Returns `InvalidRequest` (→ HTTP 400) when the named renderer is
+/// not in the configured pool. Skipped when `renderJs:false` is set, since
+/// HTTP-only ignores the pin.
+///
+/// We surface this explicitly (rather than silently falling back to "auto")
+/// so users get clear feedback when they ask for a renderer the operator
+/// hasn't configured. Sites that fail under one renderer often need a
+/// specific other one — silent fallback would leave callers wondering why
+/// "chrome" gave them the same broken result as "auto".
+pub(crate) fn validate_renderer_pin(
+    renderer: Option<RequestedRenderer>,
+    render_js: Option<bool>,
+    state: &AppState,
+) -> CrwResult<()> {
+    let Some(name) = resolve_pinned_renderer(renderer) else {
         return Ok(());
     };
 
-    // "Pinned implies JS" unless the user explicitly set renderJs:false.
-    let effective_render_js = if req.render_js.is_none() {
+    // Mirror the fetch-path resolution at `crw-crawl/src/single.rs:41-50` so
+    // validation is consistent with what the actual request does. "Pinned
+    // implies JS" — when a renderer is pinned and the request omits
+    // `renderJs`, force the request to JS=true so a `render_js_default=false`
+    // server config doesn't silently send the request through HTTP-only.
+    let effective_request = if render_js.is_none() {
         Some(true)
     } else {
-        resolve_render_js(req.render_js, state.config.renderer.render_js_default)
+        render_js
     };
+    let effective_render_js =
+        resolve_render_js(effective_request, state.config.renderer.render_js_default);
 
     if effective_render_js == Some(false) {
         return Ok(());
@@ -42,6 +58,11 @@ pub(crate) fn validate_crawl_renderer(req: &CrawlRequest, state: &AppState) -> C
         )));
     }
     Ok(())
+}
+
+/// Crawl-specific wrapper around [`validate_renderer_pin`].
+pub(crate) fn validate_crawl_renderer(req: &CrawlRequest, state: &AppState) -> CrwResult<()> {
+    validate_renderer_pin(req.renderer, req.render_js, state)
 }
 
 /// Tracks a crawl job receiver + creation time for TTL cleanup.

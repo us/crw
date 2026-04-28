@@ -13,9 +13,15 @@ pool_size = 4
                                   # Per-request `renderJs` always wins over this default.
 
 # Failover order: LightPanda → Chrome. Configure one or both.
-# In auto mode, CRW tries each renderer in order. If LightPanda crashes
-# on complex SPAs, Chrome takes over. Chrome also handles Cloudflare
-# challenges via built-in stealth injection + challenge retry.
+# In auto mode, CRW tries each renderer in order. LightPanda is fast and
+# light, but its JS engine can crash on complex SPAs (Next.js App Router
+# hydration, modern React 18+, etc.). When that happens — or when the
+# rendered output contains framework error boundaries — the chain falls
+# through to Chrome. Chrome also handles Cloudflare challenges via
+# built-in stealth injection + challenge retry.
+#
+# Strongly recommended for production: configure both. LightPanda alone
+# will return broken HTML for sites that crash during hydration.
 
 [renderer.lightpanda]
 ws_url = "ws://127.0.0.1:9222/"

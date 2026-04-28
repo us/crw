@@ -361,18 +361,62 @@ impl FallbackRenderer {
                 Ok(result) => {
                     let text_len = html_body_text_len(&result.html);
                     let is_placeholder = detector::looks_like_loading_placeholder(&result.html);
-                    if text_len >= Self::MIN_RENDERED_TEXT_LEN && !is_placeholder {
+                    let failed_render = detector::looks_like_failed_render(&result.html);
+                    if text_len >= Self::MIN_RENDERED_TEXT_LEN
+                        && !is_placeholder
+                        && failed_render.is_none()
+                    {
                         return Ok(result);
                     }
                     tracing::info!(
                         renderer = renderer.name(),
                         text_len,
                         is_placeholder,
-                        "JS renderer returned thin/placeholder content, trying next renderer"
+                        failed_render = ?failed_render,
+                        "JS renderer returned thin/placeholder/failed content, trying next renderer"
                     );
-                    if thin_result.is_none() {
-                        thin_result = Some(result);
+                    // Annotate the result so it can surface through `thin_result`
+                    // if no later renderer succeeds. Preserves any warning the
+                    // renderer set, but adds the failover reason. We keep the
+                    // first thin result as the body to return (no point in
+                    // accumulating bodies), but stitch later renderers'
+                    // warnings onto it so debug output reflects every attempt.
+                    let mut annotated = result;
+                    let attempt_warning = if let Some(reason) = failed_render {
+                        Some(format!(
+                            "{} returned a failed render ({})",
+                            renderer.name(),
+                            reason.as_str()
+                        ))
+                    } else if is_placeholder {
+                        Some(format!(
+                            "{} returned a loading placeholder",
+                            renderer.name()
+                        ))
+                    } else {
+                        Some(format!(
+                            "{} returned thin content (text_len={text_len})",
+                            renderer.name()
+                        ))
+                    };
+                    if let Some(warn) = attempt_warning {
+                        annotated.warning = Some(match annotated.warning {
+                            Some(prev) => format!("{prev}; {warn}"),
+                            None => warn,
+                        });
                     }
+                    thin_result = Some(match thin_result {
+                        None => annotated,
+                        Some(mut existing) => {
+                            if let Some(later) = annotated.warning {
+                                existing.warning = Some(match existing.warning {
+                                    Some(prev) => format!("{prev}; {later}"),
+                                    None => later,
+                                });
+                            }
+                            existing
+                        }
+                    });
                 }
                 Err(e) => {
                     tracing::warn!(renderer = renderer.name(), "JS renderer failed: {e}");
@@ -680,6 +724,110 @@ mod tests {
             .unwrap();
         // First renderer in the chain wins when both succeed.
         assert!(result.html.contains("LP-"), "expected lightpanda first");
+    }
+
+    #[tokio::test]
+    async fn failover_skips_renderer_that_returns_failed_render() {
+        // LightPanda returns HTML with a Next.js error boundary marker.
+        // The chain must skip it and use Chrome's healthy result.
+        let bad_lp_html = format!(
+            "<html><body><div id=\"__next-error-0\">{}</div></body></html>",
+            "x".repeat(200)
+        );
+        let lp = Arc::new(MockFetcher {
+            name: "lightpanda",
+            behavior: MockBehavior::Ok(bad_lp_html),
+        }) as Arc<dyn PageFetcher>;
+        let chrome = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Ok(rich_html("CHROME-OK")),
+        }) as Arc<dyn PageFetcher>;
+        let r = make_renderer_with_mocks(vec![lp, chrome]);
+
+        let result = r
+            .fetch(
+                "https://example.com",
+                &HashMap::new(),
+                Some(true),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(result.html.contains("CHROME-OK"));
+        assert_eq!(result.rendered_with.as_deref(), Some("chrome"));
+    }
+
+    #[tokio::test]
+    async fn failover_surfaces_warning_when_only_failed_render_available() {
+        // Only LightPanda is configured and it returns a failed render. The
+        // call must succeed (best-effort thin_result fallback) but the warning
+        // must name the failure so callers can surface it to the user.
+        let bad_lp_html = format!(
+            "<html><body><div id=\"__next-error-0\">{}</div></body></html>",
+            "x".repeat(200)
+        );
+        let lp = Arc::new(MockFetcher {
+            name: "lightpanda",
+            behavior: MockBehavior::Ok(bad_lp_html),
+        }) as Arc<dyn PageFetcher>;
+        let r = make_renderer_with_mocks(vec![lp]);
+
+        let result = r
+            .fetch(
+                "https://example.com",
+                &HashMap::new(),
+                Some(true),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        let warning = result.warning.expect("expected warning to be set");
+        assert!(
+            warning.contains("lightpanda") && warning.contains("nextjs_client_error"),
+            "warning should name renderer + reason: {warning}"
+        );
+    }
+
+    #[tokio::test]
+    async fn failover_concats_warnings_across_two_failed_renderers() {
+        // Both renderers return failed-render HTML. The fallback `thin_result`
+        // should carry warnings from BOTH attempts so debugging captures the
+        // full chain, not just the first failure.
+        let bad_lp_html = format!(
+            "<html><body><div id=\"__next-error-0\">{}</div></body></html>",
+            "x".repeat(200)
+        );
+        let bad_chrome_html = format!(
+            "<html><body><div id=\"__next_error__\">{}</div></body></html>",
+            "y".repeat(200)
+        );
+        let lp = Arc::new(MockFetcher {
+            name: "lightpanda",
+            behavior: MockBehavior::Ok(bad_lp_html),
+        }) as Arc<dyn PageFetcher>;
+        let chrome = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Ok(bad_chrome_html),
+        }) as Arc<dyn PageFetcher>;
+        let r = make_renderer_with_mocks(vec![lp, chrome]);
+
+        let result = r
+            .fetch(
+                "https://example.com",
+                &HashMap::new(),
+                Some(true),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        let warning = result.warning.expect("expected warning to be set");
+        assert!(
+            warning.contains("lightpanda") && warning.contains("chrome"),
+            "warning should mention both renderers: {warning}"
+        );
     }
 
     #[tokio::test]
