@@ -6,8 +6,13 @@ services:
     depends_on:
       lightpanda:
         condition: service_started
+      # `chrome` is opt-in via `--profile heavy`. Compose treats a missing
+      # service as "not started", so listing it here is harmless when the
+      # profile is off — but keeping it makes `--profile heavy up` order
+      # crw after chrome instead of racing.
       chrome:
         condition: service_started
+        required: false
     environment:
       - RUST_LOG=info
       - CRW_CONFIG=config.docker
@@ -23,7 +28,12 @@ services:
   # Cloudflare challenges that LightPanda cannot.
   # --remote-allow-origins=* lets Chrome accept CDP connections where the
   # Host header is the Docker service name ("chrome") instead of localhost.
+  #
+  # Opt-in: `docker compose --profile heavy up -d`. Self-host users on
+  # small VPS instances skip the ~500MB Chromium image by default; the
+  # crw service falls back to LightPanda + HTTP-only when chrome is absent.
   chrome:
     image: chromedp/headless-shell:latest
+    profiles: ["heavy"]
     shm_size: "2g"
     command: ["--remote-allow-origins=*"]
