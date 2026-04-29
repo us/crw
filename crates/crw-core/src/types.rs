@@ -251,7 +251,22 @@ pub struct ScrapeData {
     pub chunks: Option<Vec<ChunkResult>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub warning: Option<String>,
+    /// Soft-failure / informational warnings collected through the render
+    /// chain. Empty vec serializes as missing for backward compatibility.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub warnings: Vec<String>,
+    /// Routing decision metadata (renderer chosen, failover chain).
+    /// Surfaced for debug + UI; `None` for legacy paths.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub render_decision: Option<RenderDecision>,
+    /// Credit cost attributed to this page (0 = not yet priced).
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub credit_cost: u32,
     pub metadata: PageMetadata,
+}
+
+fn is_zero_u32(v: &u32) -> bool {
+    *v == 0
 }
 
 /// Generic API response wrapper.

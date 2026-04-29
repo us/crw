@@ -24,7 +24,7 @@ pub mod structured;
 
 use crw_core::error::{CrwError, CrwResult};
 use crw_core::types::{
-    ChunkResult, ChunkStrategy, FilterMode, OutputFormat, PageMetadata, ScrapeData,
+    ChunkResult, ChunkStrategy, FilterMode, OutputFormat, PageMetadata, RenderDecision, ScrapeData,
 };
 
 /// Options for the high-level extraction pipeline.
@@ -34,6 +34,12 @@ pub struct ExtractOptions<'a> {
     pub status_code: u16,
     pub rendered_with: Option<String>,
     pub elapsed_ms: u64,
+    /// Routing decision metadata to surface to API consumers.
+    pub render_decision: Option<RenderDecision>,
+    /// Credit cost attributed to this fetch.
+    pub credit_cost: u32,
+    /// Soft-failure warnings collected through the render chain.
+    pub warnings: Vec<String>,
     pub formats: &'a [OutputFormat],
     pub only_main_content: bool,
     pub include_tags: &'a [String],
@@ -60,6 +66,9 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
         status_code,
         rendered_with,
         elapsed_ms,
+        render_decision,
+        credit_cost,
+        warnings,
         formats,
         only_main_content,
         include_tags,
@@ -240,6 +249,9 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
         json,
         chunks,
         warning: orphan_chunk_warning,
+        warnings,
+        render_decision,
+        credit_cost,
         metadata: PageMetadata {
             title: meta.title,
             description: meta.description,

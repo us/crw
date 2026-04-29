@@ -217,16 +217,34 @@ fn psl() -> &'static List {
 }
 
 /// Normalize a host for cache keying:
-/// - lowercase
-/// - strip leading `www.`
-/// - collapse to registrable domain (eTLD+1) using the public suffix list
+/// - lowercase, trim
+/// - strip a single leading `www.`
+/// - strip a trailing `.` (FQDN root) so `example.com.` and `example.com`
+///   share a cache entry
+/// - if the host parses as an IP literal (v4 or v6), return it raw — PSL
+///   does not understand IPs and would otherwise collapse `127.0.0.1`
+///   into `0.1`, colliding with every other `*.0.1` host
+/// - otherwise collapse to the registrable domain (eTLD+1) using the
+///   public suffix list
 ///
 /// Multi-tenant hosts under a public suffix (e.g. `foo.myshopify.com`,
 /// `foo.vercel.app`) keep their tenant label because the suffix itself
 /// is `myshopify.com` / `vercel.app` — eTLD+1 ends up being the tenant.
 pub fn normalize_host(input: &str) -> String {
-    let lower = input.trim().to_ascii_lowercase();
+    let lower = input.trim().trim_end_matches('.').to_ascii_lowercase();
     let trimmed = lower.strip_prefix("www.").unwrap_or(&lower);
+
+    // IP literal? Bypass PSL — its eTLD+1 logic would corrupt the address.
+    if trimmed.parse::<std::net::IpAddr>().is_ok() {
+        return trimmed.to_string();
+    }
+    // Bracketed IPv6 (`[::1]`): strip brackets and parse.
+    if let Some(stripped) = trimmed.strip_prefix('[').and_then(|s| s.strip_suffix(']'))
+        && stripped.parse::<std::net::IpAddr>().is_ok()
+    {
+        return stripped.to_string();
+    }
+
     let bytes = trimmed.as_bytes();
     match psl().domain(bytes) {
         Some(domain) => std::str::from_utf8(domain.as_bytes())
@@ -268,6 +286,33 @@ mod tests {
     #[test]
     fn case_insensitive() {
         assert_eq!(normalize_host("WWW.Example.COM"), "example.com");
+    }
+
+    #[test]
+    fn ipv4_returns_raw() {
+        assert_eq!(normalize_host("127.0.0.1"), "127.0.0.1");
+        assert_eq!(normalize_host("192.168.0.1"), "192.168.0.1");
+    }
+
+    #[test]
+    fn ipv4_distinct_addresses_distinct_keys() {
+        // Pre-fix this collided into "0.1" via the PSL eTLD+1 logic.
+        assert_ne!(normalize_host("127.0.0.1"), normalize_host("192.168.0.1"));
+    }
+
+    #[test]
+    fn ipv6_bracketed_returns_unbracketed() {
+        assert_eq!(normalize_host("[::1]"), "::1");
+        assert_eq!(normalize_host("::1"), "::1");
+    }
+
+    #[test]
+    fn trailing_dot_stripped() {
+        assert_eq!(normalize_host("example.com."), "example.com");
+        assert_eq!(
+            normalize_host("example.com."),
+            normalize_host("example.com")
+        );
     }
 
     #[test]

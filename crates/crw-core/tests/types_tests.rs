@@ -149,6 +149,9 @@ fn scrape_data_skip_serializing_none() {
         json: None,
         chunks: None,
         warning: None,
+        warnings: Vec::new(),
+        render_decision: None,
+        credit_cost: 0,
         metadata: PageMetadata {
             title: None,
             description: None,

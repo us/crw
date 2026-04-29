@@ -58,6 +58,9 @@ pub fn extract_pdf(
         json: None,
         chunks: None,
         warning,
+        warnings: Vec::new(),
+        render_decision: None,
+        credit_cost: 0,
         metadata,
     })
 }
