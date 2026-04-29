@@ -129,6 +129,18 @@ impl Backend {
 
 // --- Proxy mode HTTP dispatch ---
 
+// Per-endpoint timeouts. /map and /crawl can take longer because the engine
+// fetches sitemaps and discovers links across many pages; scrape/search are
+// single-page and capped lower. status is a cheap polling GET.
+//
+// Keep these aligned with crw-saas/src/lib/crw-client.ts so a saas-fronted
+// MCP doesn't trip its own client before the upstream responds.
+const TIMEOUT_SCRAPE: std::time::Duration = std::time::Duration::from_secs(120);
+const TIMEOUT_CRAWL_KICKOFF: std::time::Duration = std::time::Duration::from_secs(120);
+const TIMEOUT_CRAWL_STATUS: std::time::Duration = std::time::Duration::from_secs(30);
+const TIMEOUT_MAP: std::time::Duration = std::time::Duration::from_secs(180);
+const TIMEOUT_SEARCH: std::time::Duration = std::time::Duration::from_secs(120);
+
 async fn proxy_call_tool(
     client: &reqwest::Client,
     base_url: &str,
@@ -152,6 +164,7 @@ async fn proxy_call_tool(
             let resp = client
                 .post(format!("{base_url}/v1/scrape"))
                 .headers(headers)
+                .timeout(TIMEOUT_SCRAPE)
                 .json(&args)
                 .send()
                 .await
@@ -162,6 +175,7 @@ async fn proxy_call_tool(
             let resp = client
                 .post(format!("{base_url}/v1/crawl"))
                 .headers(headers)
+                .timeout(TIMEOUT_CRAWL_KICKOFF)
                 .json(&args)
                 .send()
                 .await
@@ -176,6 +190,7 @@ async fn proxy_call_tool(
             let resp = client
                 .get(format!("{base_url}/v1/crawl/{id}"))
                 .headers(headers)
+                .timeout(TIMEOUT_CRAWL_STATUS)
                 .send()
                 .await
                 .map_err(|e| format!("HTTP request failed: {e}"))?;
@@ -185,6 +200,7 @@ async fn proxy_call_tool(
             let resp = client
                 .post(format!("{base_url}/v1/map"))
                 .headers(headers)
+                .timeout(TIMEOUT_MAP)
                 .json(&args)
                 .send()
                 .await
@@ -195,6 +211,7 @@ async fn proxy_call_tool(
             let resp = client
                 .post(format!("{base_url}/v1/search"))
                 .headers(headers)
+                .timeout(TIMEOUT_SEARCH)
                 .json(&args)
                 .send()
                 .await
@@ -247,9 +264,10 @@ async fn main() {
         tracing::info!("Starting {SERVER_NAME} v{SERVER_VERSION} (proxy mode)");
         tracing::info!("API URL: {api_url}");
 
+        // Per-request timeouts are applied below in proxy_call_tool — do not set
+        // a global .timeout() here, or it would cap long endpoints like /map.
         let client = reqwest::Client::builder()
             .redirect(crw_core::url_safety::safe_redirect_policy())
-            .timeout(std::time::Duration::from_secs(120))
             .connect_timeout(std::time::Duration::from_secs(10))
             .build()
             .expect("reqwest client build failed");
