@@ -112,6 +112,11 @@ fn stamp_http_decision(result: &mut FetchResult, requested_renderer: Option<&str
         Some("http") => RenderDecision::UserPinned { renderer: kind },
         _ => RenderDecision::AutoDefault { chosen: kind },
     });
+    // Mirror the JS-renderer metric so dashboards see HTTP routing too.
+    metrics()
+        .render_route_decision_total
+        .with_label_values(&[kind.as_str(), "success"])
+        .inc();
 }
 
 /// Extract the host from a URL string, returning an empty string on failure.
@@ -674,8 +679,29 @@ impl FallbackRenderer {
                 result.credit_cost = credit_for(last);
                 result.render_decision = Some(RenderDecision::Failover {
                     chain: chain.clone(),
-                    reason: last_failover_reason.unwrap_or(FailoverErrorKind::Other),
+                    reason: last_failover_reason
+                        .clone()
+                        .unwrap_or(FailoverErrorKind::Other),
                 });
+            }
+            // When the user hard-pinned a single renderer and it failed thin,
+            // failover never ran — surface an actionable hint so callers (SaaS
+            // playground, CLI, MCP) can show a banner instead of silently
+            // returning broken markdown with `success: true`.
+            if is_user_pinned
+                && chain.len() == 1
+                && let Some(pinned) = chain.first().copied()
+            {
+                let reason = last_failover_reason
+                    .as_ref()
+                    .map(|r| r.as_str())
+                    .unwrap_or("unknown");
+                let hint = format!(
+                    "Pinned renderer '{}' returned a failed render ({}). Content may be unreliable. Retry with renderer=\"chrome\" or omit the renderer field for auto-failover.",
+                    pinned.as_str(),
+                    reason,
+                );
+                result.warnings.push(hint);
             }
             Ok(result)
         } else {
@@ -1190,6 +1216,61 @@ mod tests {
                 skipped: RendererKind::Lightpanda,
                 chosen: RendererKind::Chrome
             })
+        ));
+    }
+
+    #[tokio::test]
+    async fn user_pinned_failed_render_emits_warning() {
+        // Pin lightpanda. It returns failed-render HTML (Next.js error
+        // boundary). Because the user hard-pinned, no failover happens.
+        // The thin result must carry an actionable warning so callers can
+        // surface it instead of silently returning broken markdown.
+        let bad_html = format!(
+            "<html><body><div id=\"__next-error-0\">{}</div></body></html>",
+            "x".repeat(200)
+        );
+        let lp = Arc::new(MockFetcher {
+            name: "lightpanda",
+            behavior: MockBehavior::Ok(bad_html),
+        }) as Arc<dyn PageFetcher>;
+        let chrome = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Ok(rich_html("CHROME-")),
+        }) as Arc<dyn PageFetcher>;
+        let r = make_renderer_with_mocks(vec![lp, chrome]);
+
+        let result = r
+            .fetch(
+                "https://example.com",
+                &HashMap::new(),
+                Some(true),
+                None,
+                Some("lightpanda"),
+            )
+            .await
+            .unwrap();
+        let pin_hint = result
+            .warnings
+            .iter()
+            .find(|w| w.starts_with("Pinned renderer 'lightpanda'"));
+        assert!(
+            pin_hint.is_some(),
+            "expected pin-failure hint in warnings, got: {:?}",
+            result.warnings
+        );
+        let hint = pin_hint.unwrap();
+        assert!(
+            hint.contains("nextJsClientError"),
+            "hint should name camelCase reason: {hint}"
+        );
+        assert!(
+            hint.contains("renderer=\"chrome\""),
+            "hint should suggest a fix: {hint}"
+        );
+        // chain stays single-element because user pinned → no chrome attempt
+        assert!(matches!(
+            result.render_decision,
+            Some(RenderDecision::Failover { ref chain, .. }) if chain.len() == 1
         ));
     }
 

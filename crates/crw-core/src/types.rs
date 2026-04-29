@@ -650,6 +650,22 @@ impl FailoverErrorKind {
                 | FailoverErrorKind::PlaceholderContent
         )
     }
+
+    /// Stable camelCase identifier matching the JSON `serde` rendering.
+    /// Used in user-facing warnings so the string a client sees in a
+    /// `warnings[]` entry matches the `renderDecision.reason` field.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            FailoverErrorKind::NextJsClientError => "nextJsClientError",
+            FailoverErrorKind::EmptyNextRoot => "emptyNextRoot",
+            FailoverErrorKind::LightpandaTimeout => "lightpandaTimeout",
+            FailoverErrorKind::LightpandaCrash => "lightpandaCrash",
+            FailoverErrorKind::CloudflareChallenge => "cloudflareChallenge",
+            FailoverErrorKind::PlaceholderContent => "placeholderContent",
+            FailoverErrorKind::NetworkError => "networkError",
+            FailoverErrorKind::Other => "other",
+        }
+    }
 }
 
 /// Result of fetching + optionally rendering a page.
