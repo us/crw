@@ -21,8 +21,24 @@ services:
 
   # Primary JS renderer — lightweight (~64 MB), fast startup.
   # Handles most static-JS sites. Falls back to Chrome for complex SPAs.
+  #
+  # `restart: unless-stopped` is load-bearing: LightPanda is known to OOM
+  # or segfault on adversarial pages (heavy SPA bundles, Cloudflare turnstile),
+  # and without auto-restart the breaker stays open forever and every JS
+  # request falls through to Chrome — defeating the lightweight tier.
+  # `mem_limit` keeps a runaway tab from dragging Chrome and the host into
+  # swap on small VPS instances.
   lightpanda:
     image: lightpanda/browser:latest
+    restart: unless-stopped
+    mem_limit: 1g
+    memswap_limit: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9222 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 
   # Fallback JS renderer — full Chromium, handles complex SPAs and
   # Cloudflare challenges that LightPanda cannot.
@@ -37,3 +53,12 @@ services:
     profiles: ["heavy"]
     shm_size: "2g"
     command: ["--remote-allow-origins=*"]
+    restart: unless-stopped
+    mem_limit: 2g
+    memswap_limit: 2g
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9222 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
