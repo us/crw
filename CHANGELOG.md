@@ -2,6 +2,23 @@
 
 All notable changes to CRW are documented here.
 
+## [0.4.2](https://github.com/us/crw/compare/v0.4.1...v0.4.2) (2026-04-29)
+
+
+### Features
+
+* **core:** add render decision types and prometheus metrics scaffold ([e08682b](https://github.com/us/crw/commit/e08682b761822a7100e0f40cffe4cd4f3dcf2a5c))
+* **renderer:** add per-host renderer preference cache ([21e41d1](https://github.com/us/crw/commit/21e41d1330bed255854824f55c3419a590a86411))
+* **renderer:** track HTTP routing and warn on pinned-renderer failure ([3208d27](https://github.com/us/crw/commit/3208d277aa4c480c1257648dc86a7151dcfb8976))
+* **renderer:** wire host preferences, circuit breakers, and CF detection ([0c53c64](https://github.com/us/crw/commit/0c53c645562c43a4f62aa22f1e7f603c42b3b3f3))
+
+
+### Bug Fixes
+
+* **core,renderer:** surface render metadata and harden host normalization ([ee4130b](https://github.com/us/crw/commit/ee4130b62467defb61c5b85bf267c767b3bd909a))
+* **renderer:** correct failure classification and routing decisions ([4d684bd](https://github.com/us/crw/commit/4d684bdaa0cd1a27f011d73322099258a0f713be))
+* **renderer:** probe lifecycle, RAII guard, breaker counter ([02044f5](https://github.com/us/crw/commit/02044f573cd6274231b3856cd799d7e74d61f9ba))
+
 ## [0.4.1](https://github.com/us/crw/compare/v0.4.0...v0.4.1) (2026-04-28)
 
 
