@@ -367,7 +367,30 @@ impl FallbackRenderer {
                 }
             }
             None => {
-                let mut result = self.http.fetch(url, headers, None).await?;
+                // In auto mode, an HTTP-layer failure (TargetUnreachable, body
+                // decode mid-stream, oversize response, transient network) is
+                // not terminal: if a JS renderer is available, escalate. Many
+                // sites that reject reqwest's TLS/UA fingerprint succeed via a
+                // real Chromium navigation. Bench analysis: 10/147 false
+                // "unreachable" + 5/147 "http_502" map to this branch.
+                let mut result = match self.http.fetch(url, headers, None).await {
+                    Ok(r) => r,
+                    Err(e) if !self.js_renderers.is_empty() => {
+                        tracing::info!(
+                            url,
+                            error = %e,
+                            "HTTP fetch failed, escalating to JS renderer"
+                        );
+                        return self
+                            .fetch_with_js(url, headers, wait_for_ms, requested_renderer)
+                            .await
+                            .map_err(|js_err| {
+                                tracing::warn!("Both HTTP and JS failed: http={e}, js={js_err}");
+                                js_err
+                            });
+                    }
+                    Err(e) => return Err(e),
+                };
 
                 // PDFs don't need JS rendering — return immediately.
                 if result.content_type.as_deref() == Some("application/pdf") {

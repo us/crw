@@ -6,8 +6,11 @@ use std::time::Instant;
 
 use crate::traits::PageFetcher;
 
-/// Maximum response body size (10 MB) to prevent memory exhaustion.
-const MAX_RESPONSE_BYTES: usize = 10 * 1024 * 1024;
+/// Maximum response body size (50 MB) to prevent memory exhaustion. The
+/// previous 10 MB cap rejected legitimate large reports/PDFs (bench had a
+/// ~12 MB PDF mis-flagged as 502). 50 MB is generous enough for almost any
+/// document while still bounding memory use.
+const MAX_RESPONSE_BYTES: usize = 50 * 1024 * 1024;
 /// TCP connect timeout for HTTP requests.
 const HTTP_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 /// Overall request timeout for HTTP requests.

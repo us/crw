@@ -179,26 +179,81 @@ pub async fn scrape_url(
     }
 
     let warning = derive_target_warning(&fetch_result);
-    let mut data = crw_extract::extract(crw_extract::ExtractOptions {
-        raw_html: &fetch_result.html,
-        source_url: &fetch_result.url,
-        status_code: fetch_result.status_code,
-        rendered_with: fetch_result.rendered_with.clone(),
-        elapsed_ms: fetch_result.elapsed_ms,
-        render_decision: fetch_result.render_decision.clone(),
-        credit_cost: fetch_result.credit_cost,
-        warnings: fetch_result.warnings.clone(),
-        formats: &req.formats,
-        only_main_content: req.only_main_content,
-        include_tags: &req.include_tags,
-        exclude_tags: &req.exclude_tags,
-        css_selector: req.css_selector.as_deref(),
-        xpath: req.xpath.as_deref(),
-        chunk_strategy: req.chunk_strategy.as_ref(),
-        query: req.query.as_deref(),
-        filter_mode: req.filter_mode.as_ref(),
-        top_k: req.top_k,
-    })?;
+    fn build_extract_opts<'a>(
+        fr: &'a FetchResult,
+        req: &'a ScrapeRequest,
+    ) -> crw_extract::ExtractOptions<'a> {
+        crw_extract::ExtractOptions {
+            raw_html: &fr.html,
+            source_url: &fr.url,
+            status_code: fr.status_code,
+            rendered_with: fr.rendered_with.clone(),
+            elapsed_ms: fr.elapsed_ms,
+            render_decision: fr.render_decision.clone(),
+            credit_cost: fr.credit_cost,
+            warnings: fr.warnings.clone(),
+            formats: &req.formats,
+            only_main_content: req.only_main_content,
+            include_tags: &req.include_tags,
+            exclude_tags: &req.exclude_tags,
+            css_selector: req.css_selector.as_deref(),
+            xpath: req.xpath.as_deref(),
+            chunk_strategy: req.chunk_strategy.as_ref(),
+            query: req.query.as_deref(),
+            filter_mode: req.filter_mode.as_ref(),
+            top_k: req.top_k,
+        }
+    }
+    let mut data = crw_extract::extract(build_extract_opts(&fetch_result, req))?;
+
+    // Post-extract escalation: HTTP-only fetch returned 2xx but extraction
+    // produced no markdown. Re-fetch with JS rendering forced. Catches sites
+    // whose HTML is substantive (so `looks_like_thin_html` doesn't trigger at
+    // the renderer layer) but whose content lives entirely in client-side
+    // hydration or post-load shadow DOM. Bench analysis: ~13/147 failures.
+    let md_is_empty = data
+        .markdown
+        .as_deref()
+        .map(|s| s.trim().len() < 100)
+        .unwrap_or(true);
+    let used_http_only = matches!(
+        fetch_result.rendered_with.as_deref(),
+        Some("http") | Some("http_only_fallback")
+    );
+    let is_2xx = (200..300).contains(&fetch_result.status_code);
+    let escalation_eligible = effective_render_js != Some(false)
+        && !needs_temp_fetcher
+        && !renderer.js_renderer_names().is_empty()
+        && req.formats.contains(&OutputFormat::Markdown);
+
+    if md_is_empty && used_http_only && is_2xx && escalation_eligible {
+        tracing::info!(
+            url = %req.url,
+            html_len = fetch_result.html.len(),
+            "HTTP 2xx but markdown extraction empty, escalating to JS renderer"
+        );
+        match renderer
+            .fetch(&req.url, &req.headers, Some(true), req.wait_for, pinned)
+            .await
+        {
+            Ok(js_fetch) if js_fetch.status_code < 400 => {
+                if let Ok(js_data) = crw_extract::extract(build_extract_opts(&js_fetch, req)) {
+                    let js_md_len = js_data
+                        .markdown
+                        .as_deref()
+                        .map(|s| s.trim().len())
+                        .unwrap_or(0);
+                    if js_md_len >= 100 {
+                        data = js_data;
+                    }
+                }
+            }
+            Ok(_) => {}
+            Err(e) => {
+                tracing::warn!(url = %req.url, "JS escalation after empty markdown failed: {e}");
+            }
+        }
+    }
     // Merge target warning with any extraction warning (e.g. orphan chunk params).
     data.warning = match (warning, data.warning) {
         (Some(w1), Some(w2)) => Some(format!("{w1}; {w2}")),
