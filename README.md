@@ -214,6 +214,38 @@ This domain is for use in illustrative examples in documents.
 You may use this domain in literature without prior coordination.
 ```
 
+#### Renderer selection & response metadata
+
+CRW picks between three rendering backends per request:
+
+- **`http`** (1 credit) — plain HTTP fetch. Used for static pages.
+- **`lightpanda`** (1 credit) — lightweight JS renderer for most SPAs.
+- **`chrome`** (2 credits) — full Chromium for sites where LightPanda's hydration crashes (e.g. some Next.js App Router pages).
+
+By default the engine auto-selects, learns per-host preferences after repeated failures, and falls over chrome → lightpanda → http transparently. Pass `"renderer"` to pin one of `auto | http | lightpanda | chrome` (Firecrawl's `engine` is also accepted as an alias).
+
+Every successful response includes routing metadata so callers can audit and debug:
+
+```jsonc
+{
+  "data": {
+    "markdown": "...",
+    "renderDecision": {
+      "kind": "failover",                 // autoDefault | autoPromoted | userPinned | failover | breakerSkipped
+      "chain": ["lightpanda", "chrome"],  // renderers actually attempted
+      "reason": "nextJsClientError"       // why the chain advanced
+    },
+    "creditCost": 2,
+    "warnings": [
+      "lightpanda returned a failed render (nextjs_client_error)"
+    ],
+    "metadata": { "renderedWith": "chrome", /* … */ }
+  }
+}
+```
+
+When you hard-pin a renderer that fails (e.g. `"renderer":"lightpanda"` on a hydration-crashing page), `success` stays `true` for protocol compatibility — but `data.warnings[]` carries an actionable hint suggesting `renderer="chrome"` or auto mode. Clients should surface the warnings array.
+
 ### Crawl
 
 Scrape all pages of a website asynchronously.
@@ -487,6 +519,18 @@ Custom port:
 CRW_SERVER__PORT=8080 crw-server                                       # env var
 docker run -p 8080:8080 -e CRW_SERVER__PORT=8080 ghcr.io/us/crw       # Docker
 ```
+
+**Docker Compose** ships with `lightpanda` enabled by default; `chrome` is opt-in to keep small VPS deploys lean (~500MB image + 1GB resident):
+
+```bash
+# baseline — http + lightpanda
+docker compose up -d
+
+# add chrome failover (recommended for production)
+docker compose --profile heavy up -d
+```
+
+Without `--profile heavy`, the engine still serves all endpoints — chrome-required URLs will exhaust their lightpanda failover and surface `data.warnings[]` instead of routing to chrome.
 
 > **When do you need `crw-server`?** Only if you want a REST API endpoint. The Python SDK (`CrwClient()`) and MCP binary (`crw-mcp`) both run a self-contained engine — no server required.
 
