@@ -616,6 +616,9 @@ mod tests {
                     rendered_with: Some(self.name.to_string()),
                     elapsed_ms: 0,
                     warning: None,
+                    render_decision: None,
+                    credit_cost: 0,
+                    warnings: Vec::new(),
                 }),
                 MockBehavior::Err(msg) => Err(CrwError::RendererError(msg.clone())),
             }

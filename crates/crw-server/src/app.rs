@@ -71,6 +71,10 @@ pub fn create_app(state: AppState) -> Router {
             "/health",
             get(routes::health::health).fallback(method_not_allowed),
         )
+        .route(
+            "/metrics",
+            get(routes::metrics::metrics).fallback(method_not_allowed),
+        )
         .with_state(state)
         .merge(api_routes)
         .layer(axum::middleware::from_fn(move |req, next| {

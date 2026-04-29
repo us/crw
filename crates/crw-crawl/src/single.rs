@@ -336,6 +336,9 @@ mod tests {
             rendered_with: None,
             elapsed_ms: 10,
             warning: None,
+            render_decision: None,
+            credit_cost: 0,
+            warnings: Vec::new(),
         }
     }
 

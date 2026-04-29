@@ -419,6 +419,9 @@ impl CdpRenderer {
             rendered_with: Some(self.name.clone()),
             elapsed_ms: start.elapsed().as_millis() as u64,
             warning: None,
+            render_decision: None,
+            credit_cost: 0,
+            warnings: Vec::new(),
         })
     }
 

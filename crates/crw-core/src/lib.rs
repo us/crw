@@ -19,6 +19,7 @@
 pub mod config;
 pub mod error;
 pub mod mcp;
+pub mod metrics;
 pub mod types;
 pub mod url_safety;
 

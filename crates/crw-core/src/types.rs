@@ -551,6 +551,92 @@ pub type MapResponse = ApiResponse<MapData>;
 
 // ── Render result ──
 
+/// Closed enum of renderer kinds used in routing decisions and metrics.
+/// Distinct from `RequestedRenderer` (user-facing input) — this is the
+/// internal vocabulary for what actually executed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RendererKind {
+    Http,
+    Lightpanda,
+    Chrome,
+}
+
+impl RendererKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            RendererKind::Http => "http",
+            RendererKind::Lightpanda => "lightpanda",
+            RendererKind::Chrome => "chrome",
+        }
+    }
+}
+
+/// Why and how a renderer was chosen for a given request. Surfaced in
+/// `FetchResult.render_decision` and exposed to API callers behind a debug gate.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum RenderDecision {
+    /// User pinned a specific renderer; auto-mode learning is bypassed.
+    UserPinned { renderer: RendererKind },
+    /// Auto mode used the configured default chain (no host preference yet).
+    AutoDefault { chosen: RendererKind },
+    /// Auto mode promoted a heavy renderer based on host preference.
+    AutoPromoted {
+        chosen: RendererKind,
+        from: RendererKind,
+        reason: String,
+    },
+    /// Auto mode skipped a renderer because its circuit breaker was open.
+    BreakerSkipped {
+        skipped: RendererKind,
+        chosen: RendererKind,
+    },
+    /// Failover triggered after the initial choice failed.
+    Failover {
+        chain: Vec<RendererKind>,
+        reason: FailoverErrorKind,
+    },
+}
+
+/// Closed taxonomy of failure reasons that drive failover and host learning.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FailoverErrorKind {
+    /// LightPanda hydration / runtime exception (counts toward promotion).
+    NextJsClientError,
+    /// LightPanda returned an empty Next.js root shell.
+    EmptyNextRoot,
+    /// LightPanda timed out.
+    LightpandaTimeout,
+    /// LightPanda crashed or connection died.
+    LightpandaCrash,
+    /// Cloudflare challenge detected (combination markers).
+    CloudflareChallenge,
+    /// Generic placeholder / too-short content.
+    PlaceholderContent,
+    /// Network error during render.
+    NetworkError,
+    /// Other / unclassified failure (does NOT count for promotion).
+    Other,
+}
+
+impl FailoverErrorKind {
+    /// Strict failure predicate: only LightPanda-specific failures should
+    /// drive host preference promotion. CF challenges and network errors
+    /// are not LightPanda's fault.
+    pub fn counts_for_promotion(&self) -> bool {
+        matches!(
+            self,
+            FailoverErrorKind::NextJsClientError
+                | FailoverErrorKind::EmptyNextRoot
+                | FailoverErrorKind::LightpandaTimeout
+                | FailoverErrorKind::LightpandaCrash
+                | FailoverErrorKind::PlaceholderContent
+        )
+    }
+}
+
 /// Result of fetching + optionally rendering a page.
 #[derive(Debug, Clone)]
 pub struct FetchResult {
@@ -562,4 +648,10 @@ pub struct FetchResult {
     pub rendered_with: Option<String>,
     pub elapsed_ms: u64,
     pub warning: Option<String>,
+    /// Routing decision metadata. `None` for legacy / non-instrumented paths.
+    pub render_decision: Option<RenderDecision>,
+    /// Credit cost for this request (set by routing layer; 0 = not yet priced).
+    pub credit_cost: u32,
+    /// Soft-failure / informational warnings to surface to the caller.
+    pub warnings: Vec<String>,
 }
