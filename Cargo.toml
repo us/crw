@@ -80,6 +80,10 @@ clap = { version = "4", features = ["derive", "env"] }
 # Metrics
 prometheus = "0.13"
 
+# Caching (host preferences)
+moka = { version = "0.12", features = ["future"] }
+publicsuffix = "2"
+
 # Misc
 uuid = { version = "1", features = ["v4", "serde"] }
 url = { version = "2", features = ["serde"] }

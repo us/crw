@@ -40,6 +40,7 @@ pub mod cdp;
 pub mod cdp_conn;
 pub mod detector;
 pub mod http_only;
+pub mod preference;
 pub mod traits;
 
 use crw_core::config::{BUILTIN_UA_POOL, RendererConfig, RendererMode, StealthConfig};
