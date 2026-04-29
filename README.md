@@ -45,6 +45,23 @@
 
 ## What's New
 
+### [0.4.2](https://github.com/us/crw/compare/v0.4.1...v0.4.2) (2026-04-29)
+
+
+### Features
+
+* **core:** add render decision types and prometheus metrics scaffold ([e08682b](https://github.com/us/crw/commit/e08682b761822a7100e0f40cffe4cd4f3dcf2a5c))
+* **renderer:** add per-host renderer preference cache ([21e41d1](https://github.com/us/crw/commit/21e41d1330bed255854824f55c3419a590a86411))
+* **renderer:** track HTTP routing and warn on pinned-renderer failure ([3208d27](https://github.com/us/crw/commit/3208d277aa4c480c1257648dc86a7151dcfb8976))
+* **renderer:** wire host preferences, circuit breakers, and CF detection ([0c53c64](https://github.com/us/crw/commit/0c53c645562c43a4f62aa22f1e7f603c42b3b3f3))
+
+
+### Bug Fixes
+
+* **core,renderer:** surface render metadata and harden host normalization ([ee4130b](https://github.com/us/crw/commit/ee4130b62467defb61c5b85bf267c767b3bd909a))
+* **renderer:** correct failure classification and routing decisions ([4d684bd](https://github.com/us/crw/commit/4d684bdaa0cd1a27f011d73322099258a0f713be))
+* **renderer:** probe lifecycle, RAII guard, breaker counter ([02044f5](https://github.com/us/crw/commit/02044f573cd6274231b3856cd799d7e74d61f9ba))
+
 ### [0.4.1](https://github.com/us/crw/compare/v0.4.0...v0.4.1) (2026-04-28)
 
 
@@ -72,21 +89,6 @@
 ### Miscellaneous
 
 * release 0.4.0 ([e15fc74](https://github.com/us/crw/commit/e15fc74cf0dfc7c02ca7e6b82258aeff57f74f17))
-
-### [0.3.6](https://github.com/us/crw/compare/v0.3.5...v0.3.6) (2026-04-21)
-
-
-### Features
-
-* **ci:** add Google Indexing API notification for docs changes ([3b5a340](https://github.com/us/crw/commit/3b5a3404e91a1d776275ac312ad08cad86339a98))
-* **docs:** generate static HTML pages for SEO indexability ([7b321c0](https://github.com/us/crw/commit/7b321c0a26cea0da32d42e952f6327b468bdb099))
-
-
-### Bug Fixes
-
-* **ci:** trigger release workflow after release-please creates tag ([27f2b67](https://github.com/us/crw/commit/27f2b67d0b9db4f7b1bacc6c901e9c92131a3a95))
-* **mcp:** bump npm optionalDependencies from 0.3.0 to 0.3.5 ([0e363e0](https://github.com/us/crw/commit/0e363e0fc512eb18bcb8284a9723b00f50e2dfd0))
-* **renderer:** detect loading placeholders and poll for content stability ([d3b642b](https://github.com/us/crw/commit/d3b642b2736b4568fa8a3502e521b8bede60317f))
 
 [Full changelog →](CHANGELOG.md)
 
