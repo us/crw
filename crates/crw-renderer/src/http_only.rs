@@ -12,6 +12,30 @@ const MAX_RESPONSE_BYTES: usize = 10 * 1024 * 1024;
 const HTTP_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 /// Overall request timeout for HTTP requests.
 const HTTP_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+/// One retry on transient errors. GET is idempotent so a single retry is safe;
+/// origins frequently emit 502/503/504 under brief overload and connect/timeout
+/// errors are often DNS or TCP races that resolve on the next attempt.
+const HTTP_MAX_RETRIES: u32 = 1;
+/// Backoff before the retry attempt. Short — we are inside the request path
+/// and the upstream timeout is 30s, so we cannot afford long sleeps.
+const HTTP_RETRY_BACKOFF: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// Returns true if a `reqwest::Error` represents a transient failure worth
+/// retrying. Connect failures often succeed on the next attempt; `is_timeout`
+/// covers cases where the first connection stalled before the body started
+/// arriving. `is_request()` is intentionally NOT included — it also fires on
+/// permanent builder/config errors that no amount of retrying will fix.
+fn is_retriable_error(e: &reqwest::Error) -> bool {
+    e.is_connect() || e.is_timeout()
+}
+
+/// Returns true if a response status warrants one retry. Limited to the
+/// canonical transient gateway/origin signals — 5xx errors that are not
+/// retriable (501, 505) are excluded so we don't waste time on permanent
+/// upstream misconfigurations.
+fn is_retriable_status(status: u16) -> bool {
+    matches!(status, 502..=504)
+}
 
 /// Stealth headers injected when stealth mode is enabled.
 /// These mimic a real browser's default request headers.
@@ -66,35 +90,64 @@ impl PageFetcher for HttpFetcher {
     ) -> CrwResult<FetchResult> {
         let start = Instant::now();
 
-        let mut req = self.client.get(url);
-
-        // Inject stealth headers before user-supplied headers so users can override.
-        if self.inject_stealth_headers {
-            req = req
-                .header("Accept", STEALTH_ACCEPT)
-                .header("Accept-Language", "en-US,en;q=0.9")
-                .header("Sec-Ch-Ua", STEALTH_SEC_CH_UA)
-                .header("Sec-Ch-Ua-Mobile", "?0")
-                .header("Sec-Ch-Ua-Platform", "\"Windows\"")
-                .header("Sec-Fetch-Dest", "document")
-                .header("Sec-Fetch-Mode", "navigate")
-                .header("Sec-Fetch-Site", "none")
-                .header("Sec-Fetch-User", "?1")
-                .header("Upgrade-Insecure-Requests", "1")
-                .header("Priority", "u=0, i");
-        }
-
-        for (k, v) in headers {
-            req = req.header(k.as_str(), v.as_str());
-        }
-
-        let resp = req.send().await.map_err(|e| {
-            if e.is_connect() {
-                CrwError::TargetUnreachable(format!("Could not reach {url}: {e}"))
-            } else {
-                CrwError::HttpError(e.to_string())
+        // Build a fresh, fully-decorated request for each attempt. Closure
+        // captures `self`, `url`, and `headers`; called once per attempt so
+        // every retry sends an independent (yet identical) request.
+        let build_request = || {
+            let mut req = self.client.get(url);
+            if self.inject_stealth_headers {
+                req = req
+                    .header("Accept", STEALTH_ACCEPT)
+                    .header("Accept-Language", "en-US,en;q=0.9")
+                    .header("Sec-Ch-Ua", STEALTH_SEC_CH_UA)
+                    .header("Sec-Ch-Ua-Mobile", "?0")
+                    .header("Sec-Ch-Ua-Platform", "\"Windows\"")
+                    .header("Sec-Fetch-Dest", "document")
+                    .header("Sec-Fetch-Mode", "navigate")
+                    .header("Sec-Fetch-Site", "none")
+                    .header("Sec-Fetch-User", "?1")
+                    .header("Upgrade-Insecure-Requests", "1")
+                    .header("Priority", "u=0, i");
             }
-        })?;
+            for (k, v) in headers {
+                req = req.header(k.as_str(), v.as_str());
+            }
+            req
+        };
+
+        // Single-retry loop on transient errors / 502-503-504. GET is
+        // idempotent so this is safe.
+        let mut attempt: u32 = 0;
+        let resp = loop {
+            match build_request().send().await {
+                Ok(r) if attempt < HTTP_MAX_RETRIES && is_retriable_status(r.status().as_u16()) => {
+                    tracing::debug!(
+                        "HTTP {} from {url}, retrying (attempt {})",
+                        r.status(),
+                        attempt + 1
+                    );
+                    drop(r);
+                    attempt += 1;
+                    tokio::time::sleep(HTTP_RETRY_BACKOFF).await;
+                }
+                Ok(r) => break r,
+                Err(e) if attempt < HTTP_MAX_RETRIES && is_retriable_error(&e) => {
+                    tracing::debug!(
+                        "transient HTTP error to {url} ({e}), retrying (attempt {})",
+                        attempt + 1
+                    );
+                    attempt += 1;
+                    tokio::time::sleep(HTTP_RETRY_BACKOFF).await;
+                }
+                Err(e) => {
+                    return Err(if e.is_connect() {
+                        CrwError::TargetUnreachable(format!("Could not reach {url}: {e}"))
+                    } else {
+                        CrwError::HttpError(e.to_string())
+                    });
+                }
+            }
+        };
         let status = resp.status().as_u16();
 
         // Check content-length before downloading

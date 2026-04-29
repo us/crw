@@ -211,7 +211,12 @@ fn default_true() -> bool {
     true
 }
 fn default_ua() -> String {
-    "CRW/0.1".into()
+    // Modern Chrome UA. The legacy "CRW/0.1" was rejected by UA-filtering sites
+    // (opencorporates, killeenisd, wsj) returning 403/404. Kept in sync with the
+    // Sec-Ch-Ua client hint in `crw-renderer/src/http_only.rs`.
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 \
+     (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        .into()
 }
 fn default_depth() -> u32 {
     2

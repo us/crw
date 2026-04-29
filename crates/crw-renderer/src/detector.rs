@@ -18,11 +18,18 @@ pub fn needs_js_rendering(html: &str) -> bool {
             "id=\"svelte\"",
             "ng-app",
             "data-reactroot",
+            "data-reactid",
+            "data-remix-run",
+            "data-sveltekit",
+            "data-astro-",
             "<script src",
             "window.__initial_state__",
             "__next_data__",
+            "__nuxt__",
+            "__sveltekit_data",
             "window.__remixcontext",
             "window.__astro",
+            "gatsby-focus-wrapper",
         ];
         if spa_indicators.iter().any(|ind| lower.contains(ind)) {
             return true;
@@ -47,7 +54,40 @@ pub fn needs_js_rendering(html: &str) -> bool {
         }
     }
 
+    // Bundler-heavy modern SPA: short body + many script tags. Catches sites
+    // that don't expose a recognizable framework marker but ship most of their
+    // content via client-side hydration. Threshold is conservative (5+ scripts,
+    // body <1000 chars) — 3 scripts is a normal load (analytics + ads + a font
+    // loader) on minimal static pages, so we require more before escalating.
+    if body_len < 1000 {
+        let script_count = lower.matches("<script").count();
+        if script_count >= 5 {
+            return true;
+        }
+    }
+
     false
+}
+
+/// Returns true when an HTTP response yielded effectively no visible text in
+/// the body (post script/style strip). Used by the renderer to decide whether
+/// to escalate a "successful" HTTP fetch to JS rendering when no SPA marker
+/// was recognized.
+///
+/// Distinct from [`needs_js_rendering`]: that one is a pre-fetch heuristic
+/// on raw markup, looking for framework shells. This one is purely about
+/// outcome — does the page have *any* content for an extractor to chew on.
+pub fn looks_like_thin_html(html: &str) -> bool {
+    let check_len = html.len().min(500_000);
+    let lower = html[..check_len].to_lowercase();
+    extract_body_text_len(&lower) < 200
+}
+
+/// Returns true when an extracted markdown is below the floor used by the
+/// renderer to decide a fetch produced effectively no extractable content.
+/// Pair with [`looks_like_thin_html`] for a full thin-content judgment.
+pub fn is_thin_markdown(markdown_len: usize) -> bool {
+    markdown_len < 100
 }
 
 /// Reason a rendered page is considered a failed render. Returned by

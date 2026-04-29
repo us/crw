@@ -380,8 +380,18 @@ impl FallbackRenderer {
                 let is_blocked =
                     cf_header_signal || detector::looks_like_cloudflare_challenge(&result.html);
                 let is_auth_blocked = matches!(result.status_code, 401 | 403);
+                // Post-fetch thin-content trigger: HTTP returned 2xx but the
+                // body has effectively no extractable text. Catches sites whose
+                // SPA marker we don't recognize (no `id="root"`, no
+                // `__next_data__`) yet still return a near-empty HTML shell.
+                // Bench analysis showed 23/147 failures fall in this bucket
+                // (seattletimes, espn, ionos, huduser, …).
+                let is_2xx = (200..300).contains(&result.status_code);
+                let is_thin_content = is_2xx && detector::looks_like_thin_html(&result.html);
 
-                if !self.js_renderers.is_empty() && (needs_js || is_blocked || is_auth_blocked) {
+                if !self.js_renderers.is_empty()
+                    && (needs_js || is_blocked || is_auth_blocked || is_thin_content)
+                {
                     if is_auth_blocked {
                         tracing::info!(
                             url,
@@ -394,8 +404,14 @@ impl FallbackRenderer {
                             url,
                             "Anti-bot challenge detected in HTTP response, escalating to JS renderer"
                         );
-                    } else {
+                    } else if needs_js {
                         tracing::info!(url, "SPA shell detected, retrying with JS renderer");
+                    } else {
+                        tracing::info!(
+                            url,
+                            html_len = result.html.len(),
+                            "HTTP 2xx but body is thin, escalating to JS renderer"
+                        );
                     }
                     match self
                         .fetch_with_js(url, headers, wait_for_ms, requested_renderer)

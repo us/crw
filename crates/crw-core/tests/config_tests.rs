@@ -25,7 +25,7 @@ fn crawler_config_default_values() {
     assert_eq!(config.max_concurrency, 10);
     assert!((config.requests_per_second - 10.0).abs() < f64::EPSILON);
     assert!(config.respect_robots_txt);
-    assert_eq!(config.user_agent, "CRW/0.1");
+    assert!(config.user_agent.contains("Chrome/"));
     assert_eq!(config.default_max_depth, 2);
     assert_eq!(config.default_max_pages, 100);
     assert!(config.proxy.is_none());
@@ -69,7 +69,7 @@ fn crawler_config_deserialize_partial() {
     assert!((config.requests_per_second - 5.0).abs() < f64::EPSILON);
     // defaults for the rest
     assert!(config.respect_robots_txt);
-    assert_eq!(config.user_agent, "CRW/0.1");
+    assert!(config.user_agent.contains("Chrome/"));
 }
 
 #[test]
