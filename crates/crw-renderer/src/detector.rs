@@ -62,6 +62,10 @@ pub enum FailedRenderReason {
     /// React rendered its production "Minified React error" placeholder. Same
     /// failure class as Next.js, but framework-agnostic.
     ReactMinifiedError,
+    /// Next.js root `<div id="__next">` is present but empty (no hydration
+    /// took place). Distinct from a generic placeholder because it specifically
+    /// indicates an SPA whose JS never executed.
+    EmptyNextRoot,
 }
 
 impl FailedRenderReason {
@@ -69,6 +73,7 @@ impl FailedRenderReason {
         match self {
             FailedRenderReason::NextJsClientError => "nextjs_client_error",
             FailedRenderReason::ReactMinifiedError => "react_minified_error",
+            FailedRenderReason::EmptyNextRoot => "empty_next_root",
         }
     }
 }
@@ -109,6 +114,22 @@ pub fn looks_like_failed_render(html: &str) -> Option<FailedRenderReason> {
         || lower.contains("https://reactjs.org/docs/error-decoder")
     {
         return Some(FailedRenderReason::ReactMinifiedError);
+    }
+
+    // Empty Next.js root shell: <div id="__next"></div> (or with whitespace).
+    // The renderer returned the SSR shell but no hydration ran; the
+    // user-visible content is missing.
+    if let Some(start) = lower.find("id=\"__next\"") {
+        let after_id = &lower[start..];
+        if let Some(close) = after_id.find('>') {
+            let tail = &after_id[close + 1..];
+            if let Some(end) = tail.find("</div>") {
+                let inner = tail[..end].trim();
+                if inner.is_empty() {
+                    return Some(FailedRenderReason::EmptyNextRoot);
+                }
+            }
+        }
     }
 
     None
@@ -286,12 +307,13 @@ pub fn looks_like_cloudflare_challenge(html: &str) -> bool {
     }
 
     // Weak markers: each can appear on legitimate Cloudflare-fronted pages.
+    // "ray id:" + "cloudflare" co-occur on most CF-fronted error pages and
+    // would false-positive a real page with a CF footer; require challenge-
+    // specific phrasing instead.
     let weak = [
         "just a moment",
         "checking your browser",
         "attention required",
-        "ray id:",
-        "cloudflare",
         "performance &amp; security by cloudflare",
         "performance & security by cloudflare",
     ];
@@ -463,8 +485,20 @@ mod tests {
 
     #[test]
     fn cf_two_weak_markers_trigger() {
-        let html = r#"<html><body><h1>Just a moment...</h1><p>Ray ID: abc123</p></body></html>"#;
+        // Two challenge-specific phrases must co-occur. "ray id:" was
+        // removed from the weak set because legitimate CF-fronted error
+        // pages also include both "ray id" and "cloudflare".
+        let html =
+            r#"<html><body><h1>Just a moment...</h1><p>Checking your browser...</p></body></html>"#;
         assert!(looks_like_cloudflare_challenge(html));
+    }
+
+    #[test]
+    fn cf_ray_id_alone_does_not_trigger() {
+        // Pre-fix this would false-positive: "ray id" + "cloudflare" both
+        // appear on benign CF-fronted pages.
+        let html = r#"<html><body><h1>About</h1><p>Hosted via Cloudflare.</p><footer>Ray ID: abc123</footer></body></html>"#;
+        assert!(!looks_like_cloudflare_challenge(html));
     }
 
     #[test]

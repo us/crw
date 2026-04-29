@@ -44,12 +44,14 @@ pub mod http_only;
 pub mod preference;
 pub mod traits;
 
-use crate::breaker::{BreakerRegistry, Permit};
+use crate::breaker::{BreakerRegistry, Permit, ProbeGuard};
 use crate::preference::HostPreferences;
 use crw_core::config::{BUILTIN_UA_POOL, RendererConfig, RendererMode, StealthConfig};
 use crw_core::error::{CrwError, CrwResult};
 use crw_core::metrics::metrics;
-use crw_core::types::{FailoverErrorKind, FetchResult, RendererKind, resolve_render_js};
+use crw_core::types::{
+    FailoverErrorKind, FetchResult, RenderDecision, RendererKind, resolve_render_js,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 use traits::PageFetcher;
@@ -67,19 +69,49 @@ fn renderer_kind_for(name: &str) -> Option<RendererKind> {
 }
 
 /// Classify a renderer-side error into a `FailoverErrorKind` for the
-/// preference learner. Conservative: only LightPanda-specific failures
-/// drive promotion, everything else is `Other`.
+/// preference learner. Match on `CrwError` variants (not error strings),
+/// so renaming or rewording the human-readable message can't silently
+/// reclassify failures and over-promote hosts.
+///
+/// Only LightPanda-specific failures drive promotion (see
+/// [`FailoverErrorKind::counts_for_promotion`]); transport / unreachable
+/// errors stay in `NetworkError` so a flaky upstream doesn't push hosts
+/// to Chrome.
 fn classify_renderer_error(err: &CrwError) -> FailoverErrorKind {
-    let msg = err.to_string().to_lowercase();
-    if msg.contains("timeout") || msg.contains("timed out") {
-        FailoverErrorKind::LightpandaTimeout
-    } else if msg.contains("connection") || msg.contains("websocket") || msg.contains("crash") {
-        FailoverErrorKind::LightpandaCrash
-    } else if msg.contains("network") {
-        FailoverErrorKind::NetworkError
-    } else {
-        FailoverErrorKind::Other
+    match err {
+        CrwError::Timeout(_) => FailoverErrorKind::LightpandaTimeout,
+        CrwError::TargetUnreachable(_) => FailoverErrorKind::NetworkError,
+        CrwError::HttpError(_) => FailoverErrorKind::NetworkError,
+        // RendererError covers WS disconnects, CDP frame errors, render
+        // pipeline crashes — these are LightPanda-attributable.
+        CrwError::RendererError(_) => FailoverErrorKind::LightpandaCrash,
+        _ => FailoverErrorKind::Other,
     }
+}
+
+/// Per-renderer credit cost. Exposed so the routing layer can populate
+/// `FetchResult.credit_cost` and `/v1/scrape` charge accurately.
+fn credit_for(kind: RendererKind) -> u32 {
+    match kind {
+        RendererKind::Http => 1,
+        RendererKind::Lightpanda => 1,
+        RendererKind::Chrome => 2,
+    }
+}
+
+/// Stamp `render_decision` and `credit_cost` for an HTTP-only result.
+/// `requested_renderer` is taken into account: if the user explicitly
+/// pinned `"http"` we mark it as `UserPinned`, otherwise `AutoDefault`.
+fn stamp_http_decision(result: &mut FetchResult, requested_renderer: Option<&str>) {
+    if result.render_decision.is_some() {
+        return;
+    }
+    let kind = RendererKind::Http;
+    result.credit_cost = credit_for(kind);
+    result.render_decision = Some(match requested_renderer {
+        Some("http") => RenderDecision::UserPinned { renderer: kind },
+        _ => RenderDecision::AutoDefault { chosen: kind },
+    });
 }
 
 /// Extract the host from a URL string, returning an empty string on failure.
@@ -297,11 +329,16 @@ impl FallbackRenderer {
         // A non-"auto" pinned renderer is a hard pin — failures must surface.
         let is_hard_pinned = matches!(requested_renderer, Some(name) if name != "auto");
         match effective {
-            Some(false) => self.http.fetch(url, headers, None).await,
+            Some(false) => {
+                let mut r = self.http.fetch(url, headers, None).await?;
+                stamp_http_decision(&mut r, requested_renderer);
+                Ok(r)
+            }
             Some(true) => {
                 // Fetch via HTTP first to check content type — PDFs can't be JS-rendered.
-                let http_result = self.http.fetch(url, headers, None).await?;
+                let mut http_result = self.http.fetch(url, headers, None).await?;
                 if http_result.content_type.as_deref() == Some("application/pdf") {
+                    stamp_http_decision(&mut http_result, requested_renderer);
                     return Ok(http_result);
                 }
 
@@ -313,6 +350,11 @@ impl FallbackRenderer {
                     let mut result = http_result;
                     result.rendered_with = Some("http_only_fallback".to_string());
                     result.warning = Some("JS rendering was requested but no renderer is available. Content was fetched via HTTP only.".to_string());
+                    result.warnings.push(
+                        "JS rendering requested but no renderer available; HTTP fallback used"
+                            .into(),
+                    );
+                    stamp_http_decision(&mut result, requested_renderer);
                     Ok(result)
                 } else {
                     self.fetch_with_js(url, headers, wait_for_ms, requested_renderer)
@@ -320,10 +362,11 @@ impl FallbackRenderer {
                 }
             }
             None => {
-                let result = self.http.fetch(url, headers, None).await?;
+                let mut result = self.http.fetch(url, headers, None).await?;
 
                 // PDFs don't need JS rendering — return immediately.
                 if result.content_type.as_deref() == Some("application/pdf") {
+                    stamp_http_decision(&mut result, requested_renderer);
                     return Ok(result);
                 }
 
@@ -361,10 +404,12 @@ impl FallbackRenderer {
                         }
                         Err(e) => {
                             tracing::warn!("JS rendering failed, falling back to HTTP result: {e}");
+                            stamp_http_decision(&mut result, requested_renderer);
                             Ok(result)
                         }
                     }
                 } else {
+                    stamp_http_decision(&mut result, requested_renderer);
                     Ok(result)
                 }
             }
@@ -422,15 +467,26 @@ impl FallbackRenderer {
             )));
         }
 
+        // Track the chain we attempted so we can populate
+        // `RenderDecision::Failover` when nothing succeeded outright.
+        let mut chain: Vec<RendererKind> = Vec::new();
+        let mut breaker_skipped: Vec<RendererKind> = Vec::new();
         let mut last_error = None;
+        let mut last_failover_reason: Option<FailoverErrorKind> = None;
         let mut thin_result: Option<FetchResult> = None;
+
         for renderer in renderers {
             let kind = renderer_kind_for(renderer.name());
 
+            // Skip empty hosts: don't pollute breaker/preference caches
+            // with the "" key when URL parsing failed.
+            let trackable = kind.filter(|_| !host.is_empty());
+
             // Consult breaker for tracked renderers. Untracked names (e.g.
             // "playwright") bypass the breaker for now.
-            if let Some(k) = kind {
-                let permit = self.breakers.try_acquire(&host, k).await;
+            let mut probe_guard: Option<ProbeGuard> = None;
+            if let Some(k) = trackable {
+                let (permit, guard) = self.breakers.acquire_with_guard(&host, k).await;
                 if permit == Permit::Rejected {
                     tracing::info!(
                         renderer = renderer.name(),
@@ -441,12 +497,18 @@ impl FallbackRenderer {
                         .render_route_decision_total
                         .with_label_values(&[k.as_str(), "breakerSkipped"])
                         .inc();
+                    breaker_skipped.push(k);
+                    drop(guard); // not Probe — drop is a no-op
                     continue;
                 }
+                probe_guard = Some(guard);
+            }
+            if let Some(k) = kind {
+                chain.push(k);
             }
 
             match renderer.fetch(url, headers, wait_for_ms).await {
-                Ok(result) => {
+                Ok(mut result) => {
                     let text_len = html_body_text_len(&result.html);
                     let is_placeholder = detector::looks_like_loading_placeholder(&result.html);
                     let failed_render = detector::looks_like_failed_render(&result.html);
@@ -454,7 +516,14 @@ impl FallbackRenderer {
                         && !is_placeholder
                         && failed_render.is_none()
                     {
-                        if let Some(k) = kind {
+                        // Capture the promotion state BEFORE record_success
+                        // clears the latch — otherwise AutoPromoted decisions
+                        // race against the success path and downgrade to AutoDefault.
+                        let was_promoted = matches!(
+                            self.preferences.preferred(&host).await,
+                            Some(RendererKind::Chrome)
+                        );
+                        if let Some(k) = trackable {
                             self.breakers.record_result(&host, k, true).await;
                             self.preferences.record_success(&host).await;
                             metrics()
@@ -465,22 +534,56 @@ impl FallbackRenderer {
                                 .host_preferences_size
                                 .set(self.preferences.size() as i64);
                         }
+                        if let Some(g) = probe_guard.take() {
+                            g.disarm();
+                        }
+                        // Populate routing metadata + per-renderer credit.
+                        if let Some(k) = kind {
+                            result.credit_cost = credit_for(k);
+                            result.render_decision = Some(if is_user_pinned {
+                                RenderDecision::UserPinned { renderer: k }
+                            } else if !breaker_skipped.is_empty() {
+                                RenderDecision::BreakerSkipped {
+                                    skipped: breaker_skipped[0],
+                                    chosen: k,
+                                }
+                            } else if chain.len() > 1 {
+                                RenderDecision::Failover {
+                                    chain: chain.clone(),
+                                    reason: last_failover_reason
+                                        .clone()
+                                        .unwrap_or(FailoverErrorKind::Other),
+                                }
+                            } else if was_promoted && k == RendererKind::Chrome {
+                                RenderDecision::AutoPromoted {
+                                    chosen: k,
+                                    from: RendererKind::Lightpanda,
+                                    reason: "host preference learner".into(),
+                                }
+                            } else {
+                                RenderDecision::AutoDefault { chosen: k }
+                            });
+                        }
                         return Ok(result);
                     }
                     // Treat thin/placeholder/failed as a soft failure for
                     // breaker + preference purposes.
-                    if let Some(k) = kind {
+                    let err_kind = match failed_render {
+                        Some(detector::FailedRenderReason::NextJsClientError) => {
+                            FailoverErrorKind::NextJsClientError
+                        }
+                        Some(detector::FailedRenderReason::ReactMinifiedError) => {
+                            FailoverErrorKind::NextJsClientError
+                        }
+                        Some(detector::FailedRenderReason::EmptyNextRoot) => {
+                            FailoverErrorKind::EmptyNextRoot
+                        }
+                        None if is_placeholder => FailoverErrorKind::PlaceholderContent,
+                        None => FailoverErrorKind::PlaceholderContent,
+                    };
+                    last_failover_reason = Some(err_kind.clone());
+                    if let Some(k) = trackable {
                         self.breakers.record_result(&host, k, false).await;
-                        let err_kind = match failed_render {
-                            Some(detector::FailedRenderReason::NextJsClientError) => {
-                                FailoverErrorKind::NextJsClientError
-                            }
-                            Some(detector::FailedRenderReason::ReactMinifiedError) => {
-                                FailoverErrorKind::NextJsClientError
-                            }
-                            None if is_placeholder => FailoverErrorKind::PlaceholderContent,
-                            None => FailoverErrorKind::PlaceholderContent,
-                        };
                         if k == RendererKind::Lightpanda
                             && let Some(target) =
                                 self.preferences.record_failure(&host, &err_kind).await
@@ -497,6 +600,9 @@ impl FallbackRenderer {
                             );
                         }
                     }
+                    if let Some(g) = probe_guard.take() {
+                        g.disarm();
+                    }
                     tracing::info!(
                         renderer = renderer.name(),
                         text_len,
@@ -512,49 +618,48 @@ impl FallbackRenderer {
                     // warnings onto it so debug output reflects every attempt.
                     let mut annotated = result;
                     let attempt_warning = if let Some(reason) = failed_render {
-                        Some(format!(
+                        format!(
                             "{} returned a failed render ({})",
                             renderer.name(),
                             reason.as_str()
-                        ))
+                        )
                     } else if is_placeholder {
-                        Some(format!(
-                            "{} returned a loading placeholder",
-                            renderer.name()
-                        ))
+                        format!("{} returned a loading placeholder", renderer.name())
                     } else {
-                        Some(format!(
+                        format!(
                             "{} returned thin content (text_len={text_len})",
                             renderer.name()
-                        ))
+                        )
                     };
-                    if let Some(warn) = attempt_warning {
-                        annotated.warning = Some(match annotated.warning {
-                            Some(prev) => format!("{prev}; {warn}"),
-                            None => warn,
-                        });
-                    }
+                    annotated.warnings.push(attempt_warning.clone());
+                    annotated.warning = Some(match annotated.warning {
+                        Some(prev) => format!("{prev}; {attempt_warning}"),
+                        None => attempt_warning.clone(),
+                    });
                     thin_result = Some(match thin_result {
                         None => annotated,
                         Some(mut existing) => {
-                            if let Some(later) = annotated.warning {
-                                existing.warning = Some(match existing.warning {
-                                    Some(prev) => format!("{prev}; {later}"),
-                                    None => later,
-                                });
-                            }
+                            existing.warnings.push(attempt_warning.clone());
+                            existing.warning = Some(match existing.warning {
+                                Some(prev) => format!("{prev}; {attempt_warning}"),
+                                None => attempt_warning,
+                            });
                             existing
                         }
                     });
                 }
                 Err(e) => {
                     tracing::warn!(renderer = renderer.name(), "JS renderer failed: {e}");
-                    if let Some(k) = kind {
+                    let err_kind = classify_renderer_error(&e);
+                    last_failover_reason = Some(err_kind.clone());
+                    if let Some(k) = trackable {
                         self.breakers.record_result(&host, k, false).await;
-                        let err_kind = classify_renderer_error(&e);
                         if k == RendererKind::Lightpanda {
                             let _ = self.preferences.record_failure(&host, &err_kind).await;
                         }
+                    }
+                    if let Some(g) = probe_guard.take() {
+                        g.disarm();
                     }
                     last_error = Some(e);
                     continue;
@@ -562,7 +667,16 @@ impl FallbackRenderer {
             }
         }
         // Return the best thin result if we have one, otherwise the last error.
-        if let Some(result) = thin_result {
+        if let Some(mut result) = thin_result {
+            // Stamp routing metadata on the soft-failure result too — callers
+            // need to know which chain was attempted for debugging.
+            if let Some(last) = chain.last().copied() {
+                result.credit_cost = credit_for(last);
+                result.render_decision = Some(RenderDecision::Failover {
+                    chain: chain.clone(),
+                    reason: last_failover_reason.unwrap_or(FailoverErrorKind::Other),
+                });
+            }
             Ok(result)
         } else {
             Err(last_error
@@ -988,5 +1102,120 @@ mod tests {
             .await
             .unwrap_err();
         assert!(err.to_string().contains("boom"));
+    }
+
+    #[tokio::test]
+    async fn auto_promoted_host_tries_chrome_first() {
+        // Pre-promote example.com via the preference learner so the loop
+        // sorts chrome ahead of lightpanda even though lightpanda was
+        // declared first. The first renderer in the executed order wins.
+        let lp = Arc::new(MockFetcher {
+            name: "lightpanda",
+            behavior: MockBehavior::Ok(rich_html("LP-")),
+        }) as Arc<dyn PageFetcher>;
+        let chrome = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Ok(rich_html("CHROME-")),
+        }) as Arc<dyn PageFetcher>;
+        let r = make_renderer_with_mocks(vec![lp, chrome]);
+
+        // Force-promote "example.com" by reaching the failure threshold.
+        for _ in 0..3 {
+            r.preferences
+                .record_failure("example.com", &FailoverErrorKind::NextJsClientError)
+                .await;
+        }
+
+        let result = r
+            .fetch(
+                "https://example.com",
+                &HashMap::new(),
+                Some(true),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(
+            result.html.contains("CHROME-"),
+            "promoted host should hit chrome first, got: {}",
+            &result.html[..80.min(result.html.len())]
+        );
+        assert_eq!(result.credit_cost, 2, "chrome costs 2 credits");
+        assert!(matches!(
+            result.render_decision,
+            Some(RenderDecision::AutoPromoted {
+                chosen: RendererKind::Chrome,
+                ..
+            })
+        ));
+    }
+
+    #[tokio::test]
+    async fn breaker_skipped_renderer_falls_through_to_next() {
+        // Trip the per-host breaker for lightpanda, then verify the loop
+        // skips it and uses chrome — without ever calling lightpanda.fetch.
+        let lp = Arc::new(MockFetcher {
+            name: "lightpanda",
+            behavior: MockBehavior::Err("would fire if reached".into()),
+        }) as Arc<dyn PageFetcher>;
+        let chrome = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Ok(rich_html("CHROME-OK")),
+        }) as Arc<dyn PageFetcher>;
+        let r = make_renderer_with_mocks(vec![lp, chrome]);
+
+        // Trip global+host breakers for lightpanda by recording 5 failures
+        // at the BreakerRegistry layer (default threshold is 5).
+        for _ in 0..5 {
+            r.breakers
+                .record_result("example.com", RendererKind::Lightpanda, false)
+                .await;
+        }
+
+        let result = r
+            .fetch(
+                "https://example.com",
+                &HashMap::new(),
+                Some(true),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(result.html.contains("CHROME-OK"));
+        assert!(matches!(
+            result.render_decision,
+            Some(RenderDecision::BreakerSkipped {
+                skipped: RendererKind::Lightpanda,
+                chosen: RendererKind::Chrome
+            })
+        ));
+    }
+
+    #[tokio::test]
+    async fn user_pinned_decision_records_credit_and_kind() {
+        let chrome = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Ok(rich_html("CHROME-")),
+        }) as Arc<dyn PageFetcher>;
+        let r = make_renderer_with_mocks(vec![chrome]);
+        let result = r
+            .fetch(
+                "https://example.com",
+                &HashMap::new(),
+                Some(true),
+                None,
+                Some("chrome"),
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.credit_cost, 2);
+        assert!(matches!(
+            result.render_decision,
+            Some(RenderDecision::UserPinned {
+                renderer: RendererKind::Chrome
+            })
+        ));
     }
 }
