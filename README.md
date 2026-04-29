@@ -45,11 +45,48 @@
 
 ## What's New
 
-### v0.4.0 (2026-04-22)
+### [0.4.1](https://github.com/us/crw/compare/v0.4.0...v0.4.1) (2026-04-28)
 
-* feat: add `crw-browse` — interactive browser automation MCP server over CDP
-* feat: add SOCKS5 proxy support in `crw-renderer`
-* feat: extract `crw-mcp-proto` crate — shared JSON-RPC 2.0 types
+
+### Features
+
+* add per-request renderer field for scrape and crawl APIs ([#29](https://github.com/us/crw/issues/29)) ([f1e0b63](https://github.com/us/crw/commit/f1e0b63fd28be0ceb38342086a309f92bbbc1e53))
+* **crw-browse:** add interactive browser MCP server with phase-2 tools ([e78879d](https://github.com/us/crw/commit/e78879db18c7c4b3df2a4984349a65b4493b1cda))
+* honor renderer mode and force_js in config (fixes [#28](https://github.com/us/crw/issues/28)) ([b76e473](https://github.com/us/crw/commit/b76e473facbce08a841ef8bd9fdfac97a552a8fd))
+
+
+### Bug Fixes
+
+* detect failed JS renders and fail over to next renderer ([fca8fd5](https://github.com/us/crw/commit/fca8fd5cadb4fa3c96bf5a315f96ab6d1e63989c))
+* **docs:** use absolute logo paths in site.config.js ([c5c9321](https://github.com/us/crw/commit/c5c93215561094a35038ab6af2b21e91c16199f4))
+* **docs:** use absolute paths for logo and favicon assets ([cdb1451](https://github.com/us/crw/commit/cdb14517da6425c105b95749dec35bbc9e977f5e))
+
+### [0.4.0](https://github.com/us/crw/compare/v0.3.6...v0.4.0) (2026-04-22)
+
+
+### Features
+
+* add crw-browse MCP server, SOCKS5 proxy, extract mcp-proto ([9a53753](https://github.com/us/crw/commit/9a53753baf6d87272bd2417fc87102a8ed34d41b))
+
+
+### Miscellaneous
+
+* release 0.4.0 ([e15fc74](https://github.com/us/crw/commit/e15fc74cf0dfc7c02ca7e6b82258aeff57f74f17))
+
+### [0.3.6](https://github.com/us/crw/compare/v0.3.5...v0.3.6) (2026-04-21)
+
+
+### Features
+
+* **ci:** add Google Indexing API notification for docs changes ([3b5a340](https://github.com/us/crw/commit/3b5a3404e91a1d776275ac312ad08cad86339a98))
+* **docs:** generate static HTML pages for SEO indexability ([7b321c0](https://github.com/us/crw/commit/7b321c0a26cea0da32d42e952f6327b468bdb099))
+
+
+### Bug Fixes
+
+* **ci:** trigger release workflow after release-please creates tag ([27f2b67](https://github.com/us/crw/commit/27f2b67d0b9db4f7b1bacc6c901e9c92131a3a95))
+* **mcp:** bump npm optionalDependencies from 0.3.0 to 0.3.5 ([0e363e0](https://github.com/us/crw/commit/0e363e0fc512eb18bcb8284a9723b00f50e2dfd0))
+* **renderer:** detect loading placeholders and poll for content stability ([d3b642b](https://github.com/us/crw/commit/d3b642b2736b4568fa8a3502e521b8bede60317f))
 
 [Full changelog →](CHANGELOG.md)
 
