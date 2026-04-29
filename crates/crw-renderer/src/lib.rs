@@ -32,6 +32,7 @@
 //! # }
 //! ```
 
+pub mod breaker;
 #[cfg(feature = "auto-browser")]
 pub mod browser;
 #[cfg(feature = "cdp")]
@@ -43,12 +44,51 @@ pub mod http_only;
 pub mod preference;
 pub mod traits;
 
+use crate::breaker::{BreakerRegistry, Permit};
+use crate::preference::HostPreferences;
 use crw_core::config::{BUILTIN_UA_POOL, RendererConfig, RendererMode, StealthConfig};
 use crw_core::error::{CrwError, CrwResult};
-use crw_core::types::{FetchResult, resolve_render_js};
+use crw_core::metrics::metrics;
+use crw_core::types::{FailoverErrorKind, FetchResult, RendererKind, resolve_render_js};
 use std::collections::HashMap;
 use std::sync::Arc;
 use traits::PageFetcher;
+
+/// Map a renderer's name string to the closed `RendererKind` enum.
+/// Returns `None` for unknown names (e.g. "playwright" — treated as a
+/// JS renderer but not tracked in metrics/preferences).
+fn renderer_kind_for(name: &str) -> Option<RendererKind> {
+    match name {
+        "http" | "http_only_fallback" => Some(RendererKind::Http),
+        "lightpanda" => Some(RendererKind::Lightpanda),
+        "chrome" => Some(RendererKind::Chrome),
+        _ => None,
+    }
+}
+
+/// Classify a renderer-side error into a `FailoverErrorKind` for the
+/// preference learner. Conservative: only LightPanda-specific failures
+/// drive promotion, everything else is `Other`.
+fn classify_renderer_error(err: &CrwError) -> FailoverErrorKind {
+    let msg = err.to_string().to_lowercase();
+    if msg.contains("timeout") || msg.contains("timed out") {
+        FailoverErrorKind::LightpandaTimeout
+    } else if msg.contains("connection") || msg.contains("websocket") || msg.contains("crash") {
+        FailoverErrorKind::LightpandaCrash
+    } else if msg.contains("network") {
+        FailoverErrorKind::NetworkError
+    } else {
+        FailoverErrorKind::Other
+    }
+}
+
+/// Extract the host from a URL string, returning an empty string on failure.
+fn host_of(url: &str) -> String {
+    url::Url::parse(url)
+        .ok()
+        .and_then(|u| u.host_str().map(|h| h.to_string()))
+        .unwrap_or_default()
+}
 
 /// Pick a user-agent: rotate from stealth pool when stealth is enabled.
 fn pick_ua<'a>(default_ua: &'a str, stealth: &'a StealthConfig) -> String {
@@ -71,6 +111,10 @@ pub struct FallbackRenderer {
     js_renderers: Vec<Arc<dyn PageFetcher>>,
     /// Global default for `render_js` when a request doesn't specify one.
     render_js_default: Option<bool>,
+    /// Per-host renderer preference learning (auto-mode only).
+    preferences: Arc<HostPreferences>,
+    /// Per-host + global circuit breakers per renderer.
+    breakers: Arc<BreakerRegistry>,
 }
 
 impl std::fmt::Debug for FallbackRenderer {
@@ -134,6 +178,8 @@ impl FallbackRenderer {
                 http,
                 js_renderers,
                 render_js_default: config.render_js_default,
+                preferences: Arc::new(HostPreferences::with_defaults()),
+                breakers: Arc::new(BreakerRegistry::with_defaults()),
             });
         }
 
@@ -203,7 +249,19 @@ impl FallbackRenderer {
             http,
             js_renderers,
             render_js_default: config.render_js_default,
+            preferences: Arc::new(HostPreferences::with_defaults()),
+            breakers: Arc::new(BreakerRegistry::with_defaults()),
         })
+    }
+
+    /// Access the host preferences cache (for admin endpoints, tests).
+    pub fn preferences(&self) -> Arc<HostPreferences> {
+        Arc::clone(&self.preferences)
+    }
+
+    /// Access the breaker registry (for tests).
+    pub fn breakers(&self) -> Arc<BreakerRegistry> {
+        Arc::clone(&self.breakers)
     }
 
     /// Names of the configured JS renderers in fallback order.
@@ -270,7 +328,9 @@ impl FallbackRenderer {
                 }
 
                 let needs_js = detector::needs_js_rendering(&result.html);
-                let is_blocked = Self::looks_like_challenge(&result.html);
+                let cf_header_signal = result.warning.as_deref() == Some("cloudflare_mitigated");
+                let is_blocked =
+                    cf_header_signal || detector::looks_like_cloudflare_challenge(&result.html);
                 let is_auth_blocked = matches!(result.status_code, 401 | 403);
 
                 if !self.js_renderers.is_empty() && (needs_js || is_blocked || is_auth_blocked) {
@@ -311,19 +371,6 @@ impl FallbackRenderer {
         }
     }
 
-    /// Quick check if HTML looks like an anti-bot challenge/interstitial page.
-    fn looks_like_challenge(html: &str) -> bool {
-        if html.len() > 50_000 {
-            return false;
-        }
-        let lower = html.to_lowercase();
-        lower.contains("just a moment")
-            || lower.contains("cf-browser-verification")
-            || lower.contains("cf-challenge-running")
-            || lower.contains("challenge-platform")
-            || (lower.contains("attention required") && lower.contains("cloudflare"))
-    }
-
     /// Minimum body text length for a JS-rendered result to be considered
     /// successful. If the rendered page has less visible text than this, the
     /// next renderer in the chain is tried.
@@ -336,9 +383,20 @@ impl FallbackRenderer {
         wait_for_ms: Option<u64>,
         requested_renderer: Option<&str>,
     ) -> CrwResult<FetchResult> {
+        let host = host_of(url);
+        let is_user_pinned = matches!(requested_renderer, Some(name) if name != "auto");
+        if let Some(pinned) = requested_renderer
+            && let Some(kind) = renderer_kind_for(pinned)
+        {
+            metrics()
+                .user_pin_total
+                .with_label_values(&[kind.as_str()])
+                .inc();
+        }
+
         // Filter the JS pool down to a hard-pinned renderer when one was named.
         // "auto" or `None` means "use the configured chain".
-        let renderers: Vec<&Arc<dyn PageFetcher>> = match requested_renderer {
+        let mut renderers: Vec<&Arc<dyn PageFetcher>> = match requested_renderer {
             Some(name) if name != "auto" => self
                 .js_renderers
                 .iter()
@@ -346,6 +404,15 @@ impl FallbackRenderer {
                 .collect(),
             _ => self.js_renderers.iter().collect(),
         };
+
+        // Auto mode: if this host has been promoted, try Chrome first.
+        if !is_user_pinned
+            && let Some(RendererKind::Chrome) = self.preferences.preferred(&host).await
+        {
+            renderers.sort_by_key(|r| if r.name() == "chrome" { 0 } else { 1 });
+            tracing::debug!(host = %host, "host promoted to chrome by preference learner");
+        }
+
         if renderers.is_empty() {
             let available = self.js_renderer_names();
             return Err(CrwError::RendererError(format!(
@@ -358,6 +425,26 @@ impl FallbackRenderer {
         let mut last_error = None;
         let mut thin_result: Option<FetchResult> = None;
         for renderer in renderers {
+            let kind = renderer_kind_for(renderer.name());
+
+            // Consult breaker for tracked renderers. Untracked names (e.g.
+            // "playwright") bypass the breaker for now.
+            if let Some(k) = kind {
+                let permit = self.breakers.try_acquire(&host, k).await;
+                if permit == Permit::Rejected {
+                    tracing::info!(
+                        renderer = renderer.name(),
+                        host = %host,
+                        "circuit breaker open, skipping renderer"
+                    );
+                    metrics()
+                        .render_route_decision_total
+                        .with_label_values(&[k.as_str(), "breakerSkipped"])
+                        .inc();
+                    continue;
+                }
+            }
+
             match renderer.fetch(url, headers, wait_for_ms).await {
                 Ok(result) => {
                     let text_len = html_body_text_len(&result.html);
@@ -367,7 +454,48 @@ impl FallbackRenderer {
                         && !is_placeholder
                         && failed_render.is_none()
                     {
+                        if let Some(k) = kind {
+                            self.breakers.record_result(&host, k, true).await;
+                            self.preferences.record_success(&host).await;
+                            metrics()
+                                .render_route_decision_total
+                                .with_label_values(&[k.as_str(), "success"])
+                                .inc();
+                            metrics()
+                                .host_preferences_size
+                                .set(self.preferences.size() as i64);
+                        }
                         return Ok(result);
+                    }
+                    // Treat thin/placeholder/failed as a soft failure for
+                    // breaker + preference purposes.
+                    if let Some(k) = kind {
+                        self.breakers.record_result(&host, k, false).await;
+                        let err_kind = match failed_render {
+                            Some(detector::FailedRenderReason::NextJsClientError) => {
+                                FailoverErrorKind::NextJsClientError
+                            }
+                            Some(detector::FailedRenderReason::ReactMinifiedError) => {
+                                FailoverErrorKind::NextJsClientError
+                            }
+                            None if is_placeholder => FailoverErrorKind::PlaceholderContent,
+                            None => FailoverErrorKind::PlaceholderContent,
+                        };
+                        if k == RendererKind::Lightpanda
+                            && let Some(target) =
+                                self.preferences.record_failure(&host, &err_kind).await
+                        {
+                            metrics()
+                                .host_preferences_promotions_total
+                                .with_label_values(&[k.as_str(), target.as_str()])
+                                .inc();
+                            tracing::info!(
+                                host = %host,
+                                "host promoted by preference learner: {} -> {}",
+                                k.as_str(),
+                                target.as_str()
+                            );
+                        }
                     }
                     tracing::info!(
                         renderer = renderer.name(),
@@ -421,6 +549,13 @@ impl FallbackRenderer {
                 }
                 Err(e) => {
                     tracing::warn!(renderer = renderer.name(), "JS renderer failed: {e}");
+                    if let Some(k) = kind {
+                        self.breakers.record_result(&host, k, false).await;
+                        let err_kind = classify_renderer_error(&e);
+                        if k == RendererKind::Lightpanda {
+                            let _ = self.preferences.record_failure(&host, &err_kind).await;
+                        }
+                    }
                     last_error = Some(e);
                     continue;
                 }

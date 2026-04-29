@@ -253,6 +253,63 @@ fn strip_tag_blocks(html: &str, tag: &str) -> String {
     result
 }
 
+// ── Cloudflare challenge detection ───────────────────────────────────
+
+/// Detect a Cloudflare anti-bot challenge / interstitial in the response.
+///
+/// Strategy: a single weak marker is not enough — most marketing pages
+/// reference Cloudflare somewhere. We require either a *strong* marker
+/// (uniquely tied to the challenge interstitial) or a *combination* of
+/// two weak markers. This keeps false positives low while still catching
+/// the JS-challenge HTML LightPanda fails to solve.
+///
+/// Pair with [`is_cloudflare_mitigated_header`] which uses the
+/// `cf-mitigated` response header — that signal is independent of body
+/// content and is the most reliable indicator.
+pub fn looks_like_cloudflare_challenge(html: &str) -> bool {
+    if html.len() > 80_000 {
+        return false;
+    }
+    let lower = html.to_lowercase();
+
+    // Strong markers: appear ONLY on the interstitial.
+    let strong = [
+        "cf-browser-verification",
+        "cf-challenge-running",
+        "/cdn-cgi/challenge-platform/",
+        "_cf_chl_opt",
+        "__cf_chl_managed_tk__",
+        "window._cf_chl_opt",
+    ];
+    if strong.iter().any(|m| lower.contains(m)) {
+        return true;
+    }
+
+    // Weak markers: each can appear on legitimate Cloudflare-fronted pages.
+    let weak = [
+        "just a moment",
+        "checking your browser",
+        "attention required",
+        "ray id:",
+        "cloudflare",
+        "performance &amp; security by cloudflare",
+        "performance & security by cloudflare",
+    ];
+    let weak_hits = weak.iter().filter(|m| lower.contains(*m)).count();
+    weak_hits >= 2
+}
+
+/// Returns true when the `cf-mitigated` response header indicates the
+/// request was challenged or blocked by Cloudflare. Independent of the
+/// HTTP status code — Cloudflare may return 200 with this header set.
+///
+/// `header_value` is the raw header value (case-sensitive on the right
+/// side; we lower-case here for safety).
+pub fn is_cloudflare_mitigated_header(header_value: &str) -> bool {
+    let lower = header_value.trim().to_ascii_lowercase();
+    matches!(lower.as_str(), "challenge" | "block")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -382,6 +439,55 @@ mod tests {
         html.push_str("</body></html>");
         assert!(html.len() > 200_000);
         assert!(looks_like_failed_render(&html).is_none());
+    }
+
+    #[test]
+    fn cf_strong_marker_detected() {
+        let html =
+            r#"<html><body><div id="cf-browser-verification">Just a moment...</div></body></html>"#;
+        assert!(looks_like_cloudflare_challenge(html));
+    }
+
+    #[test]
+    fn cf_managed_token_detected() {
+        let html = r#"<html><body><script>window._cf_chl_opt={cvId:'2'};</script></body></html>"#;
+        assert!(looks_like_cloudflare_challenge(html));
+    }
+
+    #[test]
+    fn cf_single_weak_marker_not_enough() {
+        // A page that just mentions "Cloudflare" should not trigger.
+        let html = r#"<html><body><article><h1>Why we use Cloudflare</h1><p>Performance benefits.</p></article></body></html>"#;
+        assert!(!looks_like_cloudflare_challenge(html));
+    }
+
+    #[test]
+    fn cf_two_weak_markers_trigger() {
+        let html = r#"<html><body><h1>Just a moment...</h1><p>Ray ID: abc123</p></body></html>"#;
+        assert!(looks_like_cloudflare_challenge(html));
+    }
+
+    #[test]
+    fn cf_mitigated_header_challenge() {
+        assert!(is_cloudflare_mitigated_header("challenge"));
+        assert!(is_cloudflare_mitigated_header(" CHALLENGE "));
+        assert!(is_cloudflare_mitigated_header("block"));
+    }
+
+    #[test]
+    fn cf_mitigated_header_other_values() {
+        assert!(!is_cloudflare_mitigated_header(""));
+        assert!(!is_cloudflare_mitigated_header("ok"));
+        assert!(!is_cloudflare_mitigated_header("verified"));
+    }
+
+    #[test]
+    fn cf_huge_page_not_scanned() {
+        let mut html = String::from(r#"<html><body><div id="cf-browser-verification">"#);
+        html.push_str(&"<p>x</p>".repeat(20_000));
+        html.push_str("</div></body></html>");
+        assert!(html.len() > 80_000);
+        assert!(!looks_like_cloudflare_challenge(&html));
     }
 
     #[test]

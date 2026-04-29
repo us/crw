@@ -112,6 +112,13 @@ impl PageFetcher for HttpFetcher {
             .and_then(|v| v.to_str().ok())
             .map(|s| s.split(';').next().unwrap_or(s).trim().to_lowercase());
 
+        let cf_mitigated = resp
+            .headers()
+            .get("cf-mitigated")
+            .and_then(|v| v.to_str().ok())
+            .map(crate::detector::is_cloudflare_mitigated_header)
+            .unwrap_or(false);
+
         let is_pdf = content_type.as_deref() == Some("application/pdf");
 
         let bytes = resp
@@ -144,10 +151,18 @@ impl PageFetcher for HttpFetcher {
                 Some("http".to_string())
             },
             elapsed_ms: start.elapsed().as_millis() as u64,
-            warning: None,
+            warning: if cf_mitigated {
+                Some("cloudflare_mitigated".to_string())
+            } else {
+                None
+            },
             render_decision: None,
             credit_cost: 0,
-            warnings: Vec::new(),
+            warnings: if cf_mitigated {
+                vec!["cf-mitigated header indicates Cloudflare challenge or block".to_string()]
+            } else {
+                Vec::new()
+            },
         })
     }
 
