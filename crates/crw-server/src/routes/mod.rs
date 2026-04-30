@@ -1,3 +1,4 @@
+pub mod breakers;
 pub mod crawl;
 pub mod health;
 pub mod map;

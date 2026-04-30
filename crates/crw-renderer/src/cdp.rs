@@ -27,6 +27,15 @@ const CHALLENGE_POLL_INTERVAL_MS: u64 = 3000;
 const CONTENT_STABILITY_MAX_MS: u64 = 6000;
 /// Interval between content-stability polls.
 const CONTENT_STABILITY_TICK_MS: u64 = 500;
+/// Max time to poll for a content selector before giving up and proceeding
+/// with whatever HTML is currently rendered. Covers SPAs that hydrate after
+/// `loadEventFired` (njcourts.gov, in-n-out.com, hangzhou customs, apploi).
+const SPA_SELECTOR_MAX_MS: u64 = 8000;
+/// Interval between SPA selector polls.
+const SPA_SELECTOR_TICK_MS: u64 = 200;
+/// Selector list checked when the caller didn't pass `wait_for_ms` — typical
+/// SPA root containers. The first match wins.
+const SPA_CONTENT_SELECTORS: &str = "main, article, [role=main], #content, #root > *, #app > *";
 
 /// JavaScript injected via `Page.addScriptToEvaluateOnNewDocument` before every
 /// navigation to prevent headless browser detection by anti-bot systems.
@@ -87,6 +96,26 @@ const proxy = new Proxy(nativeToString, {
 });
 Function.prototype.toString = proxy;
 overrides.set(Function.prototype.toString, 'function toString() { [native code] }');
+
+// 8. WebGL vendor/renderer spoof — anti-bot scripts inspect UNMASKED_VENDOR_WEBGL
+// (37445) and UNMASKED_RENDERER_WEBGL (37446) to detect headless software rendering.
+// Returning real GPU strings makes the browser look like a normal Windows desktop.
+try {
+    const getParameter = WebGLRenderingContext.prototype.getParameter;
+    WebGLRenderingContext.prototype.getParameter = function(parameter) {
+        if (parameter === 37445) return 'Intel Inc.';
+        if (parameter === 37446) return 'Intel Iris OpenGL Engine';
+        return getParameter.call(this, parameter);
+    };
+    if (typeof WebGL2RenderingContext !== 'undefined') {
+        const getParameter2 = WebGL2RenderingContext.prototype.getParameter;
+        WebGL2RenderingContext.prototype.getParameter = function(parameter) {
+            if (parameter === 37445) return 'Intel Inc.';
+            if (parameter === 37446) return 'Intel Iris OpenGL Engine';
+            return getParameter2.call(this, parameter);
+        };
+    }
+} catch (_) {}
 "#;
 
 /// Lightweight CDP client that talks directly to any CDP-compatible browser
@@ -450,6 +479,49 @@ impl CdpRenderer {
             .to_string())
     }
 
+    /// Poll for the presence of any selector in [`SPA_CONTENT_SELECTORS`] up to
+    /// [`SPA_SELECTOR_MAX_MS`]. Returns `true` as soon as one is found, `false`
+    /// if the budget elapses without a hit. Used when the caller didn't supply
+    /// `wait_for_ms` so we don't snapshot SPAs mid-hydration.
+    async fn wait_for_spa_selector(
+        conn: &CdpConnection,
+        session_id: &str,
+        timeout: Duration,
+    ) -> bool {
+        let deadline = Instant::now() + Duration::from_millis(SPA_SELECTOR_MAX_MS);
+        let expr = format!(
+            "document.querySelector({:?}) !== null",
+            SPA_CONTENT_SELECTORS
+        );
+        while Instant::now() < deadline {
+            match conn
+                .send_recv(
+                    "Runtime.evaluate",
+                    serde_json::json!({ "expression": expr, "returnByValue": true }),
+                    Some(session_id),
+                    timeout,
+                )
+                .await
+            {
+                Ok(v) => {
+                    if v.get("result")
+                        .and_then(|r| r.get("value"))
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                    {
+                        return true;
+                    }
+                }
+                Err(e) => {
+                    tracing::debug!("SPA selector poll eval failed: {e}");
+                    return false;
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(SPA_SELECTOR_TICK_MS)).await;
+        }
+        false
+    }
+
     /// Poll `document.documentElement.outerHTML` at a fixed interval until the
     /// rendered HTML stabilises and no longer looks like a loading placeholder,
     /// or until the stability budget is exhausted.
@@ -601,9 +673,20 @@ impl CdpRenderer {
             }
         };
 
-        // 3. Wait for initial JS work requested by the caller.
-        let wait = wait_for_ms.unwrap_or(DEFAULT_JS_WAIT_MS);
-        tokio::time::sleep(Duration::from_millis(wait)).await;
+        // 3. Wait for initial JS work. When the caller didn't pass
+        // `wait_for_ms` we additionally poll for an SPA content selector — the
+        // fixed 2s sleep snapshots in-n-out.com / njcourts.gov / apploi.com
+        // mid-hydration. The selector poll exits as soon as one of `main,
+        // article, [role=main], #content, #root > *, #app > *` is mounted, up
+        // to SPA_SELECTOR_MAX_MS. Static pages get the fixed sleep only.
+        if let Some(wait) = wait_for_ms {
+            tokio::time::sleep(Duration::from_millis(wait)).await;
+        } else {
+            tokio::time::sleep(Duration::from_millis(DEFAULT_JS_WAIT_MS)).await;
+            if !Self::wait_for_spa_selector(conn, &session_id, self.page_timeout).await {
+                tracing::debug!(url, "SPA selector poll exhausted budget");
+            }
+        }
 
         // 4. Get rendered HTML.
         let mut html = match Self::eval_html(conn, &session_id, self.page_timeout).await {

@@ -1,6 +1,16 @@
 # Docker-specific overrides (layered on top of config.default.toml).
 # Renderer failover order: HTTP → LightPanda → Chrome.
 
+[renderer]
+# Per-tier nav timeouts. Bench analysis (April 2026): the flat 30s budget
+# pushed slow gov/legal SPAs to client_timeout in chrome (~6 URLs) while
+# letting the http tier monopolize 30s of budget on stalled origins. Splitting
+# 15/20/45 lets HTTP fail fast into the JS escalation while giving Chrome
+# enough headroom for `networkidle` on heavy pages.
+http_timeout_ms = 15000
+lightpanda_timeout_ms = 20000
+chrome_timeout_ms = 45000
+
 [renderer.lightpanda]
 ws_url = "ws://lightpanda:9222/"
 

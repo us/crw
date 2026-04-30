@@ -76,8 +76,28 @@ pub enum RendererMode {
 pub struct RendererConfig {
     #[serde(default)]
     pub mode: RendererMode,
+    /// Generic per-page navigation timeout. Used as the fallback when no
+    /// per-tier override is configured. Kept for backward compatibility — the
+    /// per-tier knobs below are preferred for new deployments.
     #[serde(default = "default_page_timeout")]
     pub page_timeout_ms: u64,
+    /// Override for the HTTP-only fetcher request timeout. Falls back to
+    /// `page_timeout_ms` when unset. HTTP responses arrive quickly when they
+    /// arrive at all, so 15s is generous and keeps slow upstreams from
+    /// hogging the request budget that should be spent on JS retries.
+    #[serde(default)]
+    pub http_timeout_ms: Option<u64>,
+    /// Override for the LightPanda CDP renderer. LightPanda completes most
+    /// renders in <10s; if it stalls past 20s it almost always means an
+    /// adversarial page that Chrome will render anyway, so failing fast and
+    /// escalating beats waiting it out.
+    #[serde(default)]
+    pub lightpanda_timeout_ms: Option<u64>,
+    /// Override for the full-Chromium tier. Chrome is the slow path
+    /// (gov/legal SPAs need 30–40s for `networkidle`); the larger budget here
+    /// recovers ~6 URLs per fc-wins iteration without affecting the fast path.
+    #[serde(default)]
+    pub chrome_timeout_ms: Option<u64>,
     #[serde(default = "default_pool_size")]
     pub pool_size: usize,
     /// If set, applies to every request that doesn't specify `renderJs` explicitly.
@@ -99,6 +119,9 @@ impl Default for RendererConfig {
         Self {
             mode: RendererMode::default(),
             page_timeout_ms: default_page_timeout(),
+            http_timeout_ms: None,
+            lightpanda_timeout_ms: None,
+            chrome_timeout_ms: None,
             pool_size: default_pool_size(),
             render_js_default: None,
             lightpanda: None,
@@ -109,6 +132,27 @@ impl Default for RendererConfig {
 }
 fn default_page_timeout() -> u64 {
     30000
+}
+
+impl RendererConfig {
+    /// Resolved per-tier nav timeout in milliseconds. Resolution rules:
+    ///   1. If the explicit per-tier field is set, use it verbatim.
+    ///   2. Otherwise fall back to `page_timeout_ms` (which itself defaults
+    ///      to 30s for backward compatibility with pre-multi-tier configs).
+    ///
+    /// New deployments are encouraged to set the per-tier knobs to 15/20/45s
+    /// (see config.docker.toml) — these match the bench-tuned values that
+    /// recover slow gov sites in the chrome tier without giving the http
+    /// tier permission to hog the request budget.
+    pub fn http_timeout(&self) -> u64 {
+        self.http_timeout_ms.unwrap_or(self.page_timeout_ms)
+    }
+    pub fn lightpanda_timeout(&self) -> u64 {
+        self.lightpanda_timeout_ms.unwrap_or(self.page_timeout_ms)
+    }
+    pub fn chrome_timeout(&self) -> u64 {
+        self.chrome_timeout_ms.unwrap_or(self.page_timeout_ms)
+    }
 }
 fn default_pool_size() -> usize {
     4

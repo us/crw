@@ -52,7 +52,15 @@ services:
     image: chromedp/headless-shell:latest
     profiles: ["heavy"]
     shm_size: "2g"
-    command: ["--remote-allow-origins=*"]
+    # --ignore-certificate-errors: render sites with expired/invalid certs
+    #   (e.g., actu-transport-logistique.fr) instead of failing nav.
+    # --disable-http2: dodge `ERR_HTTP2_PROTOCOL_ERROR` on hosts that hard-fail
+    #   on Chrome's JA4 fingerprint mismatch (e.g., desotoms.mugshots.zone);
+    #   forces HTTP/1.1 fallback which most anti-bot stacks still allow.
+    command:
+      - "--remote-allow-origins=*"
+      - "--ignore-certificate-errors"
+      - "--disable-http2"
     restart: unless-stopped
     mem_limit: 2g
     memswap_limit: 2g

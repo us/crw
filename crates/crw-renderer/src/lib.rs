@@ -180,10 +180,11 @@ impl FallbackRenderer {
     ) -> CrwResult<Self> {
         let effective_ua = pick_ua(user_agent, stealth);
         let inject_headers = stealth.enabled && stealth.inject_headers;
-        let http = Arc::new(http_only::HttpFetcher::new(
+        let http = Arc::new(http_only::HttpFetcher::with_timeout(
             &effective_ua,
             proxy,
             inject_headers,
+            std::time::Duration::from_millis(config.http_timeout()),
         )) as Arc<dyn PageFetcher>;
 
         // A pinned backend (Lightpanda/Chrome/Playwright) must have CDP compiled in
@@ -231,7 +232,7 @@ impl FallbackRenderer {
                     js_renderers.push(Arc::new(cdp::CdpRenderer::new(
                         "lightpanda",
                         &lp.ws_url,
-                        config.page_timeout_ms,
+                        config.lightpanda_timeout(),
                         config.pool_size,
                     )));
                 } else if matches!(config.mode, RendererMode::Lightpanda) {
@@ -244,10 +245,12 @@ impl FallbackRenderer {
             }
             if want(RendererMode::Playwright) {
                 if let Some(pw) = &config.playwright {
+                    // Playwright is treated as a "chrome-equivalent" tier —
+                    // same timeout budget, same kind of work.
                     js_renderers.push(Arc::new(cdp::CdpRenderer::new(
                         "playwright",
                         &pw.ws_url,
-                        config.page_timeout_ms,
+                        config.chrome_timeout(),
                         config.pool_size,
                     )));
                 } else if matches!(config.mode, RendererMode::Playwright) {
@@ -263,7 +266,7 @@ impl FallbackRenderer {
                     js_renderers.push(Arc::new(cdp::CdpRenderer::new(
                         "chrome",
                         &ch.ws_url,
-                        config.page_timeout_ms,
+                        config.chrome_timeout(),
                         config.pool_size,
                     )));
                 } else if matches!(config.mode, RendererMode::Chrome) {
@@ -402,7 +405,22 @@ impl FallbackRenderer {
                 let cf_header_signal = result.warning.as_deref() == Some("cloudflare_mitigated");
                 let is_blocked =
                     cf_header_signal || detector::looks_like_cloudflare_challenge(&result.html);
-                let is_auth_blocked = matches!(result.status_code, 401 | 403);
+                // Soft-block / soft-error status codes where the body often
+                // contains real content despite the status header. Sources:
+                //   - UA/header-based bot filters: 401, 403, 405, 406, 412
+                //   - Rate limits: 429
+                //   - Geo gates: 451
+                //   - Origin overload: 503
+                //   - "Not found" SPAs that 404 the route but render content
+                //     via JS hydration: 404, 410
+                //   - Origin error that still serves a usable page: 500
+                // Firecrawl-comparison (April 2026 bench): the JS render
+                // path recovered content in ~25/99 such cases that HTTP
+                // alone could not.
+                let is_auth_blocked = matches!(
+                    result.status_code,
+                    401 | 403 | 404 | 405 | 406 | 410 | 412 | 429 | 451 | 500 | 503
+                );
                 // Post-fetch thin-content trigger: HTTP returned 2xx but the
                 // body has effectively no extractable text. Catches sites whose
                 // SPA marker we don't recognize (no `id="root"`, no
@@ -447,7 +465,29 @@ impl FallbackRenderer {
                             Err(e)
                         }
                         Err(e) => {
-                            tracing::warn!("JS rendering failed, falling back to HTTP result: {e}");
+                            // For `is_auth_blocked` (4xx/5xx soft-block status codes), the
+                            // HTTP body is almost certainly an error shell — falling back
+                            // to it silently misleads the caller. Surface the JS failure
+                            // through a warning so the post-extract layer can decide.
+                            // For `needs_js` / `is_blocked` / `is_thin_content`, the HTTP
+                            // body still has *some* useful content so the silent fallback
+                            // remains the safer default.
+                            if is_auth_blocked {
+                                tracing::error!(
+                                    url,
+                                    status_code = result.status_code,
+                                    "JS escalation failed for soft-block status; surfacing HTTP shell with warning: {e}"
+                                );
+                                let warning = format!("js_escalation_failed: {e}");
+                                result.warning = Some(match result.warning.take() {
+                                    Some(prev) => format!("{warning}; {prev}"),
+                                    None => warning,
+                                });
+                            } else {
+                                tracing::warn!(
+                                    "JS rendering failed, falling back to HTTP result: {e}"
+                                );
+                            }
                             stamp_http_decision(&mut result, requested_renderer);
                             Ok(result)
                         }
@@ -1249,9 +1289,9 @@ mod tests {
         }) as Arc<dyn PageFetcher>;
         let r = make_renderer_with_mocks(vec![lp, chrome]);
 
-        // Trip global+host breakers for lightpanda by recording 5 failures
-        // at the BreakerRegistry layer (default threshold is 5).
-        for _ in 0..5 {
+        // Trip global+host breakers for lightpanda by recording enough
+        // failures to exceed the default threshold (10).
+        for _ in 0..10 {
             r.breakers
                 .record_result("example.com", RendererKind::Lightpanda, false)
                 .await;

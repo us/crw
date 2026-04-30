@@ -56,10 +56,26 @@ pub struct HttpFetcher {
 
 impl HttpFetcher {
     pub fn new(user_agent: &str, proxy: Option<&str>, inject_stealth_headers: bool) -> Self {
+        Self::with_timeout(
+            user_agent,
+            proxy,
+            inject_stealth_headers,
+            HTTP_REQUEST_TIMEOUT,
+        )
+    }
+
+    /// Same as [`Self::new`] but with a caller-supplied request timeout.
+    /// Used by `FallbackRenderer` to honor `RendererConfig::http_timeout()`.
+    pub fn with_timeout(
+        user_agent: &str,
+        proxy: Option<&str>,
+        inject_stealth_headers: bool,
+        request_timeout: std::time::Duration,
+    ) -> Self {
         let mut builder = reqwest::Client::builder()
             .user_agent(user_agent)
             .connect_timeout(HTTP_CONNECT_TIMEOUT)
-            .timeout(HTTP_REQUEST_TIMEOUT)
+            .timeout(request_timeout)
             .redirect(crw_core::url_safety::safe_redirect_policy());
 
         if let Some(proxy_url) = proxy {

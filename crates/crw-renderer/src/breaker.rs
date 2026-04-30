@@ -35,9 +35,17 @@ pub struct BreakerConfig {
 
 impl Default for BreakerConfig {
     fn default() -> Self {
+        // Bumped from 5/30s after bench observation (April 2026): a single
+        // request can record up to 2 failures (renderer-level escalation +
+        // post-extract escalation), so the old 5-failure threshold tripped
+        // host/renderer breakers after just 2-3 problem URLs to the same
+        // host, cascading into "No JS renderer available" for the rest of
+        // the bench. 10 failures with a 15s cooldown keeps the breaker as a
+        // genuine fault-isolation mechanism without making it the dominant
+        // failure mode under load.
         Self {
-            failure_threshold: 5,
-            cooldown: Duration::from_secs(30),
+            failure_threshold: 10,
+            cooldown: Duration::from_secs(15),
         }
     }
 }
@@ -157,6 +165,23 @@ impl CircuitBreaker {
     pub fn is_open(&self) -> bool {
         let inner = self.inner.lock().expect("breaker mutex poisoned");
         matches!(inner.state, State::Open { .. } | State::HalfOpenProbe)
+    }
+
+    /// Read-only snapshot of the breaker's state. Returns `(label,
+    /// opens_in_seconds)` where label is "closed" / "open" / "half_open" and
+    /// `opens_in_seconds` is `Some` only when state is `Open` (cooldown
+    /// remaining; saturates to 0 if expired but not yet probed).
+    pub fn snapshot(&self) -> (&'static str, Option<u64>) {
+        let inner = self.inner.lock().expect("breaker mutex poisoned");
+        match inner.state {
+            State::Closed => ("closed", None),
+            State::HalfOpenProbe => ("half_open", None),
+            State::Open { until } => {
+                let now = Instant::now();
+                let remaining = until.saturating_duration_since(now).as_secs();
+                ("open", Some(remaining))
+            }
+        }
     }
 }
 
@@ -283,6 +308,66 @@ impl BreakerRegistry {
         self.global_for(renderer).cancel_probe();
         self.host_for(host, renderer).await.cancel_probe();
     }
+
+    /// Read-only snapshot of every breaker tracked by the registry. Used
+    /// by the `/metrics/renderer-breakers` debug endpoint so operators can
+    /// see at a glance which renderers are tripped per host vs globally.
+    pub fn snapshot(&self) -> RegistrySnapshot {
+        let global: Vec<BreakerStatus> = self
+            .global
+            .iter()
+            .map(|(kind, breaker)| {
+                let (state, opens_in) = breaker.snapshot();
+                BreakerStatus {
+                    renderer: kind.as_str().to_string(),
+                    state: state.to_string(),
+                    opens_in_seconds: opens_in,
+                }
+            })
+            .collect();
+        let mut per_host: Vec<HostBreakerStatus> = Vec::new();
+        // moka::Cache exposes `iter()` which yields `(Arc<K>, V)` pairs.
+        for (key, breaker) in self.host.iter() {
+            let (state, opens_in) = breaker.snapshot();
+            per_host.push(HostBreakerStatus {
+                host: key.0.clone(),
+                renderer: key.1.as_str().to_string(),
+                state: state.to_string(),
+                opens_in_seconds: opens_in,
+            });
+        }
+        // Stable order so dashboards diff cleanly.
+        per_host.sort_by(|a, b| {
+            a.host
+                .cmp(&b.host)
+                .then_with(|| a.renderer.cmp(&b.renderer))
+        });
+        RegistrySnapshot { global, per_host }
+    }
+}
+
+/// Read-only view of a single breaker's state.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct BreakerStatus {
+    pub renderer: String,
+    pub state: String,
+    pub opens_in_seconds: Option<u64>,
+}
+
+/// Read-only view of a per-host breaker's state.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct HostBreakerStatus {
+    pub host: String,
+    pub renderer: String,
+    pub state: String,
+    pub opens_in_seconds: Option<u64>,
+}
+
+/// Full snapshot of the registry, suitable for JSON serialization.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct RegistrySnapshot {
+    pub global: Vec<BreakerStatus>,
+    pub per_host: Vec<HostBreakerStatus>,
 }
 
 impl Default for BreakerRegistry {

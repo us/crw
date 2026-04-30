@@ -75,6 +75,10 @@ pub fn create_app(state: AppState) -> Router {
             "/metrics",
             get(routes::metrics::metrics).fallback(method_not_allowed),
         )
+        .route(
+            "/metrics/renderer-breakers",
+            get(routes::breakers::renderer_breakers).fallback(method_not_allowed),
+        )
         .with_state(state)
         .merge(api_routes)
         .layer(axum::middleware::from_fn(move |req, next| {

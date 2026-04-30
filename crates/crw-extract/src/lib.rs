@@ -137,14 +137,27 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
 
             let fallback_too_short = fallback_md.trim().len() < 100 && raw_html.len() > 5000;
             if fallback_too_short {
-                let text = plaintext::html_to_plaintext(&content_html);
-                if text.trim().is_empty() {
-                    let basic_cleaned =
-                        clean::clean_html(raw_html, false, include_tags, exclude_tags)
-                            .unwrap_or_else(|_| raw_html.to_string());
-                    Some(plaintext::html_to_plaintext(&basic_cleaned))
-                } else {
-                    Some(text)
+                // Last-resort structural fallback: some pages (county budget
+                // listings, sheriff vacancies, niche product catalogs) carry
+                // their entire payload inside a single <table> or a long
+                // <ul>/<ol> that readability discards as "navigation". If we
+                // can pull such structures out of the raw HTML and they
+                // dominate the page, prefer them over the plaintext path.
+                let structural = extract_tables_and_lists(raw_html);
+                let plain_text_fb = {
+                    let text = plaintext::html_to_plaintext(&content_html);
+                    if text.trim().is_empty() {
+                        let basic_cleaned =
+                            clean::clean_html(raw_html, false, include_tags, exclude_tags)
+                                .unwrap_or_else(|_| raw_html.to_string());
+                        plaintext::html_to_plaintext(&basic_cleaned)
+                    } else {
+                        text
+                    }
+                };
+                match structural {
+                    Some(s) if s.trim().len() > plain_text_fb.trim().len() => Some(s),
+                    _ => Some(plain_text_fb),
                 }
             } else {
                 Some(fallback_md)
@@ -295,4 +308,106 @@ fn apply_selector(html: &str, css: Option<&str>, xpath: Option<&str>) -> CrwResu
         return Ok(Some(wrapped));
     }
     Ok(None)
+}
+
+/// Walk the raw HTML for substantial `<table>` (≥2 data rows) and
+/// `<ul>/<ol>` (≥5 items) elements, render each to markdown, and return
+/// the concatenation. Returns `None` if no qualifying structure is found.
+///
+/// This exists as a last-ditch fallback: readability and the htmd-on-cleaned
+/// path treat tabular and list-only pages (county finance reports, job
+/// listings, niche product catalogs) as navigation noise. By pulling those
+/// structures out of the raw DOM we surface real content that would
+/// otherwise be reported as thin.
+fn extract_tables_and_lists(html: &str) -> Option<String> {
+    use scraper::{Html, Selector};
+
+    let doc = Html::parse_document(html);
+    let table_sel = Selector::parse("table").ok()?;
+    let list_sel = Selector::parse("ul, ol").ok()?;
+    let row_sel = Selector::parse("tr").ok()?;
+    let item_sel = Selector::parse("li").ok()?;
+
+    let mut chunks: Vec<String> = Vec::new();
+
+    for table in doc.select(&table_sel) {
+        if table.select(&row_sel).count() < 2 {
+            continue;
+        }
+        let html_chunk = table.html();
+        let md = markdown::html_to_markdown(&html_chunk);
+        if md.trim().len() >= 40 {
+            chunks.push(md);
+        }
+    }
+
+    for list in doc.select(&list_sel) {
+        if list.select(&item_sel).count() < 5 {
+            continue;
+        }
+        // Skip nav/footer lists — those are usually identifiable by ancestor
+        // tag and would otherwise drown out real content.
+        let in_nav = list
+            .ancestors()
+            .filter_map(scraper::ElementRef::wrap)
+            .any(|el| {
+                let n = el.value().name();
+                n == "nav" || n == "footer" || n == "header"
+            });
+        if in_nav {
+            continue;
+        }
+        let html_chunk = list.html();
+        let md = markdown::html_to_markdown(&html_chunk);
+        if md.trim().len() >= 40 {
+            chunks.push(md);
+        }
+    }
+
+    if chunks.is_empty() {
+        return None;
+    }
+    Some(chunks.join("\n\n"))
+}
+
+#[cfg(test)]
+mod table_list_fallback_tests {
+    use super::*;
+
+    #[test]
+    fn extracts_two_row_table() {
+        let html = "<html><body><nav>x</nav><table>\
+            <tr><th>Name</th><th>Value</th></tr>\
+            <tr><td>Alpha</td><td>1</td></tr>\
+            <tr><td>Bravo</td><td>2</td></tr>\
+            </table></body></html>";
+        let md = extract_tables_and_lists(html).expect("table should extract");
+        assert!(md.contains("Alpha"));
+        assert!(md.contains("Bravo"));
+    }
+
+    #[test]
+    fn skips_short_table() {
+        let html = "<table><tr><td>only</td></tr></table>";
+        assert!(extract_tables_and_lists(html).is_none());
+    }
+
+    #[test]
+    fn skips_nav_list() {
+        let html = "<nav><ul>\
+            <li>a</li><li>b</li><li>c</li><li>d</li><li>e</li><li>f</li>\
+            </ul></nav>";
+        assert!(extract_tables_and_lists(html).is_none());
+    }
+
+    #[test]
+    fn extracts_long_list() {
+        let html = "<main><ul>\
+            <li>Job A</li><li>Job B</li><li>Job C</li>\
+            <li>Job D</li><li>Job E</li><li>Job F</li>\
+            </ul></main>";
+        let md = extract_tables_and_lists(html).expect("list should extract");
+        assert!(md.contains("Job A"));
+        assert!(md.contains("Job F"));
+    }
 }
