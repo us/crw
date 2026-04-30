@@ -142,11 +142,23 @@ impl PageFetcher for HttpFetcher {
         };
 
         // Single-retry loop on transient errors / 502-503-504. GET is
-        // idempotent so this is safe.
+        // idempotent so this is safe. Each attempt is bounded by the caller's
+        // remaining deadline so the request cannot exceed the overall budget.
         let mut attempt: u32 = 0;
         let resp = loop {
-            match build_request().send().await {
-                Ok(r) if attempt < HTTP_MAX_RETRIES && is_retriable_status(r.status().as_u16()) => {
+            let remaining = deadline.remaining();
+            if remaining.is_zero() {
+                return Err(CrwError::Timeout(0));
+            }
+            let send_fut = build_request().send();
+            let send_result = tokio::time::timeout(remaining, send_fut).await;
+            match send_result {
+                Err(_) => {
+                    return Err(CrwError::Timeout(remaining.as_millis() as u64));
+                }
+                Ok(Ok(r))
+                    if attempt < HTTP_MAX_RETRIES && is_retriable_status(r.status().as_u16()) =>
+                {
                     tracing::debug!(
                         "HTTP {} from {url}, retrying (attempt {})",
                         r.status(),
@@ -154,18 +166,24 @@ impl PageFetcher for HttpFetcher {
                     );
                     drop(r);
                     attempt += 1;
-                    tokio::time::sleep(HTTP_RETRY_BACKOFF).await;
+                    let backoff = HTTP_RETRY_BACKOFF.min(deadline.remaining());
+                    if !backoff.is_zero() {
+                        tokio::time::sleep(backoff).await;
+                    }
                 }
-                Ok(r) => break r,
-                Err(e) if attempt < HTTP_MAX_RETRIES && is_retriable_error(&e) => {
+                Ok(Ok(r)) => break r,
+                Ok(Err(e)) if attempt < HTTP_MAX_RETRIES && is_retriable_error(&e) => {
                     tracing::debug!(
                         "transient HTTP error to {url} ({e}), retrying (attempt {})",
                         attempt + 1
                     );
                     attempt += 1;
-                    tokio::time::sleep(HTTP_RETRY_BACKOFF).await;
+                    let backoff = HTTP_RETRY_BACKOFF.min(deadline.remaining());
+                    if !backoff.is_zero() {
+                        tokio::time::sleep(backoff).await;
+                    }
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     return Err(if e.is_connect() {
                         CrwError::TargetUnreachable(format!("Could not reach {url}: {e}"))
                     } else {

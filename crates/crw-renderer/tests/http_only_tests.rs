@@ -203,3 +203,43 @@ async fn http_fetcher_retries_on_connect_refused() {
         "expected TargetUnreachable, got {result:?}"
     );
 }
+
+// ── Deadline enforcement ──────────────────────────────────────────────
+
+async fn slow_handler() -> impl axum::response::IntoResponse {
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    (StatusCode::OK, "<html>too late</html>")
+}
+
+async fn spawn_slow_server() -> String {
+    let app = Router::new().route("/slow", get(slow_handler));
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    format!("http://{}", addr)
+}
+
+#[tokio::test]
+async fn http_fetcher_enforces_deadline_against_slow_origin() {
+    let base = spawn_slow_server().await;
+    let fetcher = HttpFetcher::new("crw-test", None, false);
+
+    let started = std::time::Instant::now();
+    let result = fetcher
+        .fetch(
+            &format!("{base}/slow"),
+            &HashMap::new(),
+            None,
+            Deadline::now_plus(Duration::from_millis(300)),
+        )
+        .await;
+    let elapsed = started.elapsed();
+
+    assert!(result.is_err(), "expected Timeout, got {result:?}");
+    assert!(
+        elapsed < Duration::from_millis(1500),
+        "deadline not enforced — took {elapsed:?} for a 300ms budget"
+    );
+}
