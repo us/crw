@@ -26,7 +26,8 @@
 //! let config = RendererConfig::default();
 //! let stealth = StealthConfig::default();
 //! let renderer = FallbackRenderer::new(&config, "crw/0.1", None, &stealth)?;
-//! let result = renderer.fetch("https://example.com", &HashMap::new(), None, None, None).await?;
+//! let deadline = crw_core::Deadline::from_request_ms(8000);
+//! let result = renderer.fetch("https://example.com", &HashMap::new(), None, None, None, deadline).await?;
 //! println!("status: {}", result.status_code);
 //! # Ok(())
 //! # }
@@ -324,6 +325,7 @@ impl FallbackRenderer {
         render_js: Option<bool>,
         wait_for_ms: Option<u64>,
         requested_renderer: Option<&str>,
+        deadline: crw_core::Deadline,
     ) -> CrwResult<FetchResult> {
         let effective = resolve_render_js(render_js, self.render_js_default);
         tracing::debug!(
@@ -338,13 +340,13 @@ impl FallbackRenderer {
         let is_hard_pinned = matches!(requested_renderer, Some(name) if name != "auto");
         match effective {
             Some(false) => {
-                let mut r = self.http.fetch(url, headers, None).await?;
+                let mut r = self.http.fetch(url, headers, None, deadline).await?;
                 stamp_http_decision(&mut r, requested_renderer);
                 Ok(r)
             }
             Some(true) => {
                 // Fetch via HTTP first to check content type — PDFs can't be JS-rendered.
-                let mut http_result = self.http.fetch(url, headers, None).await?;
+                let mut http_result = self.http.fetch(url, headers, None, deadline).await?;
                 if http_result.content_type.as_deref() == Some("application/pdf") {
                     stamp_http_decision(&mut http_result, requested_renderer);
                     return Ok(http_result);
@@ -365,7 +367,7 @@ impl FallbackRenderer {
                     stamp_http_decision(&mut result, requested_renderer);
                     Ok(result)
                 } else {
-                    self.fetch_with_js(url, headers, wait_for_ms, requested_renderer)
+                    self.fetch_with_js(url, headers, wait_for_ms, requested_renderer, deadline)
                         .await
                 }
             }
@@ -376,7 +378,7 @@ impl FallbackRenderer {
                 // sites that reject reqwest's TLS/UA fingerprint succeed via a
                 // real Chromium navigation. Bench analysis: 10/147 false
                 // "unreachable" + 5/147 "http_502" map to this branch.
-                let mut result = match self.http.fetch(url, headers, None).await {
+                let mut result = match self.http.fetch(url, headers, None, deadline).await {
                     Ok(r) => r,
                     Err(e) if !self.js_renderers.is_empty() => {
                         tracing::info!(
@@ -385,7 +387,7 @@ impl FallbackRenderer {
                             "HTTP fetch failed, escalating to JS renderer"
                         );
                         return self
-                            .fetch_with_js(url, headers, wait_for_ms, requested_renderer)
+                            .fetch_with_js(url, headers, wait_for_ms, requested_renderer, deadline)
                             .await
                             .map_err(|js_err| {
                                 tracing::warn!("Both HTTP and JS failed: http={e}, js={js_err}");
@@ -455,7 +457,7 @@ impl FallbackRenderer {
                         );
                     }
                     match self
-                        .fetch_with_js(url, headers, wait_for_ms, requested_renderer)
+                        .fetch_with_js(url, headers, wait_for_ms, requested_renderer, deadline)
                         .await
                     {
                         Ok(js_result) => Ok(js_result),
@@ -511,6 +513,7 @@ impl FallbackRenderer {
         headers: &HashMap<String, String>,
         wait_for_ms: Option<u64>,
         requested_renderer: Option<&str>,
+        deadline: crw_core::Deadline,
     ) -> CrwResult<FetchResult> {
         let host = host_of(url);
         let is_user_pinned = matches!(requested_renderer, Some(name) if name != "auto");
@@ -591,7 +594,7 @@ impl FallbackRenderer {
                 chain.push(k);
             }
 
-            match renderer.fetch(url, headers, wait_for_ms).await {
+            match renderer.fetch(url, headers, wait_for_ms, deadline).await {
                 Ok(mut result) => {
                     let text_len = html_body_text_len(&result.html);
                     let is_placeholder = detector::looks_like_loading_placeholder(&result.html);
@@ -859,6 +862,12 @@ fn html_body_text_len(html: &str) -> usize {
 mod tests {
     use super::*;
     use crw_core::config::CdpEndpoint;
+    use std::time::Duration;
+
+    /// Generous deadline used by tests that don't care about budget enforcement.
+    fn tdl() -> crw_core::Deadline {
+        crw_core::Deadline::now_plus(Duration::from_secs(60))
+    }
 
     fn base_cfg(mode: RendererMode) -> RendererConfig {
         RendererConfig {
@@ -979,6 +988,7 @@ mod tests {
             url: &str,
             _headers: &HashMap<String, String>,
             _wait_for_ms: Option<u64>,
+            _deadline: crw_core::Deadline,
         ) -> CrwResult<FetchResult> {
             match &self.behavior {
                 MockBehavior::Ok(html) => Ok(FetchResult {
@@ -1045,6 +1055,7 @@ mod tests {
                 Some(true),
                 None,
                 Some("chrome"),
+                tdl(),
             )
             .await
             .unwrap();
@@ -1067,6 +1078,7 @@ mod tests {
                 Some(true),
                 None,
                 Some("lightpanda"),
+                tdl(),
             )
             .await
             .unwrap_err();
@@ -1096,6 +1108,7 @@ mod tests {
                 Some(true),
                 None,
                 Some("auto"),
+                tdl(),
             )
             .await
             .unwrap();
@@ -1128,6 +1141,7 @@ mod tests {
                 Some(true),
                 None,
                 None,
+                tdl(),
             )
             .await
             .unwrap();
@@ -1157,6 +1171,7 @@ mod tests {
                 Some(true),
                 None,
                 None,
+                tdl(),
             )
             .await
             .unwrap();
@@ -1197,6 +1212,7 @@ mod tests {
                 Some(true),
                 None,
                 None,
+                tdl(),
             )
             .await
             .unwrap();
@@ -1222,6 +1238,7 @@ mod tests {
                 Some(true),
                 None,
                 Some("chrome"),
+                tdl(),
             )
             .await
             .unwrap_err();
@@ -1257,6 +1274,7 @@ mod tests {
                 Some(true),
                 None,
                 None,
+                tdl(),
             )
             .await
             .unwrap();
@@ -1304,6 +1322,7 @@ mod tests {
                 Some(true),
                 None,
                 None,
+                tdl(),
             )
             .await
             .unwrap();
@@ -1344,6 +1363,7 @@ mod tests {
                 Some(true),
                 None,
                 Some("lightpanda"),
+                tdl(),
             )
             .await
             .unwrap();
@@ -1386,6 +1406,7 @@ mod tests {
                 Some(true),
                 None,
                 Some("chrome"),
+                tdl(),
             )
             .await
             .unwrap();

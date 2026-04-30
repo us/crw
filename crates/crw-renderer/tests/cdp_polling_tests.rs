@@ -20,13 +20,19 @@
 #![cfg(feature = "cdp")]
 
 use std::collections::HashMap;
+use std::time::Duration;
 
 use axum::Router;
 use axum::response::Html;
 use axum::routing::get;
+use crw_core::Deadline;
 use crw_renderer::cdp::CdpRenderer;
 use crw_renderer::traits::PageFetcher;
 use tokio::net::TcpListener;
+
+fn tdl() -> Deadline {
+    Deadline::now_plus(Duration::from_secs(60))
+}
 
 /// Page that displays a loading placeholder for 2.5 s, then swaps in real
 /// content. 2500 ms is chosen to be *after* the default 2 s JS wait so that
@@ -82,7 +88,7 @@ async fn polls_until_delayed_content_appears() {
     // Auto mode (wait_for_ms = None) triggers the stability poll when the
     // initial snapshot still looks like a loading placeholder.
     let result = renderer
-        .fetch(&base_url, &HashMap::new(), None)
+        .fetch(&base_url, &HashMap::new(), None, tdl())
         .await
         .expect("CDP fetch failed");
 
@@ -109,7 +115,7 @@ async fn explicit_wait_for_opts_out_of_polling() {
     let renderer = CdpRenderer::new("chrome", &ws_url, 30_000, 2);
 
     let result = renderer
-        .fetch(&base_url, &HashMap::new(), Some(500))
+        .fetch(&base_url, &HashMap::new(), Some(500), tdl())
         .await
         .expect("CDP fetch failed");
 

@@ -1,3 +1,4 @@
+use crw_core::Deadline;
 use crw_core::config::{BUILTIN_UA_POOL, LlmConfig};
 use crw_core::error::CrwResult;
 use crw_core::types::{
@@ -23,6 +24,7 @@ pub async fn scrape_url(
     user_agent: &str,
     default_stealth: bool,
     render_js_default: Option<bool>,
+    deadline: Deadline,
 ) -> CrwResult<ScrapeData> {
     // Reject unsupported `actions` parameter early with a clear error.
     if req.actions.is_some() {
@@ -86,7 +88,7 @@ pub async fn scrape_url(
             // HTTP-only: safe to use a temp HttpFetcher with custom proxy/stealth.
             let temp_http = HttpFetcher::new(&effective_ua, proxy, inject_stealth);
             temp_http
-                .fetch(&req.url, &req.headers, req.wait_for)
+                .fetch(&req.url, &req.headers, req.wait_for, deadline)
                 .await?
         } else {
             // JS rendering needed (or auto-detect): use the shared renderer which
@@ -105,6 +107,7 @@ pub async fn scrape_url(
                     effective_render_js_request,
                     req.wait_for,
                     pinned,
+                    deadline,
                 )
                 .await?
         }
@@ -116,6 +119,7 @@ pub async fn scrape_url(
                 effective_render_js_request,
                 req.wait_for,
                 pinned,
+                deadline,
             )
             .await?
     };
@@ -279,6 +283,7 @@ pub async fn scrape_url(
                 Some(true),
                 req.wait_for,
                 escalation_target,
+                deadline,
             )
             .await
         {

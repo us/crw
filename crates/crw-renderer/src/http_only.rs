@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use crw_core::Deadline;
 use crw_core::error::{CrwError, CrwResult};
 use crw_core::types::FetchResult;
 use std::collections::HashMap;
@@ -106,7 +107,13 @@ impl PageFetcher for HttpFetcher {
         url: &str,
         headers: &HashMap<String, String>,
         _wait_for_ms: Option<u64>,
+        deadline: Deadline,
     ) -> CrwResult<FetchResult> {
+        if deadline.expired() {
+            return Err(CrwError::HttpError(format!(
+                "deadline expired before HTTP fetch of {url}"
+            )));
+        }
         let start = Instant::now();
 
         // Build a fresh, fully-decorated request for each attempt. Closure

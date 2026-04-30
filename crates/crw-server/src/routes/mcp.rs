@@ -31,6 +31,10 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
             let user_agent = &state.config.crawler.user_agent;
             let default_stealth =
                 state.config.crawler.stealth.enabled && state.config.crawler.stealth.inject_headers;
+            let deadline = crw_core::Deadline::from_request_ms(
+                req.deadline_ms
+                    .unwrap_or(state.config.request.deadline_ms_default),
+            );
             let data = scrape_url(
                 &req,
                 &state.renderer,
@@ -38,6 +42,7 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
                 user_agent,
                 default_stealth,
                 state.config.renderer.render_js_default,
+                deadline,
             )
             .await
             .map_err(|e| format!("{e}"))?;
@@ -80,6 +85,7 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
                 requests_per_second: state.config.crawler.requests_per_second,
                 user_agent: &state.config.crawler.user_agent,
                 proxy: state.config.crawler.proxy.clone(),
+                deadline_ms_per_page: state.config.request.deadline_ms_default,
             })
             .await
             .map_err(|e| format!("{e}"))?;

@@ -2,6 +2,13 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::Duration;
+
+use crw_core::Deadline;
+
+fn tdl() -> Deadline {
+    Deadline::now_plus(Duration::from_secs(60))
+}
 
 use axum::Router;
 use axum::extract::State;
@@ -74,14 +81,14 @@ async fn http_fetcher_decodes_gzip_and_brotli_responses() {
     let fetcher = HttpFetcher::new("crw-test", None, true);
 
     let gzip_result = fetcher
-        .fetch(&format!("{base_url}/gzip"), &HashMap::new(), None)
+        .fetch(&format!("{base_url}/gzip"), &HashMap::new(), None, tdl())
         .await
         .unwrap();
     assert!(gzip_result.html.contains("gzip works"));
     assert!(!gzip_result.html.contains('\u{1f}'));
 
     let brotli_result = fetcher
-        .fetch(&format!("{base_url}/brotli"), &HashMap::new(), None)
+        .fetch(&format!("{base_url}/brotli"), &HashMap::new(), None, tdl())
         .await
         .unwrap();
     assert!(brotli_result.html.contains("brotli works"));
@@ -138,7 +145,7 @@ async fn http_fetcher_retries_502_then_succeeds() {
     let fetcher = HttpFetcher::new("crw-test", None, false);
 
     let result = fetcher
-        .fetch(&format!("{base}/flaky"), &HashMap::new(), None)
+        .fetch(&format!("{base}/flaky"), &HashMap::new(), None, tdl())
         .await
         .expect("retry should succeed");
 
@@ -156,7 +163,7 @@ async fn http_fetcher_gives_up_after_one_retry_on_502() {
     // Both attempts return 502; we surface the final status to the caller
     // without erroring (caller decides what to do with non-2xx).
     let result = fetcher
-        .fetch(&format!("{base}/always502"), &HashMap::new(), None)
+        .fetch(&format!("{base}/always502"), &HashMap::new(), None, tdl())
         .await
         .expect("non-2xx must be returned, not raised");
     assert_eq!(result.status_code, 502);
@@ -168,7 +175,7 @@ async fn http_fetcher_does_not_retry_500() {
     let (base, _counter) = spawn_retry_server().await;
     let fetcher = HttpFetcher::new("crw-test", None, false);
     let result = fetcher
-        .fetch(&format!("{base}/always500"), &HashMap::new(), None)
+        .fetch(&format!("{base}/always500"), &HashMap::new(), None, tdl())
         .await
         .expect("500 must surface as result");
     assert_eq!(result.status_code, 500);
@@ -184,7 +191,12 @@ async fn http_fetcher_retries_on_connect_refused() {
     let fetcher = HttpFetcher::new("crw-test", None, false);
     // Should retry once and then give up with TargetUnreachable.
     let result = fetcher
-        .fetch(&format!("http://{dead_addr}/x"), &HashMap::new(), None)
+        .fetch(
+            &format!("http://{dead_addr}/x"),
+            &HashMap::new(),
+            None,
+            tdl(),
+        )
         .await;
     assert!(
         result.is_err(),

@@ -321,6 +321,7 @@ impl PageFetcher for CdpRenderer {
         url: &str,
         _headers: &HashMap<String, String>,
         wait_for_ms: Option<u64>,
+        deadline: crw_core::Deadline,
     ) -> CrwResult<FetchResult> {
         // Overall hard timeout: page_timeout + wait_for + challenge retry budget
         // + content-stability budget (auto-mode only) + overhead. Challenge retries
@@ -333,8 +334,14 @@ impl PageFetcher for CdpRenderer {
         } else {
             Duration::ZERO
         };
-        let overall_timeout =
+        let internal_timeout =
             self.page_timeout + wait_dur + challenge_budget + stability_budget + FETCH_OVERHEAD;
+        // Clamp internal timeout against the caller's remaining budget so the
+        // CDP fetch never exceeds the end-to-end deadline.
+        let overall_timeout = internal_timeout.min(deadline.remaining());
+        if overall_timeout.is_zero() {
+            return Err(CrwError::Timeout(0));
+        }
 
         tokio::time::timeout(overall_timeout, self.fetch_with_ws(url, wait_for_ms))
             .await

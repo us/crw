@@ -36,6 +36,9 @@ pub struct CrawlOptions<'a> {
     pub proxy: Option<String>,
     /// Jitter factor for rate limiting (0.0–1.0). 0.2 = ±20% of sleep duration.
     pub jitter_factor: f64,
+    /// Per-page deadline budget in milliseconds. Each URL fetched in the
+    /// crawl gets a fresh `Deadline` of this length.
+    pub deadline_ms_per_page: u64,
 }
 
 /// Stale rate limiter entries are cleaned up after this duration.
@@ -208,6 +211,7 @@ pub async fn run_crawl(opts: CrawlOptions<'_>) {
         llm_config,
         proxy,
         jitter_factor,
+        deadline_ms_per_page,
     } = opts;
 
     let max_depth = req.max_depth.unwrap_or(2).min(10);
@@ -300,6 +304,7 @@ pub async fn run_crawl(opts: CrawlOptions<'_>) {
             tokio::time::sleep(sleep_dur).await;
         }
 
+        let page_deadline = crw_core::Deadline::from_request_ms(deadline_ms_per_page);
         let fetch_result = match renderer
             .fetch(
                 &url,
@@ -307,6 +312,7 @@ pub async fn run_crawl(opts: CrawlOptions<'_>) {
                 effective_render_js,
                 req.wait_for,
                 pinned_renderer,
+                page_deadline,
             )
             .await
         {
@@ -453,6 +459,8 @@ pub struct DiscoverOptions<'a> {
     /// Supports HTTP, HTTPS, and SOCKS5
     /// (e.g. `http://proxy:8080` or `socks5://user:pass@proxy:1080`).
     pub proxy: Option<String>,
+    /// Per-page deadline budget in milliseconds.
+    pub deadline_ms_per_page: u64,
 }
 
 /// Discover URLs from a site (map endpoint).
@@ -466,6 +474,7 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<Vec<String>> 
         requests_per_second,
         user_agent,
         proxy,
+        deadline_ms_per_page,
     } = opts;
     let parsed = url::Url::parse(base_url)
         .map_err(|e| crw_core::error::CrwError::InvalidRequest(format!("Invalid URL: {e}")))?;
@@ -550,8 +559,16 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<Vec<String>> 
             tokio::time::sleep(sleep_dur).await;
         }
 
+        let discover_deadline = crw_core::Deadline::from_request_ms(deadline_ms_per_page);
         let fetch = renderer
-            .fetch(&url, &Default::default(), Some(false), None, None)
+            .fetch(
+                &url,
+                &Default::default(),
+                Some(false),
+                None,
+                None,
+                discover_deadline,
+            )
             .await;
 
         if let Ok(result) = fetch {

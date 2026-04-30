@@ -172,6 +172,7 @@ impl AppState {
         let llm_config = self.config.extraction.llm.clone();
         let proxy = self.config.crawler.proxy.clone();
         let jitter_factor = self.config.crawler.stealth.jitter_factor;
+        let deadline_ms_per_page = self.config.request.deadline_ms_default;
 
         let handle = tokio::spawn(async move {
             let _permit = match crawl_semaphore.acquire().await {
@@ -201,6 +202,7 @@ impl AppState {
                 llm_config: llm_config.as_ref(),
                 proxy,
                 jitter_factor,
+                deadline_ms_per_page,
             })
             .await;
         });

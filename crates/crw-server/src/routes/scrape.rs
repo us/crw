@@ -1,6 +1,7 @@
 use axum::Json;
 use axum::extract::State;
 use axum::extract::rejection::JsonRejection;
+use crw_core::Deadline;
 use crw_core::error::CrwError;
 use crw_core::types::{ApiResponse, ScrapeData, ScrapeRequest};
 use crw_crawl::single::scrape_url;
@@ -22,6 +23,10 @@ pub async fn scrape(
     let user_agent = &state.config.crawler.user_agent;
     let default_stealth =
         state.config.crawler.stealth.enabled && state.config.crawler.stealth.inject_headers;
+    let deadline = Deadline::from_request_ms(
+        req.deadline_ms
+            .unwrap_or(state.config.request.deadline_ms_default),
+    );
     let data = scrape_url(
         &req,
         &state.renderer,
@@ -29,6 +34,7 @@ pub async fn scrape(
         user_agent,
         default_stealth,
         state.config.renderer.render_js_default,
+        deadline,
     )
     .await?;
 

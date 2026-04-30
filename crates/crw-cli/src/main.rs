@@ -160,7 +160,18 @@ async fn main() {
         deadline_ms: None,
     };
 
-    let data = match scrape_url(&req, &renderer, None, "crw/0.0.3", cli.stealth, None).await {
+    let cli_deadline = crw_core::Deadline::from_request_ms(req.deadline_ms.unwrap_or(8000));
+    let data = match scrape_url(
+        &req,
+        &renderer,
+        None,
+        "crw/0.0.3",
+        cli.stealth,
+        None,
+        cli_deadline,
+    )
+    .await
+    {
         Ok(d) => d,
         Err(e) => {
             eprintln!("error: {e}");
