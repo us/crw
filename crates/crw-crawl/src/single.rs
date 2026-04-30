@@ -367,6 +367,18 @@ fn detect_block_interstitial(html: &str) -> Option<String> {
         "cf-challenge",
         "captcha",
         "access denied",
+        // DataDome (Reuters, Forbes, Inc, Zoro, WSJ, etc.) — serves a small
+        // CAPTCHA/iframe shell to headless browsers. The captcha-delivery host
+        // and "datadome" string only appear on actively-challenged pages.
+        "captcha-delivery.com",
+        "datadome captcha",
+        "data-cfasync",
+        // PerimeterX / HUMAN
+        "px-captcha",
+        "_px3=",
+        // Akamai Bot Manager
+        "_abck=",
+        "ak-challenge",
     ];
 
     if markers.iter().any(|marker| lower.contains(marker)) {

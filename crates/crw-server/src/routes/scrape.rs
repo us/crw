@@ -62,6 +62,35 @@ pub async fn scrape(
         }
     }
 
+    // Anti-bot interstitial detection: if extraction produced no real content
+    // AND a block warning was attached, surface as a failure with the proper
+    // error code instead of returning empty markdown with success=true. Bench
+    // analysis: ~19/1000 URLs (Reuters, Forbes, Inc, Zoro, WSJ, …) hit this
+    // path through DataDome/PerimeterX/Akamai challenges.
+    let md_empty = data
+        .markdown
+        .as_deref()
+        .map(|s| s.trim().len() < 100)
+        .unwrap_or(true);
+    let blocked = data
+        .warning
+        .as_deref()
+        .map(|w| w.starts_with("Blocked by anti-bot"))
+        .unwrap_or(false);
+    if md_empty && blocked {
+        let error_msg = data
+            .warning
+            .clone()
+            .unwrap_or_else(|| "Blocked by anti-bot protection".into());
+        return Ok(Json(ApiResponse {
+            success: false,
+            data: Some(data),
+            error: Some(error_msg),
+            error_code: Some("anti_bot".into()),
+            warning: None,
+        }));
+    }
+
     // Promote data.warning to ApiResponse.warning so it's visible at top level
     let warning = data.warning.clone();
     let mut resp = ApiResponse::ok(data);
