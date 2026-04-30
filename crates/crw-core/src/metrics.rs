@@ -31,6 +31,13 @@ pub fn metrics() -> &'static Metrics {
     METRICS.get_or_init(Metrics::new)
 }
 
+/// Eagerly register all metrics at boot. Forces `OnceLock` initialisation so
+/// alert rules referencing series that have never emitted are evaluated
+/// against present (zero-valued) series instead of absent ones.
+pub fn init() {
+    let _ = metrics();
+}
+
 impl Metrics {
     fn new() -> Self {
         let registry = Registry::new();

@@ -38,6 +38,9 @@ async fn run_server() {
         )
         .init();
 
+    // Eagerly register Prometheus metrics so alert rules see present series at boot.
+    crw_core::metrics::init();
+
     // Load configuration.
     let config = match AppConfig::load() {
         Ok(c) => c,

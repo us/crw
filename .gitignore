@@ -2,6 +2,8 @@
 .claude
 PROGRESS.md
 .gstack/
+bench/server-runs/
+bench/results.json
 **/__pycache__/
 python/.venv/
 python/uv.lock

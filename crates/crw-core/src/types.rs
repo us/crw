@@ -188,6 +188,12 @@ pub struct ScrapeRequest {
     /// value implies `renderJs:true` unless `renderJs:false` is set explicitly.
     #[serde(default)]
     pub renderer: Option<RequestedRenderer>,
+    /// End-to-end deadline budget in milliseconds. When unset, the configured
+    /// `request.deadline_ms_default` (8000) applies. The SLO p95 metric is
+    /// computed only over requests with `deadline_ms <= 8000`; longer values
+    /// land in a separate slow-path histogram. Must be in `(0, 60000]`.
+    #[serde(default, alias = "deadline_ms")]
+    pub deadline_ms: Option<u64>,
 }
 
 fn default_formats() -> Vec<OutputFormat> {

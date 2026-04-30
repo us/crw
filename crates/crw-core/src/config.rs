@@ -12,6 +12,33 @@ pub struct AppConfig {
     pub extraction: ExtractionConfig,
     #[serde(default)]
     pub auth: AuthConfig,
+    #[serde(default)]
+    pub request: RequestConfig,
+}
+
+/// Per-request defaults that apply to every scrape, crawl, or map call when
+/// the caller does not specify an override. Currently only governs the
+/// end-to-end deadline budget (see `crw-core/src/deadline.rs`).
+#[derive(Debug, Clone, Deserialize)]
+pub struct RequestConfig {
+    /// Default end-to-end deadline budget in milliseconds when a request does
+    /// not specify `deadlineMs`. The SLO p95 latency metric is computed only
+    /// over requests with `deadline_ms <= 8000`; longer values land in a
+    /// separate slow-path histogram.
+    #[serde(default = "default_deadline_ms")]
+    pub deadline_ms_default: u64,
+}
+
+impl Default for RequestConfig {
+    fn default() -> Self {
+        Self {
+            deadline_ms_default: default_deadline_ms(),
+        }
+    }
+}
+
+fn default_deadline_ms() -> u64 {
+    8000
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -112,6 +139,40 @@ pub struct RendererConfig {
     pub playwright: Option<CdpEndpoint>,
     #[serde(default)]
     pub chrome: Option<CdpEndpoint>,
+    /// Enable Chrome resource interception (`Fetch.enable` blocking of media,
+    /// fonts, trackers). Default `false`; flipped after the CDP-fake suite
+    /// validates pump + cleanup behaviour. See plan Phase 2.
+    #[serde(default)]
+    pub chrome_intercept_resources: bool,
+    /// Additionally block `stylesheet` requests when interception is enabled.
+    /// Default `false` — kept off in v1 because some extractors depend on
+    /// CSS-driven visibility / lazy-content triggers.
+    #[serde(default)]
+    pub chrome_intercept_stylesheets: bool,
+    /// Per-host opt-out for chrome interception. Hosts in this list run with
+    /// interception disabled even when `chrome_intercept_resources = true`.
+    #[serde(default)]
+    pub chrome_host_intercept_disable: Vec<String>,
+    /// Hard chrome-tier navigation budget in ms. Wraps `wait_for_page_ready`
+    /// in an inner race; on budget hit the renderer snapshots whatever DOM is
+    /// present and returns `truncated = true`. Calibrated as
+    /// `p90(successful chrome renders)` clamped to `[8_000, 12_000]`.
+    #[serde(default = "default_chrome_nav_budget_ms")]
+    pub chrome_nav_budget_ms: u64,
+    /// Enable the bounded browser-context pool. Default `false`; v1 ships
+    /// `RECYCLE_AFTER_NAV = 1` (recreate every release) before optimising to
+    /// reuse-with-clearing. See plan Phase 4.
+    #[serde(default)]
+    pub chrome_context_pool_enabled: bool,
+    /// Enable the success-ratio renderer predictor in `HostPreferences`.
+    /// Default `false`; flipped after the predictor replay harness gates
+    /// on the 1k bench (false-skip < 2 %, false-escalate < 5 %, churn < 3 / 1k).
+    #[serde(default)]
+    pub use_predictor: bool,
+}
+
+fn default_chrome_nav_budget_ms() -> u64 {
+    12_000
 }
 
 impl Default for RendererConfig {
@@ -127,6 +188,12 @@ impl Default for RendererConfig {
             lightpanda: None,
             playwright: None,
             chrome: None,
+            chrome_intercept_resources: false,
+            chrome_intercept_stylesheets: false,
+            chrome_host_intercept_disable: Vec::new(),
+            chrome_nav_budget_ms: default_chrome_nav_budget_ms(),
+            chrome_context_pool_enabled: false,
+            use_predictor: false,
         }
     }
 }
@@ -227,6 +294,21 @@ pub struct CrawlerConfig {
     pub job_ttl_secs: u64,
     #[serde(default)]
     pub stealth: StealthConfig,
+    /// Floor for the per-host limiter interval, in milliseconds. When a host
+    /// advertises `Crawl-delay` in robots.txt, the higher of the two wins.
+    /// Default `0` — robots.txt is the authoritative source, this is a
+    /// per-deployment safety net.
+    #[serde(default)]
+    pub per_host_min_interval_ms: u64,
+    /// Maximum concurrent in-flight requests against a single eTLD+1.
+    /// Default `1` — strict ethics posture; operators raise consciously via
+    /// config when scraping their own infrastructure.
+    #[serde(default = "default_per_host_max_concurrent")]
+    pub per_host_max_concurrent: u32,
+}
+
+fn default_per_host_max_concurrent() -> u32 {
+    1
 }
 
 impl Default for CrawlerConfig {
@@ -241,6 +323,8 @@ impl Default for CrawlerConfig {
             proxy: None,
             job_ttl_secs: default_job_ttl(),
             stealth: StealthConfig::default(),
+            per_host_min_interval_ms: 0,
+            per_host_max_concurrent: default_per_host_max_concurrent(),
         }
     }
 }
@@ -451,6 +535,30 @@ mod tests {
         let cfg = AppConfig::load().unwrap();
         clear_renderer_env();
         assert_eq!(cfg.renderer.render_js_default, Some(true));
+    }
+
+    #[test]
+    fn request_config_defaults_match_plan() {
+        let r = RequestConfig::default();
+        assert_eq!(r.deadline_ms_default, 8000);
+    }
+
+    #[test]
+    fn renderer_phase_toggles_default_off_or_safe() {
+        let r = RendererConfig::default();
+        assert!(!r.chrome_intercept_resources);
+        assert!(!r.chrome_intercept_stylesheets);
+        assert!(r.chrome_host_intercept_disable.is_empty());
+        assert_eq!(r.chrome_nav_budget_ms, 12_000);
+        assert!(!r.chrome_context_pool_enabled);
+        assert!(!r.use_predictor);
+    }
+
+    #[test]
+    fn crawler_per_host_limiter_defaults() {
+        let c = CrawlerConfig::default();
+        assert_eq!(c.per_host_min_interval_ms, 0);
+        assert_eq!(c.per_host_max_concurrent, 1);
     }
 
     #[test]

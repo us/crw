@@ -297,6 +297,7 @@ async fn main() {
                     crawler: Default::default(),
                     extraction: Default::default(),
                     auth: Default::default(),
+                    request: Default::default(),
                 }
             });
 
