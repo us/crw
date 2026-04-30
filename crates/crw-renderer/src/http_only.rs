@@ -148,7 +148,11 @@ impl PageFetcher for HttpFetcher {
         let resp = loop {
             let remaining = deadline.remaining();
             if remaining.is_zero() {
-                return Err(CrwError::Timeout(0));
+                // Already past the budget — report elapsed-since-call so the
+                // message reads "Timeout after Xms" instead of a useless 0.
+                return Err(CrwError::Timeout(
+                    (start.elapsed().as_millis().max(1)) as u64,
+                ));
             }
             let send_fut = build_request().send();
             let send_result = tokio::time::timeout(remaining, send_fut).await;

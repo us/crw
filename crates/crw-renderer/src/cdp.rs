@@ -340,7 +340,11 @@ impl PageFetcher for CdpRenderer {
         // CDP fetch never exceeds the end-to-end deadline.
         let overall_timeout = internal_timeout.min(deadline.remaining());
         if overall_timeout.is_zero() {
-            return Err(CrwError::Timeout(0));
+            // Caller's deadline is already past — surface how late we are so
+            // the error reads "Timeout after Xms" instead of a useless 0.
+            return Err(CrwError::Timeout(
+                (deadline.overrun().as_millis().max(1)) as u64,
+            ));
         }
 
         tokio::time::timeout(overall_timeout, self.fetch_with_ws(url, wait_for_ms))

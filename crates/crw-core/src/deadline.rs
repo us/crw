@@ -44,6 +44,12 @@ impl Deadline {
         Instant::now() >= self.absolute
     }
 
+    /// How long ago the deadline expired. `Duration::ZERO` if not yet expired.
+    /// Used to produce meaningful timeout error messages (vs. reporting 0ms).
+    pub fn overrun(&self) -> Duration {
+        Instant::now().saturating_duration_since(self.absolute)
+    }
+
     /// The absolute wall-clock instant at which this deadline expires.
     pub fn absolute(&self) -> Instant {
         self.absolute
