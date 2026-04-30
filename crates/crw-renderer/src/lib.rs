@@ -682,13 +682,32 @@ impl FallbackRenderer {
                     });
                     thin_result = Some(match thin_result {
                         None => annotated,
-                        Some(mut existing) => {
-                            existing.warnings.push(attempt_warning.clone());
-                            existing.warning = Some(match existing.warning {
+                        Some(existing) => {
+                            // Prefer the larger HTML when stitching thin
+                            // results — a later renderer (e.g. chrome) often
+                            // returns a CAPTCHA shell that, while small,
+                            // contains anti-bot markers absent from an even
+                            // smaller earlier shell. Diagnostics & block
+                            // detection then have something to match on.
+                            let (mut keeper, dropped) =
+                                if annotated.html.len() > existing.html.len() {
+                                    (annotated, existing)
+                                } else {
+                                    (existing, annotated)
+                                };
+                            keeper.warnings.push(attempt_warning.clone());
+                            keeper.warning = Some(match keeper.warning {
                                 Some(prev) => format!("{prev}; {attempt_warning}"),
                                 None => attempt_warning,
                             });
-                            existing
+                            // Carry over any extra warnings from the dropped
+                            // attempt so debug output stays complete.
+                            for w in dropped.warnings {
+                                if !keeper.warnings.contains(&w) {
+                                    keeper.warnings.push(w);
+                                }
+                            }
+                            keeper
                         }
                     });
                 }
