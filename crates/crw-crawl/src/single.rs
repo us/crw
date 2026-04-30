@@ -309,6 +309,14 @@ pub async fn scrape_url(
 }
 
 pub(crate) fn derive_target_warning(fetch_result: &FetchResult) -> Option<String> {
+    // Anti-bot detection wins over any other warning. The renderer chain
+    // annotates thin results with "X returned a loading placeholder", but the
+    // underlying HTML may be a CAPTCHA shell — surfacing the placeholder
+    // misattributes the failure to our renderer instead of the site block.
+    if let Some(block) = detect_block_interstitial(&fetch_result.html) {
+        return Some(block);
+    }
+
     if fetch_result.warning.is_some() {
         return fetch_result.warning.clone();
     }
@@ -321,7 +329,7 @@ pub(crate) fn derive_target_warning(fetch_result: &FetchResult) -> Option<String
         ));
     }
 
-    detect_block_interstitial(&fetch_result.html)
+    None
 }
 
 fn canonical_status_text(status_code: u16) -> &'static str {
