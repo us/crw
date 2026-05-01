@@ -95,7 +95,11 @@ impl AppState {
             &config.crawler.user_agent,
             proxy,
             &config.crawler.stealth,
-        )?;
+        )?
+        .with_host_limits(
+            config.crawler.requests_per_second,
+            config.crawler.per_host_max_concurrent,
+        );
 
         let state = Self {
             config: Arc::new(config),

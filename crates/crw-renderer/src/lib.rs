@@ -154,6 +154,12 @@ pub struct FallbackRenderer {
     preferences: Arc<HostPreferences>,
     /// Per-host + global circuit breakers per renderer.
     breakers: Arc<BreakerRegistry>,
+    /// Process-wide per-eTLD+1 rate (req/sec). `0.0` disables the interval
+    /// floor; the concurrency cap below still applies. Configured via
+    /// [`Self::with_host_limits`].
+    requests_per_second: f64,
+    /// Process-wide per-eTLD+1 in-flight cap. `1` enforces strict politeness.
+    per_host_max_concurrent: u32,
 }
 
 impl std::fmt::Debug for FallbackRenderer {
@@ -220,6 +226,8 @@ impl FallbackRenderer {
                 render_js_default: config.render_js_default,
                 preferences: Arc::new(HostPreferences::with_defaults()),
                 breakers: Arc::new(BreakerRegistry::with_defaults()),
+                requests_per_second: 0.0,
+                per_host_max_concurrent: 1,
             });
         }
 
@@ -293,7 +301,22 @@ impl FallbackRenderer {
             render_js_default: config.render_js_default,
             preferences: Arc::new(HostPreferences::with_defaults()),
             breakers: Arc::new(BreakerRegistry::with_defaults()),
+            requests_per_second: 0.0,
+            per_host_max_concurrent: 1,
         })
+    }
+
+    /// Configure the process-wide per-host limiter (eTLD+1 keyed). Call once
+    /// at startup with values from `CrawlerConfig`. Defaults: rps=0.0 (no
+    /// interval floor), per-host cap=1 (strict politeness).
+    pub fn with_host_limits(
+        mut self,
+        requests_per_second: f64,
+        per_host_max_concurrent: u32,
+    ) -> Self {
+        self.requests_per_second = requests_per_second;
+        self.per_host_max_concurrent = per_host_max_concurrent;
+        self
     }
 
     /// Access the host preferences cache (for admin endpoints, tests).
@@ -328,6 +351,50 @@ impl FallbackRenderer {
         requested_renderer: Option<&str>,
         deadline: crw_core::Deadline,
     ) -> CrwResult<FetchResult> {
+        // Per-eTLD+1 rate-limit + concurrency cap. Held across the entire
+        // fetch (including any escalation to a JS renderer) so a host that
+        // rate-limits HTTP doesn't get hammered by Chrome on retry.
+        let host_key = url::Url::parse(url)
+            .ok()
+            .and_then(|u| u.host_str().map(crate::preference::normalize_host));
+        let _host_permit = if let Some(key) = host_key.as_deref() {
+            let remaining = deadline.remaining();
+            if remaining.is_zero() {
+                return Err(CrwError::Timeout(
+                    deadline.overrun().as_millis().max(1) as u64
+                ));
+            }
+            match tokio::time::timeout(
+                remaining,
+                crate::host_limiter::acquire(
+                    key,
+                    self.requests_per_second,
+                    self.per_host_max_concurrent as usize,
+                ),
+            )
+            .await
+            {
+                Ok(Ok((permit, sleep))) => {
+                    if !sleep.is_zero() {
+                        let budget = deadline.remaining();
+                        if sleep > budget {
+                            return Err(CrwError::Timeout(sleep.as_millis().max(1) as u64));
+                        }
+                        tokio::time::sleep(sleep).await;
+                    }
+                    Some(permit)
+                }
+                Ok(Err(_)) => return Err(CrwError::RendererError("host limiter closed".into())),
+                Err(_) => {
+                    return Err(CrwError::Timeout(
+                        deadline.overrun().as_millis().max(1) as u64
+                    ));
+                }
+            }
+        } else {
+            None
+        };
+
         let effective = resolve_render_js(render_js, self.render_js_default);
         tracing::debug!(
             url,

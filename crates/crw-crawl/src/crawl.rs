@@ -7,8 +7,7 @@ use crw_extract::readability::extract_links;
 use crw_renderer::FallbackRenderer;
 use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::{Mutex, Semaphore};
+use tokio::sync::Semaphore;
 use uuid::Uuid;
 
 use crate::robots::RobotsTxt;
@@ -40,32 +39,6 @@ pub struct CrawlOptions<'a> {
     /// Cap on concurrent in-flight requests per eTLD+1 host. `1` enforces
     /// strict politeness; raise via config when scraping owned infrastructure.
     pub per_host_max_concurrent: u32,
-}
-
-/// Re-export so the crawl loops can call the shared limiter without depending
-/// on `crw_renderer::host_limiter` paths inline.
-use crw_renderer::host_limiter::{RateLimiter, get_host_limiter};
-
-fn get_domain_limiter(
-    domain: &str,
-    rps: f64,
-    per_host_max_concurrent: usize,
-) -> (Arc<Mutex<RateLimiter>>, Arc<Semaphore>) {
-    get_host_limiter(domain, rps, per_host_max_concurrent)
-}
-
-/// Apply a random jitter to a sleep duration.
-/// `factor` is the maximum fractional deviation (e.g. 0.2 = ±20%).
-fn jittered_sleep(base: Duration, factor: f64) -> Duration {
-    if factor <= 0.0 || base.is_zero() {
-        return base;
-    }
-    let factor = factor.min(1.0);
-    // Random value in [-1, 1]
-    let rng: f64 = (rand::random::<f64>() - 0.5) * 2.0;
-    let delta = base.as_secs_f64() * factor * rng;
-    let secs = (base.as_secs_f64() + delta).max(0.0);
-    Duration::from_secs_f64(secs)
 }
 
 /// Validate that a URL is safe to fetch (scheme + host check).
@@ -129,7 +102,7 @@ pub async fn run_crawl(opts: CrawlOptions<'_>) {
         state_tx,
         llm_config,
         proxy,
-        jitter_factor,
+        jitter_factor: _,
         deadline_ms_per_page,
         per_host_max_concurrent,
     } = opts;
@@ -195,12 +168,9 @@ pub async fn run_crawl(opts: CrawlOptions<'_>) {
     // domain (e.g. news.example.com + blog.example.com) share a single
     // limiter rather than each getting their own — otherwise we'd hammer the
     // origin's actual infrastructure at N×rps.
-    let domain = crw_renderer::preference::normalize_host(base_url.host_str().unwrap_or("unknown"));
-    let (rate_limiter, host_sem) = get_domain_limiter(
-        &domain,
-        requests_per_second,
-        per_host_max_concurrent as usize,
-    );
+    // Per-host rate limit and concurrency cap are owned by FallbackRenderer
+    // via crw_renderer::host_limiter; no need to construct them here.
+    let _ = (requests_per_second, per_host_max_concurrent);
     let mut visited: HashSet<String> = HashSet::new();
     let mut queue: VecDeque<(String, u32)> = VecDeque::new();
     let mut results: Vec<ScrapeData> = Vec::new();
@@ -227,20 +197,10 @@ pub async fn run_crawl(opts: CrawlOptions<'_>) {
                 break;
             }
         };
-        // Per-eTLD+1 concurrency cap on top of the global semaphore — blocks
-        // when N requests are already in flight against the same registered
-        // domain. Politeness default is `1`.
-        let _host_permit = match host_sem.clone().acquire_owned().await {
-            Ok(p) => p,
-            Err(_) => {
-                tracing::error!("Per-host semaphore closed unexpectedly");
-                break;
-            }
-        };
-        let sleep_dur = jittered_sleep(rate_limiter.lock().await.next_sleep(), jitter_factor);
-        if !sleep_dur.is_zero() {
-            tokio::time::sleep(sleep_dur).await;
-        }
+        // Per-host rate limit + concurrency cap is now owned by
+        // FallbackRenderer (see crw_renderer::host_limiter). Acquiring here
+        // would double-acquire the same global semaphore and deadlock with
+        // the renderer's acquire when per_host_max_concurrent = 1.
 
         let page_deadline = crw_core::Deadline::from_request_ms(deadline_ms_per_page);
         let fetch_result = match renderer
@@ -478,15 +438,8 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<Vec<String>> 
 
     let max_depth = max_depth.min(10);
     let semaphore = Arc::new(Semaphore::new(max_concurrency));
-    // eTLD+1 keying so subdomain discovery shares a single limiter — see
-    // run_crawl for the same rationale.
-    let discover_domain =
-        crw_renderer::preference::normalize_host(parsed.host_str().unwrap_or("unknown"));
-    let (rate_limiter, host_sem) = get_domain_limiter(
-        &discover_domain,
-        requests_per_second,
-        per_host_max_concurrent as usize,
-    );
+    // Per-host limiter is owned by FallbackRenderer (see run_crawl).
+    let _ = (requests_per_second, per_host_max_concurrent);
     let mut visited: HashSet<String> = HashSet::new();
     let mut queue: VecDeque<(String, u32)> = VecDeque::new();
 
@@ -502,14 +455,7 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<Vec<String>> 
             Ok(p) => p,
             Err(_) => break,
         };
-        let _host_permit = match host_sem.clone().acquire_owned().await {
-            Ok(p) => p,
-            Err(_) => break,
-        };
-        let sleep_dur = rate_limiter.lock().await.next_sleep();
-        if !sleep_dur.is_zero() {
-            tokio::time::sleep(sleep_dur).await;
-        }
+        // Per-host limiter handled in FallbackRenderer (see run_crawl note).
 
         let discover_deadline = crw_core::Deadline::from_request_ms(deadline_ms_per_page);
         let fetch = renderer
@@ -652,46 +598,6 @@ mod tests {
         assert!(!is_safe_url(
             &url::Url::parse("http://169.254.169.254").unwrap()
         ));
-    }
-
-    #[test]
-    fn rate_limiter_zero_rps_no_delay() {
-        let limiter = RateLimiter::new(0.0);
-        assert_eq!(limiter.min_interval, Duration::ZERO);
-    }
-
-    #[test]
-    fn rate_limiter_negative_rps_no_panic() {
-        // Negative RPS should not panic
-        let limiter = RateLimiter::new(-1.0);
-        assert_eq!(limiter.min_interval, Duration::ZERO);
-    }
-
-    #[test]
-    fn rate_limiter_normal_rps() {
-        let limiter = RateLimiter::new(10.0);
-        assert_eq!(limiter.min_interval, Duration::from_millis(100));
-    }
-
-    #[tokio::test]
-    async fn rate_limiter_first_call_no_wait() {
-        let mut limiter = RateLimiter::new(10.0);
-        let sleep = limiter.next_sleep();
-        // First call should return zero sleep
-        assert!(sleep.is_zero(), "First call should not wait, got {sleep:?}");
-    }
-
-    #[tokio::test]
-    async fn rate_limiter_enforces_interval() {
-        let mut limiter = RateLimiter::new(10.0); // 100ms interval
-        // First call — no wait
-        let _ = limiter.next_sleep();
-        // Second call immediately — should require ~100ms sleep
-        let sleep = limiter.next_sleep();
-        assert!(
-            sleep.as_millis() >= 80,
-            "Second call should wait ~100ms, got {sleep:?}"
-        );
     }
 
     /// Simulate the clamping logic from run_crawl
