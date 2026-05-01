@@ -13,11 +13,10 @@ use crate::traits::PageFetcher;
 /// Timeout for WebSocket connect handshake.
 const WS_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// Extra overhead budget for the overall fetch timeout (on top of page_timeout + wait_for).
-const FETCH_OVERHEAD: Duration = Duration::from_secs(30);
+/// Covers WS connect, target create, navigate commit, snapshot eval, and cleanup.
+const FETCH_OVERHEAD: Duration = Duration::from_secs(5);
 /// Timeout for the Target.closeTarget cleanup command.
 const TARGET_CLOSE_TIMEOUT: Duration = Duration::from_secs(5);
-/// Default JS wait time if not specified by the caller.
-const DEFAULT_JS_WAIT_MS: u64 = 2000;
 /// Maximum number of challenge retry attempts.
 const CHALLENGE_MAX_RETRIES: u32 = 3;
 /// Delay between challenge retry polls (ms).
@@ -326,7 +325,10 @@ impl PageFetcher for CdpRenderer {
         // Overall hard timeout: page_timeout + wait_for + challenge retry budget
         // + content-stability budget (auto-mode only) + overhead. Challenge retries
         // can add up to CHALLENGE_MAX_RETRIES * CHALLENGE_POLL_INTERVAL_MS.
-        let wait_dur = Duration::from_millis(wait_for_ms.unwrap_or(DEFAULT_JS_WAIT_MS));
+        // When the caller didn't supply `wait_for_ms`, fetch_with_ws uses the
+        // SPA selector poll instead of a fixed sleep — size the budget for
+        // its worst-case SPA_SELECTOR_MAX_MS rather than the old 2s default.
+        let wait_dur = Duration::from_millis(wait_for_ms.unwrap_or(SPA_SELECTOR_MAX_MS));
         let challenge_budget =
             Duration::from_millis(CHALLENGE_POLL_INTERVAL_MS * u64::from(CHALLENGE_MAX_RETRIES));
         let stability_budget = if wait_for_ms.is_none() {
@@ -684,19 +686,16 @@ impl CdpRenderer {
             }
         };
 
-        // 3. Wait for initial JS work. When the caller didn't pass
-        // `wait_for_ms` we additionally poll for an SPA content selector — the
-        // fixed 2s sleep snapshots in-n-out.com / njcourts.gov / apploi.com
-        // mid-hydration. The selector poll exits as soon as one of `main,
-        // article, [role=main], #content, #root > *, #app > *` is mounted, up
-        // to SPA_SELECTOR_MAX_MS. Static pages get the fixed sleep only.
+        // 3. Wait for initial JS work. Caller-supplied `wait_for_ms` wins —
+        // sleep that long. Otherwise jump straight to the SPA selector poll;
+        // the poll exits in ~200ms on static pages where `main`/`article`/etc.
+        // are already mounted, and waits up to SPA_SELECTOR_MAX_MS for SPAs
+        // that hydrate after `loadEventFired` (njcourts.gov, in-n-out.com,
+        // apploi). Skipping the prior fixed 2s sleep saves ~2s on every render.
         if let Some(wait) = wait_for_ms {
             tokio::time::sleep(Duration::from_millis(wait)).await;
-        } else {
-            tokio::time::sleep(Duration::from_millis(DEFAULT_JS_WAIT_MS)).await;
-            if !Self::wait_for_spa_selector(conn, &session_id, self.page_timeout).await {
-                tracing::debug!(url, "SPA selector poll exhausted budget");
-            }
+        } else if !Self::wait_for_spa_selector(conn, &session_id, self.page_timeout).await {
+            tracing::debug!(url, "SPA selector poll exhausted budget");
         }
 
         // 4. Get rendered HTML.
