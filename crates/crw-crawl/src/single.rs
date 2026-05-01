@@ -225,7 +225,12 @@ pub async fn scrape_url(
     //     indiamart, zujuan.xkw) — bumping the lightpanda-only threshold to
     //     500 captures all of them without changing http-tier behavior.
     const HTTP_RETRY_THRESHOLD_BYTES: usize = 100;
-    const LIGHTPANDA_RETRY_THRESHOLD_BYTES: usize = 500;
+    // Bumped 500 → 2000 (May 2026) after bench showed ~12 LP renders that
+    // squeaked past 500B with low-quality SPA husks (header+nav+footer, no
+    // article body) which then suppressed a chrome escalation that would
+    // have produced full-quality content. 2000B is "below this is almost
+    // certainly an SPA chrome / hydration sentinel, not real content."
+    const LIGHTPANDA_RETRY_THRESHOLD_BYTES: usize = 2000;
     // Tier of renderer that produced fetch_result. We always escalate from
     // "below" — http and lightpanda → try chrome — but never re-call chrome
     // when chrome already produced the empty markdown (that would just churn).
