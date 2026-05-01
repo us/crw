@@ -1389,8 +1389,8 @@ mod tests {
         let r = make_renderer_with_mocks(vec![lp, chrome]);
 
         // Trip global+host breakers for lightpanda by recording enough
-        // failures to exceed the default threshold (10).
-        for _ in 0..10 {
+        // failures to exceed the default threshold (20).
+        for _ in 0..20 {
             r.breakers
                 .record_result("example.com", RendererKind::Lightpanda, false)
                 .await;

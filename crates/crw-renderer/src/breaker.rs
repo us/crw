@@ -44,8 +44,8 @@ impl Default for BreakerConfig {
         // genuine fault-isolation mechanism without making it the dominant
         // failure mode under load.
         Self {
-            failure_threshold: 10,
-            cooldown: Duration::from_secs(15),
+            failure_threshold: 20,
+            cooldown: Duration::from_secs(10),
         }
     }
 }
