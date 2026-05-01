@@ -23,6 +23,12 @@ pub struct Metrics {
     pub user_pin_total: IntCounterVec,
     /// Current size of the host preferences cache.
     pub host_preferences_size: IntGauge,
+    /// Chrome navigation budget truncations, labeled by snapshot outcome
+    /// (`ok` = partial DOM extracted, `empty` = nothing snapshotted).
+    pub chrome_budget_truncated_total: IntCounterVec,
+    /// Requests blocked by the chrome interception blocklist, labeled by
+    /// reason (`resource_type`, `host`).
+    pub chrome_blocked_requests_total: IntCounterVec,
 }
 
 static METRICS: OnceLock<Metrics> = OnceLock::new();
@@ -82,6 +88,20 @@ impl Metrics {
             registry
         )
         .unwrap();
+        let chrome_budget_truncated_total = register_int_counter_vec_with_registry!(
+            "crw_chrome_budget_truncated_total",
+            "Chrome nav-budget truncations by snapshot outcome",
+            &["outcome"],
+            registry
+        )
+        .unwrap();
+        let chrome_blocked_requests_total = register_int_counter_vec_with_registry!(
+            "crw_chrome_blocked_requests_total",
+            "Chrome requests blocked by interception, labeled by reason",
+            &["reason"],
+            registry
+        )
+        .unwrap();
         Self {
             registry,
             render_route_decision_total,
@@ -90,6 +110,8 @@ impl Metrics {
             admin_preferences_reset_total,
             user_pin_total,
             host_preferences_size,
+            chrome_budget_truncated_total,
+            chrome_blocked_requests_total,
         }
     }
 }

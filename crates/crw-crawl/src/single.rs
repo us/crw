@@ -485,6 +485,8 @@ mod tests {
             render_decision: None,
             credit_cost: 0,
             warnings: Vec::new(),
+            truncated: false,
+            deadline_exceeded: false,
         }
     }
 

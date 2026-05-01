@@ -264,6 +264,8 @@ impl PageFetcher for HttpFetcher {
             } else {
                 Vec::new()
             },
+            truncated: false,
+            deadline_exceeded: false,
         })
     }
 

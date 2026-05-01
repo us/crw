@@ -33,6 +33,7 @@
 //! # }
 //! ```
 
+pub mod blocklist;
 pub mod breaker;
 #[cfg(feature = "auto-browser")]
 pub mod browser;
@@ -273,12 +274,15 @@ impl FallbackRenderer {
             }
             if want(RendererMode::Chrome) {
                 if let Some(ch) = &config.chrome {
-                    js_renderers.push(Arc::new(cdp::CdpRenderer::new(
-                        "chrome",
-                        &ch.ws_url,
-                        config.chrome_timeout(),
-                        config.pool_size,
-                    )));
+                    js_renderers.push(Arc::new(
+                        cdp::CdpRenderer::new(
+                            "chrome",
+                            &ch.ws_url,
+                            config.chrome_timeout(),
+                            config.pool_size,
+                        )
+                        .with_nav_budget(config.chrome_nav_budget_ms),
+                    ));
                 } else if matches!(config.mode, RendererMode::Chrome) {
                     return Err(CrwError::ConfigError(
                         "renderer.mode = \"chrome\" but [renderer.chrome] ws_url is not configured"
@@ -1071,6 +1075,8 @@ mod tests {
                     render_decision: None,
                     credit_cost: 0,
                     warnings: Vec::new(),
+                    truncated: false,
+                    deadline_exceeded: false,
                 }),
                 MockBehavior::Err(msg) => Err(CrwError::RendererError(msg.clone())),
             }

@@ -132,19 +132,32 @@ pub struct CdpRenderer {
     /// Lazily resolved browser-level WS URL (discovered from /json/version).
     resolved_ws_url: OnceCell<String>,
     page_timeout: Duration,
+    /// Hard ceiling on the post-navigate wait+snapshot+stability+challenge
+    /// phase. Wraps the work in a budget race; on hit the renderer snapshots
+    /// whatever DOM is present and flags `truncated = true`.
+    nav_budget: Duration,
     conn_semaphore: Arc<Semaphore>,
 }
 
 impl CdpRenderer {
     pub fn new(name: &str, ws_url: &str, page_timeout_ms: u64, pool_size: usize) -> Self {
         let pool_size = pool_size.max(1);
+        let page_timeout = Duration::from_millis(page_timeout_ms);
         Self {
             name: name.to_string(),
             configured_ws_url: ws_url.to_string(),
             resolved_ws_url: OnceCell::new(),
-            page_timeout: Duration::from_millis(page_timeout_ms),
+            page_timeout,
+            nav_budget: page_timeout,
             conn_semaphore: Arc::new(Semaphore::new(pool_size)),
         }
+    }
+
+    /// Override the post-navigate budget. Default equals `page_timeout_ms`.
+    /// Set from `RendererConfig::chrome_nav_budget_ms` for the chrome tier.
+    pub fn with_nav_budget(mut self, nav_budget_ms: u64) -> Self {
+        self.nav_budget = Duration::from_millis(nav_budget_ms);
+        self
     }
 
     /// Resolve the actual browser WebSocket URL.
@@ -349,9 +362,12 @@ impl PageFetcher for CdpRenderer {
             ));
         }
 
-        tokio::time::timeout(overall_timeout, self.fetch_with_ws(url, wait_for_ms))
-            .await
-            .map_err(|_| CrwError::Timeout(overall_timeout.as_millis() as u64))?
+        tokio::time::timeout(
+            overall_timeout,
+            self.fetch_with_ws(url, wait_for_ms, deadline),
+        )
+        .await
+        .map_err(|_| CrwError::Timeout(overall_timeout.as_millis() as u64))?
     }
 
     fn name(&self) -> &str {
@@ -421,7 +437,12 @@ fn detect_navigation_error(html: &str) -> Option<String> {
 
 impl CdpRenderer {
     /// Inner fetch with WebSocket lifecycle management.
-    async fn fetch_with_ws(&self, url: &str, wait_for_ms: Option<u64>) -> CrwResult<FetchResult> {
+    async fn fetch_with_ws(
+        &self,
+        url: &str,
+        wait_for_ms: Option<u64>,
+        deadline: crw_core::Deadline,
+    ) -> CrwResult<FetchResult> {
         let start = Instant::now();
 
         // Limit concurrent WebSocket connections to pool_size.
@@ -434,11 +455,11 @@ impl CdpRenderer {
         let ws_url = self.resolve_ws_url().await?;
         let conn = CdpConnection::connect(&ws_url, WS_CONNECT_TIMEOUT).await?;
 
-        let result = self.fetch_inner(&conn, url, wait_for_ms).await;
+        let result = self.fetch_inner(&conn, url, wait_for_ms, deadline).await;
 
         conn.close().await;
 
-        let (html, status_code) = result?;
+        let (html, status_code, truncated) = result?;
 
         if html.is_empty() {
             return Err(CrwError::RendererError(
@@ -460,10 +481,20 @@ impl CdpRenderer {
             raw_bytes: None,
             rendered_with: Some(self.name.clone()),
             elapsed_ms: start.elapsed().as_millis() as u64,
-            warning: None,
+            warning: if truncated {
+                Some("chrome_budget_truncated".to_string())
+            } else {
+                None
+            },
             render_decision: None,
             credit_cost: 0,
-            warnings: Vec::new(),
+            warnings: if truncated {
+                vec!["chrome_budget_truncated".to_string()]
+            } else {
+                Vec::new()
+            },
+            truncated,
+            deadline_exceeded: deadline.remaining().is_zero(),
         })
     }
 
@@ -572,7 +603,8 @@ impl CdpRenderer {
         conn: &CdpConnection,
         url: &str,
         wait_for_ms: Option<u64>,
-    ) -> CrwResult<(String, u16)> {
+        deadline: crw_core::Deadline,
+    ) -> CrwResult<(String, u16, bool)> {
         // 1. Create a blank target so navigation events can be observed reliably.
         let create_result = conn
             .send_recv(
@@ -686,26 +718,85 @@ impl CdpRenderer {
             }
         };
 
+        // Post-navigate phase (wait + snapshot + stability + challenge) runs
+        // inside a budget race. On budget hit we attempt a partial-DOM
+        // snapshot via `Page.stopLoading` + `eval_html` and return
+        // `truncated = true`; `single.rs` then decides success on md length.
+        let nav_budget = self.nav_budget.min(deadline.remaining());
+        let phase = self.post_navigate_phase(conn, &session_id, url, wait_for_ms);
+        let (html, truncated) = match tokio::time::timeout(nav_budget, phase).await {
+            Ok(Ok(html)) => (html, false),
+            Ok(Err(err)) => {
+                close_target(conn, &target_id).await;
+                return Err(err);
+            }
+            Err(_) => {
+                tracing::info!(
+                    url,
+                    budget_ms = nav_budget.as_millis() as u64,
+                    "chrome nav budget hit; attempting partial snapshot"
+                );
+                let _ = conn
+                    .send_recv(
+                        "Page.stopLoading",
+                        serde_json::json!({}),
+                        Some(&session_id),
+                        Duration::from_secs(1),
+                    )
+                    .await;
+                let html = Self::eval_html(conn, &session_id, Duration::from_secs(2))
+                    .await
+                    .unwrap_or_default();
+                crw_core::metrics::metrics()
+                    .chrome_budget_truncated_total
+                    .with_label_values(&[if html.is_empty() { "empty" } else { "ok" }])
+                    .inc();
+                (html, true)
+            }
+        };
+
+        if html.is_empty() && truncated {
+            close_target(conn, &target_id).await;
+            return Err(CrwError::Timeout(nav_budget.as_millis() as u64));
+        }
+
+        // Best-effort: clear residual placeholder once outside the budget race.
+        if !truncated
+            && wait_for_ms.is_none()
+            && crate::detector::looks_like_loading_placeholder(&html)
+        {
+            // Already polled inside the race; nothing to do.
+            tracing::debug!(url, "Placeholder still present after stability poll");
+        }
+        // 6. Cleanup target.
+        close_target(conn, &target_id).await;
+
+        Ok((html, status_code, truncated))
+    }
+
+    /// Post-navigate work: SPA selector wait, eval HTML, placeholder
+    /// stability poll, challenge retry. Lives inside a `nav_budget` race;
+    /// see `fetch_inner` for the timeout/snapshot fallback path.
+    async fn post_navigate_phase(
+        &self,
+        conn: &CdpConnection,
+        session_id: &str,
+        url: &str,
+        wait_for_ms: Option<u64>,
+    ) -> CrwResult<String> {
         // 3. Wait for initial JS work. Caller-supplied `wait_for_ms` wins —
         // sleep that long. Otherwise jump straight to the SPA selector poll;
         // the poll exits in ~200ms on static pages where `main`/`article`/etc.
         // are already mounted, and waits up to SPA_SELECTOR_MAX_MS for SPAs
-        // that hydrate after `loadEventFired` (njcourts.gov, in-n-out.com,
-        // apploi). Skipping the prior fixed 2s sleep saves ~2s on every render.
+        // that hydrate after `loadEventFired`.
         if let Some(wait) = wait_for_ms {
             tokio::time::sleep(Duration::from_millis(wait)).await;
-        } else if !Self::wait_for_spa_selector(conn, &session_id, self.page_timeout).await {
+        } else if !Self::wait_for_spa_selector(conn, session_id, self.page_timeout).await {
             tracing::debug!(url, "SPA selector poll exhausted budget");
         }
 
         // 4. Get rendered HTML.
-        let mut html = match Self::eval_html(conn, &session_id, self.page_timeout).await {
-            Ok(h) => h,
-            Err(e) => {
-                close_target(conn, &target_id).await;
-                return Err(e);
-            }
-        };
+        let mut html = Self::eval_html(conn, session_id, self.page_timeout).await?;
 
         // 4b. SPA loading placeholder → poll for content stability.
         if wait_for_ms.is_none() && crate::detector::looks_like_loading_placeholder(&html) {
@@ -713,7 +804,7 @@ impl CdpRenderer {
                 url,
                 "Loading placeholder detected, polling for content stability"
             );
-            match Self::poll_until_content_stable(conn, &session_id, self.page_timeout).await {
+            match Self::poll_until_content_stable(conn, session_id, self.page_timeout).await {
                 Ok(stable) => html = stable,
                 Err(e) => tracing::warn!("Content stability polling failed: {e}"),
             }
@@ -724,16 +815,7 @@ impl CdpRenderer {
             tracing::info!(url, "Challenge page detected, waiting for auto-resolve");
             for attempt in 1..=CHALLENGE_MAX_RETRIES {
                 tokio::time::sleep(Duration::from_millis(CHALLENGE_POLL_INTERVAL_MS)).await;
-
-                html = match Self::eval_html(conn, &session_id, self.page_timeout).await {
-                    Ok(h) => h,
-                    Err(e) => {
-                        tracing::warn!(attempt, "Challenge retry eval failed: {e}");
-                        close_target(conn, &target_id).await;
-                        return Err(e);
-                    }
-                };
-
+                html = Self::eval_html(conn, session_id, self.page_timeout).await?;
                 if !is_challenge_page(&html) {
                     tracing::info!(url, attempt, "Challenge cleared");
                     break;
@@ -742,10 +824,7 @@ impl CdpRenderer {
             }
         }
 
-        // 6. Cleanup target.
-        close_target(conn, &target_id).await;
-
-        Ok((html, status_code))
+        Ok(html)
     }
 }
 

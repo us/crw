@@ -691,4 +691,11 @@ pub struct FetchResult {
     pub credit_cost: u32,
     /// Soft-failure / informational warnings to surface to the caller.
     pub warnings: Vec<String>,
+    /// Set by chrome renderer when the navigation budget elapsed before
+    /// `loadEventFired` and we snapshotted the partial DOM. Mid-load HTML may
+    /// still extract usefully (`single.rs` decides success on md length).
+    pub truncated: bool,
+    /// Set when `Deadline::remaining() == 0` was observed at result-build time.
+    /// Stricter than `truncated` — caller's whole budget is spent.
+    pub deadline_exceeded: bool,
 }
