@@ -271,7 +271,11 @@ pub async fn run_crawl(opts: CrawlOptions<'_>) {
     };
 
     let semaphore = Arc::new(Semaphore::new(max_concurrency));
-    let domain = base_url.host_str().unwrap_or("unknown").to_string();
+    // Key the rate limiter by eTLD+1 so subdomains under the same registered
+    // domain (e.g. news.example.com + blog.example.com) share a single
+    // limiter rather than each getting their own — otherwise we'd hammer the
+    // origin's actual infrastructure at N×rps.
+    let domain = crw_renderer::preference::normalize_host(base_url.host_str().unwrap_or("unknown"));
     let rate_limiter = get_domain_limiter(&domain, requests_per_second);
     let mut visited: HashSet<String> = HashSet::new();
     let mut queue: VecDeque<(String, u32)> = VecDeque::new();
@@ -537,7 +541,10 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<Vec<String>> 
 
     let max_depth = max_depth.min(10);
     let semaphore = Arc::new(Semaphore::new(max_concurrency));
-    let discover_domain = parsed.host_str().unwrap_or("unknown").to_string();
+    // eTLD+1 keying so subdomain discovery shares a single limiter — see
+    // run_crawl for the same rationale.
+    let discover_domain =
+        crw_renderer::preference::normalize_host(parsed.host_str().unwrap_or("unknown"));
     let rate_limiter = get_domain_limiter(&discover_domain, requests_per_second);
     let mut visited: HashSet<String> = HashSet::new();
     let mut queue: VecDeque<(String, u32)> = VecDeque::new();
