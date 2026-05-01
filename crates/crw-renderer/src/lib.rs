@@ -274,6 +274,8 @@ impl FallbackRenderer {
             }
             if want(RendererMode::Chrome) {
                 if let Some(ch) = &config.chrome {
+                    let blocklist = blocklist::Blocklist::defaults()
+                        .with_stylesheets(config.chrome_intercept_stylesheets);
                     js_renderers.push(Arc::new(
                         cdp::CdpRenderer::new(
                             "chrome",
@@ -281,7 +283,12 @@ impl FallbackRenderer {
                             config.chrome_timeout(),
                             config.pool_size,
                         )
-                        .with_nav_budget(config.chrome_nav_budget_ms),
+                        .with_nav_budget(config.chrome_nav_budget_ms)
+                        .with_interception(
+                            config.chrome_intercept_resources,
+                            blocklist,
+                            config.chrome_host_intercept_disable.clone(),
+                        ),
                     ));
                 } else if matches!(config.mode, RendererMode::Chrome) {
                     return Err(CrwError::ConfigError(

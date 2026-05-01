@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::{OnceCell, Semaphore, broadcast};
 use tokio_tungstenite::connect_async;
 
+use crate::blocklist::{BlockReason, Blocklist};
 use crate::cdp_conn::{CdpConnection, CdpEvent};
 use crate::traits::PageFetcher;
 
@@ -136,6 +137,14 @@ pub struct CdpRenderer {
     /// phase. Wraps the work in a budget race; on hit the renderer snapshots
     /// whatever DOM is present and flags `truncated = true`.
     nav_budget: Duration,
+    /// Whether to enable `Fetch.requestPaused` interception for chrome tier.
+    /// When true, the pump runs alongside navigate and blocks requests per
+    /// `blocklist`. Off-by-default per Phase 2 plan; flipped via config.
+    intercept_enabled: bool,
+    blocklist: Blocklist,
+    /// Host substrings (case-insensitive) for which interception is force-disabled
+    /// even when `intercept_enabled = true`.
+    host_intercept_disable: Vec<String>,
     conn_semaphore: Arc<Semaphore>,
 }
 
@@ -149,6 +158,9 @@ impl CdpRenderer {
             resolved_ws_url: OnceCell::new(),
             page_timeout,
             nav_budget: page_timeout,
+            intercept_enabled: false,
+            blocklist: Blocklist::defaults(),
+            host_intercept_disable: Vec::new(),
             conn_semaphore: Arc::new(Semaphore::new(pool_size)),
         }
     }
@@ -158,6 +170,36 @@ impl CdpRenderer {
     pub fn with_nav_budget(mut self, nav_budget_ms: u64) -> Self {
         self.nav_budget = Duration::from_millis(nav_budget_ms);
         self
+    }
+
+    /// Enable `Fetch.requestPaused` interception driven by `blocklist`.
+    /// `host_disable` is a list of host substrings that opt out per-request.
+    pub fn with_interception(
+        mut self,
+        enabled: bool,
+        blocklist: Blocklist,
+        host_disable: Vec<String>,
+    ) -> Self {
+        self.intercept_enabled = enabled;
+        self.blocklist = blocklist;
+        self.host_intercept_disable = host_disable.iter().map(|s| s.to_lowercase()).collect();
+        self
+    }
+
+    /// `true` if interception is configured-on AND the URL's host is not on
+    /// the per-host opt-out list.
+    fn intercept_active_for(&self, url: &str) -> bool {
+        if !self.intercept_enabled {
+            return false;
+        }
+        if self.host_intercept_disable.is_empty() {
+            return true;
+        }
+        let host = match url::Url::parse(url) {
+            Ok(u) => u.host_str().map(|s| s.to_lowercase()).unwrap_or_default(),
+            Err(_) => return true,
+        };
+        !self.host_intercept_disable.iter().any(|h| host.contains(h))
     }
 
     /// Resolve the actual browser WebSocket URL.
@@ -257,6 +299,88 @@ fn rewrite_ws_host(discovered: &str, configured: &str) -> String {
         "ws://"
     };
     format!("{scheme}{conf_host_port}{disc_path}")
+}
+
+/// Drive `Fetch.requestPaused` events through the blocklist. Runs forever
+/// until cancelled (the future is dropped when the work future completes
+/// inside `tokio::select!`). Each paused request is either failed
+/// (`BlockedByClient`) or continued. Metrics are incremented per block.
+///
+/// Serialisation: each handler awaits a CDP roundtrip (`Fetch.continueRequest`
+/// or `Fetch.failRequest`) before consuming the next event. This is fine in
+/// practice — chrome queues paused requests internally and the per-handler
+/// CDP roundtrip is sub-millisecond on a local socket. Spawning per-handler
+/// would buy parallelism but require `Arc<CdpConnection>` plumbing.
+async fn run_intercept_pump(
+    conn: &CdpConnection,
+    mut rx: broadcast::Receiver<CdpEvent>,
+    blocklist: &Blocklist,
+    session_id: &str,
+) {
+    let cmd_timeout = Duration::from_secs(2);
+    loop {
+        let ev = match rx.recv().await {
+            Ok(ev) => ev,
+            Err(broadcast::error::RecvError::Lagged(_)) => continue,
+            Err(broadcast::error::RecvError::Closed) => return,
+        };
+        if ev.method != "Fetch.requestPaused" {
+            continue;
+        }
+        if ev.session_id.as_deref() != Some(session_id) {
+            continue;
+        }
+        let request_id = ev
+            .params
+            .get("requestId")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        if request_id.is_empty() {
+            continue;
+        }
+        let resource_type = ev
+            .params
+            .get("resourceType")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let req_url = ev
+            .params
+            .get("request")
+            .and_then(|r| r.get("url"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        if let Some(reason) = blocklist.should_block(resource_type, req_url) {
+            let label = match reason {
+                BlockReason::ResourceType => "resource_type",
+                BlockReason::Host => "host",
+            };
+            crw_core::metrics::metrics()
+                .chrome_blocked_requests_total
+                .with_label_values(&[label])
+                .inc();
+            let _ = conn
+                .send_recv(
+                    "Fetch.failRequest",
+                    serde_json::json!({
+                        "requestId": request_id,
+                        "errorReason": "BlockedByClient",
+                    }),
+                    Some(session_id),
+                    cmd_timeout,
+                )
+                .await;
+        } else {
+            let _ = conn
+                .send_recv(
+                    "Fetch.continueRequest",
+                    serde_json::json!({ "requestId": request_id }),
+                    Some(session_id),
+                    cmd_timeout,
+                )
+                .await;
+        }
+    }
 }
 
 async fn close_target(conn: &CdpConnection, target_id: &str) {
@@ -683,93 +807,121 @@ impl CdpRenderer {
         // Subscribe to events BEFORE navigating so we don't miss loadEventFired.
         let events_rx = conn.subscribe();
 
-        let navigate_result = match conn
-            .send_recv(
-                "Page.navigate",
-                serde_json::json!({ "url": url }),
-                Some(&session_id),
-                self.page_timeout,
-            )
-            .await
-        {
-            Ok(result) => result,
-            Err(err) => {
-                close_target(conn, &target_id).await;
-                return Err(err);
-            }
-        };
-
-        if let Some(error_text) = navigate_result
-            .get("errorText")
-            .and_then(|value| value.as_str())
+        // Optionally enable request interception. Must be done before
+        // `Page.navigate` because `Fetch.enable` pauses the document request
+        // too — pump must already be consuming `Fetch.requestPaused` by then.
+        let intercept_active = self.intercept_active_for(url);
+        if intercept_active
+            && let Err(err) = conn
+                .send_recv(
+                    "Fetch.enable",
+                    serde_json::json!({ "patterns": [{ "urlPattern": "*" }] }),
+                    Some(&session_id),
+                    self.page_timeout,
+                )
+                .await
         {
             close_target(conn, &target_id).await;
-            return Err(CrwError::RendererError(format!(
-                "Navigation failed: {error_text}"
-            )));
+            return Err(err);
         }
 
-        let status_code = match wait_for_page_ready(events_rx, &session_id, self.page_timeout).await
-        {
-            Ok(status) => status,
-            Err(err) => {
-                close_target(conn, &target_id).await;
-                return Err(err);
+        // The work future drives navigate → wait_for_load → post-navigate work.
+        // It races against the interception pump via `tokio::select!`. The
+        // pump never returns; when work completes, the pump future is dropped.
+        let nav_budget = self.nav_budget.min(deadline.remaining());
+        let work = async {
+            let navigate_result = conn
+                .send_recv(
+                    "Page.navigate",
+                    serde_json::json!({ "url": url }),
+                    Some(&session_id),
+                    self.page_timeout,
+                )
+                .await?;
+            if let Some(error_text) = navigate_result
+                .get("errorText")
+                .and_then(|value| value.as_str())
+            {
+                return Err(CrwError::RendererError(format!(
+                    "Navigation failed: {error_text}"
+                )));
             }
+            let status_code =
+                wait_for_page_ready(events_rx, &session_id, self.page_timeout).await?;
+            // Post-navigate phase runs inside a budget race. On budget hit
+            // we attempt a partial-DOM snapshot and return `truncated = true`;
+            // `single.rs` decides success on md length.
+            let phase = self.post_navigate_phase(conn, &session_id, url, wait_for_ms);
+            let (html, truncated) = match tokio::time::timeout(nav_budget, phase).await {
+                Ok(Ok(html)) => (html, false),
+                Ok(Err(err)) => return Err(err),
+                Err(_) => {
+                    tracing::info!(
+                        url,
+                        budget_ms = nav_budget.as_millis() as u64,
+                        "chrome nav budget hit; attempting partial snapshot"
+                    );
+                    let _ = conn
+                        .send_recv(
+                            "Page.stopLoading",
+                            serde_json::json!({}),
+                            Some(&session_id),
+                            Duration::from_secs(1),
+                        )
+                        .await;
+                    let html = Self::eval_html(conn, &session_id, Duration::from_secs(2))
+                        .await
+                        .unwrap_or_default();
+                    crw_core::metrics::metrics()
+                        .chrome_budget_truncated_total
+                        .with_label_values(&[if html.is_empty() { "empty" } else { "ok" }])
+                        .inc();
+                    (html, true)
+                }
+            };
+            Ok::<_, CrwError>((html, status_code, truncated))
         };
 
-        // Post-navigate phase (wait + snapshot + stability + challenge) runs
-        // inside a budget race. On budget hit we attempt a partial-DOM
-        // snapshot via `Page.stopLoading` + `eval_html` and return
-        // `truncated = true`; `single.rs` then decides success on md length.
-        let nav_budget = self.nav_budget.min(deadline.remaining());
-        let phase = self.post_navigate_phase(conn, &session_id, url, wait_for_ms);
-        let (html, truncated) = match tokio::time::timeout(nav_budget, phase).await {
-            Ok(Ok(html)) => (html, false),
-            Ok(Err(err)) => {
-                close_target(conn, &target_id).await;
-                return Err(err);
+        let outcome = if intercept_active {
+            let pump_rx = conn.subscribe();
+            let pump = run_intercept_pump(conn, pump_rx, &self.blocklist, &session_id);
+            tokio::select! {
+                biased;
+                res = work => res,
+                _ = pump => Err(CrwError::RendererError(
+                    "interception pump exited unexpectedly".into(),
+                )),
             }
-            Err(_) => {
-                tracing::info!(
-                    url,
-                    budget_ms = nav_budget.as_millis() as u64,
-                    "chrome nav budget hit; attempting partial snapshot"
-                );
-                let _ = conn
-                    .send_recv(
-                        "Page.stopLoading",
-                        serde_json::json!({}),
-                        Some(&session_id),
-                        Duration::from_secs(1),
-                    )
-                    .await;
-                let html = Self::eval_html(conn, &session_id, Duration::from_secs(2))
-                    .await
-                    .unwrap_or_default();
-                crw_core::metrics::metrics()
-                    .chrome_budget_truncated_total
-                    .with_label_values(&[if html.is_empty() { "empty" } else { "ok" }])
-                    .inc();
-                (html, true)
-            }
+        } else {
+            work.await
         };
+
+        // Cleanup: `Fetch.disable` auto-continues any still-paused requests
+        // per CDP docs, which avoids leaks if the pump was cancelled mid-flight.
+        if intercept_active {
+            let _ = conn
+                .send_recv(
+                    "Fetch.disable",
+                    serde_json::json!({}),
+                    Some(&session_id),
+                    Duration::from_secs(2),
+                )
+                .await;
+        }
+        close_target(conn, &target_id).await;
+
+        let (html, status_code, truncated) = outcome?;
 
         if html.is_empty() && truncated {
-            close_target(conn, &target_id).await;
             return Err(CrwError::Timeout(nav_budget.as_millis() as u64));
         }
 
-        // Best-effort: clear residual placeholder once outside the budget race.
         if !truncated
             && wait_for_ms.is_none()
             && crate::detector::looks_like_loading_placeholder(&html)
         {
-            // Already polled inside the race; nothing to do.
             tracing::debug!(url, "Placeholder still present after stability poll");
         }
-        // 6. Cleanup target.
-        close_target(conn, &target_id).await;
 
         Ok((html, status_code, truncated))
     }
