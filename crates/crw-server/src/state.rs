@@ -173,6 +173,7 @@ impl AppState {
         let proxy = self.config.crawler.proxy.clone();
         let jitter_factor = self.config.crawler.stealth.jitter_factor;
         let deadline_ms_per_page = self.config.request.deadline_ms_default;
+        let per_host_max_concurrent = self.config.crawler.per_host_max_concurrent;
 
         let handle = tokio::spawn(async move {
             let _permit = match crawl_semaphore.acquire().await {
@@ -203,6 +204,7 @@ impl AppState {
                 proxy,
                 jitter_factor,
                 deadline_ms_per_page,
+                per_host_max_concurrent,
             })
             .await;
         });

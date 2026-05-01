@@ -86,6 +86,7 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
                 user_agent: &state.config.crawler.user_agent,
                 proxy: state.config.crawler.proxy.clone(),
                 deadline_ms_per_page: state.config.request.deadline_ms_default,
+                per_host_max_concurrent: state.config.crawler.per_host_max_concurrent,
             })
             .await
             .map_err(|e| format!("{e}"))?;

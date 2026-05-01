@@ -39,13 +39,19 @@ pub struct CrawlOptions<'a> {
     /// Per-page deadline budget in milliseconds. Each URL fetched in the
     /// crawl gets a fresh `Deadline` of this length.
     pub deadline_ms_per_page: u64,
+    /// Cap on concurrent in-flight requests per eTLD+1 host. `1` enforces
+    /// strict politeness; raise via config when scraping owned infrastructure.
+    pub per_host_max_concurrent: u32,
 }
 
 /// Stale rate limiter entries are cleaned up after this duration.
 const RATE_LIMITER_TTL: Duration = Duration::from_secs(3600);
 
-/// A rate limiter entry with its last-used timestamp.
-type RateLimiterEntry = (Arc<Mutex<RateLimiter>>, Instant);
+/// Per-host limiter state: rate limiter, in-flight concurrency cap, last-used.
+/// The semaphore is sized once at insertion; subsequent `get_domain_limiter`
+/// calls for the same eTLD+1 reuse it regardless of the requested cap (warned
+/// on mismatch, like RPS).
+type RateLimiterEntry = (Arc<Mutex<RateLimiter>>, Arc<Semaphore>, Instant);
 
 /// Global domain-based rate limiter.
 /// Shared across all crawl jobs to prevent 10 concurrent crawls
@@ -56,8 +62,14 @@ static DOMAIN_RATE_LIMITERS: LazyLock<DashMap<String, RateLimiterEntry>> =
 /// Counter for periodic cleanup of stale rate limiter entries.
 static LIMITER_CALL_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-/// Get or create a rate limiter for a given domain, updating last-used timestamp.
-fn get_domain_limiter(domain: &str, rps: f64) -> Arc<Mutex<RateLimiter>> {
+/// Get or create a rate limiter and per-host concurrency semaphore for a given
+/// (eTLD+1) domain, updating last-used timestamp. The returned semaphore caps
+/// in-flight requests to `per_host_max_concurrent` across the entire process.
+fn get_domain_limiter(
+    domain: &str,
+    rps: f64,
+    per_host_max_concurrent: usize,
+) -> (Arc<Mutex<RateLimiter>>, Arc<Semaphore>) {
     let now = Instant::now();
     // Clean up stale entries every 64 calls (cheap amortized cost).
     if LIMITER_CALL_COUNT
@@ -65,13 +77,13 @@ fn get_domain_limiter(domain: &str, rps: f64) -> Arc<Mutex<RateLimiter>> {
         .is_multiple_of(64)
     {
         DOMAIN_RATE_LIMITERS
-            .retain(|_, (_, last_used)| now.duration_since(*last_used) < RATE_LIMITER_TTL);
+            .retain(|_, (_, _, last_used)| now.duration_since(*last_used) < RATE_LIMITER_TTL);
     }
-    DOMAIN_RATE_LIMITERS
+    let cap = per_host_max_concurrent.max(1);
+    let entry = DOMAIN_RATE_LIMITERS
         .entry(domain.to_string())
         .and_modify(|entry| {
-            entry.1 = now;
-            // Warn if a different RPS value is requested for the same domain.
+            entry.2 = now;
             let existing_interval = entry.0.try_lock().map(|l| l.min_interval).ok();
             let new_interval = if rps > 0.0 {
                 Duration::from_secs_f64(1.0 / rps)
@@ -88,10 +100,18 @@ fn get_domain_limiter(domain: &str, rps: f64) -> Arc<Mutex<RateLimiter>> {
                     "Rate limiter RPS mismatch for domain; using existing limiter"
                 );
             }
+            // The semaphore's original capacity isn't directly readable, and
+            // we don't store it — just reuse the existing one. First insertion
+            // wins for capacity (same policy we apply to RPS).
         })
-        .or_insert_with(|| (Arc::new(Mutex::new(RateLimiter::new(rps))), now))
-        .0
-        .clone()
+        .or_insert_with(|| {
+            (
+                Arc::new(Mutex::new(RateLimiter::new(rps))),
+                Arc::new(Semaphore::new(cap)),
+                now,
+            )
+        });
+    (entry.0.clone(), entry.1.clone())
 }
 
 /// Simple rate limiter: ensures minimum interval between requests.
@@ -212,6 +232,7 @@ pub async fn run_crawl(opts: CrawlOptions<'_>) {
         proxy,
         jitter_factor,
         deadline_ms_per_page,
+        per_host_max_concurrent,
     } = opts;
 
     let max_depth = req.max_depth.unwrap_or(2).min(10);
@@ -276,7 +297,11 @@ pub async fn run_crawl(opts: CrawlOptions<'_>) {
     // limiter rather than each getting their own — otherwise we'd hammer the
     // origin's actual infrastructure at N×rps.
     let domain = crw_renderer::preference::normalize_host(base_url.host_str().unwrap_or("unknown"));
-    let rate_limiter = get_domain_limiter(&domain, requests_per_second);
+    let (rate_limiter, host_sem) = get_domain_limiter(
+        &domain,
+        requests_per_second,
+        per_host_max_concurrent as usize,
+    );
     let mut visited: HashSet<String> = HashSet::new();
     let mut queue: VecDeque<(String, u32)> = VecDeque::new();
     let mut results: Vec<ScrapeData> = Vec::new();
@@ -300,6 +325,16 @@ pub async fn run_crawl(opts: CrawlOptions<'_>) {
             Ok(p) => p,
             Err(_) => {
                 tracing::error!("Semaphore closed unexpectedly");
+                break;
+            }
+        };
+        // Per-eTLD+1 concurrency cap on top of the global semaphore — blocks
+        // when N requests are already in flight against the same registered
+        // domain. Politeness default is `1`.
+        let _host_permit = match host_sem.clone().acquire_owned().await {
+            Ok(p) => p,
+            Err(_) => {
+                tracing::error!("Per-host semaphore closed unexpectedly");
                 break;
             }
         };
@@ -465,6 +500,8 @@ pub struct DiscoverOptions<'a> {
     pub proxy: Option<String>,
     /// Per-page deadline budget in milliseconds.
     pub deadline_ms_per_page: u64,
+    /// Per-eTLD+1 concurrency cap. See `CrawlOptions::per_host_max_concurrent`.
+    pub per_host_max_concurrent: u32,
 }
 
 /// Discover URLs from a site (map endpoint).
@@ -479,6 +516,7 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<Vec<String>> 
         user_agent,
         proxy,
         deadline_ms_per_page,
+        per_host_max_concurrent,
     } = opts;
     let parsed = url::Url::parse(base_url)
         .map_err(|e| crw_core::error::CrwError::InvalidRequest(format!("Invalid URL: {e}")))?;
@@ -545,7 +583,11 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<Vec<String>> 
     // run_crawl for the same rationale.
     let discover_domain =
         crw_renderer::preference::normalize_host(parsed.host_str().unwrap_or("unknown"));
-    let rate_limiter = get_domain_limiter(&discover_domain, requests_per_second);
+    let (rate_limiter, host_sem) = get_domain_limiter(
+        &discover_domain,
+        requests_per_second,
+        per_host_max_concurrent as usize,
+    );
     let mut visited: HashSet<String> = HashSet::new();
     let mut queue: VecDeque<(String, u32)> = VecDeque::new();
 
@@ -558,6 +600,10 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<Vec<String>> 
         }
 
         let _permit = match semaphore.clone().acquire_owned().await {
+            Ok(p) => p,
+            Err(_) => break,
+        };
+        let _host_permit = match host_sem.clone().acquire_owned().await {
             Ok(p) => p,
             Err(_) => break,
         };
