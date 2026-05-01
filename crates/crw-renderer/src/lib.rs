@@ -41,6 +41,7 @@ pub mod cdp;
 #[cfg(feature = "cdp")]
 pub mod cdp_conn;
 pub mod detector;
+pub mod host_limiter;
 pub mod http_only;
 pub mod preference;
 pub mod traits;

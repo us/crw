@@ -5,12 +5,10 @@ use crw_core::types::{
 };
 use crw_extract::readability::extract_links;
 use crw_renderer::FallbackRenderer;
-use dashmap::DashMap;
 use std::collections::{HashSet, VecDeque};
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Mutex, Semaphore};
-use tokio::time::Instant;
 use uuid::Uuid;
 
 use crate::robots::RobotsTxt;
@@ -44,115 +42,16 @@ pub struct CrawlOptions<'a> {
     pub per_host_max_concurrent: u32,
 }
 
-/// Stale rate limiter entries are cleaned up after this duration.
-const RATE_LIMITER_TTL: Duration = Duration::from_secs(3600);
+/// Re-export so the crawl loops can call the shared limiter without depending
+/// on `crw_renderer::host_limiter` paths inline.
+use crw_renderer::host_limiter::{RateLimiter, get_host_limiter};
 
-/// Per-host limiter state: rate limiter, in-flight concurrency cap, last-used.
-/// The semaphore is sized once at insertion; subsequent `get_domain_limiter`
-/// calls for the same eTLD+1 reuse it regardless of the requested cap (warned
-/// on mismatch, like RPS).
-type RateLimiterEntry = (Arc<Mutex<RateLimiter>>, Arc<Semaphore>, Instant);
-
-/// Global domain-based rate limiter.
-/// Shared across all crawl jobs to prevent 10 concurrent crawls
-/// from sending 10x the intended rate to the same domain.
-static DOMAIN_RATE_LIMITERS: LazyLock<DashMap<String, RateLimiterEntry>> =
-    LazyLock::new(DashMap::new);
-
-/// Counter for periodic cleanup of stale rate limiter entries.
-static LIMITER_CALL_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-
-/// Get or create a rate limiter and per-host concurrency semaphore for a given
-/// (eTLD+1) domain, updating last-used timestamp. The returned semaphore caps
-/// in-flight requests to `per_host_max_concurrent` across the entire process.
 fn get_domain_limiter(
     domain: &str,
     rps: f64,
     per_host_max_concurrent: usize,
 ) -> (Arc<Mutex<RateLimiter>>, Arc<Semaphore>) {
-    let now = Instant::now();
-    // Clean up stale entries every 64 calls (cheap amortized cost).
-    if LIMITER_CALL_COUNT
-        .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-        .is_multiple_of(64)
-    {
-        DOMAIN_RATE_LIMITERS
-            .retain(|_, (_, _, last_used)| now.duration_since(*last_used) < RATE_LIMITER_TTL);
-    }
-    let cap = per_host_max_concurrent.max(1);
-    let entry = DOMAIN_RATE_LIMITERS
-        .entry(domain.to_string())
-        .and_modify(|entry| {
-            entry.2 = now;
-            let existing_interval = entry.0.try_lock().map(|l| l.min_interval).ok();
-            let new_interval = if rps > 0.0 {
-                Duration::from_secs_f64(1.0 / rps)
-            } else {
-                Duration::ZERO
-            };
-            if let Some(existing) = existing_interval
-                && existing != new_interval
-            {
-                tracing::warn!(
-                    domain,
-                    existing_rps = ?existing,
-                    requested_rps = rps,
-                    "Rate limiter RPS mismatch for domain; using existing limiter"
-                );
-            }
-            // The semaphore's original capacity isn't directly readable, and
-            // we don't store it — just reuse the existing one. First insertion
-            // wins for capacity (same policy we apply to RPS).
-        })
-        .or_insert_with(|| {
-            (
-                Arc::new(Mutex::new(RateLimiter::new(rps))),
-                Arc::new(Semaphore::new(cap)),
-                now,
-            )
-        });
-    (entry.0.clone(), entry.1.clone())
-}
-
-/// Simple rate limiter: ensures minimum interval between requests.
-struct RateLimiter {
-    min_interval: Duration,
-    last_request: Instant,
-}
-
-impl RateLimiter {
-    fn new(requests_per_second: f64) -> Self {
-        if requests_per_second < 0.0 {
-            tracing::warn!(
-                requests_per_second,
-                "Negative requests_per_second value, treating as unlimited"
-            );
-        }
-        let min_interval = if requests_per_second > 0.0 {
-            Duration::from_secs_f64(1.0 / requests_per_second)
-        } else {
-            Duration::ZERO
-        };
-        Self {
-            min_interval,
-            last_request: Instant::now() - min_interval,
-        }
-    }
-
-    /// Compute how long to sleep and update the last_request timestamp.
-    /// The caller must sleep **outside** the mutex lock to avoid holding
-    /// the lock during async sleep (which would starve other crawl jobs
-    /// on the same domain).
-    fn next_sleep(&mut self) -> Duration {
-        let elapsed = self.last_request.elapsed();
-        let sleep = if elapsed < self.min_interval {
-            self.min_interval - elapsed
-        } else {
-            Duration::ZERO
-        };
-        self.last_request = Instant::now() + sleep;
-        sleep
-    }
+    get_host_limiter(domain, rps, per_host_max_concurrent)
 }
 
 /// Apply a random jitter to a sleep duration.
