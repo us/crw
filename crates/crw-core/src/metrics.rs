@@ -29,6 +29,9 @@ pub struct Metrics {
     /// Requests blocked by the chrome interception blocklist, labeled by
     /// reason (`resource_type`, `host`).
     pub chrome_blocked_requests_total: IntCounterVec,
+    /// Outcomes ignored by the renderer circuit breaker (deadline-clamped,
+    /// truncated-but-OK, etc.) — labeled by renderer and reason.
+    pub breaker_ignored_total: IntCounterVec,
 }
 
 static METRICS: OnceLock<Metrics> = OnceLock::new();
@@ -102,6 +105,13 @@ impl Metrics {
             registry
         )
         .unwrap();
+        let breaker_ignored_total = register_int_counter_vec_with_registry!(
+            "crw_breaker_ignored_total",
+            "Renderer outcomes ignored by the circuit breaker (deadline-clamped, truncated, etc.)",
+            &["renderer", "reason"],
+            registry
+        )
+        .unwrap();
         Self {
             registry,
             render_route_decision_total,
@@ -112,6 +122,7 @@ impl Metrics {
             host_preferences_size,
             chrome_budget_truncated_total,
             chrome_blocked_requests_total,
+            breaker_ignored_total,
         }
     }
 }

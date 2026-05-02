@@ -47,7 +47,9 @@ pub mod http_only;
 pub mod preference;
 pub mod traits;
 
-use crate::breaker::{BreakerRegistry, Permit, ProbeGuard};
+use crate::breaker::{
+    AttemptContext, BreakerOutcome, BreakerRegistry, Permit, ProbeGuard, classify_outcome,
+};
 use crate::preference::HostPreferences;
 use crw_core::config::{BUILTIN_UA_POOL, RendererConfig, RendererMode, StealthConfig};
 use crw_core::error::{CrwError, CrwResult};
@@ -90,6 +92,27 @@ fn classify_renderer_error(err: &CrwError) -> FailoverErrorKind {
         CrwError::RendererError(_) => FailoverErrorKind::LightpandaCrash,
         _ => FailoverErrorKind::Other,
     }
+}
+
+/// Build a per-tier timeout map from the renderer config. Used by the
+/// breaker layer for pre-flight skip and clamp detection.
+fn tier_timeouts_from(
+    config: &RendererConfig,
+) -> std::collections::HashMap<RendererKind, std::time::Duration> {
+    let mut m = std::collections::HashMap::new();
+    m.insert(
+        RendererKind::Http,
+        std::time::Duration::from_millis(config.http_timeout()),
+    );
+    m.insert(
+        RendererKind::Lightpanda,
+        std::time::Duration::from_millis(config.lightpanda_timeout()),
+    );
+    m.insert(
+        RendererKind::Chrome,
+        std::time::Duration::from_millis(config.chrome_timeout()),
+    );
+    m
 }
 
 /// Per-renderer credit cost. Exposed so the routing layer can populate
@@ -155,6 +178,10 @@ pub struct FallbackRenderer {
     preferences: Arc<HostPreferences>,
     /// Per-host + global circuit breakers per renderer.
     breakers: Arc<BreakerRegistry>,
+    /// Per-tier configured timeouts (Duration). Used by the breaker layer
+    /// for pre-flight deadline-skip and clamp detection in
+    /// `AttemptContext::capture`.
+    tier_timeouts: std::collections::HashMap<RendererKind, std::time::Duration>,
     /// Process-wide per-eTLD+1 rate (req/sec). `0.0` disables the interval
     /// floor; the concurrency cap below still applies. Configured via
     /// [`Self::with_host_limits`].
@@ -227,6 +254,7 @@ impl FallbackRenderer {
                 render_js_default: config.render_js_default,
                 preferences: Arc::new(HostPreferences::with_defaults()),
                 breakers: Arc::new(BreakerRegistry::with_defaults()),
+                tier_timeouts: tier_timeouts_from(config),
                 requests_per_second: 0.0,
                 per_host_max_concurrent: 1,
             });
@@ -312,6 +340,7 @@ impl FallbackRenderer {
             render_js_default: config.render_js_default,
             preferences: Arc::new(HostPreferences::with_defaults()),
             breakers: Arc::new(BreakerRegistry::with_defaults()),
+            tier_timeouts: tier_timeouts_from(config),
             requests_per_second: 0.0,
             per_host_max_concurrent: 1,
         })
@@ -648,6 +677,14 @@ impl FallbackRenderer {
             // with the "" key when URL parsing failed.
             let trackable = kind.filter(|_| !host.is_empty());
 
+            // Pre-flight deadline skip removed: classify_outcome in the
+            // breaker layer already ignores DeadlineClamped outcomes, so a
+            // tier-side timeout on near-exhausted budget doesn't poison the
+            // breaker. Letting chrome attempt with partial-DOM budget gives
+            // higher success on legitimately-slow tail URLs than aborting
+            // pre-flight. tier_timeouts is still used by AttemptContext to
+            // detect clamping post-hoc.
+
             // Consult breaker for tracked renderers. Untracked names (e.g.
             // "playwright") bypass the breaker for now.
             let mut probe_guard: Option<ProbeGuard> = None;
@@ -673,6 +710,15 @@ impl FallbackRenderer {
                 chain.push(k);
             }
 
+            // Capture pre-call context so post-await classification is
+            // race-free against deadline drift.
+            let attempt_ctx = {
+                let remaining = deadline.remaining();
+                let tier_budget = kind
+                    .and_then(|k| self.tier_timeouts.get(&k).copied())
+                    .unwrap_or(remaining);
+                AttemptContext::capture(remaining, tier_budget)
+            };
             match renderer.fetch(url, headers, wait_for_ms, deadline).await {
                 Ok(mut result) => {
                     let text_len = html_body_text_len(&result.html);
@@ -690,7 +736,14 @@ impl FallbackRenderer {
                             Some(RendererKind::Chrome)
                         );
                         if let Some(k) = trackable {
-                            self.breakers.record_result(&host, k, true).await;
+                            // Treat truncated-but-valid as Truncated (ignored
+                            // by default per BreakerConfig.count_truncated_as_failure).
+                            let outcome = if result.truncated {
+                                BreakerOutcome::Truncated
+                            } else {
+                                BreakerOutcome::Success
+                            };
+                            self.breakers.record_outcome(&host, k, outcome).await;
                             self.preferences.record_success(&host).await;
                             metrics()
                                 .render_route_decision_total
@@ -749,7 +802,11 @@ impl FallbackRenderer {
                     };
                     last_failover_reason = Some(err_kind.clone());
                     if let Some(k) = trackable {
-                        self.breakers.record_result(&host, k, false).await;
+                        // Thin/placeholder/failed render → classify against
+                        // attempt context so deadline-clamped attempts don't
+                        // poison the breaker.
+                        let outcome = classify_outcome(false, false, false, &attempt_ctx);
+                        self.breakers.record_outcome(&host, k, outcome).await;
                         if k == RendererKind::Lightpanda
                             && let Some(target) =
                                 self.preferences.record_failure(&host, &err_kind).await
@@ -838,7 +895,9 @@ impl FallbackRenderer {
                     let err_kind = classify_renderer_error(&e);
                     last_failover_reason = Some(err_kind.clone());
                     if let Some(k) = trackable {
-                        self.breakers.record_result(&host, k, false).await;
+                        let was_timeout = matches!(e, CrwError::Timeout(_));
+                        let outcome = classify_outcome(false, false, was_timeout, &attempt_ctx);
+                        self.breakers.record_outcome(&host, k, outcome).await;
                         if k == RendererKind::Lightpanda {
                             let _ = self.preferences.record_failure(&host, &err_kind).await;
                         }
@@ -940,6 +999,7 @@ fn html_body_text_len(html: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "cdp")]
     use crw_core::config::CdpEndpoint;
     use std::time::Duration;
 
