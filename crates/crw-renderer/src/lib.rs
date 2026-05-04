@@ -59,6 +59,7 @@ use crw_core::types::{
 };
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use traits::PageFetcher;
 
 /// Map a renderer's name string to the closed `RendererKind` enum.
@@ -669,6 +670,11 @@ impl FallbackRenderer {
         let mut last_error = None;
         let mut last_failover_reason: Option<FailoverErrorKind> = None;
         let mut thin_result: Option<FetchResult> = None;
+        // Snapshot for the leak-through fallback below. The main loop
+        // consumes `renderers`; we keep a parallel reference list so a
+        // single skipped renderer can still get a shot when its host
+        // breaker is closed.
+        let renderers_snapshot: Vec<&Arc<dyn PageFetcher>> = renderers.clone();
 
         for renderer in renderers {
             let kind = renderer_kind_for(renderer.name());
@@ -910,6 +916,97 @@ impl FallbackRenderer {
                 }
             }
         }
+        // Leak-through fallback: every renderer was rejected by the global
+        // breaker, but the host itself has no failures recorded. Rather
+        // than fail the request outright (which is what made the bench
+        // shed ~12% on broad lightpanda outages), give one renderer a
+        // single attempt without recording its outcome to the global
+        // window. The host tier still records, so a host that's actually
+        // broken trips its own breaker on the next attempt.
+        // Trigger when every chain attempt failed outright (no thin_result,
+        // no Ok return) AND at least one renderer was skipped by the global
+        // breaker. Common case: lightpanda runs and errors, chrome gets
+        // globally rejected → without leak we'd return error even though
+        // chrome's host breaker is clean and would likely succeed.
+        //
+        // Skip when the request deadline is already (near-)exhausted:
+        // entering a renderer with <500ms budget produced 37/128 of the
+        // first leak run's failures as "Timeout after 1-2ms" — the
+        // attempt cannot succeed and just consumes a CDP connection.
+        const LEAK_MIN_BUDGET: Duration = Duration::from_millis(500);
+        if thin_result.is_none()
+            && !breaker_skipped.is_empty()
+            && !is_user_pinned
+            && deadline.remaining() >= LEAK_MIN_BUDGET
+        {
+            for renderer in &renderers_snapshot {
+                let kind = renderer_kind_for(renderer.name());
+                let trackable = kind.filter(|_| !host.is_empty());
+                let Some(k) = trackable else { continue };
+                if !breaker_skipped.contains(&k) {
+                    continue;
+                }
+                let permit = self.breakers.try_acquire_host_only(&host, k).await;
+                if permit == Permit::Rejected {
+                    continue;
+                }
+                tracing::info!(
+                    renderer = renderer.name(),
+                    host = %host,
+                    "global breaker open, host clean — leaking through one attempt"
+                );
+                metrics()
+                    .render_route_decision_total
+                    .with_label_values(&[k.as_str(), "leakThrough"])
+                    .inc();
+                let attempt_ctx = {
+                    let remaining = deadline.remaining();
+                    let tier_budget = self.tier_timeouts.get(&k).copied().unwrap_or(remaining);
+                    AttemptContext::capture(remaining, tier_budget)
+                };
+                let res = renderer.fetch(url, headers, wait_for_ms, deadline).await;
+                match res {
+                    Ok(mut result) => {
+                        let text_len = html_body_text_len(&result.html);
+                        let is_placeholder = detector::looks_like_loading_placeholder(&result.html);
+                        let failed_render = detector::looks_like_failed_render(&result.html);
+                        let truncated = result.truncated;
+                        let content_ok = text_len >= Self::MIN_RENDERED_TEXT_LEN
+                            && !is_placeholder
+                            && failed_render.is_none();
+                        let outcome = classify_outcome(content_ok, truncated, false, &attempt_ctx);
+                        // Record host only — global stays untouched so the
+                        // existing trip can finish its cooldown naturally.
+                        self.breakers
+                            .record_scoped_outcome(&host, k, None, Some(outcome))
+                            .await;
+                        if content_ok {
+                            result.credit_cost = credit_for(k);
+                            result.render_decision =
+                                Some(RenderDecision::AutoDefault { chosen: k });
+                            return Ok(result);
+                        }
+                        // Thin/placeholder on leak path → fall through to
+                        // the normal "no JS renderer" return below.
+                        last_error = Some(CrwError::RendererError(format!(
+                            "leak attempt on {} returned thin content (text_len={text_len})",
+                            renderer.name()
+                        )));
+                        break;
+                    }
+                    Err(e) => {
+                        let was_timeout = matches!(e, CrwError::Timeout(_));
+                        let outcome = classify_outcome(false, false, was_timeout, &attempt_ctx);
+                        self.breakers
+                            .record_scoped_outcome(&host, k, None, Some(outcome))
+                            .await;
+                        last_error = Some(e);
+                        break;
+                    }
+                }
+            }
+        }
+
         // Return the best thin result if we have one, otherwise the last error.
         if let Some(mut result) = thin_result {
             // Stamp routing metadata on the soft-failure result too — callers
@@ -999,6 +1096,7 @@ fn html_body_text_len(html: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::breaker::BreakerConfig;
     #[cfg(feature = "cdp")]
     use crw_core::config::CdpEndpoint;
     use std::time::Duration;
@@ -1446,11 +1544,20 @@ mod tests {
             name: "chrome",
             behavior: MockBehavior::Ok(rich_html("CHROME-OK")),
         }) as Arc<dyn PageFetcher>;
-        let r = make_renderer_with_mocks(vec![lp, chrome]);
+        let mut r = make_renderer_with_mocks(vec![lp, chrome]);
 
-        // Trip global+host breakers for lightpanda by recording enough
-        // failures to exceed the default threshold (20).
-        for _ in 0..20 {
+        // Use a custom breaker config: long cooldown so the breaker can't
+        // transition to half-open under parallel test load (the default
+        // 5s cooldown was racing against scheduler latency on workspace runs).
+        // Threshold/window stay tuned to default: 80 consecutive failures
+        // satisfies min_calls=50 and far exceeds failure_rate=0.80.
+        let breaker_cfg = BreakerConfig {
+            base_cooldown: Duration::from_secs(300),
+            max_cooldown: Duration::from_secs(300),
+            ..BreakerConfig::default()
+        };
+        r.breakers = Arc::new(BreakerRegistry::new(breaker_cfg));
+        for _ in 0..80 {
             r.breakers
                 .record_result("example.com", RendererKind::Lightpanda, false)
                 .await;

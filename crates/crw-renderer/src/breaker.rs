@@ -42,11 +42,21 @@ pub struct BreakerConfig {
 impl Default for BreakerConfig {
     fn default() -> Self {
         Self {
-            window_size: 50,
-            min_calls: 20,
-            failure_rate_threshold: 0.55,
-            base_cooldown: Duration::from_secs(10),
-            max_cooldown: Duration::from_secs(120),
+            // Loosened May 2026 after the 1000-URL bench traced 117/214 failures
+            // to false-trips in the global breaker. The bench-natural failure
+            // rate (anti-bot blocks + 4xx/5xx + soft fails + thin renders) sits
+            // in the 30-45% band, which the prior 0.55 / N=50 config crossed
+            // 5-6 times per run and shed ~12% of throughput. Threshold 0.80 +
+            // window 100 + min_calls 50 only trip when something is genuinely
+            // broken (e.g. LP segfault loop, chrome disconnect storm), not
+            // when a bursty cluster of hard URLs hits the queue. Cooldown
+            // dropped 10s→5s so a transient blip recovers within one bench
+            // window-roll instead of compounding to 30s+ via ejection_count.
+            window_size: 100,
+            min_calls: 50,
+            failure_rate_threshold: 0.80,
+            base_cooldown: Duration::from_secs(5),
+            max_cooldown: Duration::from_secs(60),
             max_probes: 5,
             half_open_success_rate: 0.60,
             eval_timeout: Duration::from_secs(30),
@@ -534,6 +544,16 @@ impl BreakerRegistry {
             .await
     }
 
+    /// Acquire a permit consulting the host tier only, ignoring global
+    /// breaker state. Used by the "leak" fallback: when every renderer
+    /// has been skipped because the global breaker is open but the
+    /// per-host breaker is closed, give one renderer a single shot
+    /// rather than fail the request outright. The host breaker still
+    /// guards against repeatedly hammering a host that's known broken.
+    pub async fn try_acquire_host_only(&self, host: &str, renderer: RendererKind) -> Permit {
+        self.host_for(host, renderer).await.try_acquire()
+    }
+
     pub async fn try_acquire(&self, host: &str, renderer: RendererKind) -> Permit {
         let global = self.global_for(renderer);
         let host_b = self.host_for(host, renderer).await;
@@ -583,6 +603,49 @@ impl BreakerRegistry {
                 .circuit_breaker_open_total
                 .with_label_values(&[renderer.as_str(), "host"])
                 .inc();
+        }
+    }
+
+    /// Record outcomes independently to global vs host tiers. Use when a
+    /// failure is page-/content-specific (anti-bot, thin SPA shell,
+    /// target-host network error) and should not poison global renderer
+    /// availability. Pass `None` to skip recording on a tier.
+    ///
+    /// Background: the 1000-URL bench traced ~12% of failures to false
+    /// global trips — content-quality issues clustered onto a handful of
+    /// hosts but the global window saw them as renderer-wide failures.
+    /// Splitting accounting lets the host tier learn unsuitability while
+    /// the global tier tracks only renderer-infrastructure health.
+    pub async fn record_scoped_outcome(
+        &self,
+        host: &str,
+        renderer: RendererKind,
+        global_outcome: Option<BreakerOutcome>,
+        host_outcome: Option<BreakerOutcome>,
+    ) {
+        if let Some(outcome) = global_outcome {
+            if let Some(reason) = outcome.ignored_reason() {
+                metrics()
+                    .breaker_ignored_total
+                    .with_label_values(&[renderer.as_str(), reason])
+                    .inc();
+            }
+            let g_tripped = self.global_for(renderer).record_outcome(outcome);
+            if g_tripped {
+                metrics()
+                    .circuit_breaker_open_total
+                    .with_label_values(&[renderer.as_str(), "global"])
+                    .inc();
+            }
+        }
+        if let Some(outcome) = host_outcome {
+            let h_tripped = self.host_for(host, renderer).await.record_outcome(outcome);
+            if h_tripped {
+                metrics()
+                    .circuit_breaker_open_total
+                    .with_label_values(&[renderer.as_str(), "host"])
+                    .inc();
+            }
         }
     }
 
