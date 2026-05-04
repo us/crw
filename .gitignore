@@ -11,3 +11,5 @@ python/uv.lock
 node_modules/
 package-lock.json
 docker-compose.override.yml
+config.local.toml
+.env

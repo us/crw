@@ -1,0 +1,59 @@
+# Stealth-tier config for HOST-MODE `crw-server` (not Docker Compose).
+#
+# Use this when you run `crw-server` directly on the host and point it at
+# a separately-running browserless container. For Docker Compose deploys,
+# use docker-compose.stealth.yml instead — it overrides the `crw`
+# service's chrome ws_url via env var, which is the right boundary inside
+# the docker network.
+#
+# Usage (host mode):
+#   docker compose --profile stealth up -d            # starts browserless
+#   CRW_CONFIG=config.stealth crw-server              # crw-server on host
+#
+# Layering: `CRW_CONFIG=config.stealth` loads config.default.toml then
+# this file (config.docker.toml is skipped because CRW_CONFIG selects
+# exactly one override file). All host-mode-relevant fields must be
+# present here.
+#
+# Bench (2026-05-04, 1000-URL Firecrawl scrape-content-dataset-v1):
+#   vanilla chromedp/headless-shell : 87.1% success
+#   browserless stealth (this file) : 89.6% success  (+2.5pt)
+#   p50 1725ms, p95 ≈ 6s
+#
+# ⚠️  LICENSE — compliance risk to review:
+# browserless v2 is SSPL-3.0. SSPL §13 obliges anyone who makes the
+# functionality of the Program available to third parties as a service
+# (commercial OR otherwise) to release the *Service Source Code*. CRW's
+# AGPL-3 source side connects over a network socket and is most likely
+# outside §13's reach, but the boundary is fact-specific. Get legal
+# review before exposing this stack to third parties. The default
+# `chrome` profile (chromedp/headless-shell, Apache-2/BSD) carries no
+# such risk. Full notice: docker-compose.yml `chrome-stealth` service.
+
+[server]
+rate_limit_rps = 0
+
+[renderer]
+http_timeout_ms = 4000
+lightpanda_timeout_ms = 2500
+chrome_timeout_ms = 30000
+chrome_intercept_resources = true
+chrome_nav_budget_ms = 12000
+
+[renderer.lightpanda]
+# Host-mode: assumes you also expose lightpanda on host port 9222
+# (the default compose mapping does not — add `ports: ["9222:9222"]`
+# to the lightpanda service if running this configuration).
+ws_url = "ws://localhost:9222/"
+
+[renderer.chrome]
+# browserless v2 endpoint reached via the loopback host bind set up by
+# docker-compose.yml (chrome-stealth -> 127.0.0.1:9224).
+# `/chromium` opens a fresh session; `stealth=true` enables the
+# anti-fingerprint plugin per session; `token` must match the TOKEN env
+# var on the chrome-stealth service. The published default `crwtest` is
+# a placeholder — set BROWSERLESS_TOKEN in `.env` before any deploy and
+# update this URL to match.
+# NOTE: keep this `token=` value in sync with `BROWSERLESS_TOKEN` in `.env`.
+# The two are not auto-linked — rotate one, rotate the other.
+ws_url = "ws://localhost:9224/chromium?token=crwtest&stealth=true"

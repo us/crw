@@ -13,6 +13,13 @@ services:
       chrome:
         condition: service_started
         required: false
+      # `chrome-stealth` is opt-in via `--profile stealth` (browserless image,
+      # SSPL-licensed — only run if you accept those terms). Same listing
+      # rationale as `chrome` above: harmless when off, deterministic ordering
+      # when on. The two profiles are mutually exclusive in practice — pick one.
+      chrome-stealth:
+        condition: service_started
+        required: false
     environment:
       - RUST_LOG=info
       - CRW_CONFIG=config.docker
@@ -34,7 +41,7 @@ services:
     mem_limit: 1g
     memswap_limit: 1g
     healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9222 || exit 1"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9222"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -65,8 +72,83 @@ services:
     mem_limit: 2g
     memswap_limit: 2g
     healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9222 || exit 1"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9222"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  # Stealth JS renderer — browserless/chromium with built-in anti-fingerprint
+  # plugin. Drop-in replacement for the `chrome` tier on hosts that ship
+  # bot-detection (Cloudflare Turnstile, DataDome, PerimeterX). On the 1000-URL
+  # Firecrawl bench (2026-05-04): +2.5pt success rate (87.1% → 89.6%) over
+  # vanilla chromedp/headless-shell, p50 1725ms.
+  #
+  # ⚠️  LICENSE — compliance risk to review before production:
+  # browserless v2 is SSPL-3.0. SSPL §13 obliges anyone who makes the
+  # functionality of the Program available to third parties as a service
+  # (commercial OR otherwise) to release the *Service Source Code* — the
+  # full management/automation/hosting stack around it, not just changes to
+  # browserless. CRW (AGPL-3) connects over a network socket only, so the
+  # opencore CRW source is most likely outside SSPL §13's reach — but the
+  # boundary is fact-specific and we are not lawyers. If you deploy this
+  # profile in any service that exposes scraping to third parties, get
+  # legal review. The default `chrome` profile (chromedp/headless-shell,
+  # Apache-2/BSD) carries none of this risk.
+  #
+  # Opt-in: `docker compose --profile stealth up -d`. To route the composed
+  # `crw` service at this tier, layer the stealth override file:
+  #   docker compose -f docker-compose.yml -f docker-compose.stealth.yml \
+  #     --profile stealth up -d
+  # Mutually exclusive with `--profile heavy` in practice — both bind to the
+  # chrome tier; the override file points `crw` at one of them.
+  #
+  # Tuning notes (2026-05-04 bench, 1000-URL Firecrawl dataset):
+  #   CONCURRENT=10 → sustained-load drops (Server disconnected ×48)
+  #   CONCURRENT=15 → sweet spot (89.6% success, stable)
+  #   CONCURRENT=25 → host saturation collapse (61.3%)
+  chrome-stealth:
+    image: ghcr.io/browserless/chromium:v2.27.0
+    profiles: ["stealth"]
+    # Loopback-only host bind: lets a host-run `crw-server` connect via
+    # `ws://localhost:9224/...` for development, while keeping the endpoint
+    # off the public internet. The composed `crw` service does NOT need
+    # this port — it reaches the container via the docker bridge as
+    # `chrome-stealth:3000` (see docker-compose.stealth.yml override).
+    ports:
+      - "127.0.0.1:9224:3000"
+    environment:
+      # TOKEN is required by browserless v2 — clients must pass `?token=...`.
+      # Default is a published placeholder; override via `.env` in production:
+      #   echo "BROWSERLESS_TOKEN=$(openssl rand -hex 24)" >> .env
+      - TOKEN=${BROWSERLESS_TOKEN:-crwtest}
+      - CONCURRENT=15
+      - MAX_QUEUE_LENGTH=30
+      - TIMEOUT=30000
+      # Kill the container instead of accepting traffic in a degraded state;
+      # without this, browserless can wedge in "healthy but refusing CDP".
+      - EXIT_ON_HEALTH_FAILURE=true
+    shm_size: "2g"
+    restart: unless-stopped
+    mem_limit: 3g
+    memswap_limit: 3g
+    # Confine browserless's user-data-dirs and downloads to tmpfs so a
+    # runaway session can't fill the host disk (we hit ENOSPC during
+    # bench tuning when this was missing). Browserless v2 writes session
+    # state under /tmp by default, so a single bounded tmpfs is enough.
+    tmpfs:
+      - /tmp:size=512m
+    healthcheck:
+      # TCP accept on browserless's listen port. App-level CDP failures
+      # (chromium pool wedged, /chromium routing broken) are caught by
+      # browserless's own supervision via `EXIT_ON_HEALTH_FAILURE=true`
+      # above — it kills the container and `restart: unless-stopped`
+      # brings it back up. A bash-based HTTP probe with token
+      # interpolation is fragile (compose-vs-runtime expansion of $TOKEN,
+      # and short-lived /dev/tcp FDs racing with HTTP/1.0 connection close)
+      # and gave us nothing this combo doesn't already.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/3000"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

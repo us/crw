@@ -1,0 +1,22 @@
+# Stealth-tier override for Docker Compose. Layered on top of
+# docker-compose.yml so the composed `crw` service routes its chrome tier
+# at the browserless `chrome-stealth` container instead of vanilla
+# chromedp/headless-shell.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.stealth.yml \
+#     --profile stealth up -d
+#
+# Set a strong token first:
+#   echo "BROWSERLESS_TOKEN=$(openssl rand -hex 24)" >> .env
+#
+# ⚠️  LICENSE: see the SSPL-3.0 notice on the `chrome-stealth` service in
+# docker-compose.yml before exposing this stack to third parties.
+
+services:
+  crw:
+    environment:
+      # Override the chrome tier ws_url for the in-container CRW. This
+      # bypasses the host port (9224) entirely; traffic stays on the
+      # docker bridge between the `crw` and `chrome-stealth` containers.
+      - CRW_RENDERER__CHROME__WS_URL=ws://chrome-stealth:3000/chromium?token=${BROWSERLESS_TOKEN:-crwtest}&stealth=true

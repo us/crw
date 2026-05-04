@@ -530,9 +530,27 @@ docker compose up -d
 
 # add chrome failover (recommended for production)
 docker compose --profile heavy up -d
+
+# stealth tier — browserless/chromium with anti-fingerprint plugin
+# (+2.5pt bench success on bot-defended sites; SSPL-3.0, see warning below)
+echo "BROWSERLESS_TOKEN=$(openssl rand -hex 24)" >> .env
+docker compose -f docker-compose.yml -f docker-compose.stealth.yml \
+  --profile stealth up -d
 ```
 
-Without `--profile heavy`, the engine still serves all endpoints — chrome-required URLs will exhaust their lightpanda failover and surface `data.warnings[]` instead of routing to chrome.
+Without `--profile heavy` or `--profile stealth`, the engine still serves all endpoints — chrome-required URLs will exhaust their lightpanda failover and surface `data.warnings[]` instead of routing to chrome.
+
+> ⚠️ **Stealth profile licensing — compliance risk to review.**
+> `--profile stealth` pulls `ghcr.io/browserless/chromium`, which is
+> **SSPL-3.0**. SSPL §13 obliges anyone who makes the functionality of the
+> Program available to third parties as a service (commercial *or*
+> otherwise) to release the *Service Source Code* — the full
+> management/automation/hosting stack around it. CRW (AGPL-3) connects
+> over a network socket only, so the opencore CRW source is most likely
+> outside §13's reach — but the boundary is fact-specific and we are not
+> lawyers. Get legal review before exposing this stack to third parties.
+> The default `--profile heavy` (chromedp/headless-shell, Apache-2/BSD)
+> carries none of this risk.
 
 > **When do you need `crw-server`?** Only if you want a REST API endpoint. The Python SDK (`CrwClient()`) and MCP binary (`crw-mcp`) both run a self-contained engine — no server required.
 
@@ -632,7 +650,8 @@ crw-server setup   # downloads LightPanda, creates config.local.toml
 | Renderer | Protocol | Best for |
 |----------|----------|----------|
 | LightPanda | CDP over WebSocket | Low-resource environments (default); simple sites |
-| Chrome | CDP over WebSocket | Modern React/Vite/Next SPAs; recommended for production |
+| Chrome (chromedp/headless-shell) | CDP over WebSocket | Modern React/Vite/Next SPAs; recommended for production |
+| Chrome (browserless/chromium, opt-in `stealth` profile) | CDP over WebSocket | Bot-defended sites (Cloudflare Turnstile, DataDome) — SSPL-3.0, see compose notes |
 | Playwright | CDP over WebSocket | Full browser compatibility |
 
 > **Renderer choice matters for SPAs.** LightPanda is fast and cheap but its
