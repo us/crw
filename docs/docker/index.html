@@ -176,15 +176,6 @@ docker compose up
     ports:
       - &quot;9222:9222&quot;
 </code></pre>
-<h3>Stealth tier (browserless, opt-in)</h3>
-<p>The <code>stealth</code> profile swaps the chrome tier for <code>browserless/chromium</code>, which ships an anti-fingerprint plugin. On the 1000-URL Firecrawl bench (2026-05-04) it raised success rate from 87.1% to 89.6% (+2.5pt) on bot-defended sites.</p>
-<p>Set a strong token, then bring up both the base file and the stealth override:</p>
-<pre><code class="language-bash">echo "BROWSERLESS_TOKEN=$(openssl rand -hex 24)" &gt;&gt; .env
-docker compose -f docker-compose.yml -f docker-compose.stealth.yml \
-  --profile stealth up -d
-</code></pre>
-<p>The override file rewires the in-container <code>crw</code> service's chrome tier to <code>chrome-stealth:3000</code> over the docker bridge — the host port (<code>127.0.0.1:9224</code>) is loopback-only and exists only for host-mode <code>crw-server</code> development. If you run <code>crw-server</code> directly on the host instead, use <code>CRW_CONFIG=config.stealth crw-server</code> after starting the stealth profile.</p>
-<p>⚠️ <strong>License — compliance risk to review.</strong> <code>browserless/chromium</code> is <strong>SSPL-3.0</strong>. SSPL §13 obliges anyone who makes the functionality of the Program available to third parties as a service (commercial <em>or</em> otherwise) to release the <em>Service Source Code</em> — the full management/automation/hosting stack around it. CRW (AGPL-3) connects over a network socket only, so the opencore CRW source is most likely outside §13's reach, but the boundary is fact-specific. Get legal review before exposing this stack to third parties. The default <code>--profile heavy</code> (chromedp/headless-shell, Apache-2/BSD) carries no such risk.</p>
 <h3>Add Playwright (optional)</h3>
 <pre><code class="language-yaml">  playwright:
     image: mcr.microsoft.com/playwright:v1.49.0-noble

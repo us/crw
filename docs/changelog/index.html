@@ -133,6 +133,33 @@
 The source of truth is the repository root changelog. Do not edit this docs page manually.
 :::</p>
 <p>All notable changes to CRW are documented here.</p>
+<h2><a href="https://github.com/us/crw/compare/v0.4.1...v0.4.2">0.4.2</a> (2026-04-29)</h2>
+<h3>Features</h3>
+<ul>
+<li><strong>core:</strong> add render decision types and prometheus metrics scaffold (<a href="https://github.com/us/crw/commit/e08682b761822a7100e0f40cffe4cd4f3dcf2a5c">e08682b</a>)</li>
+<li><strong>renderer:</strong> add per-host renderer preference cache (<a href="https://github.com/us/crw/commit/21e41d1330bed255854824f55c3419a590a86411">21e41d1</a>)</li>
+<li><strong>renderer:</strong> track HTTP routing and warn on pinned-renderer failure (<a href="https://github.com/us/crw/commit/3208d277aa4c480c1257648dc86a7151dcfb8976">3208d27</a>)</li>
+<li><strong>renderer:</strong> wire host preferences, circuit breakers, and CF detection (<a href="https://github.com/us/crw/commit/0c53c645562c43a4f62aa22f1e7f603c42b3b3f3">0c53c64</a>)</li>
+</ul>
+<h3>Bug Fixes</h3>
+<ul>
+<li><strong>core,renderer:</strong> surface render metadata and harden host normalization (<a href="https://github.com/us/crw/commit/ee4130b62467defb61c5b85bf267c767b3bd909a">ee4130b</a>)</li>
+<li><strong>renderer:</strong> correct failure classification and routing decisions (<a href="https://github.com/us/crw/commit/4d684bdaa0cd1a27f011d73322099258a0f713be">4d684bd</a>)</li>
+<li><strong>renderer:</strong> probe lifecycle, RAII guard, breaker counter (<a href="https://github.com/us/crw/commit/02044f573cd6274231b3856cd799d7e74d61f9ba">02044f5</a>)</li>
+</ul>
+<h2><a href="https://github.com/us/crw/compare/v0.4.0...v0.4.1">0.4.1</a> (2026-04-28)</h2>
+<h3>Features</h3>
+<ul>
+<li>add per-request renderer field for scrape and crawl APIs (<a href="https://github.com/us/crw/issues/29">#29</a>) (<a href="https://github.com/us/crw/commit/f1e0b63fd28be0ceb38342086a309f92bbbc1e53">f1e0b63</a>)</li>
+<li><strong>crw-browse:</strong> add interactive browser MCP server with phase-2 tools (<a href="https://github.com/us/crw/commit/e78879db18c7c4b3df2a4984349a65b4493b1cda">e78879d</a>)</li>
+<li>honor renderer mode and force_js in config (fixes <a href="https://github.com/us/crw/issues/28">#28</a>) (<a href="https://github.com/us/crw/commit/b76e473facbce08a841ef8bd9fdfac97a552a8fd">b76e473</a>)</li>
+</ul>
+<h3>Bug Fixes</h3>
+<ul>
+<li>detect failed JS renders and fail over to next renderer (<a href="https://github.com/us/crw/commit/fca8fd5cadb4fa3c96bf5a315f96ab6d1e63989c">fca8fd5</a>)</li>
+<li><strong>docs:</strong> use absolute logo paths in site.config.js (<a href="https://github.com/us/crw/commit/c5c93215561094a35038ab6af2b21e91c16199f4">c5c9321</a>)</li>
+<li><strong>docs:</strong> use absolute paths for logo and favicon assets (<a href="https://github.com/us/crw/commit/cdb14517da6425c105b95749dec35bbc9e977f5e">cdb1451</a>)</li>
+</ul>
 <h2><a href="https://github.com/us/crw/compare/v0.3.6...v0.4.0">0.4.0</a> (2026-04-22)</h2>
 <h3>Features</h3>
 <ul>
