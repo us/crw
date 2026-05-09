@@ -512,20 +512,19 @@ fn detect_block_interstitial(html: &str) -> Option<String> {
         e
     };
     let lower = html[..end].to_lowercase();
+    // Keep markers SPECIFIC to interstitial pages — bare "captcha"/"access
+    // denied" false-positive on legit content (e.g. an HN headline mentioning
+    // "reCAPTCHA" matches "captcha" anywhere in the document).
     let markers = [
         "just a moment",
         "attention required",
         "cf-browser-verification",
         "cf-challenge",
-        "captcha",
-        "access denied",
-        // DataDome (Reuters, Forbes, Inc, Zoro, WSJ, etc.) — serves a small
-        // CAPTCHA/iframe shell to headless browsers. The captcha-delivery host
-        // and "datadome" string only appear on actively-challenged pages.
+        // DataDome — captcha-delivery host + "datadome" string only appear on
+        // actively-challenged pages.
         "captcha-delivery.com",
         "datadome captcha",
-        "data-cfasync",
-        // PerimeterX / HUMAN
+        // PerimeterX / HUMAN — _px3 cookie + px-captcha widget
         "px-captcha",
         "_px3=",
         // Akamai Bot Manager
@@ -613,5 +612,16 @@ mod tests {
             "<html><title>Just a moment</title><body>cf-browser-verification</body></html>",
         ));
         assert_eq!(warning.as_deref(), Some("Blocked by anti-bot protection"));
+    }
+
+    #[test]
+    fn warning_skips_legit_pages_mentioning_captcha() {
+        // Regression: HN front page used to false-positive because the headline
+        // "Google broke reCAPTCHA…" matched a bare "captcha" substring marker.
+        let warning = derive_target_warning(&sample_fetch(
+            200,
+            "<html><body>Google broke reCAPTCHA for de-googled Android users</body></html>",
+        ));
+        assert!(warning.is_none(), "got false-positive: {warning:?}");
     }
 }
