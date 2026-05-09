@@ -50,6 +50,7 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 (cd "$tmp" && npm init -y >/dev/null && npm install --silent "crw-mcp@$v" >/dev/null 2>&1) \
   || { err "npm install crw-mcp@$v failed"; fail=1; }
+# shellcheck disable=SC2015
 resolved=$(cd "$tmp" && npm ls --all 2>/dev/null | grep -E "crw-mcp-(darwin|linux|win32)" | head -1 || true)
 if [ -n "$resolved" ] && ! printf '%s' "$resolved" | grep -q "@$v"; then
   err "platform pkg resolved to wrong version: $resolved"

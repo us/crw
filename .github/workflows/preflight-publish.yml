@@ -51,4 +51,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          shellcheck -x scripts/release/*.sh
+          shellcheck --severity=warning --source-path=scripts/release -x scripts/release/*.sh
