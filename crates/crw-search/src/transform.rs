@@ -17,24 +17,20 @@ fn score_or_zero(r: &SearxngResult) -> f64 {
     r.score.unwrap_or(0.0)
 }
 
-/// Drop rows that are missing the load-bearing identity fields (`url`,
+/// Predicate: row carries the load-bearing identity fields (`url`,
 /// `title`, `engine`). Real upstreams sometimes emit partial rows — e.g.
 /// when an engine times out mid-page — and one bad row used to fail the
-/// whole search. Now we silently skip them and continue.
+/// whole search. We silently skip them and continue.
 ///
-/// Note: this filter does NOT cap the result count — caller applies the
-/// per-source cap *after* filtering by source so a hot bucket (e.g. 600
-/// general results) can't starve a cold one (e.g. 5 news results).
-fn keep_well_formed(items: &[SearxngResult]) -> Vec<SearxngResult> {
-    items
-        .iter()
-        .filter(|r| {
-            r.url.as_deref().is_some_and(|s| !s.is_empty())
-                && r.title.as_deref().is_some_and(|s| !s.is_empty())
-                && r.engine.as_deref().is_some_and(|s| !s.is_empty())
-        })
-        .cloned()
-        .collect()
+/// Returning a predicate (not a filtered `Vec`) lets each caller chain
+/// `.filter(is_well_formed).take(MAX_UPSTREAM_ROWS).cloned()` so we never
+/// clone rows that will be discarded. Callers cap *after* filtering by
+/// source so a hot bucket (e.g. 600 general results) can't starve a cold
+/// one (e.g. 5 news results).
+fn is_well_formed(r: &SearxngResult) -> bool {
+    r.url.as_deref().is_some_and(|s| !s.is_empty())
+        && r.title.as_deref().is_some_and(|s| !s.is_empty())
+        && r.engine.as_deref().is_some_and(|s| !s.is_empty())
 }
 
 fn url_of(r: &SearxngResult) -> &str {
@@ -105,9 +101,12 @@ pub fn transform_flat(response: &SearxngResponse, limit: u32) -> Vec<SearchResul
     // before clone+sort. A misbehaving SearXNG instance (or a query that
     // scoops thousands of rows) would otherwise amplify CPU/memory on every
     // request.
-    let mut results: Vec<SearxngResult> = keep_well_formed(&response.results)
-        .into_iter()
+    let mut results: Vec<SearxngResult> = response
+        .results
+        .iter()
+        .filter(|r| is_well_formed(r))
         .take(MAX_UPSTREAM_ROWS)
+        .cloned()
         .collect();
     sort_by_score(&mut results);
     let deduped = dedupe_by_url(results);
@@ -128,15 +127,16 @@ pub fn transform_grouped(
 ) -> GroupedSearchData {
     let mut data = GroupedSearchData::default();
     let cap = limit as usize;
-    let well_formed = keep_well_formed(&response.results);
 
-    // Cap is applied AFTER the per-source filter (not on `well_formed`)
-    // because `keep_well_formed` is unbounded — otherwise a hot bucket
-    // (500 web rows) could starve cold ones (5 news rows). Each source
-    // gets its own `MAX_UPSTREAM_ROWS` budget for sort/dedupe.
+    // Per-source filter+cap on the raw response — `is_well_formed` is a
+    // predicate so we never clone rows that will be discarded. Each source
+    // gets its own `MAX_UPSTREAM_ROWS` budget for sort/dedupe so a hot
+    // bucket (500 web rows) can't starve cold ones (5 news rows).
     if sources.contains(&SearchSource::Web) {
-        let mut sorted: Vec<SearxngResult> = well_formed
+        let mut sorted: Vec<SearxngResult> = response
+            .results
             .iter()
+            .filter(|r| is_well_formed(r))
             .filter(|r| {
                 let cat = r.category.as_deref();
                 cat == Some("general") || (r.img_src.is_none() && cat != Some("news"))
@@ -157,8 +157,10 @@ pub fn transform_grouped(
     }
 
     if sources.contains(&SearchSource::News) {
-        let mut sorted: Vec<SearxngResult> = well_formed
+        let mut sorted: Vec<SearxngResult> = response
+            .results
             .iter()
+            .filter(|r| is_well_formed(r))
             .filter(|r| r.category.as_deref() == Some("news"))
             .take(MAX_UPSTREAM_ROWS)
             .cloned()
@@ -176,8 +178,10 @@ pub fn transform_grouped(
     }
 
     if sources.contains(&SearchSource::Images) {
-        let mut sorted: Vec<SearxngResult> = well_formed
+        let mut sorted: Vec<SearxngResult> = response
+            .results
             .iter()
+            .filter(|r| is_well_formed(r))
             .filter(|r| r.category.as_deref() == Some("images") || r.img_src.is_some())
             .take(MAX_UPSTREAM_ROWS)
             .cloned()
