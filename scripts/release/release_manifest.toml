@@ -19,7 +19,7 @@ crates = ["crw-core"]
 
 [[tiers]]
 order = 2
-crates = ["crw-renderer", "crw-extract"]
+crates = ["crw-renderer", "crw-extract", "crw-search"]
 
 [[tiers]]
 order = 3
