@@ -45,20 +45,21 @@
 
 ## What's New
 
-### [0.6.0](https://github.com/us/crw/compare/v0.5.0...v0.6.0) (2026-05-09)
+### [0.6.1](https://github.com/us/crw/compare/v0.6.0...v0.6.1) (2026-05-09)
 
 
 ### Features
 
-* **extract:** scale recall to 63.74% on 1000-URL benchmark ([5b85555](https://github.com/us/crw/commit/5b855554c5f7ba16981fbe2060e25cca4ba81686))
-* **renderer:** add browserless/chromium opt-in stealth profile (+2.5pt) ([d2414c9](https://github.com/us/crw/commit/d2414c9cd89dc01447b9e52501aa26180ce7d326))
-* **renderer:** chrome-stealth wiring + CDP discovery improvements ([6b2e77c](https://github.com/us/crw/commit/6b2e77c2a356ef8fc453560870985819ce75483a))
-* **server,core,crawl:** plumb tier timeouts and recall pipeline ([7cbee43](https://github.com/us/crw/commit/7cbee43e5db319f0af39dddea07faccbf0cd25ee))
+* **metrics:** cdp_pending_requests, cdp_live_connections, ([b5f7bec](https://github.com/us/crw/commit/b5f7bec28308e4f0094b7bbcbbecc5d2f734e385))
+* **renderer:** live-connection registry + 60s telemetry sampler ([b5f7bec](https://github.com/us/crw/commit/b5f7bec28308e4f0094b7bbcbbecc5d2f734e385))
+* **renderer:** target lifecycle metric + leaked detection ([b5f7bec](https://github.com/us/crw/commit/b5f7bec28308e4f0094b7bbcbbecc5d2f734e385))
+* **server:** /ready endpoint with deep status code ([b5f7bec](https://github.com/us/crw/commit/b5f7bec28308e4f0094b7bbcbbecc5d2f734e385))
 
 
-### Miscellaneous
+### Bug Fixes
 
-* release 0.6.0 ([bd03a35](https://github.com/us/crw/commit/bd03a352922b293431e49722c052f90c945f1c56))
+* **release:** bulletproof publish pipeline and drop pdf feature ([8fcf2f6](https://github.com/us/crw/commit/8fcf2f656aabe1a8a05db7d6c21011e06959e184))
+* **renderer:** invalidate cached chrome WS URL on connect failure ([b5f7bec](https://github.com/us/crw/commit/b5f7bec28308e4f0094b7bbcbbecc5d2f734e385))
 
 [Full changelog →](CHANGELOG.md)
 

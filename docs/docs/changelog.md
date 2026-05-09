@@ -8,6 +8,22 @@ The source of truth is the repository root changelog. Do not edit this docs page
 
 All notable changes to CRW are documented here.
 
+## [0.6.1](https://github.com/us/crw/compare/v0.6.0...v0.6.1) (2026-05-09)
+
+
+### Features
+
+* **metrics:** cdp_pending_requests, cdp_live_connections, ([b5f7bec](https://github.com/us/crw/commit/b5f7bec28308e4f0094b7bbcbbecc5d2f734e385))
+* **renderer:** live-connection registry + 60s telemetry sampler ([b5f7bec](https://github.com/us/crw/commit/b5f7bec28308e4f0094b7bbcbbecc5d2f734e385))
+* **renderer:** target lifecycle metric + leaked detection ([b5f7bec](https://github.com/us/crw/commit/b5f7bec28308e4f0094b7bbcbbecc5d2f734e385))
+* **server:** /ready endpoint with deep status code ([b5f7bec](https://github.com/us/crw/commit/b5f7bec28308e4f0094b7bbcbbecc5d2f734e385))
+
+
+### Bug Fixes
+
+* **release:** bulletproof publish pipeline and drop pdf feature ([8fcf2f6](https://github.com/us/crw/commit/8fcf2f656aabe1a8a05db7d6c21011e06959e184))
+* **renderer:** invalidate cached chrome WS URL on connect failure ([b5f7bec](https://github.com/us/crw/commit/b5f7bec28308e4f0094b7bbcbbecc5d2f734e385))
+
 ## [0.6.0](https://github.com/us/crw/compare/v0.5.0...v0.6.0) (2026-05-09)
 
 
