@@ -2,6 +2,21 @@
 
 All notable changes to CRW are documented here.
 
+## [0.6.0](https://github.com/us/crw/compare/v0.5.0...v0.6.0) (2026-05-09)
+
+
+### Features
+
+* **extract:** scale recall to 63.74% on 1000-URL benchmark ([5b85555](https://github.com/us/crw/commit/5b855554c5f7ba16981fbe2060e25cca4ba81686))
+* **renderer:** add browserless/chromium opt-in stealth profile (+2.5pt) ([d2414c9](https://github.com/us/crw/commit/d2414c9cd89dc01447b9e52501aa26180ce7d326))
+* **renderer:** chrome-stealth wiring + CDP discovery improvements ([6b2e77c](https://github.com/us/crw/commit/6b2e77c2a356ef8fc453560870985819ce75483a))
+* **server,core,crawl:** plumb tier timeouts and recall pipeline ([7cbee43](https://github.com/us/crw/commit/7cbee43e5db319f0af39dddea07faccbf0cd25ee))
+
+
+### Miscellaneous
+
+* release 0.6.0 ([bd03a35](https://github.com/us/crw/commit/bd03a352922b293431e49722c052f90c945f1c56))
+
 ## [0.5.0](https://github.com/us/crw/compare/v0.4.2...v0.5.0) (2026-05-04)
 
 
