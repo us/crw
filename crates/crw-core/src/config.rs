@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Default)]
 pub struct AppConfig {
     #[serde(default)]
     pub server: ServerConfig,
@@ -17,6 +17,25 @@ pub struct AppConfig {
     #[serde(default)]
     pub search: SearchConfig,
 }
+
+/// Per-tier CDP overhead in milliseconds — sum of SPA selector poll budget,
+/// challenge retry budget, content-stability budget, and fetch overhead.
+/// Mirrors the constants in `crw-renderer::cdp`. The drift between the two
+/// is regression-tested by `crates/crw-server/tests/cdp_constants_test.rs`
+/// (gated behind `feature = "cdp"`).
+///
+/// Used by [`RendererConfig::min_deadline_for_full_ladder_ms`] so the request
+/// deadline accommodates each CDP tier's outer fetch timeout, not just its
+/// configured `page_timeout`.
+pub const CDP_TIER_OVERHEAD_MS: u64 = 28_000;
+
+/// Hard upper bound on the per-request `wait_for_ms` budget. The Tower outer
+/// timeout is sized so a worst-case implicit scrape (no `deadlineMs`,
+/// `wait_for` at this maximum) still completes inside it; values above this
+/// are clamped by [`AppConfig::effective_deadline_ms`] so the inner deadline
+/// can never escape the outer envelope. Documented as `(0, 60000]` in
+/// `types.rs::ScrapeRequest::wait_for`.
+pub const MAX_WAIT_FOR_MS: u64 = 60_000;
 
 /// Configuration for the `/v1/search` endpoint and its SearXNG backend.
 ///
@@ -100,14 +119,30 @@ pub struct RequestConfig {
     /// separate slow-path histogram.
     #[serde(default = "default_deadline_ms")]
     pub deadline_ms_default: u64,
+    /// When `true` (default), an implicit deadline (no per-request `deadlineMs`)
+    /// is auto-extended to `max(deadline_ms_default, ladder_min)` where
+    /// `ladder_min = sum(http+lightpanda+chrome timeouts) + N_cdp_tiers * 28s`.
+    /// This prevents `chrome_timeout_ms = 30000` from appearing inert when
+    /// `deadline_ms_default` is small (issue #35).
+    ///
+    /// Set to `false` to enforce a strict SLO regardless of tier sizing —
+    /// requests that would have completed under the extended budget will
+    /// instead time out at `deadline_ms_default`.
+    #[serde(default = "default_true_request")]
+    pub auto_extend_deadline_for_ladder: bool,
 }
 
 impl Default for RequestConfig {
     fn default() -> Self {
         Self {
             deadline_ms_default: default_deadline_ms(),
+            auto_extend_deadline_for_ladder: true,
         }
     }
+}
+
+fn default_true_request() -> bool {
+    true
 }
 
 fn default_deadline_ms() -> u64 {
@@ -369,6 +404,73 @@ impl RendererConfig {
     }
     pub fn chrome_timeout(&self) -> u64 {
         self.chrome_timeout_ms.unwrap_or(self.page_timeout_ms)
+    }
+
+    /// Number of active CDP tiers (lightpanda + playwright + chrome) under
+    /// the current `mode`. Mirrors the predicate used at runtime in
+    /// `crw-renderer/src/lib.rs` when constructing the renderer ladder:
+    /// `want(mode) && config.<tier>.is_some()`.
+    ///
+    /// Returns `0` when the binary is built without the `cdp` feature — in
+    /// that case no JS renderer can be constructed regardless of the config,
+    /// so the deadline auto-extension policy must collapse to HTTP-only.
+    pub fn cdp_tier_count(&self) -> usize {
+        if !cfg!(feature = "cdp") {
+            return 0;
+        }
+        let want =
+            |m: RendererMode| -> bool { matches!(self.mode, RendererMode::Auto) || self.mode == m };
+        let mut n = 0;
+        if want(RendererMode::Lightpanda) && self.lightpanda.is_some() {
+            n += 1;
+        }
+        if want(RendererMode::Playwright) && self.playwright.is_some() {
+            n += 1;
+        }
+        if want(RendererMode::Chrome) && self.chrome.is_some() {
+            n += 1;
+        }
+        n
+    }
+
+    /// Minimum request deadline budget (ms) required so that every configured
+    /// tier can use its full allowance when fallback exhausts the chain.
+    /// Sums the per-tier timeouts and adds [`CDP_TIER_OVERHEAD_MS`] for each
+    /// active CDP tier, matching the runtime ladder built in
+    /// `crw-renderer/src/lib.rs`.
+    pub fn min_deadline_for_full_ladder_ms(&self) -> u64 {
+        let want =
+            |m: RendererMode| -> bool { matches!(self.mode, RendererMode::Auto) || self.mode == m };
+
+        let mut sum: u64 = 0;
+        // HTTP prefetch runs ahead of any JS tier (content-type sniffing,
+        // direct PDF/binary handling) regardless of pinned mode. Skipped only
+        // when mode is `None` (no fetching at all).
+        if !matches!(self.mode, RendererMode::None) {
+            sum = sum.saturating_add(self.http_timeout());
+        }
+
+        // CDP tiers only contribute when the binary was built with the `cdp`
+        // feature; otherwise no JS renderer is constructable at runtime and
+        // including their budgets would over-extend the deadline.
+        if !cfg!(feature = "cdp") {
+            return sum;
+        }
+
+        let mut cdp_tier_count: u64 = 0;
+        if want(RendererMode::Lightpanda) && self.lightpanda.is_some() {
+            sum = sum.saturating_add(self.lightpanda_timeout());
+            cdp_tier_count += 1;
+        }
+        if want(RendererMode::Playwright) && self.playwright.is_some() {
+            sum = sum.saturating_add(self.chrome_timeout());
+            cdp_tier_count += 1;
+        }
+        if want(RendererMode::Chrome) && self.chrome.is_some() {
+            sum = sum.saturating_add(self.chrome_timeout());
+            cdp_tier_count += 1;
+        }
+        sum.saturating_add(cdp_tier_count.saturating_mul(CDP_TIER_OVERHEAD_MS))
     }
 }
 fn default_pool_size() -> usize {
@@ -651,6 +753,109 @@ impl AppConfig {
             .build()?;
         cfg.try_deserialize()
     }
+
+    /// Compute the effective end-to-end request deadline (ms). Implements the
+    /// issue-#35 auto-extension policy:
+    ///
+    /// 1. If the caller supplied an explicit `requested_deadline_ms`, return it
+    ///    verbatim — operators trust the request budget over our heuristic.
+    /// 2. Otherwise, when `request.auto_extend_deadline_for_ladder` is on,
+    ///    return `max(deadline_ms_default, ladder_min + wait_for_extra)`.
+    ///    `ladder_min` covers the configured tier ladder; `wait_for_extra`
+    ///    compensates for callers that bumped `wait_for_ms` above the default
+    ///    SPA budget (8s) — without it, a long `wait_for` would silently
+    ///    re-clamp inside CDP.
+    /// 3. When the policy is disabled, return `deadline_ms_default` unchanged.
+    ///
+    /// `wait_for_ms` is the per-request override (ScrapeRequest::wait_for /
+    /// CrawlRequest::wait_for); pass `None` for sub-fetches that don't
+    /// surface a wait_for to the caller (search/map enrichment).
+    pub fn effective_deadline_ms(
+        &self,
+        requested_deadline_ms: Option<u64>,
+        wait_for_ms: Option<u64>,
+    ) -> u64 {
+        if let Some(explicit) = requested_deadline_ms {
+            return explicit;
+        }
+        let default_ms = self.request.deadline_ms_default;
+        if !self.request.auto_extend_deadline_for_ladder {
+            return default_ms;
+        }
+        // Issue #35 is specifically about CDP tier overhead silently clamping
+        // chrome_timeout_ms. HTTP-only deployments don't suffer the same
+        // problem (the HTTP renderer respects deadline.remaining without the
+        // extra fetch/challenge/stability overhead). Skip the extension when
+        // no CDP tiers are configured so HTTP-only users keep the strict
+        // operator-configured default.
+        if self.renderer.cdp_tier_count() == 0 {
+            return default_ms;
+        }
+        let ladder_min = self.renderer.min_deadline_for_full_ladder_ms();
+        // Mirrors crw_renderer::cdp::SPA_SELECTOR_MAX_MS. The CDP module
+        // adds `wait_for_ms.unwrap_or(SPA_SELECTOR_MAX_MS)` to its internal
+        // timeout, so when the caller exceeds the default we need to extend
+        // the deadline per active CDP tier.
+        const SPA_DEFAULT_MS: u64 = 8_000;
+        // Clamp `wait_for_ms` to MAX_WAIT_FOR_MS so the inner deadline never
+        // exceeds the Tower envelope, which is sized off the same constant in
+        // `effective_request_timeout_secs`. A pathological caller passing
+        // `wait_for: 600_000` without `deadlineMs` would otherwise be cancelled
+        // by Tower before the inner CDP loop noticed the bigger budget.
+        let extra = if let Some(w) = wait_for_ms {
+            let bounded = w.min(MAX_WAIT_FOR_MS);
+            let per_tier = bounded.saturating_sub(SPA_DEFAULT_MS);
+            per_tier.saturating_mul(self.renderer.cdp_tier_count() as u64)
+        } else {
+            0
+        };
+        default_ms.max(ladder_min.saturating_add(extra))
+    }
+
+    /// Tower middleware outer timeout (seconds). Must accommodate the longest
+    /// legitimate handler runtime so a healthy request isn't cancelled by the
+    /// outer layer before the inner deadline fires.
+    ///
+    /// Covers the three route envelopes:
+    /// - `/scrape`, `/mcp` — auto-extended scrape deadline.
+    /// - `/search` — SearXNG fetch + bounded enrichment fan-out
+    ///   (`ceil(max_limit / max_concurrency)` batches × scrape_ms).
+    /// - `/crawl/jobs/:id`, `/map` — handler-side caps up to 300s.
+    ///
+    /// When auto-extend is disabled, returns the operator-configured baseline
+    /// unchanged.
+    pub fn effective_request_timeout_secs(&self) -> u64 {
+        let baseline = self.server.request_timeout_secs;
+        if !self.request.auto_extend_deadline_for_ladder {
+            return baseline;
+        }
+        const OUTER_BUFFER_SECS: u64 = 5;
+        // `/map` handler caps `req.timeout.unwrap_or(120).min(300)`; the outer
+        // must cover the upper bound so callers passing `timeout=300` aren't
+        // cancelled mid-flight.
+        const MAP_REQUEST_TIMEOUT_CEILING_MS: u64 = 300_000;
+        // Cover the worst-case implicit scrape: caller bumps `wait_for` to the
+        // configured maximum without supplying `deadlineMs`. The same
+        // [`MAX_WAIT_FOR_MS`] constant is used inside `effective_deadline_ms`
+        // to clamp the inner extension, so the inner deadline can never
+        // exceed this outer envelope.
+        let scrape_ms = self.effective_deadline_ms(None, Some(MAX_WAIT_FOR_MS));
+
+        // Search enrichment: bounded by max_concurrency. Worst case sequential
+        // batching with low concurrency: ceil(max_limit / max_concurrency)
+        // batches each bounded by scrape_ms.
+        let conc = (self.crawler.max_concurrency.max(1)) as u64;
+        let max_results = self.search.max_limit as u64;
+        let enrich_batches = max_results.div_ceil(conc);
+        let search_enrichment_ms = enrich_batches.saturating_mul(scrape_ms);
+        let search_ms = self.search.timeout_ms.saturating_add(search_enrichment_ms);
+
+        let max_handler_ms = scrape_ms.max(search_ms).max(MAP_REQUEST_TIMEOUT_CEILING_MS);
+        let needed_secs = max_handler_ms
+            .div_ceil(1_000)
+            .saturating_add(OUTER_BUFFER_SECS);
+        baseline.max(needed_secs)
+    }
 }
 
 #[cfg(test)]
@@ -756,6 +961,243 @@ mod tests {
     fn request_config_defaults_match_plan() {
         let r = RequestConfig::default();
         assert_eq!(r.deadline_ms_default, 8000);
+        assert!(r.auto_extend_deadline_for_ladder);
+    }
+
+    #[test]
+    fn default_app_config_enables_auto_extend() {
+        // Programmatic Default must mirror serde defaults — issue #35.
+        let cfg = AppConfig::default();
+        assert!(cfg.request.auto_extend_deadline_for_ladder);
+        assert_eq!(cfg.request.deadline_ms_default, 8000);
+    }
+
+    fn renderer_with_chrome_only(chrome_ms: u64) -> RendererConfig {
+        RendererConfig {
+            mode: RendererMode::Chrome,
+            page_timeout_ms: chrome_ms,
+            chrome_timeout_ms: Some(chrome_ms),
+            chrome: Some(CdpEndpoint {
+                ws_url: "ws://chrome:9222".into(),
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "cdp")]
+    fn min_deadline_full_ladder_chrome_only() {
+        // chrome-only mode: http (page_timeout) + chrome + 1 * 28000.
+        let r = renderer_with_chrome_only(30_000);
+        // page_timeout_ms is set to chrome_ms here, so http_timeout() → 30s.
+        assert_eq!(
+            r.min_deadline_for_full_ladder_ms(),
+            30_000 + 30_000 + 28_000
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "cdp")]
+    fn min_deadline_full_ladder_auto_three_tiers() {
+        let r = RendererConfig {
+            mode: RendererMode::Auto,
+            page_timeout_ms: 15_000,
+            http_timeout_ms: Some(15_000),
+            lightpanda_timeout_ms: Some(2_500),
+            chrome_timeout_ms: Some(30_000),
+            lightpanda: Some(CdpEndpoint {
+                ws_url: "ws://lp:9222".into(),
+            }),
+            chrome: Some(CdpEndpoint {
+                ws_url: "ws://chrome:9222".into(),
+            }),
+            ..Default::default()
+        };
+        // http(15) + lp(2.5) + chrome(30) + 2*28 = 47.5 + 56 = 103_500.
+        assert_eq!(
+            r.min_deadline_for_full_ladder_ms(),
+            15_000 + 2_500 + 30_000 + 2 * 28_000
+        );
+        assert_eq!(r.cdp_tier_count(), 2);
+    }
+
+    #[test]
+    fn effective_deadline_explicit_bypasses_auto_extend() {
+        let mut cfg = AppConfig::default();
+        cfg.request.auto_extend_deadline_for_ladder = true;
+        cfg.renderer = renderer_with_chrome_only(30_000);
+        // Explicit override beats both default and ladder_min.
+        assert_eq!(cfg.effective_deadline_ms(Some(5_000), None), 5_000);
+        assert_eq!(cfg.effective_deadline_ms(Some(500_000), None), 500_000);
+    }
+
+    #[test]
+    #[cfg(feature = "cdp")]
+    fn effective_deadline_auto_extend_raises_to_ladder_min() {
+        let mut cfg = AppConfig::default();
+        cfg.request.auto_extend_deadline_for_ladder = true;
+        cfg.request.deadline_ms_default = 8_000;
+        cfg.renderer = renderer_with_chrome_only(30_000);
+        let expected = cfg.renderer.min_deadline_for_full_ladder_ms();
+        assert!(expected > 8_000);
+        assert_eq!(cfg.effective_deadline_ms(None, None), expected);
+    }
+
+    #[test]
+    fn effective_deadline_default_wins_when_higher_than_ladder() {
+        let mut cfg = AppConfig::default();
+        cfg.request.auto_extend_deadline_for_ladder = true;
+        cfg.request.deadline_ms_default = 1_000_000;
+        cfg.renderer = renderer_with_chrome_only(30_000);
+        assert_eq!(cfg.effective_deadline_ms(None, None), 1_000_000);
+    }
+
+    #[test]
+    fn effective_deadline_auto_extend_disabled_returns_baseline() {
+        let mut cfg = AppConfig::default();
+        cfg.request.auto_extend_deadline_for_ladder = false;
+        cfg.request.deadline_ms_default = 8_000;
+        cfg.renderer = renderer_with_chrome_only(30_000);
+        assert_eq!(cfg.effective_deadline_ms(None, None), 8_000);
+    }
+
+    #[test]
+    #[cfg(feature = "cdp")]
+    fn effective_deadline_extends_for_long_wait_for() {
+        let mut cfg = AppConfig::default();
+        cfg.request.auto_extend_deadline_for_ladder = true;
+        cfg.request.deadline_ms_default = 8_000;
+        cfg.renderer = renderer_with_chrome_only(30_000);
+        let base = cfg.renderer.min_deadline_for_full_ladder_ms();
+        let tier_count = cfg.renderer.cdp_tier_count() as u64;
+        // wait_for = 20000 → per-tier extra = 12000 over SPA_DEFAULT_MS (8000).
+        let with_wait = cfg.effective_deadline_ms(None, Some(20_000));
+        assert_eq!(with_wait, base + 12_000 * tier_count);
+        // wait_for below SPA default → no extra.
+        assert_eq!(cfg.effective_deadline_ms(None, Some(2_000)), base);
+    }
+
+    #[test]
+    fn effective_request_timeout_covers_map_ceiling() {
+        let mut cfg = AppConfig::default();
+        cfg.request.auto_extend_deadline_for_ladder = true;
+        cfg.request.deadline_ms_default = 8_000;
+        cfg.renderer = renderer_with_chrome_only(30_000);
+        cfg.search.timeout_ms = 15_000;
+        cfg.crawler.max_concurrency = 10;
+        cfg.search.max_limit = 20;
+        cfg.server.request_timeout_secs = 60;
+        // Map ceiling 300s + 5s buffer = 305s minimum.
+        assert!(cfg.effective_request_timeout_secs() >= 305);
+    }
+
+    #[test]
+    fn effective_request_timeout_disabled_returns_baseline() {
+        let mut cfg = AppConfig::default();
+        cfg.request.auto_extend_deadline_for_ladder = false;
+        cfg.server.request_timeout_secs = 60;
+        assert_eq!(cfg.effective_request_timeout_secs(), 60);
+    }
+
+    #[test]
+    fn effective_request_timeout_respects_operator_override() {
+        let mut cfg = AppConfig::default();
+        cfg.request.auto_extend_deadline_for_ladder = true;
+        cfg.server.request_timeout_secs = 600; // operator-configured high
+        cfg.renderer = renderer_with_chrome_only(30_000);
+        // Operator's explicit 600s should win over the auto-computed 305s.
+        assert_eq!(cfg.effective_request_timeout_secs(), 600);
+    }
+
+    #[test]
+    fn effective_request_timeout_search_sequential_batching() {
+        // Low concurrency forces ceil(max_limit/conc) batches → larger search_ms.
+        let mut cfg = AppConfig::default();
+        cfg.request.auto_extend_deadline_for_ladder = true;
+        cfg.request.deadline_ms_default = 8_000;
+        cfg.renderer = renderer_with_chrome_only(30_000);
+        cfg.search.timeout_ms = 15_000;
+        cfg.search.max_limit = 20;
+        cfg.crawler.max_concurrency = 1;
+        cfg.server.request_timeout_secs = 60;
+        // The Tower envelope must cover the worst-case implicit scrape with
+        // `wait_for` bumped to MAX_WAIT_FOR_MS (60s), because callers can do
+        // that without supplying `deadlineMs`. Mirror that in the expected.
+        let secs = cfg.effective_request_timeout_secs();
+        let scrape_ms = cfg.effective_deadline_ms(None, Some(60_000));
+        let expected_search_ms = 15_000 + 20 * scrape_ms;
+        let expected_max_ms = scrape_ms.max(expected_search_ms).max(300_000);
+        let expected_secs = expected_max_ms.div_ceil(1_000) + 5;
+        assert_eq!(secs, 60u64.max(expected_secs));
+    }
+
+    #[test]
+    #[cfg(not(feature = "cdp"))]
+    fn cdp_tier_count_zero_without_cdp_feature() {
+        // Even when chrome/lightpanda are configured, a binary built without
+        // the `cdp` feature can never construct a JS renderer. The deadline
+        // policy must observe that and collapse to HTTP-only behavior.
+        let r = RendererConfig {
+            mode: RendererMode::Auto,
+            page_timeout_ms: 15_000,
+            chrome_timeout_ms: Some(30_000),
+            chrome: Some(CdpEndpoint {
+                ws_url: "ws://chrome:9222".into(),
+            }),
+            lightpanda: Some(CdpEndpoint {
+                ws_url: "ws://lp:9222".into(),
+            }),
+            ..Default::default()
+        };
+        assert_eq!(r.cdp_tier_count(), 0);
+        // Only the HTTP tier contributes to the ladder budget.
+        assert_eq!(r.min_deadline_for_full_ladder_ms(), 15_000);
+    }
+
+    #[test]
+    fn effective_deadline_skipped_for_http_only_mode() {
+        // P2 from codex review: HTTP-only deployments don't suffer the CDP
+        // clamping problem (no fetch/challenge/stability overhead). The
+        // auto-extension must NOT silently bump their default from 8s to 30s
+        // just because page_timeout_ms defaults high.
+        let mut cfg = AppConfig::default();
+        cfg.request.auto_extend_deadline_for_ladder = true;
+        cfg.request.deadline_ms_default = 8_000;
+        cfg.renderer = RendererConfig {
+            mode: RendererMode::Auto,
+            page_timeout_ms: 30_000,
+            // No CDP endpoints configured.
+            lightpanda: None,
+            playwright: None,
+            chrome: None,
+            ..Default::default()
+        };
+        assert_eq!(cfg.renderer.cdp_tier_count(), 0);
+        assert_eq!(cfg.effective_deadline_ms(None, None), 8_000);
+        assert_eq!(cfg.effective_deadline_ms(None, Some(30_000)), 8_000);
+    }
+
+    #[test]
+    #[cfg(feature = "cdp")]
+    fn min_deadline_full_ladder_playwright_only() {
+        // Playwright tier contributes one chrome_timeout + one CDP overhead,
+        // matching the runtime predicate in `crw-renderer/src/lib.rs`.
+        let r = RendererConfig {
+            mode: RendererMode::Playwright,
+            page_timeout_ms: 15_000,
+            http_timeout_ms: Some(15_000),
+            chrome_timeout_ms: Some(30_000),
+            playwright: Some(CdpEndpoint {
+                ws_url: "ws://playwright:9222".into(),
+            }),
+            ..Default::default()
+        };
+        assert_eq!(r.cdp_tier_count(), 1);
+        // http(15) + chrome-equivalent(30) + 1 * 28 overhead.
+        assert_eq!(
+            r.min_deadline_for_full_ladder_ms(),
+            15_000 + 30_000 + 28_000
+        );
     }
 
     #[test]

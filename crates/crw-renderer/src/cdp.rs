@@ -17,22 +17,34 @@ use crate::traits::PageFetcher;
 const WS_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// Extra overhead budget for the overall fetch timeout (on top of page_timeout + wait_for).
 /// Covers WS connect, target create, navigate commit, snapshot eval, and cleanup.
-const FETCH_OVERHEAD: Duration = Duration::from_secs(5);
+pub const FETCH_OVERHEAD: Duration = Duration::from_secs(5);
 /// Timeout for the Target.closeTarget cleanup command.
 const TARGET_CLOSE_TIMEOUT: Duration = Duration::from_secs(5);
 /// Maximum number of challenge retry attempts.
-const CHALLENGE_MAX_RETRIES: u32 = 3;
+pub const CHALLENGE_MAX_RETRIES: u32 = 3;
 /// Delay between challenge retry polls (ms).
-const CHALLENGE_POLL_INTERVAL_MS: u64 = 3000;
+pub const CHALLENGE_POLL_INTERVAL_MS: u64 = 3000;
 /// Maximum time to poll for content stability when a loading placeholder
 /// is detected after the initial wait.
-const CONTENT_STABILITY_MAX_MS: u64 = 6000;
+pub const CONTENT_STABILITY_MAX_MS: u64 = 6000;
 /// Interval between content-stability polls.
 const CONTENT_STABILITY_TICK_MS: u64 = 500;
 /// Max time to poll for a content selector before giving up and proceeding
 /// with whatever HTML is currently rendered. Covers SPAs that hydrate after
 /// `loadEventFired` (njcourts.gov, in-n-out.com, hangzhou customs, apploi).
-const SPA_SELECTOR_MAX_MS: u64 = 8000;
+pub const SPA_SELECTOR_MAX_MS: u64 = 8000;
+
+/// Sum of per-tier CDP overhead in milliseconds — the difference between
+/// `internal_timeout` (set by [`fetch_with_deadline`]) and the configured
+/// per-tier `page_timeout`. Mirrored by `crw_core::config::CDP_TIER_OVERHEAD_MS`;
+/// drift between the two is regression-tested in
+/// `crates/crw-server/tests/cdp_constants_test.rs`.
+pub const fn cdp_tier_overhead_ms() -> u64 {
+    SPA_SELECTOR_MAX_MS
+        + (CHALLENGE_MAX_RETRIES as u64) * CHALLENGE_POLL_INTERVAL_MS
+        + CONTENT_STABILITY_MAX_MS
+        + (FETCH_OVERHEAD.as_millis() as u64)
+}
 /// Interval between SPA selector polls.
 const SPA_SELECTOR_TICK_MS: u64 = 200;
 /// Body innerText length required before the SPA poll exits. Selectors mount
@@ -999,8 +1011,26 @@ impl PageFetcher for CdpRenderer {
         let internal_timeout =
             self.page_timeout + wait_dur + challenge_budget + stability_budget + FETCH_OVERHEAD;
         // Clamp internal timeout against the caller's remaining budget so the
-        // CDP fetch never exceeds the end-to-end deadline.
-        let overall_timeout = internal_timeout.min(deadline.remaining());
+        // CDP fetch never exceeds the end-to-end deadline. Snapshot remaining
+        // once so the diagnostic log and the actual timeout can't disagree
+        // across consecutive monotonic reads.
+        let remaining = deadline.remaining();
+        let overall_timeout = if internal_timeout > remaining {
+            tracing::debug!(
+                renderer = %self.name,
+                internal_ms = internal_timeout.as_millis() as u64,
+                remaining_ms = remaining.as_millis() as u64,
+                "CDP outer timeout shrunk to fit remaining request deadline. \
+                 If the caller supplied an explicit `deadlineMs`, this clamp \
+                 is intentional — the request asked for a tighter cap. \
+                 Otherwise (issue #35) raise request.deadline_ms_default or \
+                 enable request.auto_extend_deadline_for_ladder so per-tier \
+                 timeouts get their full configured allowance."
+            );
+            remaining
+        } else {
+            internal_timeout
+        };
         if overall_timeout.is_zero() {
             // Caller's deadline is already past — surface how late we are so
             // the error reads "Timeout after Xms" instead of a useless 0.

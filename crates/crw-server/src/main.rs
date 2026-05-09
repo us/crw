@@ -89,6 +89,33 @@ async fn run_server() {
     if state.renderer.js_renderer_names().is_empty() {
         tracing::warn!("No CDP renderer active — JS rendering disabled");
     }
+
+    // Issue #35 transparency: when auto-extension widens the implicit deadline
+    // beyond the operator's `deadline_ms_default`, log the effective values so
+    // operators can correlate "request took longer than my SLO" against the
+    // ladder budget instead of suspecting a bug.
+    let baseline_default_ms = state.config.request.deadline_ms_default;
+    let ladder_min_ms = state.config.renderer.min_deadline_for_full_ladder_ms();
+    let effective_default_ms = state.config.effective_deadline_ms(None, None);
+    let baseline_outer_secs = state.config.server.request_timeout_secs;
+    let effective_outer_secs = state.config.effective_request_timeout_secs();
+    if state.config.request.auto_extend_deadline_for_ladder
+        && effective_default_ms > baseline_default_ms
+    {
+        tracing::info!(
+            deadline_ms_default = baseline_default_ms,
+            ladder_min_ms,
+            effective_default_ms,
+            outer_timeout_secs_baseline = baseline_outer_secs,
+            outer_timeout_secs_effective = effective_outer_secs,
+            "request.auto_extend_deadline_for_ladder is on; default request \
+             deadline auto-raised so the configured renderer ladder \
+             (http+lightpanda+chrome+overhead) can run uncrushed. Set \
+             request.auto_extend_deadline_for_ladder = false to enforce the \
+             baseline cap."
+        );
+    }
+
     let app = crw_server::app::create_app(state);
 
     let listener = match tokio::net::TcpListener::bind(&addr).await {

@@ -22,7 +22,11 @@ use crate::state::AppState;
 
 pub fn create_app(state: AppState) -> Router {
     let api_keys = Arc::new(state.config.auth.api_keys.clone());
-    let timeout = Duration::from_secs(state.config.server.request_timeout_secs);
+    // Tower outer timeout. `effective_request_timeout_secs()` widens the
+    // operator baseline so the longest legitimate handler runtime (auto-extended
+    // scrape, search enrichment fan-out, map's 300s ceiling) isn't cancelled
+    // by the outer layer before the inner deadline fires. See issue #35.
+    let timeout = Duration::from_secs(state.config.effective_request_timeout_secs());
     let rate_limit_rps = state.config.server.rate_limit_rps;
 
     let api_routes = Router::new()

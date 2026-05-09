@@ -34,7 +34,7 @@ pub async fn map(
         requests_per_second: state.config.crawler.requests_per_second,
         user_agent: &state.config.crawler.user_agent,
         proxy: state.config.crawler.proxy.clone(),
-        deadline_ms_per_page: state.config.request.deadline_ms_default,
+        deadline_ms_per_page: state.config.effective_deadline_ms(None, None),
         per_host_max_concurrent: state.config.crawler.per_host_max_concurrent,
         crawl_fallback: req.crawl_fallback,
     });

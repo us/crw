@@ -9,6 +9,15 @@ keywords.workspace = true
 categories.workspace = true
 description = "Core types, config, and error handling for the CRW web scraper"
 
+[features]
+# Mirrors the `cdp` feature of `crw-renderer` / `crw-server`. When the
+# downstream binary is built without CDP support, no JS renderers are
+# constructable and the ladder collapses to HTTP-only — the deadline
+# auto-extension policy (`AppConfig::effective_deadline_ms`) gates on this so
+# CDP-less builds keep their strict `deadline_ms_default`. The workspace
+# binary enables this transitively via `crw-renderer/cdp`.
+cdp = []
+
 [dependencies]
 crw-mcp-proto = { path = "../crw-mcp-proto", version = "0.6.1" }
 serde = { workspace = true }

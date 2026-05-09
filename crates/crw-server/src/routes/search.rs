@@ -197,7 +197,7 @@ async fn enrich_with_scrape(
         let default_stealth =
             state.config.crawler.stealth.enabled && state.config.crawler.stealth.inject_headers;
         let render_js_default = state.config.renderer.render_js_default;
-        let deadline_ms = state.config.request.deadline_ms_default;
+        let deadline_ms = state.config.effective_deadline_ms(None, None);
         let permit_src = semaphore.clone();
 
         set.spawn(async move {

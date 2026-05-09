@@ -9,6 +9,13 @@
 # deadline yields a 264kb response. 15s is the budget that recovers the
 # stragglers without ballooning p50 on healthy pages.
 deadline_ms_default = 15000
+# Issue #35: when an implicit request omits `deadlineMs`, auto-extend the
+# effective deadline to `max(deadline_ms_default, ladder_min)` where
+# ladder_min = sum(per-tier timeouts) + N_cdp_tiers * 28s. Prevents
+# `chrome_timeout_ms = 30000` from appearing inert when this default is
+# small. Set to false to enforce the strict 15s SLO regardless of tier
+# sizing — explicit per-request `deadlineMs` always wins either way.
+auto_extend_deadline_for_ladder = true
 
 [server]
 # Disable global rps cap for benchmark + production load — the bench fires

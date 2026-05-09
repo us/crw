@@ -1,8 +1,22 @@
 [server]
 host = "0.0.0.0"
 port = 3000
+# Tower outer timeout. Issue #35: when
+# `request.auto_extend_deadline_for_ladder = true` (default), this baseline is
+# auto-widened at startup to cover the longest legitimate handler runtime
+# (auto-extended scrape, search enrichment fan-out, map's 300s ceiling). Set
+# this above 305s only if you also raised request.deadline_ms_default beyond
+# the default ladder_min.
 request_timeout_secs = 120
 rate_limit_rps = 10              # Max requests/second (global). 0 = unlimited.
+
+# [request]
+# deadline_ms_default = 8000
+# auto_extend_deadline_for_ladder = true
+#   Issue #35: when an implicit request omits `deadlineMs`, auto-extend the
+#   effective deadline to max(deadline_ms_default, ladder_min). Prevents
+#   chrome_timeout_ms = 30000 from appearing inert when deadline_ms_default
+#   is small. Set to false to enforce a strict SLO regardless of tier sizing.
 
 [renderer]
 mode = "auto"                     # auto | lightpanda | playwright | chrome | none

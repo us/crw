@@ -32,8 +32,9 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
             let default_stealth =
                 state.config.crawler.stealth.enabled && state.config.crawler.stealth.inject_headers;
             let deadline = crw_core::Deadline::from_request_ms(
-                req.deadline_ms
-                    .unwrap_or(state.config.request.deadline_ms_default),
+                state
+                    .config
+                    .effective_deadline_ms(req.deadline_ms, req.wait_for),
             );
             let data = scrape_url(
                 &req,
@@ -86,7 +87,7 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
                 requests_per_second: state.config.crawler.requests_per_second,
                 user_agent: &state.config.crawler.user_agent,
                 proxy: state.config.crawler.proxy.clone(),
-                deadline_ms_per_page: state.config.request.deadline_ms_default,
+                deadline_ms_per_page: state.config.effective_deadline_ms(None, None),
                 per_host_max_concurrent: state.config.crawler.per_host_max_concurrent,
                 crawl_fallback: req.crawl_fallback,
             })

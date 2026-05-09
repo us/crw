@@ -11,7 +11,7 @@ description = "HTTP and CDP browser rendering engine for the CRW web scraper"
 
 [features]
 default = []
-cdp = ["tokio-tungstenite"]
+cdp = ["tokio-tungstenite", "crw-core/cdp"]
 auto-browser = ["dep:dirs"]
 
 [dependencies]

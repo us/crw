@@ -24,8 +24,9 @@ pub async fn scrape(
     let default_stealth =
         state.config.crawler.stealth.enabled && state.config.crawler.stealth.inject_headers;
     let deadline = Deadline::from_request_ms(
-        req.deadline_ms
-            .unwrap_or(state.config.request.deadline_ms_default),
+        state
+            .config
+            .effective_deadline_ms(req.deadline_ms, req.wait_for),
     );
     let data = scrape_url(
         &req,
