@@ -273,8 +273,9 @@ curl -X POST http://localhost:3000/v1/map \
 Search the web and get full page content from results. Self-hosted CRW
 ships with a SearXNG sidecar (started automatically by `docker compose up`),
 so search works out of the box — **no Tavily/Serper/Brave API key needed,
-$0/month**. Drop-in replacement for paid search APIs in your RAG / agent
-stack.
+$0/month**. Tavily-style endpoints with a 30-line migration adapter — see
+the [Tavily compatibility matrix](https://fastcrw.com/alternatives/tavily#compatibility-matrix)
+for the field-by-field diff.
 
 ```python
 from crw import CrwClient
