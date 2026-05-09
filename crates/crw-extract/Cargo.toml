@@ -19,6 +19,9 @@ crw-pdf = { workspace = true, optional = true }
 lol_html = { workspace = true }
 scraper = { workspace = true }
 htmd = { workspace = true }
+ego-tree = { workspace = true }
+xxhash-rust = { workspace = true }
+once_cell = { workspace = true }
 regex = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }

@@ -51,6 +51,7 @@ pub fn extract_pdf(
             render_decision: None,
             credit_cost: 0,
             metadata,
+            debug_extraction: None,
         });
     }
     let result = crw_pdf::process_pdf_mem(bytes)
@@ -102,5 +103,6 @@ pub fn extract_pdf(
         render_decision: None,
         credit_cost: 0,
         metadata,
+        debug_extraction: None,
     })
 }

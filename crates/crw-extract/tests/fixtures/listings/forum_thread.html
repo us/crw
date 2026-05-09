@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head><title>Hacker News - Why Rust is winning</title></head>
+<body>
+<main>
+<div class="thread">
+  <article class="post">
+    <header><a href="/u/alice">alice</a> · 4h</header>
+    <p>I have been writing Rust professionally for about three years now after a decade of mostly C++ and Python. The thing that keeps surprising me is how the borrow checker turned out to be far less of an obstacle than I had expected coming in. Once you internalize ownership, most of the apparent friction disappears, and the compiler errors become genuinely helpful rather than punitive.</p>
+  </article>
+  <article class="post">
+    <header><a href="/u/bob">bob</a> · 3h</header>
+    <p>Counterpoint: I tried Rust on a non-trivial systems project and bounced off it twice before sticking with it. The learning curve is real, even for experienced developers. I think the community sometimes undersells how much of an investment it takes to become productive. That said, once you do internalize the model, the productivity is real and the resulting code quality is genuinely better than what I was shipping in C++.</p>
+  </article>
+  <article class="post">
+    <header><a href="/u/carol">carol</a> · 2h</header>
+    <p>The async story is what finally won me over. Tokio plus the structured concurrency primitives that have shipped in the last couple years make writing correct concurrent code dramatically easier than equivalent code in Go or Python. I have noticed that newcomers tend to fight async Rust for a few weeks before it clicks, but after that point the leverage is enormous and you start to see why people are so enthusiastic.</p>
+  </article>
+  <article class="post">
+    <header><a href="/u/dave">dave</a> · 1h</header>
+    <p>What is missing from this discussion is GUI. The desktop application story is still notably worse than what you can get from Swift, Kotlin, or even Electron. There are projects making real progress, but for cross-platform apps with serious design ambitions, the toolchain just is not there yet. I would love to be wrong about this.</p>
+  </article>
+  <article class="post">
+    <header><a href="/u/erin">erin</a> · 30m</header>
+    <p>I think GUI is the next frontier. Once we have a mature, batteries-included framework that competes with SwiftUI on developer experience, the language will reach a different tier of adoption entirely. The pieces are coming together; the question is just timeline. My guess is we are still two to three years away from anything I would recommend for a production consumer app, but the trajectory is clearly positive.</p>
+  </article>
+</div>
+</main>
+</body></html>

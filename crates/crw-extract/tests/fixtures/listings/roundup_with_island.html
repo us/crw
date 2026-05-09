@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en"><head><title>The 5 best Rust web frameworks in 2026</title></head>
+<body>
+<main>
+<article id="roundup">
+<h1>The 5 best Rust web frameworks in 2026</h1>
+<p class="intro">After spending the last six months building production services on top of every major Rust web framework, I have come to some strong opinions about which ones are worth recommending and which ones to avoid. The ecosystem has matured enormously over the last two years, but there is still significant variation in developer experience, ergonomics, and long-term maintainability across the available options. This article distills my findings into a practical buyer's guide for teams choosing a framework today, with concrete trade-offs and use-case recommendations rather than hand-wavy praise. The goal is to save you the months of evaluation work that I went through and to highlight the genuinely surprising results that I did not expect going in.</p>
+<div class="card-grid">
+  <article class="card"><a href="/p/axum"><h3>Axum: the safe default</h3></a><p class="meta">8 min read</p></article>
+  <article class="card"><a href="/p/actix"><h3>Actix-web: legacy choice with rough edges</h3></a><p class="meta">7 min read</p></article>
+  <article class="card"><a href="/p/rocket"><h3>Rocket: ergonomic but slower</h3></a><p class="meta">6 min read</p></article>
+  <article class="card"><a href="/p/poem"><h3>Poem: the dark horse</h3></a><p class="meta">5 min read</p></article>
+  <article class="card"><a href="/p/loco"><h3>Loco: Rails for Rust</h3></a><p class="meta">9 min read</p></article>
+  <article class="card"><a href="/p/salvo"><h3>Salvo: feature-rich newcomer</h3></a><p class="meta">7 min read</p></article>
+  <article class="card"><a href="/p/warp"><h3>Warp: filters all the way down</h3></a><p class="meta">8 min read</p></article>
+</div>
+<p class="closing">My ultimate recommendation for most teams in 2026 is Axum, primarily because of its tight integration with the Tokio ecosystem and the surprisingly small number of breaking changes since version 0.7 stabilized. If you are migrating from a Python or Node.js background, the conceptual overhead is the lowest of any of the options I evaluated. For teams that explicitly want a Rails-style batteries-included experience, Loco is genuinely impressive but still has some rough edges around database migrations and asset compilation that you should be aware of going in.</p>
+</article>
+</main>
+</body></html>

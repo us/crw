@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><head><title>API Reference - Some Library</title></head>
+<body>
+<aside class="toc">
+<h2>Contents</h2>
+<ul>
+  <li><a href="#intro">Introduction</a></li>
+  <li><a href="#install">Installation</a></li>
+  <li><a href="#quickstart">Quickstart</a></li>
+  <li><a href="#api">API reference</a></li>
+  <li><a href="#examples">Examples</a></li>
+  <li><a href="#faq">FAQ</a></li>
+  <li><a href="#changelog">Changelog</a></li>
+  <li><a href="#contrib">Contributing</a></li>
+</ul>
+</aside>
+<main role="main">
+<article>
+<h1 id="intro">Introduction</h1>
+<p>This library provides a comprehensive toolkit for working with structured data pipelines. It builds on top of established standards like Apache Arrow and Parquet to deliver high-throughput, low-latency data processing for analytical workloads. The design philosophy emphasizes composability, type safety, and minimal runtime overhead while remaining accessible to users coming from pandas or NumPy backgrounds.</p>
+<h2 id="install">Installation</h2>
+<p>Install the library using pip from the official PyPI repository. The package supports Python 3.9 through 3.12 on Linux, macOS, and Windows. For optimal performance on large datasets, we recommend installing the optional acceleration extras which include native SIMD-optimized routines and parallel execution backends. Source builds from GitHub require a recent Rust toolchain and CMake for the C++ extensions used by the columnar storage layer.</p>
+<h2 id="quickstart">Quickstart</h2>
+<p>The simplest way to get started is to load a sample dataset and perform a few common operations. Below is a complete example demonstrating CSV ingestion, schema inference, basic filtering, and aggregation. Each step is intentionally explicit so you can see how the high-level API maps to lower-level primitives. After working through this example you will have a clear understanding of the data model and how to extend it for your own use cases.</p>
+</article>
+</main>
+</body></html>

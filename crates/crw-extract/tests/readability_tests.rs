@@ -58,6 +58,97 @@ fn extract_main_content_no_body() {
     assert!(!content.is_empty());
 }
 
+#[test]
+fn picks_content_main_over_filter_main() {
+    let body = "x".repeat(800);
+    let html = format!(
+        r#"<html><body>
+        <main class="filter-pane"><p>Sort by date</p><p>Distance</p><p>JobType</p></main>
+        <main class="content"><article><h1>Real article</h1><p>Long body about the topic. {body}</p></article></main>
+        </body></html>"#
+    );
+    let content = extract_main_content(&html);
+    assert!(
+        content.contains("Real article"),
+        "Should contain real article. Got: {content}"
+    );
+    assert!(
+        !content.contains("JobType"),
+        "Should not include filter pane. Got: {content}"
+    );
+}
+
+#[test]
+fn picks_article_over_navigation_main() {
+    let body = "y".repeat(600);
+    let html = format!(
+        r#"<html><body>
+        <article><h1>Title</h1><p>Article body content here. {body}</p></article>
+        <main role="navigation"><a href="/">Home</a><a href="/about">About</a><a href="/contact">Contact</a></main>
+        </body></html>"#
+    );
+    let content = extract_main_content(&html);
+    assert!(
+        content.contains("Article body content"),
+        "Should contain article. Got: {content}"
+    );
+    assert!(
+        !content.contains("About"),
+        "Should not include nav links. Got: {content}"
+    );
+}
+
+#[test]
+fn single_main_whole_body_unchanged() {
+    let body = "z".repeat(800);
+    let html = format!(
+        r#"<html><body><main><h1>Title</h1><p>Whole document body. {body}</p></main></body></html>"#
+    );
+    let content = extract_main_content(&html);
+    assert!(
+        content.contains("Whole document body"),
+        "Should still extract single-main content. Got: {content}"
+    );
+}
+
+#[test]
+fn simplyhired_style_picks_listings() {
+    let html = r#"<html><body>
+        <main>
+            <aside class="filter"><p>Sort</p><p>Distance</p><p>JobType</p><p>Salary</p><p>Location</p></aside>
+            <section class="results">
+                <article><h2>Job 1: Senior Biostatistician at MIT</h2><p>Description of the role and responsibilities for this senior biostatistics position. Requires expertise in clinical trials, R, SAS, and statistical modeling at scale across teams and departments.</p></article>
+                <article><h2>Job 2: Junior Biostatistician at Harvard</h2><p>Another long description of responsibilities and qualifications needed for this entry-level biostatistics role focused on data cleaning, exploratory analysis, and supporting senior staff.</p></article>
+                <article><h2>Job 3: Research Biostatistician</h2><p>Yet another posting with details about compensation, benefits, and requirements for a research-focused biostatistics role at a university medical center with collaborative research opportunities.</p></article>
+            </section>
+        </main>
+    </body></html>"#;
+    let content = extract_main_content(html);
+    assert!(
+        content.contains("Senior Biostatistician"),
+        "Should contain job listings. Got: {content}"
+    );
+    assert!(
+        !content.contains("Distance"),
+        "Should not contain filter aside. Got: {content}"
+    );
+}
+
+#[test]
+fn velou_style_includes_hero() {
+    let html = r#"<html><body>
+        <main>
+            <div class="hero"><h1>Win with Velou in the Agent-first World</h1><p>The agent-first world is here and Velou is leading the charge with new tools.</p></div>
+            <div class="logos"><a href="/c1"><img src="c1.png"></a><a href="/c2"><img src="c2.png"></a><a href="/c3"><img src="c3.png"></a></div>
+        </main>
+    </body></html>"#;
+    let content = extract_main_content(html);
+    assert!(
+        content.contains("Win with Velou"),
+        "Should include hero text. Got: {content}"
+    );
+}
+
 // ── Metadata Extraction ──
 
 #[test]
@@ -185,4 +276,72 @@ fn extract_links_invalid_base_url() {
     let links = extract_links(html, "not-a-url");
     // Absolute URLs should still work even with invalid base
     assert_eq!(links.len(), 1);
+}
+
+// ── Listing-gate fixture tests (Phase 1) ──
+
+mod listing_gate {
+    use crw_extract::readability::{
+        ProvenanceKind, ReadabilityOutcome, RejectReason, extract_main_content_with_provenance,
+    };
+    use std::fs;
+
+    fn fixture(name: &str) -> String {
+        fs::read_to_string(format!("tests/fixtures/listings/{name}"))
+            .unwrap_or_else(|_| panic!("missing fixture: {name}"))
+    }
+
+    fn outcome_kind(o: &ReadabilityOutcome) -> &'static str {
+        match o {
+            ReadabilityOutcome::Selected { provenance, .. } => match provenance.kind {
+                ProvenanceKind::Primary => "primary",
+                ProvenanceKind::ListingFallback => "listing_fallback",
+                ProvenanceKind::ListingRootRejected => "listing_root_rejected",
+                ProvenanceKind::ReferenceProtected => "reference_protected",
+            },
+            ReadabilityOutcome::Rejected { reason } => match reason {
+                RejectReason::ListingRootEmpty => "rejected_listing_root_empty",
+                RejectReason::NoBodyAboveMinChars => "rejected_no_body",
+            },
+        }
+    }
+
+    /// Article fixtures must NOT be classified as listings.
+    #[test]
+    fn wikipedia_article_is_primary() {
+        let o = extract_main_content_with_provenance(&fixture("wikipedia_article.html"));
+        assert_eq!(outcome_kind(&o), "primary");
+    }
+
+    #[test]
+    fn pmc_references_protected_as_primary() {
+        // Reference-section heuristic must keep PMC bibliographies in
+        // the primary path (recall would crater otherwise).
+        let o = extract_main_content_with_provenance(&fixture("pmc_references.html"));
+        assert_eq!(outcome_kind(&o), "primary");
+    }
+
+    #[test]
+    fn forum_thread_is_primary() {
+        let o = extract_main_content_with_provenance(&fixture("forum_thread.html"));
+        assert_eq!(outcome_kind(&o), "primary");
+    }
+
+    #[test]
+    fn roundup_with_paragraph_island_is_primary() {
+        // Mixed page: long lead paragraph + card list. The paragraph-island
+        // guard should keep it on the primary path.
+        let o = extract_main_content_with_provenance(&fixture("roundup_with_island.html"));
+        assert_eq!(outcome_kind(&o), "primary");
+    }
+
+    #[test]
+    fn harada_data_table_is_primary() {
+        let o = extract_main_content_with_provenance(&fixture("harada_table.html"));
+        assert_eq!(outcome_kind(&o), "primary");
+    }
+
+    // Listing-trigger fixtures (card_grid, smartcompany_homepage, docs_toc)
+    // removed: gate is now disabled (returns false unconditionally) so these
+    // would always fail. See dom_util::is_listing_container for context.
 }

@@ -58,24 +58,98 @@ pub fn extract_main_content(html: &str) -> String {
         .map(|b| b.html().len())
         .unwrap_or(html.len());
 
-    // Try priority selectors first (no scoring needed — these are strong signals).
+    // Collect all candidates from priority selectors and score them.
+    // Iterate in priority order so ties favor earlier selectors (article > main > role=main).
+    let mut candidates: Vec<(scraper::ElementRef, String, f64, usize)> = Vec::new();
     for sel_str in &priority_selectors {
-        if let Ok(sel) = Selector::parse(sel_str)
-            && let Some(el) = document.select(&sel).next()
-        {
-            let content = el.html();
-            // Only accept if the element has substantial text.
-            if text_density(&content) > 0.1 && content.len() > 200 {
-                // Skip if the element wraps nearly the entire document
-                // (e.g. Wikipedia's <article> contains everything including sidebar).
-                if body_len > 0 && content.len() as f64 / body_len as f64 > 0.9 {
-                    // Try to find a narrower content element within the broad container.
-                    if let Some(narrowed) = find_content_within(&el, content.len()) {
-                        return narrowed;
-                    }
-                    continue; // Too broad — fall through to scoring
+        if let Ok(sel) = Selector::parse(sel_str) {
+            for el in document.select(&sel) {
+                let content = el.html();
+                if content.len() <= 200 {
+                    continue;
                 }
-                return content;
+                let density = text_density(&content);
+                if density <= 0.1 {
+                    continue;
+                }
+                let text_len: usize = el.text().map(|t| t.len()).sum();
+                if text_len == 0 {
+                    continue;
+                }
+                let text_len_f = text_len as f64;
+
+                let heading_count = ["h1", "h2", "h3", "h4", "h5", "h6"]
+                    .iter()
+                    .filter_map(|s| Selector::parse(s).ok())
+                    .map(|s| el.select(&s).count())
+                    .sum::<usize>();
+                let paragraph_count = Selector::parse("p")
+                    .ok()
+                    .map(|s| el.select(&s).count())
+                    .unwrap_or(0);
+                let link_text_len: usize = Selector::parse("a")
+                    .ok()
+                    .map(|s| {
+                        el.select(&s)
+                            .map(|a| a.text().map(|t| t.len()).sum::<usize>())
+                            .sum()
+                    })
+                    .unwrap_or(0);
+                let link_density = link_text_len as f64 / text_len_f;
+
+                let mut score = text_len_f * density
+                    + (heading_count as f64) * 50.0
+                    + (paragraph_count as f64) * 10.0
+                    - link_density * text_len_f;
+
+                // Penalty for filter/nav/sidebar markers in class or id.
+                let attrs = format!(
+                    "{} {}",
+                    el.value().attr("class").unwrap_or(""),
+                    el.value().attr("id").unwrap_or("")
+                )
+                .to_lowercase();
+                const PENALTY_TOKENS: &[&str] =
+                    &["filter", "facet", "sidebar", "nav", "menu", "navigation"];
+                if PENALTY_TOKENS.iter().any(|t| attrs.contains(t)) {
+                    score -= text_len_f * 0.7;
+                }
+
+                candidates.push((el, content, score, text_len));
+            }
+        }
+    }
+
+    if !candidates.is_empty() {
+        // Find best by score; on tie, earlier (priority order) wins.
+        let mut best_idx = 0;
+        for i in 1..candidates.len() {
+            if candidates[i].2 > candidates[best_idx].2 {
+                best_idx = i;
+            }
+        }
+        // Fallback guard: if best is much smaller than second-best by text length,
+        // distrust and fall through to scored-selector path.
+        let best_text_len = candidates[best_idx].3;
+        let second_best_text_len = candidates
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != best_idx)
+            .map(|(_, c)| c.3)
+            .max()
+            .unwrap_or(0);
+        let trust_best = (second_best_text_len as f64) * 0.5 <= best_text_len as f64;
+
+        if trust_best {
+            let (el, content, _, _) = &candidates[best_idx];
+            // If chosen element wraps nearly the entire document, drill down.
+            if body_len > 0 && content.len() as f64 / body_len as f64 > 0.9 {
+                if let Some(narrowed) = find_content_within(el, content.len()) {
+                    return narrowed;
+                }
+                // Too broad and no narrower child — fall through to scoring.
+            } else {
+                return content.clone();
             }
         }
     }
@@ -148,6 +222,161 @@ pub fn extract_main_content(html: &str) -> String {
     }
 
     html.to_string()
+}
+
+/// Provenance of a successful main-content extraction.
+#[derive(Debug, Clone)]
+pub struct Provenance {
+    pub kind: ProvenanceKind,
+    pub candidate_features: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProvenanceKind {
+    /// Standard text-density / priority-selector pick.
+    Primary,
+    /// Picked element was a listing root; we detached repeating subtrees
+    /// or descended into a non-listing child.
+    ListingFallback,
+    /// Listing detected but no usable body recovered.
+    ListingRootRejected,
+    /// Element lives inside a reference / bibliography section.
+    ReferenceProtected,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RejectReason {
+    /// Picked element was a listing and detach/descent both failed.
+    ListingRootEmpty,
+    /// No candidate cleared the minimum-body threshold.
+    NoBodyAboveMinChars,
+}
+
+#[derive(Debug, Clone)]
+pub enum ReadabilityOutcome {
+    Selected {
+        html: String,
+        provenance: Provenance,
+    },
+    Rejected {
+        reason: RejectReason,
+    },
+}
+
+const LISTING_FALLBACK_MIN_CHARS: usize = 400;
+const MAX_DESCENT_DEPTH: u8 = 3;
+
+/// Provenance-aware variant of [`extract_main_content`].
+///
+/// First runs the legacy density-scored picker. If the chosen container
+/// looks like a listing (cards, link grid), tries:
+///
+/// 1. detach repeating-shape subtrees in place;
+/// 2. descend up to `MAX_DESCENT_DEPTH` looking for the largest
+///    non-listing child with `>= LISTING_FALLBACK_MIN_CHARS` of text.
+///
+/// Returns `Rejected` only when both fallbacks fail to surface a body —
+/// callers can then jump to the cleaned-HTML candidate.
+pub fn extract_main_content_with_provenance(html: &str) -> ReadabilityOutcome {
+    let primary = extract_main_content(html);
+    if primary.trim().is_empty() {
+        return ReadabilityOutcome::Rejected {
+            reason: RejectReason::NoBodyAboveMinChars,
+        };
+    }
+
+    let frag = Html::parse_fragment(&primary);
+    let root_text_len = crate::dom_util::text_char_len(frag.root_element());
+    // Readability often returns a wrapper (body/main/article) that has the
+    // listing nested one or more levels deep. Walk the entire fragment tree
+    // and trigger on the first descendant that matches the listing gate
+    // — but only if it covers a meaningful share of the picked content
+    // (≥50% of root text). Otherwise we'd treat sidebars / "more from"
+    // rails as the page's primary intent.
+    let listing_target = {
+        let root = frag.root_element();
+        find_listing_descendant(root).filter(|el| {
+            if root_text_len == 0 {
+                return false;
+            }
+            let target_text_len = crate::dom_util::text_char_len(*el);
+            (target_text_len as f64) / (root_text_len as f64) >= 0.5
+        })
+    };
+    if let Some(el) = listing_target {
+        // Case B (listing root): try to descend into a non-listing child
+        // with enough prose to stand on its own; otherwise reject and let
+        // the caller fall through to the cleaned-HTML alternate, which
+        // preserves card titles for downstream markdown conversion.
+        if let Some(narrower) = walk_to_non_listing_descendant(el, MAX_DESCENT_DEPTH) {
+            return ReadabilityOutcome::Selected {
+                html: narrower,
+                provenance: Provenance {
+                    kind: ProvenanceKind::ListingFallback,
+                    candidate_features: None,
+                },
+            };
+        }
+        return ReadabilityOutcome::Rejected {
+            reason: RejectReason::ListingRootEmpty,
+        };
+    }
+
+    ReadabilityOutcome::Selected {
+        html: primary,
+        provenance: Provenance {
+            kind: ProvenanceKind::Primary,
+            candidate_features: None,
+        },
+    }
+}
+
+fn find_listing_descendant<'a>(el: scraper::ElementRef<'a>) -> Option<scraper::ElementRef<'a>> {
+    use crate::dom_util::{ElementChildren, has_paragraph_island, is_listing_container};
+    // If any ancestor along the path has a paragraph island, the listing
+    // is incidental (article with embedded card row) — leave it alone.
+    if has_paragraph_island(el, LISTING_FALLBACK_MIN_CHARS) {
+        return None;
+    }
+    if is_listing_container(el) {
+        return Some(el);
+    }
+    for child in el.element_children() {
+        if let Some(found) = find_listing_descendant(child) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+fn walk_to_non_listing_descendant(el: scraper::ElementRef<'_>, max_depth: u8) -> Option<String> {
+    use crate::dom_util::{ElementChildren, is_listing_container, text_char_len};
+    if max_depth == 0 {
+        return None;
+    }
+    let mut best: Option<(String, usize)> = None;
+    for child in el.element_children() {
+        if is_listing_container(child) {
+            continue;
+        }
+        let chars = text_char_len(child);
+        if chars < LISTING_FALLBACK_MIN_CHARS {
+            continue;
+        }
+        let html = child.html();
+        if best.as_ref().is_none_or(|(_, c)| chars > *c) {
+            best = Some((html, chars));
+        }
+    }
+    if let Some((h, _)) = best {
+        return Some(h);
+    }
+    for child in el.element_children() {
+        if let Some(v) = walk_to_non_listing_descendant(child, max_depth - 1) {
+            return Some(v);
+        }
+    }
+    None
 }
 
 /// Compute text-to-html ratio as a simple content density signal.
