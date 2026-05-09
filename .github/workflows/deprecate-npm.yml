@@ -1,0 +1,41 @@
+name: Deprecate npm version
+
+# One-shot manual workflow to mark a published npm version (and its 6 platform
+# packages) as deprecated. Use when a release shipped with broken metadata —
+# crw-mcp@0.6.0 had optionalDependencies pinned to 0.3.5, so its install would
+# pull old binaries. Versions on npm are immutable; deprecation is the only
+# safe signal.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to deprecate (e.g. 0.6.0)"
+        required: true
+      reason:
+        description: "Deprecation message"
+        required: true
+        default: "Broken optionalDependencies pin; use a newer version."
+
+permissions:
+  contents: read
+
+jobs:
+  deprecate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Deprecate
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          bash scripts/release/deprecate_npm_versions.sh \
+            "${{ inputs.version }}" \
+            "${{ inputs.reason }}"
