@@ -2,6 +2,25 @@
 
 All notable changes to CRW are documented here.
 
+## [0.6.2](https://github.com/us/crw/compare/v0.6.1...v0.6.2) (2026-05-10)
+
+
+### Features
+
+* **search:** add /v1/search endpoint backed by bundled SearXNG sidecar ([f4bd7f4](https://github.com/us/crw/commit/f4bd7f46db9f286e3c49be95a968951802a90710))
+
+
+### Bug Fixes
+
+* **antibot:** drop bare 'captcha'/'access denied' markers — false positives ([fae6c09](https://github.com/us/crw/commit/fae6c09537cf286bfb08cb9ebefab0c723c4160f))
+* **crawl:** drop redundant `.into_iter()` for clippy 1.95 ([#39](https://github.com/us/crw/issues/39)) ([fb4032b](https://github.com/us/crw/commit/fb4032b86a5c0095e7e69b198ac2017aa7003000))
+* **map:** WordPress sitemap-index timeout (closes [#33](https://github.com/us/crw/issues/33)) ([c3dfd6c](https://github.com/us/crw/commit/c3dfd6c66ff6bdbbaf3d2ce1646dbb9d7ac6dd5a))
+* **release:** register crw-search crate in release manifest ([9074761](https://github.com/us/crw/commit/907476163c69c5fd8e421e5063686a750c10ce24))
+* **search:** codex iteration-1 hardening — error mapping, resource bounds, container ([5acba7b](https://github.com/us/crw/commit/5acba7bbf1be2cc147e5c25ad9fca80e9bce757d))
+* **search:** codex iteration-2 — error-body cap, per-source row budget, doc ([a440d6e](https://github.com/us/crw/commit/a440d6e4ae3b6ac0dc8decdead3efe04ad33bc43))
+* **search:** codex iteration-3 — predicate-based well-formed filter ([4b4df3a](https://github.com/us/crw/commit/4b4df3a521cba31cd2a82f2d3595d726cb4b2c16))
+* **search:** use real SearXNG image tag and add fallback secret_key ([be1f403](https://github.com/us/crw/commit/be1f403648d352bc68037b0c5ba208729b96d1fa))
+
 ## [0.6.1](https://github.com/us/crw/compare/v0.6.0...v0.6.1) (2026-05-09)
 
 
