@@ -286,7 +286,7 @@ pub async fn fetch_sitemap_tree(
         }
         total_fetched += batch.len();
 
-        let results: Vec<(String, SitemapResult)> = stream::iter(batch.into_iter())
+        let results: Vec<(String, SitemapResult)> = stream::iter(batch)
             .map(|u| {
                 let client = client.clone();
                 async move {
