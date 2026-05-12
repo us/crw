@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.7.0](https://github.com/us/crw/compare/v0.6.4...v0.7.0) (2026-05-12)
+
+
+### Features
+
+* LLM summary and search answer (BYOK) ([#45](https://github.com/us/crw/issues/45)) ([ffcc2a5](https://github.com/us/crw/commit/ffcc2a52cd273dc334dd46b663be24fd45df4711))
+
 ## [0.6.4](https://github.com/us/crw/compare/v0.6.3...v0.6.4) (2026-05-12)
 
 
