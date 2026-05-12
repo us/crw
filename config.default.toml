@@ -110,12 +110,30 @@ always_run = false
 [auth]
 # api_keys = ["fc-key-1234"]
 
+# LLM configuration — powers both:
+#   1. structured JSON extraction (formats: ["json"] with jsonSchema)
+#   2. summary generation (formats: ["summary"])  ← user-facing AI feature
+#   3. search answer synthesis (/v1/search with answer: true)
+#
+# Uncomment a block below and set api_key (or CRW_EXTRACTION__LLM__API_KEY env)
+# to enable. Without this, `formats: ["summary"]` and answer/summarizeResults
+# return HTTP 400 with a clear error pointing back here.
+#
 # [extraction.llm]
-# provider = "anthropic"        # "anthropic" | "openai" | "azure"
+# provider = "anthropic"        # "anthropic" | "openai" | "deepseek" | "azure"
 # api_key = "sk-..."            # or use CRW_EXTRACTION__LLM__API_KEY env var
 # model = "claude-sonnet-4-20250514"
 # max_tokens = 4096
 # base_url = "https://custom-endpoint.example.com"  # optional, for OpenAI-compatible APIs
+# max_concurrency = 4           # bound for per-result search-summary fan-out
+# max_html_bytes = 100000       # truncate content past this before sending
+# require_byok_header = ""      # SaaS-only: header name that must be set on LLM-touching requests
+#
+# DeepSeek example (OpenAI-compatible):
+#   provider = "deepseek"                     # or "openai" — dispatched the same way
+#   api_key = "..."
+#   model = "deepseek-chat"
+#   base_url = "https://api.deepseek.com/v1"
 #
 # Azure OpenAI example:
 #   provider = "azure"

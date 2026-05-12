@@ -1,4 +1,5 @@
 pub mod breakers;
+pub mod capabilities;
 pub mod crawl;
 pub mod health;
 pub mod map;

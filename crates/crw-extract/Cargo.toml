@@ -29,3 +29,10 @@ jsonschema = "0.28"
 sxd-xpath = "0.4"
 sxd-document = "0.3"
 sxd_html = "0.1"
+phf = { workspace = true }
+futures = { workspace = true }
+rand = { workspace = true }
+
+[dev-dependencies]
+wiremock = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

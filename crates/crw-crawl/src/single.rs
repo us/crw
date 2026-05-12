@@ -377,24 +377,11 @@ pub async fn scrape_url(
         .as_ref()
         .or_else(|| req.extract.as_ref().and_then(|e| e.schema.as_ref()));
 
-    if formats_include_json(&req.formats) {
-        // Merge per-request LLM config (BYOK) with server config
-        let byok_config = req.llm_api_key.as_ref().map(|key| LlmConfig {
-            api_key: key.clone(),
-            provider: req
-                .llm_provider
-                .clone()
-                .unwrap_or_else(|| "anthropic".into()),
-            model: req
-                .llm_model
-                .clone()
-                .unwrap_or_else(|| "claude-sonnet-4-20250514".into()),
-            base_url: None,
-            max_tokens: 4096,
-            azure_api_version: None,
-        });
-        let effective_llm = byok_config.as_ref().or(llm_config);
+    // Build BYOK LlmConfig once; reused by structured JSON + summary paths.
+    let byok_config = build_byok_llm_config(req, llm_config);
+    let effective_llm = byok_config.as_ref().or(llm_config);
 
+    if formats_include_json(&req.formats) {
         if let (Some(schema), Some(llm)) = (effective_schema, effective_llm) {
             let md = data.markdown.as_deref().unwrap_or("");
             match crw_extract::structured::extract_structured(md, schema, llm).await {
@@ -412,6 +399,38 @@ pub async fn scrape_url(
             return Err(crw_core::error::CrwError::InvalidRequest(
                 "Structured extraction (formats: json/extract) requires a 'jsonSchema' field. Provide a JSON Schema object.".into()
             ));
+        }
+    }
+
+    if formats_include_summary(&req.formats) {
+        let Some(llm) = effective_llm else {
+            return Err(crw_core::error::CrwError::ExtractionError(
+                "Summary format requires an LLM config. Either set [extraction.llm] in server config, or pass 'llmApiKey' in the request body.".into()
+            ));
+        };
+        // Markdown is computed internally even if not in `formats`; if the
+        // caller asked only for `summary`, the markdown is the input to the
+        // LLM but is not surfaced in the response (see strip below).
+        let md_owned = data.markdown.clone().unwrap_or_default();
+        match crw_extract::summary::summarize(&md_owned, llm).await {
+            Ok(result) => {
+                data.summary = Some(result.content);
+                if data.llm_usage.is_none() {
+                    data.llm_usage = result.usage;
+                }
+                if let Some(w) = result.warning {
+                    data.warnings.push(w);
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Summary generation failed: {e}");
+                data.warnings.push(format!("summary failed: {e}"));
+            }
+        }
+        // If the caller didn't explicitly ask for markdown, strip the
+        // internally-computed markdown from the response.
+        if !req.formats.contains(&OutputFormat::Markdown) {
+            data.markdown = None;
         }
     }
 
@@ -541,6 +560,32 @@ fn detect_block_interstitial(html: &str) -> Option<String> {
 
 fn formats_include_json(formats: &[OutputFormat]) -> bool {
     formats.contains(&OutputFormat::Json)
+}
+
+fn formats_include_summary(formats: &[OutputFormat]) -> bool {
+    formats.contains(&OutputFormat::Summary)
+}
+
+/// Build an `LlmConfig` from per-request BYOK fields, falling back to the
+/// server-config values for non-credential fields (concurrency, header
+/// guard) so a single request can't escape global limits.
+fn build_byok_llm_config(req: &ScrapeRequest, server_cfg: Option<&LlmConfig>) -> Option<LlmConfig> {
+    let api_key = req.llm_api_key.as_ref()?.clone();
+    let mut cfg = match server_cfg {
+        Some(s) => s.clone(),
+        None => LlmConfig::default(),
+    };
+    cfg.api_key = api_key;
+    if let Some(p) = &req.llm_provider {
+        cfg.provider = p.clone();
+    }
+    if let Some(m) = &req.llm_model {
+        cfg.model = m.clone();
+    }
+    if let Some(b) = &req.base_url {
+        cfg.base_url = Some(b.clone());
+    }
+    Some(cfg)
 }
 
 #[cfg(test)]

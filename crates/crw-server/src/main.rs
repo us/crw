@@ -75,6 +75,27 @@ async fn run_server() {
         tracing::info!("LLM structured extraction: enabled");
     }
 
+    // Boot guard: when SaaS fronts opencore it sets `CRW_DISABLE_SERVER_LLM_KEY=1`
+    // to prevent the most common ops mistake — leaving a server-wide key
+    // configured behind the SaaS, which would leak the org's key to every
+    // user. Refuse to boot if both are set.
+    let disable_server_key = std::env::var("CRW_DISABLE_SERVER_LLM_KEY")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    if disable_server_key
+        && config
+            .extraction
+            .llm
+            .as_ref()
+            .is_some_and(|c| !c.api_key.is_empty())
+    {
+        tracing::error!(
+            "CRW_DISABLE_SERVER_LLM_KEY=1 but [extraction.llm].api_key is also configured. \
+             This is forbidden in SaaS-fronted deploys (refusing to boot)."
+        );
+        std::process::exit(1);
+    }
+
     let state = match AppState::new(config) {
         Ok(s) => s,
         Err(e) => {

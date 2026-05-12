@@ -835,6 +835,39 @@ pub struct LlmConfig {
     /// `provider = "azure"`; ignored otherwise.
     #[serde(default)]
     pub azure_api_version: Option<String>,
+    /// Max parallel LLM calls for fan-out (e.g. per-result search summaries).
+    /// Bounded to avoid hitting provider rate limits.
+    #[serde(default = "default_llm_max_concurrency")]
+    pub max_concurrency: usize,
+    /// Byte cap on content sent to the LLM in a single call. Content beyond
+    /// the cap is truncated on a UTF-8 char boundary.
+    #[serde(default = "default_llm_max_html_bytes")]
+    pub max_html_bytes: usize,
+    /// When set, opencore refuses LLM-touching requests that lack this header
+    /// AND do not supply `llm_api_key` in the body. SaaS deploys set this so
+    /// direct public callers can't access LLM features.
+    #[serde(default)]
+    pub require_byok_header: Option<String>,
+}
+
+impl Default for LlmConfig {
+    fn default() -> Self {
+        Self {
+            provider: default_llm_provider(),
+            api_key: String::new(),
+            model: default_llm_model(),
+            base_url: None,
+            max_tokens: default_llm_max_tokens(),
+            azure_api_version: None,
+            max_concurrency: default_llm_max_concurrency(),
+            max_html_bytes: default_llm_max_html_bytes(),
+            require_byok_header: None,
+        }
+    }
+}
+
+fn default_llm_max_concurrency() -> usize {
+    4
 }
 
 fn default_llm_provider() -> String {

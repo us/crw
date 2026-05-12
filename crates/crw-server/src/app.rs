@@ -53,6 +53,10 @@ pub fn create_app(state: AppState) -> Router {
             post(routes::search::search).fallback(method_not_allowed),
         )
         .route(
+            "/v1/capabilities",
+            get(routes::capabilities::capabilities).fallback(method_not_allowed),
+        )
+        .route(
             "/mcp",
             post(routes::mcp::mcp_handler).fallback(method_not_allowed),
         );

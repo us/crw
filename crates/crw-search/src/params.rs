@@ -98,6 +98,14 @@ mod tests {
             sources: None,
             categories: None,
             scrape_options: None,
+            summarize_results: None,
+            answer: None,
+            answer_top_n: None,
+            max_chars_per_source: None,
+            llm_api_key: None,
+            llm_provider: None,
+            llm_model: None,
+            base_url: None,
         }
     }
 

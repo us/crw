@@ -2,16 +2,24 @@ use axum::Json;
 use axum::extract::State;
 use axum::extract::rejection::JsonRejection;
 use crw_core::Deadline;
+use crw_core::config::LlmConfig;
 use crw_core::error::CrwError;
 use crw_core::types::{
     ApiResponse, OutputFormat, ScrapeData, ScrapeRequest, SearchData, SearchRequest,
-    SearchResponse, SearchResult, SearchScrapeOptions,
+    SearchResponse, SearchResponseData, SearchResult, SearchScrapeOptions,
 };
 use crw_crawl::single::scrape_url;
+use crw_extract::answer;
+use crw_extract::summary;
 use crw_search::{SearchError, map_to_searxng_params, transform_flat, transform_grouped};
+use futures::stream::{self, StreamExt};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::task::JoinSet;
+
+const DEFAULT_ANSWER_TOP_N: u32 = 5;
+const MAX_ANSWER_TOP_N: u32 = 10;
+const DEFAULT_MAX_CHARS_PER_SOURCE: usize = 8192;
 
 use crate::error::AppError;
 use crate::state::AppState;
@@ -74,6 +82,7 @@ pub async fn search_inner(
     };
 
     let mut warning: Option<String> = None;
+    let mut warnings: Vec<String> = Vec::new();
     if let Some(opts) = req.scrape_options.as_ref() {
         match enrich_with_scrape(&mut data, opts, state).await {
             Ok(()) => {}
@@ -84,9 +93,209 @@ pub async fn search_inner(
         }
     }
 
-    let mut resp = ApiResponse::ok(data);
+    // BYOK + LLM features. Both `summarize_results` and `answer` need an
+    // effective LlmConfig. Build it once from the BYOK request fields,
+    // falling back to server config.
+    let server_llm = state.config.extraction.llm.clone();
+    let byok_llm = build_byok_search_llm_config(&req, server_llm.as_ref());
+    let effective_llm = byok_llm.as_ref().or(server_llm.as_ref());
+
+    let wants_summaries = req.summarize_results.unwrap_or(false);
+    let wants_answer = req.answer.unwrap_or(false);
+
+    if (wants_summaries || wants_answer) && req.scrape_options.is_none() {
+        warnings.push(
+            "summarizeResults / answer require scrapeOptions to populate markdown; skipped".into(),
+        );
+    } else if wants_summaries || wants_answer {
+        match effective_llm {
+            None => warnings.push(
+                "summarizeResults / answer require an LLM config (set [extraction.llm] or \
+                 pass llm_api_key)"
+                    .into(),
+            ),
+            Some(llm) => {
+                if wants_summaries {
+                    let count = attach_result_summaries(&mut data, llm, llm.max_concurrency).await;
+                    if count.failed > 0 {
+                        warnings.push(format!(
+                            "{} of {} per-result summaries failed",
+                            count.failed,
+                            count.failed + count.ok
+                        ));
+                    }
+                }
+                if wants_answer {
+                    match synthesize_answer(&req, &data, llm).await {
+                        Ok((ans, cites, usage, mut ans_warns)) => {
+                            warnings.append(&mut ans_warns);
+                            let wrapped = SearchResponseData {
+                                results: data,
+                                answer: Some(ans),
+                                citations: cites,
+                                llm_usage: usage,
+                                warnings,
+                            };
+                            let mut resp = ApiResponse::ok(wrapped);
+                            resp.warning = warning;
+                            return Ok(resp);
+                        }
+                        Err(msg) => {
+                            tracing::warn!(error = %msg, "answer synthesis failed");
+                            warnings.push(format!("answer synthesis failed: {msg}"));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let wrapped = SearchResponseData {
+        results: data,
+        answer: None,
+        citations: Vec::new(),
+        llm_usage: None,
+        warnings,
+    };
+    let mut resp = ApiResponse::ok(wrapped);
     resp.warning = warning;
     Ok(resp)
+}
+
+#[derive(Default)]
+struct SummaryFanoutCount {
+    ok: usize,
+    failed: usize,
+}
+
+/// Fan-out summary calls across all results that have markdown. Bounded by
+/// `max_concurrency`. Pattern mirrors `crates/crw-crawl/src/sitemap.rs`.
+async fn attach_result_summaries(
+    data: &mut SearchData,
+    cfg: &LlmConfig,
+    max_concurrency: usize,
+) -> SummaryFanoutCount {
+    let targets: &mut Vec<SearchResult> = match data {
+        SearchData::Flat(v) => v,
+        SearchData::Grouped(g) => match g.web.as_mut() {
+            Some(v) if !v.is_empty() => v,
+            _ => return SummaryFanoutCount::default(),
+        },
+    };
+    // Capture markdown + index pairs first so we don't hold a borrow of
+    // `targets` across the async fan-out.
+    let jobs: Vec<(usize, String)> = targets
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, r)| r.markdown.as_ref().map(|md| (idx, md.clone())))
+        .collect();
+    if jobs.is_empty() {
+        return SummaryFanoutCount::default();
+    }
+    let cfg_owned = cfg.clone();
+    let concurrency = max_concurrency.max(1);
+    let results: Vec<(usize, Result<String, String>)> = stream::iter(jobs)
+        .map(|(idx, md)| {
+            let cfg = cfg_owned.clone();
+            async move {
+                let outcome = summary::summarize(&md, &cfg)
+                    .await
+                    .map(|r| r.content)
+                    .map_err(|e| e.to_string());
+                (idx, outcome)
+            }
+        })
+        .buffer_unordered(concurrency)
+        .collect()
+        .await;
+
+    let mut count = SummaryFanoutCount::default();
+    for (idx, res) in results {
+        match res {
+            Ok(text) => {
+                if let Some(slot) = targets.get_mut(idx) {
+                    slot.summary = Some(text);
+                    count.ok += 1;
+                }
+            }
+            Err(_) => count.failed += 1,
+        }
+    }
+    count
+}
+
+async fn synthesize_answer(
+    req: &SearchRequest,
+    data: &SearchData,
+    cfg: &LlmConfig,
+) -> Result<
+    (
+        String,
+        Vec<crw_core::types::Citation>,
+        Option<crw_core::types::LlmUsage>,
+        Vec<String>,
+    ),
+    String,
+> {
+    let top_n = req
+        .answer_top_n
+        .unwrap_or(DEFAULT_ANSWER_TOP_N)
+        .min(MAX_ANSWER_TOP_N) as usize;
+    let cap = req
+        .max_chars_per_source
+        .unwrap_or(DEFAULT_MAX_CHARS_PER_SOURCE)
+        .min(answer::MAX_CHARS_PER_SOURCE_CEILING);
+
+    let pool: &Vec<SearchResult> = match data {
+        SearchData::Flat(v) => v,
+        SearchData::Grouped(g) => match g.web.as_ref() {
+            Some(v) => v,
+            None => return Err("no web results to synthesize from".into()),
+        },
+    };
+    let sources: Vec<answer::Source> = pool
+        .iter()
+        .filter_map(|r| {
+            r.markdown
+                .as_ref()
+                .map(|md| (r.url.clone(), r.title.clone(), md.clone()))
+        })
+        .take(top_n)
+        .collect();
+    if sources.is_empty() {
+        return Err("no results carry markdown to synthesize an answer from".into());
+    }
+    let result = answer::synthesize(&req.query, &sources, cfg, cap)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok((
+        result.content,
+        result.citations,
+        result.usage,
+        result.warnings,
+    ))
+}
+
+fn build_byok_search_llm_config(
+    req: &SearchRequest,
+    server_cfg: Option<&LlmConfig>,
+) -> Option<LlmConfig> {
+    let api_key = req.llm_api_key.as_ref()?.clone();
+    let mut cfg = match server_cfg {
+        Some(s) => s.clone(),
+        None => LlmConfig::default(),
+    };
+    cfg.api_key = api_key;
+    if let Some(p) = &req.llm_provider {
+        cfg.provider = p.clone();
+    }
+    if let Some(m) = &req.llm_model {
+        cfg.model = m.clone();
+    }
+    if let Some(b) = &req.base_url {
+        cfg.base_url = Some(b.clone());
+    }
+    Some(cfg)
 }
 
 fn validate_request(req: &SearchRequest, max_limit: u32) -> Result<(), CrwError> {
@@ -228,6 +437,7 @@ async fn enrich_with_scrape(
                 llm_api_key: None,
                 llm_provider: None,
                 llm_model: None,
+                base_url: None,
                 renderer: None,
                 deadline_ms: Some(deadline_ms),
                 debug: None,
@@ -300,6 +510,14 @@ mod tests {
             sources: None,
             categories: None,
             scrape_options: None,
+            summarize_results: None,
+            answer: None,
+            answer_top_n: None,
+            max_chars_per_source: None,
+            llm_api_key: None,
+            llm_provider: None,
+            llm_model: None,
+            base_url: None,
         }
     }
 

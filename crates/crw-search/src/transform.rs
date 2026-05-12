@@ -76,6 +76,7 @@ fn to_search_result(r: &SearxngResult, position: u32) -> SearchResult {
         raw_html: None,
         links: None,
         metadata: None,
+        summary: None,
     }
 }
 

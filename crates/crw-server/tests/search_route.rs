@@ -120,7 +120,9 @@ async fn search_returns_flat_results() {
     resp.assert_status_ok();
     let body: Value = resp.json();
     assert_eq!(body["success"], true);
-    let data = body["data"].as_array().expect("flat data should be array");
+    let data = body["data"]["results"]
+        .as_array()
+        .expect("flat results should be array");
     assert_eq!(data.len(), 2);
     // Highest-score result first (1.5 > 1.2).
     assert_eq!(data[0]["url"], "https://tokio.rs/");
@@ -145,7 +147,7 @@ async fn search_returns_grouped_when_sources_set() {
         .await;
     resp.assert_status_ok();
     let body: Value = resp.json();
-    let data = &body["data"];
+    let data = &body["data"]["results"];
     assert!(data["web"].is_array(), "expected grouped 'web' bucket");
     assert!(data["news"].is_array(), "expected grouped 'news' bucket");
     assert_eq!(data["web"][0]["url"], "https://rust-lang.org/");

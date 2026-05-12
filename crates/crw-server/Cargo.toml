@@ -34,6 +34,7 @@ reqwest = { workspace = true }
 clap = { workspace = true }
 sha2 = { workspace = true }
 hex = { workspace = true }
+futures = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

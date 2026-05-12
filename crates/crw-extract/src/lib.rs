@@ -84,7 +84,10 @@ pub fn debug_candidate(
     }
 }
 
+pub mod answer;
 pub mod llm;
+pub mod pricing;
+pub mod summary;
 
 /// Options for the high-level extraction pipeline.
 pub struct ExtractOptions<'a> {
@@ -776,6 +779,8 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
         plain_text: plain,
         links,
         json,
+        summary: None,
+        llm_usage: None,
         chunks,
         warning: orphan_chunk_warning,
         warnings,

@@ -156,6 +156,7 @@ async fn main() {
         llm_api_key: None,
         llm_provider: None,
         llm_model: None,
+        base_url: None,
         renderer: None,
         deadline_ms: None,
         debug: None,

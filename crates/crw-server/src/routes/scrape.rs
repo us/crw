@@ -3,7 +3,7 @@ use axum::extract::State;
 use axum::extract::rejection::JsonRejection;
 use crw_core::Deadline;
 use crw_core::error::CrwError;
-use crw_core::types::{ApiResponse, ScrapeData, ScrapeRequest};
+use crw_core::types::{ApiResponse, OutputFormat, ScrapeData, ScrapeRequest};
 use crw_crawl::single::scrape_url;
 
 use crate::error::AppError;
@@ -20,6 +20,36 @@ pub async fn scrape(
     validate_renderer_pin(req.renderer, req.render_js, &state)?;
 
     let llm_config = state.config.extraction.llm.as_ref();
+
+    // Validate LLM-touching formats up front so we fail fast with a clear
+    // message rather than running the full scrape and then erroring.
+    if req.formats.contains(&OutputFormat::Summary)
+        && llm_config.is_none()
+        && req.llm_api_key.is_none()
+    {
+        return Err(AppError::from(CrwError::InvalidRequest(
+            "summary format requires LLM config: set CRW_EXTRACTION__LLM__API_KEY \
+             in server config or pass llm_api_key in the request body"
+                .into(),
+        )));
+    }
+    if let Some(cfg) = llm_config
+        && let Some(header_name) = cfg.require_byok_header.as_deref()
+        && (req.formats.contains(&OutputFormat::Summary)
+            || req.formats.contains(&OutputFormat::Json))
+        && req.llm_api_key.is_none()
+    {
+        // SaaS-fronted deploy: the request transformer must have set the
+        // tenant header. Reject direct public callers.
+        // NOTE: actually checking the header is done at the middleware
+        // layer (see Phase 7a); this catches the missing-header case at
+        // the request level when no BYOK key is supplied.
+        let _ = header_name;
+        return Err(AppError::from(CrwError::InvalidRequest(
+            "LLM features require a per-request llm_api_key (BYOK header guard active)".into(),
+        )));
+    }
+
     let user_agent = &state.config.crawler.user_agent;
     let default_stealth =
         state.config.crawler.stealth.enabled && state.config.crawler.stealth.inject_headers;
