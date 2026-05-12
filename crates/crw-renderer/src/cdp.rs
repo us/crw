@@ -391,7 +391,7 @@ pub struct CdpRenderer {
     /// invalidate on CDP connect failure: chrome restarts mint a new
     /// `/devtools/browser/<uuid>` path, and a stale cached value would dial
     /// a dead URL forever until process restart. See `invalidate_resolved_ws_url`.
-    resolved_ws_url: StdMutex<Option<String>>,
+    resolved_ws_url: Arc<StdMutex<Option<String>>>,
     page_timeout: Duration,
     /// Hard ceiling on the post-navigate wait+snapshot+stability+challenge
     /// phase. Wraps the work in a budget race; on hit the renderer snapshots
@@ -406,6 +406,11 @@ pub struct CdpRenderer {
     /// even when `intercept_enabled = true`.
     host_intercept_disable: Vec<String>,
     conn_semaphore: Arc<Semaphore>,
+    /// Browser context pool. `Some` when `[renderer.chrome.pool] enabled = true`
+    /// AND backend is vanilla chrome (not browserless v2 — gated off in v1
+    /// per plan §"Out of scope"). When `Some`, `fetch` dispatches through
+    /// `fetch_with_pool`; when `None`, legacy `fetch_with_ws` is used.
+    pool: Option<Arc<crate::browser_pool::BrowserContextPool<CdpConnection>>>,
 }
 
 impl CdpRenderer {
@@ -415,14 +420,46 @@ impl CdpRenderer {
         Self {
             name: name.to_string(),
             configured_ws_url: ws_url.to_string(),
-            resolved_ws_url: StdMutex::new(None),
+            resolved_ws_url: Arc::new(StdMutex::new(None)),
             page_timeout,
             nav_budget: page_timeout,
             intercept_enabled: false,
             blocklist: Blocklist::defaults(),
             host_intercept_disable: Vec::new(),
             conn_semaphore: Arc::new(Semaphore::new(pool_size)),
+            pool: None,
         }
+    }
+
+    /// Enable the browser-context pool. Builds an `Arc<BrowserContextPool>`
+    /// whose factory calls back into the same connect-with-retry path as the
+    /// legacy `fetch_with_ws` (preserves the cached-WS-URL invalidation from
+    /// commit `b5f7bec`).
+    pub fn with_pool(mut self, cfg: crate::browser_pool::PoolCfg) -> Self {
+        let name = self.name.clone();
+        let configured = self.configured_ws_url.clone();
+        let resolved_cache = self.resolved_ws_url.clone();
+        let page_timeout = self.page_timeout;
+        let factory: crate::browser_pool::ConnFactory<CdpConnection> = Arc::new(move || {
+            let name = name.clone();
+            let configured = configured.clone();
+            let resolved_cache = resolved_cache.clone();
+            Box::pin(async move {
+                let conn =
+                    connect_chrome_with_retry(&name, &configured, &resolved_cache, page_timeout)
+                        .await?;
+                Ok(Arc::new(conn))
+            })
+        });
+        crw_core::metrics::metrics()
+            .chrome_pool_size
+            .set(cfg.size as i64);
+        self.pool = Some(crate::browser_pool::BrowserContextPool::new(cfg, factory));
+        self
+    }
+
+    pub fn pool(&self) -> Option<Arc<crate::browser_pool::BrowserContextPool<CdpConnection>>> {
+        self.pool.clone()
     }
 
     /// Override the post-navigate budget. Default equals `page_timeout_ms`.
@@ -461,107 +498,138 @@ impl CdpRenderer {
         };
         !self.host_intercept_disable.iter().any(|h| host.contains(h))
     }
+}
 
-    /// Resolve the actual browser WebSocket URL.
-    ///
-    /// Chrome/Chromium expose a dynamic WS URL at `/json/version` that includes
-    /// a per-session UUID (e.g. `ws://host:9222/devtools/browser/<uuid>`).
-    /// LightPanda accepts connections directly on the base WS URL.
-    async fn resolve_ws_url(&self) -> CrwResult<String> {
-        if let Some(cached) = self.resolved_ws_url.lock().unwrap().clone() {
-            return Ok(cached);
-        }
-
-        let configured = &self.configured_ws_url;
-
-        let resolved = if configured.contains("/devtools/") {
-            configured.clone()
-        } else if is_browserless_direct_ws(configured) {
-            // Browserless v2 / commercial CDP endpoints serve a WS directly
-            // and do not expose `/json/version` (401s). Use as-is.
-            configured.clone()
-        } else if let Ok(Ok((ws, _))) =
-            tokio::time::timeout(Duration::from_secs(3), connect_async(configured)).await
-        {
-            // Direct connect works (LightPanda).
-            drop(ws);
-            configured.clone()
-        } else {
-            // Chrome/Chromium: discover via /json/version.
-            let http_url = configured
-                .replace("ws://", "http://")
-                .replace("wss://", "https://")
-                .trim_end_matches('/')
-                .to_string()
-                + "/json/version";
-
-            tracing::info!(
-                renderer = self.name,
-                "Discovering browser WS URL from {http_url}"
-            );
-
-            // Send Host: localhost so browsers behind socat proxies
-            // (e.g. chromedp/headless-shell) accept the request.
-            let resp = reqwest::Client::new()
-                .get(&http_url)
-                .header("Host", "localhost")
-                .timeout(Duration::from_secs(5))
-                .send()
-                .await
-                .map_err(|e| {
-                    CrwError::RendererError(format!("CDP discovery failed for {}: {e}", self.name))
-                })?;
-
-            let body: serde_json::Value = resp
-                .json()
-                .await
-                .map_err(|e| CrwError::RendererError(format!("CDP discovery parse error: {e}")))?;
-
-            let ws_url = body
-                .get("webSocketDebuggerUrl")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| {
-                    CrwError::RendererError(format!(
-                        "No webSocketDebuggerUrl in /json/version for {}",
-                        self.name
-                    ))
-                })?;
-
-            let rewritten = rewrite_ws_host(ws_url, configured);
-            tracing::info!(renderer = self.name, ws_url = %rewritten, "Discovered browser WS URL");
-            rewritten
-        };
-
-        *self.resolved_ws_url.lock().unwrap() = Some(resolved.clone());
-        Ok(resolved)
+/// Resolve the actual browser WebSocket URL, caching the result. Free
+/// function so both `CdpRenderer::resolve_ws_url` and the pool's connect
+/// factory share a single implementation with shared cache invalidation
+/// semantics.
+async fn resolve_ws_url_with_cache(
+    configured: &str,
+    cache: &StdMutex<Option<String>>,
+    _page_timeout: Duration,
+) -> CrwResult<String> {
+    if let Some(cached) = cache.lock().unwrap().clone() {
+        return Ok(cached);
     }
 
-    /// Drop the cached WS URL so the next `resolve_ws_url` call re-discovers.
-    /// Called after CDP connect failures because chrome restarts mint a new
-    /// `/devtools/browser/<uuid>` path; without invalidation we'd dial a dead
-    /// URL forever.
-    fn invalidate_resolved_ws_url(&self) {
-        *self.resolved_ws_url.lock().unwrap() = None;
-    }
+    let resolved = if configured.contains("/devtools/") || is_browserless_direct_ws(configured) {
+        // Already-resolved /devtools/ URL OR browserless v2 / commercial CDP
+        // endpoint that serves a WS directly (no /json/version).
+        configured.to_string()
+    } else if let Ok(Ok((ws, _))) =
+        tokio::time::timeout(Duration::from_secs(3), connect_async(configured)).await
+    {
+        drop(ws);
+        configured.to_string()
+    } else {
+        let http_url = configured
+            .replace("ws://", "http://")
+            .replace("wss://", "https://")
+            .trim_end_matches('/')
+            .to_string()
+            + "/json/version";
 
+        tracing::info!("Discovering browser WS URL from {http_url}");
+
+        let resp = reqwest::Client::new()
+            .get(&http_url)
+            .header("Host", "localhost")
+            .timeout(Duration::from_secs(5))
+            .send()
+            .await
+            .map_err(|e| CrwError::RendererError(format!("CDP discovery failed: {e}")))?;
+
+        let body: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| CrwError::RendererError(format!("CDP discovery parse error: {e}")))?;
+
+        let ws_url = body
+            .get("webSocketDebuggerUrl")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                CrwError::RendererError("No webSocketDebuggerUrl in /json/version".into())
+            })?;
+
+        let rewritten = rewrite_ws_host(ws_url, configured);
+        tracing::info!(ws_url = %rewritten, "Discovered browser WS URL");
+        rewritten
+    };
+
+    *cache.lock().unwrap() = Some(resolved.clone());
+    Ok(resolved)
+}
+
+impl CdpRenderer {
     /// Resolve the WS URL and open a CDP connection. On failure, invalidate
     /// the cached URL and retry once — covers the chrome-restart case where
     /// the cached `/devtools/browser/<uuid>` is stale.
     async fn connect_with_retry(&self) -> CrwResult<CdpConnection> {
-        let ws_url = self.resolve_ws_url().await?;
-        match CdpConnection::connect(&ws_url, WS_CONNECT_TIMEOUT).await {
-            Ok(conn) => Ok(conn),
-            Err(e) => {
-                tracing::warn!(
-                    renderer = self.name,
-                    error = %e,
-                    "CDP connect failed; invalidating cached ws_url and retrying once"
-                );
-                self.invalidate_resolved_ws_url();
-                let ws_url = self.resolve_ws_url().await?;
-                CdpConnection::connect(&ws_url, WS_CONNECT_TIMEOUT).await
-            }
+        connect_chrome_with_retry(
+            &self.name,
+            &self.configured_ws_url,
+            &self.resolved_ws_url,
+            self.page_timeout,
+        )
+        .await
+    }
+}
+
+/// Connect to a Chrome CDP endpoint with cached-WS-URL invalidation on first
+/// failure. Shared between `CdpRenderer::connect_with_retry` (legacy path)
+/// and `BrowserContextPool`'s factory (preserves the b5f7bec invalidation
+/// guarantee — chrome restarts mint a fresh `/devtools/browser/<uuid>`,
+/// and the cache must be drop-and-rebuild on connect failure).
+async fn connect_chrome_with_retry(
+    name: &str,
+    configured_ws_url: &str,
+    resolved_cache: &StdMutex<Option<String>>,
+    page_timeout: Duration,
+) -> CrwResult<CdpConnection> {
+    let t0 = Instant::now();
+    let result =
+        connect_chrome_with_retry_inner(name, configured_ws_url, resolved_cache, page_timeout)
+            .await;
+    let outcome = classify_connect_outcome(&result);
+    crw_core::metrics::metrics()
+        .chrome_connect_seconds
+        .with_label_values(&[outcome])
+        .observe(t0.elapsed().as_secs_f64());
+    result
+}
+
+async fn connect_chrome_with_retry_inner(
+    name: &str,
+    configured_ws_url: &str,
+    resolved_cache: &StdMutex<Option<String>>,
+    page_timeout: Duration,
+) -> CrwResult<CdpConnection> {
+    let ws_url = resolve_ws_url_with_cache(configured_ws_url, resolved_cache, page_timeout).await?;
+    match CdpConnection::connect(&ws_url, WS_CONNECT_TIMEOUT).await {
+        Ok(conn) => Ok(conn),
+        Err(e) => {
+            tracing::warn!(
+                renderer = name,
+                error = %e,
+                "CDP connect failed; invalidating cached ws_url and retrying once"
+            );
+            *resolved_cache.lock().unwrap() = None;
+            let ws_url =
+                resolve_ws_url_with_cache(configured_ws_url, resolved_cache, page_timeout).await?;
+            CdpConnection::connect(&ws_url, WS_CONNECT_TIMEOUT).await
         }
+    }
+}
+
+/// Bucket a `connect_with_retry` result into one of the Tier 0 outcome labels:
+/// `ok`, `ws_handshake_timeout`, `version_probe_fail`, `ws_dial_fail`.
+fn classify_connect_outcome(r: &CrwResult<CdpConnection>) -> &'static str {
+    match r {
+        Ok(_) => "ok",
+        Err(CrwError::Timeout(_)) => "ws_handshake_timeout",
+        Err(CrwError::RendererError(msg)) if msg.contains("CDP discovery") => "version_probe_fail",
+        Err(_) => "ws_dial_fail",
     }
 }
 
@@ -1039,12 +1107,16 @@ impl PageFetcher for CdpRenderer {
             ));
         }
 
-        tokio::time::timeout(
-            overall_timeout,
-            self.fetch_with_ws(url, wait_for_ms, deadline),
-        )
-        .await
-        .map_err(|_| CrwError::Timeout(overall_timeout.as_millis() as u64))?
+        let fut = async {
+            if let Some(pool) = self.pool.as_ref() {
+                self.fetch_with_pool(pool, url, wait_for_ms, deadline).await
+            } else {
+                self.fetch_with_ws(url, wait_for_ms, deadline).await
+            }
+        };
+        tokio::time::timeout(overall_timeout, fut)
+            .await
+            .map_err(|_| CrwError::Timeout(overall_timeout.as_millis() as u64))?
     }
 
     fn name(&self) -> &str {
@@ -1109,6 +1181,104 @@ fn detect_navigation_error(html: &str) -> Option<String> {
 }
 
 impl CdpRenderer {
+    /// Pool-backed fetch path. Acquires a checked-out browser context from
+    /// the pool, runs `fetch_inner` with the slot's ctx_id + a recorder that
+    /// writes the new target_id into the slot, then `release()`s the slot
+    /// (which owns `closeTarget` + dispose + recreate-ctx).
+    async fn fetch_with_pool(
+        &self,
+        pool: &Arc<crate::browser_pool::BrowserContextPool<CdpConnection>>,
+        url: &str,
+        wait_for_ms: Option<u64>,
+        deadline: crw_core::Deadline,
+    ) -> CrwResult<FetchResult> {
+        let start = Instant::now();
+        let handshake_t0 = Instant::now();
+        let acquire_t0 = Instant::now();
+        let guard = pool.acquire().await?;
+        let acquire_elapsed = acquire_t0.elapsed();
+        crw_core::metrics::metrics()
+            .chrome_pool_acquire_seconds
+            .observe(acquire_elapsed.as_secs_f64());
+        // Best-effort acquire-source label: we currently don't surface from
+        // `acquire()` whether it hit idle or created new — record under a
+        // generic bucket. Plumbing the precise label is a follow-up.
+        crw_core::metrics::metrics()
+            .chrome_pool_acquires_total
+            .with_label_values(&["hit_idle"])
+            .inc();
+
+        // Recorder writes the new target_id into the slot synchronously
+        // (inside fetch_inner, immediately after createTarget Ok).
+        let guard_for_rec = &guard;
+        let recorder = |tid: &str| guard_for_rec.record_target(tid.to_string());
+
+        let ctx_id = guard.ctx_id.clone();
+        let res = self
+            .fetch_inner(
+                &guard.conn,
+                Some(&ctx_id),
+                &recorder,
+                url,
+                wait_for_ms,
+                deadline,
+            )
+            .await;
+
+        // Record total handshake-overhead for this request (acquire + create
+        // target + attach happen inside fetch_inner). B2 gate metric.
+        crw_core::metrics::metrics()
+            .chrome_request_handshake_seconds
+            .with_label_values(&["on", "hit_idle"])
+            .observe(handshake_t0.elapsed().as_secs_f64());
+
+        // Always release — swallow recycle error per plan's error-precedence
+        // policy (fetch success/failure is what the caller cares about).
+        if let Err(e) = guard.release().await {
+            tracing::warn!(error = %e, "pool: release returned error (slot recycled as Dead)");
+        }
+
+        let (html, status_code, truncated, final_href, captured_responses, _tid) = res?;
+
+        if html.is_empty() {
+            return Err(CrwError::RendererError(
+                "Empty HTML from CDP renderer".into(),
+            ));
+        }
+        if let Some(reason) = detect_navigation_error(&html) {
+            return Err(CrwError::RendererError(format!(
+                "Navigation failed: {reason}"
+            )));
+        }
+
+        let final_url = final_href.and_then(|h| if h != url { Some(h) } else { None });
+        Ok(FetchResult {
+            url: url.to_string(),
+            final_url,
+            status_code,
+            html,
+            content_type: None,
+            raw_bytes: None,
+            rendered_with: Some(self.name.clone()),
+            elapsed_ms: start.elapsed().as_millis() as u64,
+            warning: if truncated {
+                Some("chrome_budget_truncated".to_string())
+            } else {
+                None
+            },
+            render_decision: None,
+            credit_cost: 0,
+            warnings: if truncated {
+                vec!["chrome_budget_truncated".to_string()]
+            } else {
+                Vec::new()
+            },
+            truncated,
+            deadline_exceeded: deadline.remaining().is_zero(),
+            captured_responses,
+        })
+    }
+
     /// Inner fetch with WebSocket lifecycle management.
     async fn fetch_with_ws(
         &self,
@@ -1117,6 +1287,7 @@ impl CdpRenderer {
         deadline: crw_core::Deadline,
     ) -> CrwResult<FetchResult> {
         let start = Instant::now();
+        let handshake_t0 = Instant::now();
 
         // Limit concurrent WebSocket connections to pool_size.
         let _permit = self
@@ -1127,11 +1298,34 @@ impl CdpRenderer {
 
         let conn = self.connect_with_retry().await?;
 
-        let result = self.fetch_inner(&conn, url, wait_for_ms, deadline).await;
+        // Legacy path: `tid_slot` is the SOLE authoritative source for target
+        // close on both Ok and Err branches. fetch_inner no longer closes
+        // targets itself — we own that here. `Arc<Mutex<...>>` (not `Cell`)
+        // so the recorder closure satisfies `Send + Sync` across the await.
+        let tid_slot: std::sync::Arc<std::sync::Mutex<Option<String>>> =
+            std::sync::Arc::new(std::sync::Mutex::new(None));
+        let tid_slot_rec = tid_slot.clone();
+        let recorder = move |tid: &str| {
+            *tid_slot_rec.lock().unwrap() = Some(tid.to_string());
+        };
+        let result = self
+            .fetch_inner(&conn, None, &recorder, url, wait_for_ms, deadline)
+            .await;
+
+        // B2 gate metric: pre-navigation overhead (connect + createTarget +
+        // attach). Pool=off arm; pool=on arm is recorded in fetch_with_pool.
+        crw_core::metrics::metrics()
+            .chrome_request_handshake_seconds
+            .with_label_values(&["off", "n/a"])
+            .observe(handshake_t0.elapsed().as_secs_f64());
+        let captured_tid = tid_slot.lock().unwrap().take();
+        if let Some(tid) = captured_tid {
+            close_target(&conn, &tid, &self.name).await;
+        }
 
         conn.close().await;
 
-        let (html, status_code, truncated, final_href, captured_responses) = result?;
+        let (html, status_code, truncated, final_href, captured_responses, _tid_ignored) = result?;
 
         if html.is_empty() {
             return Err(CrwError::RendererError(
@@ -1343,6 +1537,10 @@ impl CdpRenderer {
         session_id: &str,
         timeout: Duration,
     ) -> CrwResult<String> {
+        // Tier 0 metric M3: HTML snapshot round-trip. Observed on every call
+        // (post-navigate, SPA poll, scroll re-snapshot) so we can see how the
+        // snapshot mix behaves under different page types.
+        let snap_t0 = Instant::now();
         let eval_result = conn
             .send_recv(
                 "Runtime.evaluate",
@@ -1354,6 +1552,9 @@ impl CdpRenderer {
                 timeout,
             )
             .await?;
+        crw_core::metrics::metrics()
+            .chrome_snapshot_seconds
+            .observe(snap_t0.elapsed().as_secs_f64());
 
         Ok(eval_result
             .get("result")
@@ -1465,6 +1666,8 @@ impl CdpRenderer {
     async fn fetch_inner(
         &self,
         conn: &CdpConnection,
+        browser_context_id: Option<&str>,
+        target_recorder: &(dyn Fn(&str) + Send + Sync),
         url: &str,
         wait_for_ms: Option<u64>,
         deadline: crw_core::Deadline,
@@ -1474,85 +1677,81 @@ impl CdpRenderer {
         bool,
         Option<String>,
         Vec<CapturedNetworkResponse>,
+        String,
     )> {
         // 1. Create a blank target so navigation events can be observed reliably.
+        // When `browser_context_id` is Some, the target is bound to that
+        // context — load-bearing for pool isolation (cookies/storage do not
+        // leak across contexts).
+        let create_t0 = Instant::now();
+        let mut create_params = serde_json::json!({ "url": "about:blank" });
+        if let Some(ctx) = browser_context_id {
+            create_params["browserContextId"] = serde_json::Value::String(ctx.to_string());
+        }
         let create_result = conn
             .send_recv(
                 "Target.createTarget",
-                serde_json::json!({ "url": "about:blank" }),
+                create_params,
                 None,
                 self.page_timeout,
             )
             .await?;
+        crw_core::metrics::metrics()
+            .chrome_target_create_seconds
+            .observe(create_t0.elapsed().as_secs_f64());
 
         let target_id = create_result
             .get("targetId")
             .and_then(|v| v.as_str())
             .ok_or_else(|| CrwError::RendererError(format!("No targetId: {create_result}")))?
             .to_string();
+        // CRITICAL — synchronous handoff to caller BEFORE any subsequent
+        // `.await`. This is the only sync point that closes the cancellation
+        // window between createTarget returning Ok and the next await. The
+        // pooled caller writes the id into the slot's `CheckedOut.target_id`
+        // here; the legacy caller writes into a stack-local `Cell`. Either way
+        // the caller owns `closeTarget` from this point on — fetch_inner does
+        // NOT call closeTarget on any branch.
+        target_recorder(&target_id);
         crw_core::metrics::metrics()
             .target_lifecycle_total
             .with_label_values(&[&self.name, "created"])
             .inc();
 
         // 2. Attach to target
-        let attach_result = match conn
+        let attach_result = conn
             .send_recv(
                 "Target.attachToTarget",
                 serde_json::json!({ "targetId": &target_id, "flatten": true }),
                 None,
                 self.page_timeout,
             )
-            .await
-        {
-            Ok(result) => result,
-            Err(err) => {
-                close_target(conn, &target_id, &self.name).await;
-                return Err(err);
-            }
-        };
+            .await?;
 
-        let session_id = match attach_result
+        let session_id = attach_result
             .get("sessionId")
             .and_then(|value| value.as_str())
-        {
-            Some(value) => value.to_string(),
-            None => {
-                close_target(conn, &target_id, &self.name).await;
-                return Err(CrwError::RendererError(
-                    "CDP attach did not return sessionId".into(),
-                ));
-            }
-        };
+            .ok_or_else(|| CrwError::RendererError("CDP attach did not return sessionId".into()))?
+            .to_string();
 
         for method in ["Page.enable", "Network.enable", "Runtime.enable"] {
-            if let Err(err) = conn
-                .send_recv(
-                    method,
-                    serde_json::json!({}),
-                    Some(&session_id),
-                    self.page_timeout,
-                )
-                .await
-            {
-                close_target(conn, &target_id, &self.name).await;
-                return Err(err);
-            }
-        }
-
-        // Inject stealth scripts before navigation so they run on every new document.
-        if let Err(err) = conn
-            .send_recv(
-                "Page.addScriptToEvaluateOnNewDocument",
-                serde_json::json!({ "source": STEALTH_JS }),
+            conn.send_recv(
+                method,
+                serde_json::json!({}),
                 Some(&session_id),
                 self.page_timeout,
             )
-            .await
-        {
-            close_target(conn, &target_id, &self.name).await;
-            return Err(err);
+            .await?;
         }
+
+        // Inject stealth scripts before navigation so they run on every new document.
+        conn.send_recv(
+            "Page.addScriptToEvaluateOnNewDocument",
+            serde_json::json!({ "source": STEALTH_JS }),
+            Some(&session_id),
+            self.page_timeout,
+        )
+        .await?;
 
         // Subscribe to events BEFORE navigating so we don't miss loadEventFired.
         let events_rx = conn.subscribe();
@@ -1561,18 +1760,14 @@ impl CdpRenderer {
         // `Page.navigate` because `Fetch.enable` pauses the document request
         // too — pump must already be consuming `Fetch.requestPaused` by then.
         let intercept_active = self.intercept_active_for(url);
-        if intercept_active
-            && let Err(err) = conn
-                .send_recv(
-                    "Fetch.enable",
-                    serde_json::json!({ "patterns": [{ "urlPattern": "*" }] }),
-                    Some(&session_id),
-                    self.page_timeout,
-                )
-                .await
-        {
-            close_target(conn, &target_id, &self.name).await;
-            return Err(err);
+        if intercept_active {
+            conn.send_recv(
+                "Fetch.enable",
+                serde_json::json!({ "patterns": [{ "urlPattern": "*" }] }),
+                Some(&session_id),
+                self.page_timeout,
+            )
+            .await?;
         }
 
         // Network-idle tracker fed by a sibling pump (spawned below in the
@@ -1585,6 +1780,8 @@ impl CdpRenderer {
         // pump never returns; when work completes, the pump future is dropped.
         let nav_budget = self.nav_budget.min(deadline.remaining());
         let work = async {
+            // Tier 0 metric M2: time Page.navigate send → loadEventFired.
+            let nav_t0 = Instant::now();
             let navigate_result = conn
                 .send_recv(
                     "Page.navigate",
@@ -1603,6 +1800,9 @@ impl CdpRenderer {
             }
             let status_code =
                 wait_for_page_ready(events_rx, &session_id, self.page_timeout).await?;
+            crw_core::metrics::metrics()
+                .chrome_navigate_seconds
+                .observe(nav_t0.elapsed().as_secs_f64());
             // Post-navigate phase runs inside a budget race. On budget hit
             // we attempt a partial-DOM snapshot and return `truncated = true`;
             // `single.rs` decides success on md length.
@@ -1697,7 +1897,9 @@ impl CdpRenderer {
             Err(_) => None,
         };
 
-        close_target(conn, &target_id, &self.name).await;
+        // Target close is the caller's responsibility (pool's release() owns
+        // it via the recorded target_id; legacy fetch_with_ws closes after
+        // fetch_inner returns via its Cell-captured id).
 
         let (html, status_code, truncated) = outcome?;
 
@@ -1713,7 +1915,14 @@ impl CdpRenderer {
         }
 
         let captured_drained = std::mem::take(&mut *captured.lock().await);
-        Ok((html, status_code, truncated, final_href, captured_drained))
+        Ok((
+            html,
+            status_code,
+            truncated,
+            final_href,
+            captured_drained,
+            target_id,
+        ))
     }
 
     /// Post-navigate work: SPA selector wait, eval HTML, placeholder

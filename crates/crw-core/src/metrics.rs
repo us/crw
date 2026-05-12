@@ -4,8 +4,10 @@
 //! [`gather_text`] to render the current snapshot for `/metrics`.
 
 use prometheus::{
-    Encoder, IntCounterVec, IntGauge, Registry, TextEncoder,
-    register_int_counter_vec_with_registry, register_int_gauge_with_registry,
+    Encoder, Histogram, HistogramVec, IntCounterVec, IntGauge, Registry, TextEncoder,
+    exponential_buckets, histogram_opts, register_histogram_vec_with_registry,
+    register_histogram_with_registry, register_int_counter_vec_with_registry,
+    register_int_gauge_with_registry,
 };
 use std::sync::OnceLock;
 
@@ -57,6 +59,52 @@ pub struct Metrics {
     pub map_filter_preserved_total: IntCounterVec,
     /// /map URL filter: count of rules loaded at server startup. Labels: `kind`.
     pub map_filter_rules_loaded: IntCounterVec,
+    /// Chrome WS connect duration, labeled by outcome.
+    /// Tier 0 (Browser Context Pool plan): isolates connect+handshake cost.
+    /// `outcome` ∈ {ok, ws_dial_fail, ws_handshake_timeout, version_probe_fail}.
+    pub chrome_connect_seconds: HistogramVec,
+    /// Chrome `Target.createTarget` round-trip duration. Tier 0 sub-metric.
+    pub chrome_target_create_seconds: Histogram,
+    /// Chrome navigation duration: from `Page.navigate` send to first
+    /// `Page.loadEventFired`. Tier 0 sub-metric.
+    pub chrome_navigate_seconds: Histogram,
+    /// Chrome HTML snapshot duration: `Runtime.evaluate(outerHTML)` round-trip.
+    /// Tier 0 sub-metric.
+    pub chrome_snapshot_seconds: Histogram,
+    // -------- Browser Context Pool (Tier 1+) --------
+    /// Configured pool size.
+    pub chrome_pool_size: IntGauge,
+    /// Current idle slot count (sampled).
+    pub chrome_pool_idle: IntGauge,
+    /// Current `CheckedOut` slot count.
+    pub chrome_pool_inflight: IntGauge,
+    /// Time spent in `pool.acquire()` (waiting for a permit + slot creation).
+    pub chrome_pool_acquire_seconds: Histogram,
+    /// Acquire-path accounting.
+    /// `outcome` ∈ {hit_idle, created_new, errored, shutdown_refused}.
+    pub chrome_pool_acquires_total: IntCounterVec,
+    /// Per-phase release cost.
+    /// `phase` ∈ {close_target, dispose_ctx, create_ctx}.
+    pub chrome_pool_recycle_seconds: HistogramVec,
+    /// Terminal recycle outcomes.
+    /// `outcome` ∈ {success, dead_conn, idle_timeout, emergency_drop,
+    ///              nav_count_recycle, health_fail, shutdown_raced,
+    ///              unexpected_state}.
+    pub chrome_pool_recycle_total: IntCounterVec,
+    /// Failure-only counter, partitioned by failed stage.
+    /// `stage` ∈ {close_target_timeout, dispose_ctx_fail, create_ctx_fail,
+    ///            missed_release}.
+    pub chrome_pool_recycle_failures_total: IntCounterVec,
+    /// Idle-slot health probe outcomes.
+    /// `outcome` ∈ {ok, failed}.
+    pub chrome_pool_health_check_total: IntCounterVec,
+    /// How long each context survives between create and dispose. Informs
+    /// v2 context-lifetime decisions.
+    pub chrome_context_lifetime_seconds: Histogram,
+    /// Pre-navigation overhead per Chrome request — the B2 gate metric.
+    /// `pool` ∈ {on, off}; `acquire_source` ∈ {hit_idle, created_new,
+    /// health_checked, n/a}. Pool-off requests use `acquire_source="n/a"`.
+    pub chrome_request_handshake_seconds: HistogramVec,
 }
 
 static METRICS: OnceLock<Metrics> = OnceLock::new();
@@ -191,6 +239,133 @@ impl Metrics {
             registry
         )
         .unwrap();
+        // Tier 0 latency histograms for the Browser Context Pool plan.
+        // Buckets: 10ms × 2^k for k=0..11 → 10ms, 20, 40, 80, 160, 320, 640,
+        // 1.28s, 2.56s, 5.12s, 10.24s, 20.48s. Covers fast-path 50ms WS
+        // connects and slow-path 5s+ navigations.
+        let lat_buckets = exponential_buckets(0.01, 2.0, 12).unwrap();
+        let chrome_connect_seconds = register_histogram_vec_with_registry!(
+            histogram_opts!(
+                "crw_chrome_connect_seconds",
+                "Chrome WS connect duration by outcome",
+                lat_buckets.clone()
+            ),
+            &["outcome"],
+            registry
+        )
+        .unwrap();
+        let chrome_target_create_seconds = register_histogram_with_registry!(
+            histogram_opts!(
+                "crw_chrome_target_create_seconds",
+                "Chrome Target.createTarget round-trip duration",
+                lat_buckets.clone()
+            ),
+            registry
+        )
+        .unwrap();
+        let chrome_navigate_seconds = register_histogram_with_registry!(
+            histogram_opts!(
+                "crw_chrome_navigate_seconds",
+                "Chrome navigation duration: Page.navigate send to loadEventFired",
+                lat_buckets.clone()
+            ),
+            registry
+        )
+        .unwrap();
+        let chrome_snapshot_seconds = register_histogram_with_registry!(
+            histogram_opts!(
+                "crw_chrome_snapshot_seconds",
+                "Chrome HTML snapshot duration (Runtime.evaluate outerHTML)",
+                lat_buckets.clone()
+            ),
+            registry
+        )
+        .unwrap();
+        // -------- Browser Context Pool (Tier 1+) --------
+        let chrome_pool_size = register_int_gauge_with_registry!(
+            "crw_chrome_pool_size",
+            "Configured browser context pool size",
+            registry
+        )
+        .unwrap();
+        let chrome_pool_idle = register_int_gauge_with_registry!(
+            "crw_chrome_pool_idle",
+            "Idle slot count in the browser context pool (sampled)",
+            registry
+        )
+        .unwrap();
+        let chrome_pool_inflight = register_int_gauge_with_registry!(
+            "crw_chrome_pool_inflight",
+            "CheckedOut slot count in the browser context pool",
+            registry
+        )
+        .unwrap();
+        let chrome_pool_acquire_seconds = register_histogram_with_registry!(
+            histogram_opts!(
+                "crw_chrome_pool_acquire_seconds",
+                "Time spent in pool.acquire() — permit wait + slot bring-up",
+                lat_buckets.clone()
+            ),
+            registry
+        )
+        .unwrap();
+        let chrome_pool_acquires_total = register_int_counter_vec_with_registry!(
+            "crw_chrome_pool_acquires_total",
+            "Pool acquire outcomes (hit_idle | created_new | errored | shutdown_refused)",
+            &["outcome"],
+            registry
+        )
+        .unwrap();
+        let chrome_pool_recycle_seconds = register_histogram_vec_with_registry!(
+            histogram_opts!(
+                "crw_chrome_pool_recycle_seconds",
+                "Per-phase release cost (close_target | dispose_ctx | create_ctx)",
+                lat_buckets.clone()
+            ),
+            &["phase"],
+            registry
+        )
+        .unwrap();
+        let chrome_pool_recycle_total = register_int_counter_vec_with_registry!(
+            "crw_chrome_pool_recycle_total",
+            "Terminal recycle outcomes",
+            &["outcome"],
+            registry
+        )
+        .unwrap();
+        let chrome_pool_recycle_failures_total = register_int_counter_vec_with_registry!(
+            "crw_chrome_pool_recycle_failures_total",
+            "Recycle failures partitioned by failed stage",
+            &["stage"],
+            registry
+        )
+        .unwrap();
+        let chrome_pool_health_check_total = register_int_counter_vec_with_registry!(
+            "crw_chrome_pool_health_check_total",
+            "Pool idle-slot health probe outcomes (ok | failed)",
+            &["outcome"],
+            registry
+        )
+        .unwrap();
+        let chrome_context_lifetime_seconds = register_histogram_with_registry!(
+            histogram_opts!(
+                "crw_chrome_context_lifetime_seconds",
+                "Lifetime of each browser context, create to dispose",
+                lat_buckets.clone()
+            ),
+            registry
+        )
+        .unwrap();
+        let chrome_request_handshake_seconds = register_histogram_vec_with_registry!(
+            histogram_opts!(
+                "crw_chrome_request_handshake_seconds",
+                "Pre-navigation overhead per Chrome request (B2 gate metric)",
+                lat_buckets
+            ),
+            &["pool", "acquire_source"],
+            registry
+        )
+        .unwrap();
         Self {
             registry,
             render_route_decision_total,
@@ -210,6 +385,21 @@ impl Metrics {
             map_filter_stripped_total,
             map_filter_preserved_total,
             map_filter_rules_loaded,
+            chrome_connect_seconds,
+            chrome_target_create_seconds,
+            chrome_navigate_seconds,
+            chrome_snapshot_seconds,
+            chrome_pool_size,
+            chrome_pool_idle,
+            chrome_pool_inflight,
+            chrome_pool_acquire_seconds,
+            chrome_pool_acquires_total,
+            chrome_pool_recycle_seconds,
+            chrome_pool_recycle_total,
+            chrome_pool_recycle_failures_total,
+            chrome_pool_health_check_total,
+            chrome_context_lifetime_seconds,
+            chrome_request_handshake_seconds,
         }
     }
 }
@@ -221,4 +411,31 @@ pub fn gather_text() -> String {
     let mut buf = Vec::new();
     encoder.encode(&metric_families, &mut buf).ok();
     String::from_utf8(buf).unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Tier 0 metrics must be registered eagerly so alert rules see zero
+    /// series (not absent series) before the first observation.
+    #[test]
+    fn tier0_chrome_latency_histograms_registered() {
+        let m = metrics();
+        m.chrome_connect_seconds
+            .with_label_values(&["ok"])
+            .observe(0.05);
+        m.chrome_target_create_seconds.observe(0.02);
+        m.chrome_navigate_seconds.observe(0.4);
+        m.chrome_snapshot_seconds.observe(0.01);
+        let text = gather_text();
+        assert!(
+            text.contains("crw_chrome_connect_seconds"),
+            "missing connect_seconds; got: {text}"
+        );
+        assert!(text.contains("crw_chrome_target_create_seconds"));
+        assert!(text.contains("crw_chrome_navigate_seconds"));
+        assert!(text.contains("crw_chrome_snapshot_seconds"));
+        assert!(text.contains(r#"outcome="ok""#));
+    }
 }

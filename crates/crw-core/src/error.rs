@@ -40,6 +40,9 @@ pub enum CrwError {
 
     #[error("{0}")]
     Internal(String),
+
+    #[error("Renderer pool shutting down")]
+    Shutdown,
 }
 
 impl CrwError {
@@ -59,6 +62,7 @@ impl CrwError {
             CrwError::RateLimited => "rate_limited",
             CrwError::SearchDisabled(_) => "search_disabled",
             CrwError::Internal(_) => "internal_error",
+            CrwError::Shutdown => "shutdown",
         }
     }
 }

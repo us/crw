@@ -38,6 +38,8 @@ pub mod breaker;
 #[cfg(feature = "auto-browser")]
 pub mod browser;
 #[cfg(feature = "cdp")]
+pub mod browser_pool;
+#[cfg(feature = "cdp")]
 pub mod cdp;
 #[cfg(feature = "cdp")]
 pub mod cdp_conn;
@@ -191,6 +193,10 @@ pub struct FallbackRenderer {
     requests_per_second: f64,
     /// Process-wide per-eTLD+1 in-flight cap. `1` enforces strict politeness.
     per_host_max_concurrent: u32,
+    /// Chrome browser-context pool handle for graceful drain on shutdown.
+    /// `None` when the pool is disabled or the chrome tier isn't configured.
+    #[cfg(feature = "cdp")]
+    chrome_pool: Option<Arc<browser_pool::BrowserContextPool<cdp_conn::CdpConnection>>>,
 }
 
 impl std::fmt::Debug for FallbackRenderer {
@@ -260,8 +266,15 @@ impl FallbackRenderer {
                 tier_timeouts: tier_timeouts_from(config),
                 requests_per_second: 0.0,
                 per_host_max_concurrent: 1,
+                #[cfg(feature = "cdp")]
+                chrome_pool: None,
             });
         }
+
+        #[cfg(feature = "cdp")]
+        let mut chrome_pool: Option<
+            Arc<browser_pool::BrowserContextPool<cdp_conn::CdpConnection>>,
+        > = None;
 
         #[cfg(feature = "cdp")]
         {
@@ -307,20 +320,64 @@ impl FallbackRenderer {
                 if let Some(ch) = &config.chrome {
                     let blocklist = blocklist::Blocklist::defaults()
                         .with_stylesheets(config.chrome_intercept_stylesheets);
-                    js_renderers.push(Arc::new(
-                        cdp::CdpRenderer::new(
-                            "chrome",
-                            &ch.ws_url,
-                            config.chrome_timeout(),
-                            config.pool_size,
-                        )
-                        .with_nav_budget(config.chrome_nav_budget_ms)
-                        .with_interception(
-                            config.chrome_intercept_resources,
-                            blocklist,
-                            config.chrome_host_intercept_disable.clone(),
-                        ),
-                    ));
+                    let mut renderer = cdp::CdpRenderer::new(
+                        "chrome",
+                        &ch.ws_url,
+                        config.chrome_timeout(),
+                        config.pool_size,
+                    )
+                    .with_nav_budget(config.chrome_nav_budget_ms)
+                    .with_interception(
+                        config.chrome_intercept_resources,
+                        blocklist,
+                        config.chrome_host_intercept_disable.clone(),
+                    );
+
+                    // Browser-context pool: gated off on browserless v2 in v1
+                    // per plan §"Out of scope". The backend is set explicitly
+                    // in config; never URL-sniffed.
+                    if config.chrome_context_pool_enabled {
+                        match config.chrome_backend {
+                            crw_core::config::ChromeBackend::Vanilla => {
+                                let pcfg = &config.chrome_pool;
+                                let size = pcfg.size.unwrap_or_else(|| {
+                                    let n = std::thread::available_parallelism()
+                                        .map(|p| p.get())
+                                        .unwrap_or(2);
+                                    std::cmp::max(2, n / 2)
+                                });
+                                renderer = renderer.with_pool(browser_pool::PoolCfg {
+                                    size,
+                                    recycle_after_navs: pcfg.recycle_after_navs,
+                                    idle_timeout: std::time::Duration::from_secs(
+                                        pcfg.idle_timeout_secs,
+                                    ),
+                                    health_check_after: std::time::Duration::from_secs(
+                                        pcfg.health_check_secs,
+                                    ),
+                                    shutdown_drain: std::time::Duration::from_secs(
+                                        pcfg.shutdown_drain_secs,
+                                    ),
+                                    close_target_timeout: std::time::Duration::from_secs(2),
+                                    dispose_ctx_timeout: std::time::Duration::from_secs(1),
+                                    create_ctx_timeout: std::time::Duration::from_secs(1),
+                                });
+                                tracing::info!(
+                                    pool_size = size,
+                                    "chrome browser-context pool enabled"
+                                );
+                            }
+                            crw_core::config::ChromeBackend::Browserless => {
+                                tracing::warn!(
+                                    "chrome_context_pool_enabled = true but \
+                                     chrome_backend = browserless — pool unsupported on \
+                                     this backend in v1, falling back to legacy path"
+                                );
+                            }
+                        }
+                    }
+                    chrome_pool = renderer.pool();
+                    js_renderers.push(Arc::new(renderer));
                 } else if matches!(config.mode, RendererMode::Chrome) {
                     return Err(CrwError::ConfigError(
                         "renderer.mode = \"chrome\" but [renderer.chrome] ws_url is not configured"
@@ -352,8 +409,28 @@ impl FallbackRenderer {
             tier_timeouts: tier_timeouts_from(config),
             requests_per_second: 0.0,
             per_host_max_concurrent: 1,
+            #[cfg(feature = "cdp")]
+            chrome_pool,
         })
     }
+
+    /// Drain the chrome browser-context pool. Idempotent and a no-op when
+    /// the pool is disabled. Call from the server's SIGTERM handler after
+    /// the HTTP server has finished serving in-flight requests.
+    #[cfg(feature = "cdp")]
+    pub async fn shutdown_chrome_pool(&self, drain: std::time::Duration) {
+        if let Some(pool) = self.chrome_pool.clone() {
+            tracing::info!(
+                drain_secs = drain.as_secs(),
+                "draining chrome browser-context pool"
+            );
+            pool.shutdown(drain).await;
+        }
+    }
+
+    /// No-op when the `cdp` feature is disabled — keeps caller code simple.
+    #[cfg(not(feature = "cdp"))]
+    pub async fn shutdown_chrome_pool(&self, _drain: std::time::Duration) {}
 
     /// Configure the process-wide per-host limiter (eTLD+1 keyed). Call once
     /// at startup with values from `CrawlerConfig`. Defaults: rps=0.0 (no

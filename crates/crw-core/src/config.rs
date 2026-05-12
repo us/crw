@@ -321,9 +321,21 @@ pub struct RendererConfig {
     pub chrome_nav_budget_ms: u64,
     /// Enable the bounded browser-context pool. Default `false`; v1 ships
     /// `RECYCLE_AFTER_NAV = 1` (recreate every release) before optimising to
-    /// reuse-with-clearing. See plan Phase 4.
+    /// reuse-with-clearing. See plan Phase 4. **Gated off when
+    /// `chrome_backend = "browserless"`** — browserless v2's
+    /// `Target.createBrowserContext` semantics with long-lived sessions are
+    /// unproven; lib.rs forces this to `false` with a WARN log in that case.
     #[serde(default)]
     pub chrome_context_pool_enabled: bool,
+    /// Per-knob pool configuration. Read only when
+    /// `chrome_context_pool_enabled = true` AND backend is `Vanilla`.
+    #[serde(default)]
+    pub chrome_pool: ChromePoolConfig,
+    /// Which Chrome backend the WS URL points at. **Explicit** — never sniff
+    /// from URL substrings (k8s svc names, port-forwards, custom routes break
+    /// substring detection per plan §C2). Default `Vanilla`.
+    #[serde(default)]
+    pub chrome_backend: ChromeBackend,
     /// Enable the success-ratio renderer predictor in `HostPreferences`.
     /// Default `false`; flipped after the predictor replay harness gates
     /// on the 1k bench (false-skip < 2 %, false-escalate < 5 %, churn < 3 / 1k).
@@ -410,6 +422,71 @@ fn default_chrome_nav_budget_ms() -> u64 {
     12_000
 }
 
+/// Per-knob configuration for the bounded browser-context pool. Loaded under
+/// `[renderer.chrome_pool]`. Inactive unless
+/// `chrome_context_pool_enabled = true` AND `chrome_backend = "vanilla"`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ChromePoolConfig {
+    /// Pool size. `None` → `max(2, num_cpus / 2)`. Caps simultaneous
+    /// in-flight chrome requests per pool.
+    #[serde(default)]
+    pub size: Option<usize>,
+    /// Recycle policy: v1 always recreates the context after each release.
+    /// Reserved for a future "reuse N navigations then recreate" mode.
+    #[serde(default = "default_recycle_after_navs")]
+    pub recycle_after_navs: u32,
+    /// Idle slots older than this are health-checked on next acquire.
+    #[serde(default = "default_idle_timeout_secs")]
+    pub idle_timeout_secs: u64,
+    /// `Browser.getVersion` probe deadline (idle-slot liveness).
+    #[serde(default = "default_health_check_secs")]
+    pub health_check_secs: u64,
+    /// SIGTERM drain window before phase 3 force-close.
+    #[serde(default = "default_shutdown_drain_secs")]
+    pub shutdown_drain_secs: u64,
+}
+
+impl Default for ChromePoolConfig {
+    fn default() -> Self {
+        Self {
+            size: None,
+            recycle_after_navs: default_recycle_after_navs(),
+            idle_timeout_secs: default_idle_timeout_secs(),
+            health_check_secs: default_health_check_secs(),
+            shutdown_drain_secs: default_shutdown_drain_secs(),
+        }
+    }
+}
+
+fn default_recycle_after_navs() -> u32 {
+    1
+}
+fn default_idle_timeout_secs() -> u64 {
+    300
+}
+fn default_health_check_secs() -> u64 {
+    60
+}
+fn default_shutdown_drain_secs() -> u64 {
+    30
+}
+
+/// Chrome backend kind. Set explicitly under `[renderer]` as
+/// `chrome_backend = "vanilla"` or `chrome_backend = "browserless"`. **Never
+/// inferred from URL substrings** — k8s service names, port-forwards, and
+/// custom routes break substring detection. See plan §C2.
+#[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ChromeBackend {
+    /// chromedp/headless-shell or vanilla Chrome with `/json/version`. Pool
+    /// is enabled here when `chrome_context_pool_enabled = true`.
+    #[default]
+    Vanilla,
+    /// Browserless v2 / commercial CDP endpoint. Pool is **gated off** in v1
+    /// — see plan §"Out of scope (v1)".
+    Browserless,
+}
+
 impl Default for RendererConfig {
     fn default() -> Self {
         Self {
@@ -428,6 +505,8 @@ impl Default for RendererConfig {
             chrome_host_intercept_disable: Vec::new(),
             chrome_nav_budget_ms: default_chrome_nav_budget_ms(),
             chrome_context_pool_enabled: false,
+            chrome_pool: ChromePoolConfig::default(),
+            chrome_backend: ChromeBackend::default(),
             use_predictor: false,
             escalation: EscalationConfig::default(),
             antibot: AntibotConfig::default(),

@@ -56,11 +56,22 @@ chrome_intercept_resources = true
 # partial-DOM snapshot is returned with truncated=true.
 chrome_nav_budget_ms = 12000
 
+# Phase 4 §B5: bounded browser-context pool. Validated 2026-05-11
+# (PROGRESS.md gap-closure): cookie/storage isolation T1 PASS, B2 sanity
+# ratio < 2× (T2), RSS soak chrome 1.08× over 500 reqs (T3), TOML flip
+# 75/75 across 3 cycles (T5). Backend explicitly vanilla — pool is gated
+# off on browserless via lib.rs.
+chrome_backend = "vanilla"
+chrome_context_pool_enabled = true
+
 [renderer.lightpanda]
 ws_url = "ws://lightpanda:9222/"
 
 [renderer.chrome]
 ws_url = "ws://chrome:9222/"
+
+[renderer.chrome_pool]
+size = 4
 
 # /v1/search points at the bundled SearXNG sidecar. The container resolves
 # `searxng` via docker-compose's network DNS.
