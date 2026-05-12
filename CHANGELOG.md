@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.6.4](https://github.com/us/crw/compare/v0.6.3...v0.6.4) (2026-05-12)
+
+
+### Features
+
+* **renderer:** add bounded browser-context pool for Chrome tier ([#43](https://github.com/us/crw/issues/43)) ([69b4861](https://github.com/us/crw/commit/69b48610d269c37fa043bcd58855b3970f554f94))
+
 ## [0.6.3](https://github.com/us/crw/compare/v0.6.2...v0.6.3) (2026-05-12)
 
 
