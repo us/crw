@@ -16,6 +16,58 @@ pub struct AppConfig {
     pub request: RequestConfig,
     #[serde(default)]
     pub search: SearchConfig,
+    #[serde(default)]
+    pub map: MapConfig,
+}
+
+/// `[map]` section — currently only carries `[map.url_filter]`.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct MapConfig {
+    #[serde(default)]
+    pub url_filter: MapUrlFilterConfig,
+}
+
+/// `[map.url_filter]` — raw TOML view of the filter knobs. Conversion to
+/// the runtime `UrlFilterCfg` lives in `crw-crawl` (which can see both this
+/// type and the filter module). Keeping this struct dependency-free here
+/// avoids a cycle (`crw-core` does not depend on `crw-crawl`).
+#[derive(Debug, Clone, Deserialize)]
+pub struct MapUrlFilterConfig {
+    /// Tier B — strip tracking params. Default: `true`.
+    #[serde(default = "default_true_filter")]
+    pub strip_tracking_params: bool,
+    /// Tier A — drop action URLs entirely. Default: `true`.
+    #[serde(default = "default_true_filter")]
+    pub drop_action_urls: bool,
+    /// When `true`, `.gov`/`.mil` hosts run Tier A too. Default `false`.
+    #[serde(default)]
+    pub gov_tld_drop_actions: bool,
+    /// Additive on top of `DEFAULT_TRACKING_PARAMS`.
+    #[serde(default)]
+    pub extra_tracking_params: Vec<String>,
+    /// Additive on top of `DEFAULT_ACTION_PARAMS`.
+    #[serde(default)]
+    pub extra_action_params: Vec<String>,
+    /// Additive on top of `ALWAYS_PRESERVE`.
+    #[serde(default)]
+    pub extra_preserve_params: Vec<String>,
+}
+
+impl Default for MapUrlFilterConfig {
+    fn default() -> Self {
+        Self {
+            strip_tracking_params: true,
+            drop_action_urls: true,
+            gov_tld_drop_actions: false,
+            extra_tracking_params: Vec::new(),
+            extra_action_params: Vec::new(),
+            extra_preserve_params: Vec::new(),
+        }
+    }
+}
+
+fn default_true_filter() -> bool {
+    true
 }
 
 /// Per-tier CDP overhead in milliseconds — sum of SPA selector poll budget,

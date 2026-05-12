@@ -269,6 +269,31 @@ curl -X POST http://localhost:3000/v1/map \
 ```
 </details>
 
+#### URL Filtering (default-on)
+
+`/v1/map` filters its output by default to keep content URLs and drop
+transactional action URLs (e.g. WooCommerce `?add-to-cart=…`,
+`?add_to_wishlist=…&_wpnonce=…`). Tracking parameters (`utm_*`, `gclid`,
+`fbclid`, …) are stripped from the URLs that remain. Counts come back in
+`droppedActionCount` and `strippedTrackingCount`.
+
+Per-request fields (all optional):
+
+| Field | Effect |
+|---|---|
+| `ignoreQueryParameters: true` | Coarse Firecrawl-compatible: strip ALL params from kept URLs (action drop still runs). |
+| `ignoreQueryParameters: false` | Disable both filters — raw URLs. |
+| `stripTrackingParams: bool` | Toggle Tier B only. |
+| `dropActionUrls: bool` | Toggle Tier A only. |
+| `extraTrackingParams: [string]` | Additive (≤64 keys). |
+| `extraActionParams: [string]` | Additive (≤64 keys). |
+| `preserveParams: [string]` | Never strip / never drop these keys (≤64 keys). |
+
+Precedence: per-request value > TOML (`[map.url_filter]`) > compile-time
+default (both `true`). To restore pre-filter behaviour globally, set
+`strip_tracking_params = false` and `drop_action_urls = false` in
+`config.default.toml`.
+
 ### Search
 
 Search the web and get full page content from results. Self-hosted CRW

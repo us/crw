@@ -325,6 +325,19 @@ pub struct DiscoverOptions<'a> {
     pub deadline_ms_per_page: u64,
     /// Per-eTLD+1 concurrency cap. See `CrawlOptions::per_host_max_concurrent`.
     pub per_host_max_concurrent: u32,
+    /// Optional /map URL filter (Tier A drop + Tier B strip). When `None`,
+    /// behaviour is the legacy `normalize_url` pass-through.
+    pub url_filter: Option<Arc<crate::url_filter::UrlFilterCfg>>,
+}
+
+/// Result of [`discover_urls`]. URLs in `urls` have already passed the
+/// /map filter; `dropped_action_count` and `stripped_tracking_count` are
+/// the per-request stats the API response surfaces back to callers.
+#[derive(Debug, Clone, Default)]
+pub struct DiscoverResult {
+    pub urls: Vec<String>,
+    pub dropped_action_count: usize,
+    pub stripped_tracking_count: usize,
 }
 
 /// If the sitemap phase yields at least this many URLs and `crawl_fallback`
@@ -339,7 +352,7 @@ const SITEMAP_MAX_DEPTH: u32 = 3;
 const SITEMAP_MAX_FETCHES: usize = 25;
 
 /// Discover URLs from a site (map endpoint).
-pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<Vec<String>> {
+pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResult> {
     let DiscoverOptions {
         base_url,
         max_depth,
@@ -352,7 +365,55 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<Vec<String>> 
         proxy,
         deadline_ms_per_page,
         per_host_max_concurrent,
+        url_filter,
     } = opts;
+    let mut dropped_action_count: usize = 0;
+    let mut stripped_tracking_count: usize = 0;
+    // Helper closures around the optional filter — None ⇒ legacy pass-through
+    // (`normalize_url`). Both increment the stats counters so the API can
+    // surface them in the response.
+    let filter_raw = |raw: &str, dropped: &mut usize, stripped: &mut usize| -> Option<String> {
+        match url_filter.as_deref() {
+            Some(cfg) => match crate::url_filter::filter_and_normalize_raw(raw, cfg) {
+                Some(s) => {
+                    if raw.contains('?')
+                        && let Ok(p) = url::Url::parse(raw)
+                        && s != normalize_url(raw)
+                        && p.query().is_some()
+                    {
+                        *stripped += 1;
+                    }
+                    Some(s)
+                }
+                None => {
+                    *dropped += 1;
+                    None
+                }
+            },
+            None => Some(normalize_url(raw)),
+        }
+    };
+    let filter_parsed = |parsed: &url::Url,
+                         raw: &str,
+                         dropped: &mut usize,
+                         stripped: &mut usize|
+     -> Option<String> {
+        match url_filter.as_deref() {
+            Some(cfg) => match crate::url_filter::filter_and_normalize_parsed(parsed, raw, cfg) {
+                Some(s) => {
+                    if parsed.query().is_some() && s != normalize_url(raw) {
+                        *stripped += 1;
+                    }
+                    Some(s)
+                }
+                None => {
+                    *dropped += 1;
+                    None
+                }
+            },
+            None => Some(normalize_url(raw)),
+        }
+    };
     let parsed = url::Url::parse(base_url)
         .map_err(|e| crw_core::error::CrwError::InvalidRequest(format!("Invalid URL: {e}")))?;
 
@@ -449,7 +510,10 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<Vec<String>> 
             if all_urls.len() >= MAX_DISCOVERED_URLS {
                 break;
             }
-            all_urls.insert(u);
+            if let Some(n) = filter_raw(&u, &mut dropped_action_count, &mut stripped_tracking_count)
+            {
+                all_urls.insert(n);
+            }
         }
     }
 
@@ -458,7 +522,11 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<Vec<String>> 
         all_urls.insert(base_url.to_string());
         let mut urls: Vec<String> = all_urls.into_iter().collect();
         urls.sort();
-        return Ok(urls);
+        return Ok(DiscoverResult {
+            urls,
+            dropped_action_count,
+            stripped_tracking_count,
+        });
     }
 
     // Sitemap was rich enough → run BFS with a tight budget. Otherwise let it
@@ -525,7 +593,15 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<Vec<String>> 
                     if link_url.origin().ascii_serialization() != origin {
                         continue;
                     }
-                    let normalized = normalize_url(&link);
+                    let normalized = match filter_parsed(
+                        &link_url,
+                        &link,
+                        &mut dropped_action_count,
+                        &mut stripped_tracking_count,
+                    ) {
+                        Some(n) => n,
+                        None => continue,
+                    };
                     if !visited.contains(&normalized) {
                         visited.insert(normalized.clone());
                         all_urls.insert(normalized.clone());
@@ -541,7 +617,11 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<Vec<String>> 
     all_urls.insert(base_url.to_string());
     let mut urls: Vec<String> = all_urls.into_iter().collect();
     urls.sort();
-    Ok(urls)
+    Ok(DiscoverResult {
+        urls,
+        dropped_action_count,
+        stripped_tracking_count,
+    })
 }
 
 /// Normalize URL by removing fragment and trailing slash.

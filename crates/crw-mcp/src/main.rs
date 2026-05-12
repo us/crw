@@ -299,6 +299,7 @@ async fn main() {
                     auth: Default::default(),
                     request: Default::default(),
                     search: Default::default(),
+                    map: Default::default(),
                 }
             });
 

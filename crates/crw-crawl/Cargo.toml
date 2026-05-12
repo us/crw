@@ -23,7 +23,14 @@ futures = { workspace = true }
 dashmap = { workspace = true }
 rand = { workspace = true }
 flate2 = "1"
+phf = { workspace = true }
+publicsuffix = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
 wiremock = { workspace = true }
+proptest = { workspace = true }
+
+[[bench]]
+name = "map_url_filter"
+harness = false

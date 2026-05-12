@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Shanza Store — fixture for issue #40</title>
+  <link rel="canonical" href="https://shanzastore.example.test/">
+</head>
+<body>
+  <h1>Shanza Store (fixture)</h1>
+  <nav>
+    <a href="/">Home</a>
+    <a href="/shop/">Shop</a>
+    <a href="/product/sample-1/">Sample Product 1</a>
+    <a href="/product/sample-2/">Sample Product 2</a>
+    <a href="/about/">About</a>
+    <a href="/contact/?utm_source=newsletter&utm_medium=email">Contact</a>
+  </nav>
+
+  <main>
+    <article id="product-1">
+      <h2><a href="/product/sample-1/">Sample Product 1</a></h2>
+      <a class="add-to-cart" href="/?add-to-cart=360">Add Sample 1 to cart</a>
+      <a class="wishlist"   href="/?add_to_wishlist=6241&amp;_wpnonce=b7643da9b9">Add Sample 1 to wishlist</a>
+    </article>
+
+    <article id="product-2">
+      <h2><a href="/product/sample-2/">Sample Product 2</a></h2>
+      <a class="add-to-cart" href="/?add-to-cart=361">Add Sample 2 to cart</a>
+      <a class="wishlist"   href="/?add_to_wishlist=6242&amp;_wpnonce=c8754eb0c0">Add Sample 2 to wishlist</a>
+      <a class="remove"     href="/?remove_item=361&amp;_wpnonce=d99921ff11">Remove</a>
+      <a class="undo"       href="/?undo_item=361&amp;_wpnonce=d99921ff11">Undo</a>
+    </article>
+
+    <section class="promo">
+      <a href="/blog/spring-sale/?utm_source=facebook&amp;utm_medium=cpc&amp;fbclid=IwAR12345">
+        Spring Sale (FB ad)
+      </a>
+      <a href="/blog/spring-sale/?gclid=Cj0KCQjw_abc">Spring Sale (Google ad)</a>
+    </section>
+
+    <nav class="pagination">
+      <a href="/shop/?page=2">Page 2</a>
+      <a href="/shop/?page=3">Page 3</a>
+    </nav>
+  </main>
+</body>
+</html>

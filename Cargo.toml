@@ -89,10 +89,15 @@ url = { version = "2", features = ["serde"] }
 sha2 = "0.10"
 hex = "0.4"
 
+# Compile-time perfect-hash sets (url_filter deny-lists)
+phf = { version = "0.11", features = ["macros"] }
+
 # Test dependencies
 tokio-test = "0.4"
 wiremock = "0.6"
 axum-test = "19"
+proptest = "1"
+insta = { version = "1", features = ["json"] }
 
 [profile.release]
 lto = true

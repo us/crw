@@ -89,6 +89,10 @@ pub struct AppState {
     /// SearXNG client. `None` when `[search].searxng_url` is unset, in which
     /// case `/v1/search` returns a clear `search_disabled` error.
     pub searxng: Option<Arc<SearxngClient>>,
+    /// Server-wide default /map URL filter. `None` disables the filter
+    /// entirely (legacy behaviour). Per-request overrides may swap or
+    /// extend this at handler time.
+    pub url_filter: Option<Arc<crw_crawl::url_filter::UrlFilterCfg>>,
 }
 
 impl AppState {
@@ -124,12 +128,41 @@ impl AppState {
             None
         };
 
+        let url_filter_cfg =
+            crw_crawl::url_filter::UrlFilterCfg::from_map_config(&config.map.url_filter);
+        // One-shot snapshot of how many rules the filter knows about. Helps
+        // operators confirm at boot that the deny-lists actually loaded.
+        let m = crw_core::metrics::metrics();
+        m.map_filter_rules_loaded
+            .with_label_values(&["action"])
+            .inc_by(
+                (crw_crawl::url_filter_data::DEFAULT_ACTION_PARAMS.len()
+                    + url_filter_cfg.action_params.len()) as u64,
+            );
+        m.map_filter_rules_loaded
+            .with_label_values(&["tracking"])
+            .inc_by(
+                (crw_crawl::url_filter_data::DEFAULT_TRACKING_PARAMS.len()
+                    + url_filter_cfg.tracking_params.len()) as u64,
+            );
+        m.map_filter_rules_loaded
+            .with_label_values(&["preserve"])
+            .inc_by(
+                (crw_crawl::url_filter_data::ALWAYS_PRESERVE.len()
+                    + url_filter_cfg.preserve_params.len()) as u64,
+            );
+        m.map_filter_rules_loaded
+            .with_label_values(&["host_override"])
+            .inc_by(url_filter_cfg.host_overrides.len() as u64);
+        let url_filter = Some(Arc::new(url_filter_cfg));
+
         let state = Self {
             config: Arc::new(config),
             renderer: Arc::new(renderer),
             crawl_jobs: Arc::new(RwLock::new(HashMap::new())),
             crawl_semaphore: Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_CRAWLS)),
             searxng,
+            url_filter,
         };
 
         // Wrap the not-yet-returned state in a block to keep the Ok() shape at the end.

@@ -78,7 +78,7 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
             let max_depth = req
                 .max_depth
                 .unwrap_or(state.config.crawler.default_max_depth);
-            let urls = discover_urls(DiscoverOptions {
+            let result = discover_urls(DiscoverOptions {
                 base_url: &req.url,
                 max_depth,
                 use_sitemap: req.use_sitemap,
@@ -90,10 +90,16 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
                 deadline_ms_per_page: state.config.effective_deadline_ms(None, None),
                 per_host_max_concurrent: state.config.crawler.per_host_max_concurrent,
                 crawl_fallback: req.crawl_fallback,
+                url_filter: state.url_filter.clone(),
             })
             .await
             .map_err(|e| format!("{e}"))?;
-            Ok(json!({"success": true, "links": urls}))
+            Ok(json!({
+                "success": true,
+                "links": result.urls,
+                "droppedActionCount": result.dropped_action_count,
+                "strippedTrackingCount": result.stripped_tracking_count,
+            }))
         }
         "crw_search" => {
             let req: SearchRequest =

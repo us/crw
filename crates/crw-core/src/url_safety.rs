@@ -23,7 +23,14 @@ pub fn safe_redirect_policy() -> reqwest::redirect::Policy {
 /// - Private IP ranges (10.x, 172.16-31.x, 192.168.x)
 /// - Link-local addresses (169.254.x — e.g. AWS metadata endpoint)
 /// - 0.0.0.0
+///
+/// **Test-only escape hatch**: when the env var
+/// `CRW_ALLOW_LOOPBACK_FOR_TESTS=1` is set, the loopback/private-range
+/// checks are skipped so wiremock-backed integration tests can target
+/// `127.0.0.1:<random>`. The opt-in is read at every call (cheap) so it
+/// can be flipped per-test. Never set this in production.
 pub fn validate_safe_url(url: &url::Url) -> Result<(), String> {
+    let test_allow_loopback = std::env::var("CRW_ALLOW_LOOPBACK_FOR_TESTS").as_deref() == Ok("1");
     // URL length limit
     const MAX_URL_LENGTH: usize = 2048;
     if url.as_str().len() > MAX_URL_LENGTH {
@@ -49,12 +56,13 @@ pub fn validate_safe_url(url: &url::Url) -> Result<(), String> {
 
     // Block localhost by name
     let host_lower = host.to_lowercase();
-    if host_lower == "localhost" || host_lower.ends_with(".localhost") {
+    if !test_allow_loopback && (host_lower == "localhost" || host_lower.ends_with(".localhost")) {
         return Err("Localhost URLs are not allowed".into());
     }
 
     // Parse as IP if possible and check ranges
-    if let Ok(ip) = host.parse::<IpAddr>()
+    if !test_allow_loopback
+        && let Ok(ip) = host.parse::<IpAddr>()
         && is_blocked_ip(&ip)
     {
         return Err(format!("Access to {ip} is not allowed"));
@@ -62,7 +70,8 @@ pub fn validate_safe_url(url: &url::Url) -> Result<(), String> {
 
     // Also check bracket-stripped IPv6 (e.g. [::1])
     let stripped = host.trim_start_matches('[').trim_end_matches(']');
-    if let Ok(ip) = stripped.parse::<IpAddr>()
+    if !test_allow_loopback
+        && let Ok(ip) = stripped.parse::<IpAddr>()
         && is_blocked_ip(&ip)
     {
         return Err(format!("Access to {ip} is not allowed"));

@@ -47,6 +47,16 @@ pub struct Metrics {
     /// Renderer recycle events, labeled by renderer + reason
     /// (`age` | `count`). Reserved for the optional page-sweep work in B.1.
     pub renderer_recycle_total: IntCounterVec,
+    /// /map URL filter: URLs dropped entirely (Tier A action-URL filter or
+    /// parse-error pass-through bookkeeping). Labels: `reason`.
+    pub map_filter_dropped_total: IntCounterVec,
+    /// /map URL filter: query params stripped (Tier B / coarse mode). Labels: `reason`.
+    pub map_filter_stripped_total: IntCounterVec,
+    /// /map URL filter: param/URL preserved by a rule that beats the deny-list
+    /// (host override, `.gov` TLD, ALWAYS_PRESERVE). Labels: `reason`.
+    pub map_filter_preserved_total: IntCounterVec,
+    /// /map URL filter: count of rules loaded at server startup. Labels: `kind`.
+    pub map_filter_rules_loaded: IntCounterVec,
 }
 
 static METRICS: OnceLock<Metrics> = OnceLock::new();
@@ -153,6 +163,34 @@ impl Metrics {
             registry
         )
         .unwrap();
+        let map_filter_dropped_total = register_int_counter_vec_with_registry!(
+            "crw_map_filter_dropped_total",
+            "URLs dropped by /map filter (action-URL or parse-error pass-through)",
+            &["reason"],
+            registry
+        )
+        .unwrap();
+        let map_filter_stripped_total = register_int_counter_vec_with_registry!(
+            "crw_map_filter_stripped_total",
+            "Query params stripped by /map filter",
+            &["reason"],
+            registry
+        )
+        .unwrap();
+        let map_filter_preserved_total = register_int_counter_vec_with_registry!(
+            "crw_map_filter_preserved_total",
+            "Params/URLs preserved by /map filter rules (host override, gov TLD, always-preserve)",
+            &["reason"],
+            registry
+        )
+        .unwrap();
+        let map_filter_rules_loaded = register_int_counter_vec_with_registry!(
+            "crw_map_filter_rules_loaded",
+            "/map filter rules loaded at server startup",
+            &["kind"],
+            registry
+        )
+        .unwrap();
         Self {
             registry,
             render_route_decision_total,
@@ -168,6 +206,10 @@ impl Metrics {
             cdp_live_connections,
             target_lifecycle_total,
             renderer_recycle_total,
+            map_filter_dropped_total,
+            map_filter_stripped_total,
+            map_filter_preserved_total,
+            map_filter_rules_loaded,
         }
     }
 }

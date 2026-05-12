@@ -1,0 +1,26 @@
+{
+  "_comment": "Expected post-filter URL set from issue-40-shanzastore.html with default filter ON. Action URLs (Tier A) are dropped entirely; tracking params (Tier B) are stripped from kept URLs.",
+  "base_url": "https://shanzastore.example.test",
+  "expected_links_filter_on": [
+    "https://shanzastore.example.test",
+    "https://shanzastore.example.test/about",
+    "https://shanzastore.example.test/blog/spring-sale",
+    "https://shanzastore.example.test/contact",
+    "https://shanzastore.example.test/product/sample-1",
+    "https://shanzastore.example.test/product/sample-2",
+    "https://shanzastore.example.test/shop",
+    "https://shanzastore.example.test/shop?page=2",
+    "https://shanzastore.example.test/shop?page=3"
+  ],
+  "expected_dropped_action_count": 7,
+  "expected_links_filter_off_contains_substrings": [
+    "add-to-cart=360",
+    "add_to_wishlist=6241",
+    "_wpnonce=b7643da9b9",
+    "remove_item=361",
+    "undo_item=361",
+    "utm_source=facebook",
+    "fbclid=IwAR12345",
+    "gclid=Cj0KCQjw_abc"
+  ]
+}

@@ -139,3 +139,17 @@ max_limit = 20
 research_engines = ["arxiv", "crossref", "google scholar", "semantic scholar"]
 # Engines invoked when the request includes `categories: ["github"]`.
 github_engines = ["github"]
+
+# ── /v1/map URL filter ──────────────────────────────────────────────────
+# Strips tracking params and drops transactional action URLs from /map
+# results. See `crates/crw-crawl/src/url_filter_data.rs` for the built-in
+# deny-lists. Per-request overrides are documented on `MapRequest` —
+# pass `{"ignoreQueryParameters": false}` for raw-URL output.
+[map.url_filter]
+strip_tracking_params = true
+drop_action_urls = true
+gov_tld_drop_actions = false
+# Additive on top of built-ins (max 64 keys each).
+extra_tracking_params = []
+extra_action_params = []
+extra_preserve_params = []

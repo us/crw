@@ -602,12 +602,42 @@ pub struct MapRequest {
     /// Custom timeout in seconds (default: 120).
     #[serde(default)]
     pub timeout: Option<u64>,
+    /// Tier B — strip tracking params. `Some(_)` overrides TOML.
+    #[serde(default)]
+    pub strip_tracking_params: Option<bool>,
+    /// Tier A — drop action URLs. `Some(_)` overrides TOML.
+    #[serde(default)]
+    pub drop_action_urls: Option<bool>,
+    /// Firecrawl-compatible coarse alias. `Some(true)`: strip every
+    /// non-preserved param. `Some(false)`: switch the whole filter off
+    /// (raw URLs — the explicit escape hatch).
+    #[serde(default)]
+    pub ignore_query_parameters: Option<bool>,
+    /// Additive on top of `DEFAULT_TRACKING_PARAMS`. Max 64 keys; over-cap → 422.
+    #[serde(default)]
+    pub extra_tracking_params: Option<Vec<String>>,
+    /// Additive on top of `DEFAULT_ACTION_PARAMS`. Max 64 keys; over-cap → 422.
+    #[serde(default)]
+    pub extra_action_params: Option<Vec<String>>,
+    /// Additive on top of `ALWAYS_PRESERVE` + TOML preserves.
+    /// Max 64 keys; over-cap → 422.
+    #[serde(default)]
+    pub preserve_params: Option<Vec<String>>,
 }
 
-/// POST /v1/map response data — the discovered links.
+/// POST /v1/map response data — the discovered links plus filter stats.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MapData {
     pub links: Vec<String>,
+    /// Number of URLs the /map filter dropped entirely (Tier A action-URL
+    /// matches). `0` when the filter is disabled.
+    #[serde(default)]
+    pub dropped_action_count: usize,
+    /// Number of URLs that had at least one query param stripped by Tier B.
+    /// `0` when the filter is disabled.
+    #[serde(default)]
+    pub stripped_tracking_count: usize,
 }
 
 /// POST /v1/map response body.

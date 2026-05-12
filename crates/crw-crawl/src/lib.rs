@@ -22,3 +22,5 @@ pub mod crawl;
 pub mod robots;
 pub mod single;
 pub mod sitemap;
+pub mod url_filter;
+pub mod url_filter_data;
