@@ -451,8 +451,13 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
         (after_selection.to_string(), None)
     };
 
-    // Step 5: Produce requested formats.
-    let md = if formats.contains(&OutputFormat::Markdown) || formats.contains(&OutputFormat::Json) {
+    // Step 5: Produce requested formats. `Summary` also needs markdown
+    // internally — the summary path feeds the markdown into the LLM and then
+    // strips it from the response unless the caller also asked for markdown.
+    let md = if formats.contains(&OutputFormat::Markdown)
+        || formats.contains(&OutputFormat::Json)
+        || formats.contains(&OutputFormat::Summary)
+    {
         let primary_md = markdown::html_to_markdown(&content_html);
         let primary_quality = quality::analyze_md_only(&primary_md);
 

@@ -106,6 +106,8 @@ mod tests {
             llm_provider: None,
             llm_model: None,
             base_url: None,
+            summary_prompt: None,
+            answer_prompt: None,
         }
     }
 

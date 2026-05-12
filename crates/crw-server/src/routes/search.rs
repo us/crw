@@ -116,7 +116,13 @@ pub async fn search_inner(
             ),
             Some(llm) => {
                 if wants_summaries {
-                    let count = attach_result_summaries(&mut data, llm, llm.max_concurrency).await;
+                    let count = attach_result_summaries(
+                        &mut data,
+                        llm,
+                        llm.max_concurrency,
+                        req.summary_prompt.as_deref(),
+                    )
+                    .await;
                     if count.failed > 0 {
                         warnings.push(format!(
                             "{} of {} per-result summaries failed",
@@ -174,6 +180,7 @@ async fn attach_result_summaries(
     data: &mut SearchData,
     cfg: &LlmConfig,
     max_concurrency: usize,
+    user_prompt: Option<&str>,
 ) -> SummaryFanoutCount {
     let targets: &mut Vec<SearchResult> = match data {
         SearchData::Flat(v) => v,
@@ -193,12 +200,14 @@ async fn attach_result_summaries(
         return SummaryFanoutCount::default();
     }
     let cfg_owned = cfg.clone();
+    let user_prompt_owned: Option<String> = user_prompt.map(str::to_owned);
     let concurrency = max_concurrency.max(1);
     let results: Vec<(usize, Result<String, String>)> = stream::iter(jobs)
         .map(|(idx, md)| {
             let cfg = cfg_owned.clone();
+            let user_prompt = user_prompt_owned.clone();
             async move {
-                let outcome = summary::summarize(&md, &cfg)
+                let outcome = summary::summarize(&md, &cfg, user_prompt.as_deref())
                     .await
                     .map(|r| r.content)
                     .map_err(|e| e.to_string());
@@ -265,7 +274,7 @@ async fn synthesize_answer(
     if sources.is_empty() {
         return Err("no results carry markdown to synthesize an answer from".into());
     }
-    let result = answer::synthesize(&req.query, &sources, cfg, cap)
+    let result = answer::synthesize(&req.query, &sources, cfg, cap, req.answer_prompt.as_deref())
         .await
         .map_err(|e| e.to_string())?;
     Ok((
@@ -438,6 +447,7 @@ async fn enrich_with_scrape(
                 llm_provider: None,
                 llm_model: None,
                 base_url: None,
+                summary_prompt: None,
                 renderer: None,
                 deadline_ms: Some(deadline_ms),
                 debug: None,
@@ -518,6 +528,8 @@ mod tests {
             llm_provider: None,
             llm_model: None,
             base_url: None,
+            summary_prompt: None,
+            answer_prompt: None,
         }
     }
 

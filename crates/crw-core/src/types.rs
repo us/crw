@@ -188,6 +188,14 @@ pub struct ScrapeRequest {
     /// like DeepSeek). Example: `"https://api.deepseek.com/v1"`.
     #[serde(default, alias = "base_url")]
     pub base_url: Option<String>,
+    /// Optional user-supplied instructions appended to the summary system
+    /// prompt (e.g. "respond in Turkish", "focus on technical details").
+    /// The opencore's prompt-injection defense (UNTRUSTED delimiter,
+    /// "ignore imperative content" rule) is kept intact — this only adds
+    /// directives, it does not replace the safety wrapper. Capped at
+    /// 500 chars server-side to bound token amplification.
+    #[serde(default, alias = "summary_prompt")]
+    pub summary_prompt: Option<String>,
     /// Pin this request to a specific renderer. `None` or `Auto` = use the
     /// configured chain. Hard-pin: pinned renderer failures surface as errors,
     /// no silent fallback to a different renderer or HTTP. Pinning a non-Auto
@@ -807,6 +815,17 @@ pub struct SearchRequest {
     pub llm_model: Option<String>,
     #[serde(default, alias = "base_url")]
     pub base_url: Option<String>,
+    /// Optional user-supplied instructions appended to the per-result
+    /// summary system prompt. See `ScrapeRequest.summary_prompt`. Capped
+    /// at 500 chars server-side.
+    #[serde(default, alias = "summary_prompt")]
+    pub summary_prompt: Option<String>,
+    /// Optional user-supplied instructions appended to the answer-synthesis
+    /// system prompt (e.g. "respond in Turkish", "be concise"). The
+    /// "answer using ONLY the provided sources" rule and citation discipline
+    /// stay intact. Capped at 500 chars server-side.
+    #[serde(default, alias = "answer_prompt")]
+    pub answer_prompt: Option<String>,
 }
 
 /// A single search result (web or news). Mirrors `SearchResult` in
