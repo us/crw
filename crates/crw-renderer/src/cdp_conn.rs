@@ -241,6 +241,16 @@ impl CdpConnection {
     pub fn is_closed(&self) -> bool {
         self.is_closed.load(Ordering::SeqCst)
     }
+
+    /// Liveness probe used by the browser-context pool when an idle slot has
+    /// been parked longer than `health_check_secs`. Issues `Browser.getVersion`
+    /// — a no-side-effect call that exercises both the WS write path and the
+    /// reader loop. The 200 ms ceiling keeps acquire-path latency bounded.
+    pub async fn health_check_browser(&self, timeout: Duration) -> CrwResult<()> {
+        self.send_recv("Browser.getVersion", serde_json::json!({}), None, timeout)
+            .await
+            .map(|_| ())
+    }
 }
 
 /// Removes a pending entry on drop. Ensures cancel-safety of `send_recv`:

@@ -27,6 +27,16 @@ services:
     environment:
       - RUST_LOG=info
       - CRW_CONFIG=config.docker
+      # Bench knob passthrough (I4 fix): bench/run_pool_bench.sh sets these
+      # to flip pool on/off across two passes without editing config.docker.toml.
+      # Defaults match the §B5-flipped config.docker.toml values (pool=on,
+      # backend=vanilla, size=4) so an unset shell env leaves production
+      # behavior unchanged; bench script overrides to `false`/`off` for the
+      # control pass. Figment rejects empty strings for typed fields, so the
+      # fallback must be the real default — not `${VAR:-}`.
+      - CRW_RENDERER__CHROME_CONTEXT_POOL_ENABLED=${CRW_RENDERER__CHROME_CONTEXT_POOL_ENABLED:-true}
+      - CRW_RENDERER__CHROME_BACKEND=${CRW_RENDERER__CHROME_BACKEND:-vanilla}
+      - CRW_RENDERER__CHROME_POOL__SIZE=${CRW_RENDERER__CHROME_POOL__SIZE:-4}
     volumes:
       - ./config.docker.toml:/app/config.docker.toml:ro
 

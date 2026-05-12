@@ -116,6 +116,12 @@ async fn run_server() {
         );
     }
 
+    // Capture handles before `state` is consumed by `create_app` so we can
+    // drain the chrome browser-context pool after the HTTP server quiesces.
+    let renderer = std::sync::Arc::clone(&state.renderer);
+    let pool_drain =
+        std::time::Duration::from_secs(state.config.renderer.chrome_pool.shutdown_drain_secs);
+
     let app = crw_server::app::create_app(state);
 
     let listener = match tokio::net::TcpListener::bind(&addr).await {
@@ -134,6 +140,9 @@ async fn run_server() {
         tracing::error!("Server error: {e}");
         std::process::exit(1);
     }
+
+    // HTTP layer is quiesced; now drain the chrome pool (no-op when disabled).
+    renderer.shutdown_chrome_pool(pool_drain).await;
 
     tracing::info!("Server shut down gracefully");
 }
