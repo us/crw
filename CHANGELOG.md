@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.7.1](https://github.com/us/crw/compare/v0.7.0...v0.7.1) (2026-05-12)
+
+
+### Bug Fixes
+
+* bump stale internal version pins to 0.7.0 ([#48](https://github.com/us/crw/issues/48)) ([0bec22a](https://github.com/us/crw/commit/0bec22a76e03f428e28281b30bb34364bf5e5edd))
+
 ## [0.7.0](https://github.com/us/crw/compare/v0.6.4...v0.7.0) (2026-05-12)
 
 
