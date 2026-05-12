@@ -121,6 +121,7 @@ pub async fn search_inner(
                         llm,
                         llm.max_concurrency,
                         req.summary_prompt.as_deref(),
+                        req.max_content_chars,
                     )
                     .await;
                     if count.failed > 0 {
@@ -181,6 +182,7 @@ async fn attach_result_summaries(
     cfg: &LlmConfig,
     max_concurrency: usize,
     user_prompt: Option<&str>,
+    max_content_chars: Option<usize>,
 ) -> SummaryFanoutCount {
     let targets: &mut Vec<SearchResult> = match data {
         SearchData::Flat(v) => v,
@@ -207,10 +209,11 @@ async fn attach_result_summaries(
             let cfg = cfg_owned.clone();
             let user_prompt = user_prompt_owned.clone();
             async move {
-                let outcome = summary::summarize(&md, &cfg, user_prompt.as_deref())
-                    .await
-                    .map(|r| r.content)
-                    .map_err(|e| e.to_string());
+                let outcome =
+                    summary::summarize(&md, &cfg, user_prompt.as_deref(), max_content_chars)
+                        .await
+                        .map(|r| r.content)
+                        .map_err(|e| e.to_string());
                 (idx, outcome)
             }
         })
@@ -448,6 +451,7 @@ async fn enrich_with_scrape(
                 llm_model: None,
                 base_url: None,
                 summary_prompt: None,
+                max_content_chars: None,
                 renderer: None,
                 deadline_ms: Some(deadline_ms),
                 debug: None,
@@ -530,6 +534,7 @@ mod tests {
             base_url: None,
             summary_prompt: None,
             answer_prompt: None,
+            max_content_chars: None,
         }
     }
 

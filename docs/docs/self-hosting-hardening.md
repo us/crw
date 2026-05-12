@@ -30,6 +30,35 @@ Treat page fetching and browser rendering as higher-risk components than your ap
 - Inject secrets at runtime through your platform's secret store.
 - Rotate keys during environment changes or incident response, not only on a fixed calendar.
 
+## LLM features and trust boundary
+
+CRW's `summary` format and `/v1/search` answer/summarize features need an LLM key. There are two deployment shapes; pick one and lock it down with the runtime guards listed below.
+
+**Solo / self-hosted (key in server config):**
+
+```toml
+[extraction.llm]
+provider = "openai"
+api_key  = "sk-..."
+model    = "gpt-4o-mini"
+```
+
+Anyone who can reach your opencore can spend on that key. Front it with auth, network policy, or a private network.
+
+**SaaS / multi-tenant (BYOK, per-request keys):**
+
+- Set `CRW_DISABLE_SERVER_LLM_KEY=1` in opencore's environment. With this env var set, opencore refuses to boot if `[extraction.llm].api_key` is also configured — the most common operator mistake.
+- Set `[extraction.llm].require_byok_header = "X-CRW-Tenant"` (or similar). CRW rejects LLM-touching requests that lack that header AND do not pass a per-request `llmApiKey`. Your SaaS layer adds the header on every forwarded request; direct public callers cannot.
+- Don't expose opencore on a public address; keep it behind your SaaS proxy.
+- Use `GET /v1/capabilities` on boot from the SaaS layer to verify the opencore version's feature set before showing LLM toggles in your UI.
+
+**Per-request budget:**
+
+- `[extraction.llm].max_html_bytes` (default `100000`) caps content sent to the LLM.
+- Per-request `maxContentChars` and `maxCharsPerSource` are clamped server-side (200 KB and 32 KB respectively) regardless of value.
+- `summaryPrompt` and `answerPrompt` are truncated at 500 chars and cannot override the safety wrapper.
+- The citation list is capped at 20 entries; fabricated `source_id`s are dropped.
+
 ## Operational guidance
 
 - Rotate API keys during deployment cutovers.

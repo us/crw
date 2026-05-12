@@ -412,7 +412,14 @@ pub async fn scrape_url(
         // caller asked only for `summary`, the markdown is the input to the
         // LLM but is not surfaced in the response (see strip below).
         let md_owned = data.markdown.clone().unwrap_or_default();
-        match crw_extract::summary::summarize(&md_owned, llm, req.summary_prompt.as_deref()).await {
+        match crw_extract::summary::summarize(
+            &md_owned,
+            llm,
+            req.summary_prompt.as_deref(),
+            req.max_content_chars,
+        )
+        .await
+        {
             Ok(result) => {
                 data.summary = Some(result.content);
                 if data.llm_usage.is_none() {

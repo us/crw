@@ -196,6 +196,12 @@ pub struct ScrapeRequest {
     /// 500 chars server-side to bound token amplification.
     #[serde(default, alias = "summary_prompt")]
     pub summary_prompt: Option<String>,
+    /// Maximum number of bytes of scraped content sent to the LLM for the
+    /// `summary` format. Defaults to `[extraction.llm].max_html_bytes`
+    /// (100 KB out of the box). Clamped to a 200 KB server-side ceiling
+    /// regardless of value — protects against runaway provider bills.
+    #[serde(default, alias = "max_content_chars")]
+    pub max_content_chars: Option<usize>,
     /// Pin this request to a specific renderer. `None` or `Auto` = use the
     /// configured chain. Hard-pin: pinned renderer failures surface as errors,
     /// no silent fallback to a different renderer or HTTP. Pinning a non-Auto
@@ -826,6 +832,13 @@ pub struct SearchRequest {
     /// stay intact. Capped at 500 chars server-side.
     #[serde(default, alias = "answer_prompt")]
     pub answer_prompt: Option<String>,
+    /// Maximum number of bytes of each per-result markdown sent to the LLM
+    /// when `summarize_results` is enabled. Defaults to
+    /// `[extraction.llm].max_html_bytes` (100 KB). Clamped to a 200 KB
+    /// server-side ceiling. Independent from `max_chars_per_source`, which
+    /// caps the answer-synthesis path, not the per-result summary path.
+    #[serde(default, alias = "max_content_chars")]
+    pub max_content_chars: Option<usize>,
 }
 
 /// A single search result (web or news). Mirrors `SearchResult` in

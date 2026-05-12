@@ -14,6 +14,15 @@ Use this page when you want the common CRW envelopes in one place. The endpoint 
     "plainText": "string or null",
     "links": ["string"],
     "json": {},
+    "summary": "string or null",
+    "llmUsage": {
+      "inputTokens": 1234,
+      "outputTokens": 567,
+      "totalTokens": 1801,
+      "estimatedCostUsd": 0.00023,
+      "model": "gpt-4o-mini",
+      "provider": "openai"
+    },
     "chunks": [
       {
         "content": "string",
@@ -21,6 +30,7 @@ Use this page when you want the common CRW envelopes in one place. The endpoint 
         "index": 0
       }
     ],
+    "warnings": ["content truncated to 100000 bytes before summarization"],
     "warning": "optional warning",
     "metadata": {
       "title": "string",
@@ -77,39 +87,54 @@ Use this page when you want the common CRW envelopes in one place. The endpoint 
 
 ## Search
 
-Hosted search can return two shapes:
-
-- flat array when `sources` is not set
-- grouped object when `sources` is set
-
-Flat:
+`data` is a wrapper around the actual results. When you do not use any LLM feature, the wrapper still holds the results in `data.results` and the other fields stay empty/null.
 
 ```json
 {
   "success": true,
-  "data": [
-    {
-      "url": "https://example.com/article",
-      "title": "Article Title",
-      "description": "Search snippet...",
-      "position": 1,
-      "score": 9.5
-    }
-  ]
+  "data": {
+    "results": <flat array OR grouped object — see below>,
+    "answer": "string or null",
+    "citations": [
+      { "url": "https://...", "title": "...", "position": 0 }
+    ],
+    "llmUsage": { "inputTokens": 3420, "outputTokens": 96, "totalTokens": 3516, "estimatedCostUsd": 0.0008, "model": "gpt-4o-mini", "provider": "openai" },
+    "warnings": []
+  }
 }
+```
+
+`results` shape:
+
+- flat array when `sources` is not set
+- grouped object when `sources` is set
+
+Flat (each entry may also carry `markdown` from `scrapeOptions` and `summary` from `summarizeResults`):
+
+```json
+[
+  {
+    "url": "https://example.com/article",
+    "title": "Article Title",
+    "description": "Search snippet...",
+    "position": 1,
+    "score": 9.5,
+    "markdown": "# Article Title\n\n…",
+    "summary": "Short LLM-generated digest of this single result."
+  }
+]
 ```
 
 Grouped:
 
 ```json
 {
-  "success": true,
-  "data": {
-    "web": [{ "url": "...", "title": "..." }],
-    "news": [{ "url": "...", "title": "...", "publishedDate": "2026-04-02T14:00:00" }]
-  }
+  "web": [{ "url": "...", "title": "..." }],
+  "news": [{ "url": "...", "title": "...", "publishedDate": "2026-04-02T14:00:00" }]
 }
 ```
+
+`answer`, `citations`, and the top-level `llmUsage` are populated only when `answer: true` was sent. Per-result `summary` is populated only when `summarizeResults: true` was sent.
 
 ## Error Envelope
 

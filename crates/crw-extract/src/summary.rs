@@ -52,6 +52,14 @@ fn truncate_on_char_boundary(s: &str, max_bytes: usize) -> &str {
 /// indefinitely just to drive up provider bills.
 pub const MAX_USER_PROMPT_CHARS: usize = 500;
 
+/// Hard server-side ceiling on per-request content sent to the LLM for
+/// summarization. The caller's `max_content_chars` (or the server's
+/// configured `max_html_bytes` default) is clamped here regardless. Same
+/// rationale as [`MAX_USER_PROMPT_CHARS`]: defend against unbounded
+/// provider-bill amplification while still leaving room for long
+/// reference pages.
+pub const MAX_CONTENT_CHARS_CEILING: usize = 200_000;
+
 /// Build a system prompt that keeps the safety wrapper intact and appends
 /// any caller-supplied directives below it. Returns the prompt with the
 /// user addition truncated on a char boundary at [`MAX_USER_PROMPT_CHARS`].
@@ -89,24 +97,29 @@ fn compose_system_prompt(user_prompt: Option<&str>) -> String {
 /// `user_prompt` is an optional caller-supplied style/tone/language
 /// directive (e.g. "respond in Turkish"). It is appended *below* the
 /// hardcoded safety wrapper, not in place of it.
+///
+/// `max_content_chars` overrides the per-request byte ceiling on content
+/// fed into the LLM. `None` falls back to `cfg.max_html_bytes`. Either
+/// way the effective cap is clamped to [`MAX_CONTENT_CHARS_CEILING`].
 pub async fn summarize(
     content: &str,
     cfg: &LlmConfig,
     user_prompt: Option<&str>,
+    max_content_chars: Option<usize>,
 ) -> CrwResult<LlmCallResult> {
     let nonce = random_nonce();
-    let was_truncated = content.len() > cfg.max_html_bytes;
-    let body = truncate_on_char_boundary(content, cfg.max_html_bytes);
+    let cap = max_content_chars
+        .unwrap_or(cfg.max_html_bytes)
+        .min(MAX_CONTENT_CHARS_CEILING);
+    let was_truncated = content.len() > cap;
+    let body = truncate_on_char_boundary(content, cap);
 
     let user_msg = format!("=====UNTRUSTED:{nonce}=====\n{body}\n=====/UNTRUSTED:{nonce}=====");
 
     let system_prompt = compose_system_prompt(user_prompt);
     let mut result = llm::chat(cfg, &system_prompt, &user_msg).await?;
     if was_truncated {
-        let note = format!(
-            "content truncated to {} bytes before summarization",
-            cfg.max_html_bytes
-        );
+        let note = format!("content truncated to {cap} bytes before summarization");
         result.warning = Some(match result.warning {
             Some(prev) => format!("{prev}; {note}"),
             None => note,

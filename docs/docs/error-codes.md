@@ -51,6 +51,8 @@ You need both to debug real scraping failures.
 | Response too large | Page exceeded the maximum allowed size |
 | Invalid JSON schema | Schema provided for extraction is malformed |
 | Extraction failure | LLM extraction failed (no LLM configured, or LLM returned an error) |
+| `summary` format requires LLM config | `formats: ["summary"]` sent without a server-side `[extraction.llm]` block and without per-request `llmApiKey` |
+| BYOK header required | Server is in BYOK-only mode (`require_byok_header`) and the request lacks both the header and `llmApiKey` |
 | No JS renderer available | `renderJs: true` but no CDP browser is configured |
 
 ## Common warnings
@@ -61,6 +63,10 @@ You need both to debug real scraping failures.
 | `Target returned 429 Too Many Requests` | Target site rate limited the request |
 | `Blocked by anti-bot protection` | Page contains Cloudflare/captcha markers |
 | `JS rendering was requested but no renderer is available` | Fallback to HTTP-only fetch |
+| `content truncated to N bytes before summarization` | Scraped content exceeded `maxContentChars` (or `[extraction.llm].max_html_bytes`); the head of the page was summarized |
+| `summary failed: <reason>` | A per-result summary in `/v1/search` failed (e.g. provider 429). Other results are still returned |
+| `answer synthesis failed: <reason>` | The answer call in `/v1/search` failed. `answer` is `null` but `summaries` and `results` are still returned |
+| `N of M per-result summaries failed` | Some but not all per-result summaries failed in `/v1/search` |
 
 ## Retry Guidance
 

@@ -105,6 +105,8 @@
 | Feature | Description |
 |---------|-------------|
 | [**LLM Extraction**](#llm-structured-extraction) | Send a JSON schema, get validated structured data back |
+| **LLM Summary** | `formats: ["summary"]` on `/v1/scrape` — clean prose digest of any page. BYOK (Anthropic / OpenAI / Azure / DeepSeek / any OpenAI-compatible). |
+| **LLM Search Answer** | `answer: true` / `summarizeResults: true` on `/v1/search` — synthesized answer with citations or per-result summaries |
 | [**JS Rendering**](#js-rendering) | Auto-detect SPAs, render via LightPanda or Chrome |
 | [**CLI**](#cli) | Scrape any URL from your terminal — no server needed |
 | [**MCP Server**](#mcp-server-for-ai-agents) | Built-in stdio + HTTP transport for any AI agent |
@@ -167,6 +169,22 @@ curl -X POST https://fastcrw.com/api/v1/scrape \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com"}'
+```
+
+**With LLM summary** (BYOK — bring your own provider key):
+```bash
+curl -X POST http://localhost:3000/v1/scrape \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://en.wikipedia.org/wiki/Tokio_(software)",
+    "formats": ["markdown", "summary"],
+    "summaryPrompt": "Answer in two sentences.",
+    "maxContentChars": 50000,
+    "llmProvider": "openai-compatible",
+    "llmModel": "deepseek-chat",
+    "baseUrl": "https://api.deepseek.com/v1",
+    "llmApiKey": "YOUR_PROVIDER_KEY"
+  }'
 ```
 </details>
 
@@ -320,6 +338,21 @@ curl -X POST http://localhost:3000/v1/search \
     "query": "rust async runtime",
     "sources": ["web", "news"],
     "scrapeOptions": {"formats": ["markdown"]}
+  }'
+
+# With LLM answer synthesis over the top results (BYOK)
+curl -X POST http://localhost:3000/v1/search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "what is tokio rust",
+    "limit": 3,
+    "answer": true,
+    "answerTopN": 3,
+    "answerPrompt": "Respond in Turkish in two sentences.",
+    "scrapeOptions": {"formats": ["markdown"]},
+    "llmApiKey": "sk-...",
+    "llmProvider": "openai",
+    "llmModel": "gpt-4o-mini"
   }'
 ```
 

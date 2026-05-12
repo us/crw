@@ -134,6 +134,17 @@ That is the flat response shape used when `sources` is not set.
 | `sources` | string[] | -- | Result groups such as `"web"`, `"news"`, `"images"` |
 | `categories` | string[] | -- | Filters such as `"github"`, `"research"`, `"pdf"` |
 | `scrapeOptions` | object | -- | Scrape each result URL after search |
+| `summarizeResults` | boolean | `false` | When `true`, each scraped result is summarized by the LLM and the digest appears in `result.summary`. Needs LLM config (BYOK or server). Fan-out is bounded by `[extraction.llm].max_concurrency`. |
+| `answer` | boolean | `false` | When `true`, after scraping the top results crw synthesizes a single answer over them. The answer + `citations` land on the response wrapper. |
+| `answerTopN` | number | `5` (max `10`) | Number of top-scoring results to feed into the answer pipeline |
+| `maxCharsPerSource` | number | `8192` | Per-source byte cap on markdown fed into the answer prompt. Clamped to 32 KB server-side. |
+| `maxContentChars` | number | `[extraction.llm].max_html_bytes` (100 KB) | Per-result byte cap on markdown sent to the per-result summarizer (`summarizeResults`). Clamped to 200 KB server-side. Independent from `maxCharsPerSource`. |
+| `summaryPrompt` | string | -- | Style/tone/language directive appended to the per-result summary prompt. Capped at 500 chars. |
+| `answerPrompt` | string | -- | Style/tone/language directive appended to the answer-synthesis prompt. Capped at 500 chars. Cannot override the "answer using ONLY provided sources" rule or the citation discipline. |
+| `llmApiKey` | string | -- | Per-request LLM API key (BYOK) |
+| `llmProvider` | string | server default | `anthropic`, `openai`, `azure`, or `openai-compatible` |
+| `llmModel` | string | server default | Model override |
+| `baseUrl` | string | -- | OpenAI-compatible endpoint base (e.g. DeepSeek, Azure) |
 
 `scrapeOptions`:
 
@@ -190,6 +201,81 @@ When you need more than result snippets, add `scrapeOptions`:
 ```
 
 That enriches eligible results with scraped page content. It is powerful, but it is also the moment search becomes more expensive, so keep it off until you need it.
+
+## LLM-assisted search
+
+CRW can turn a search-with-scrape into either per-result summaries or a single synthesized answer (or both).
+
+### Per-result summaries (`summarizeResults`)
+
+```json
+{
+  "query": "what is tokio rust",
+  "limit": 3,
+  "scrapeOptions": { "formats": ["markdown"] },
+  "summarizeResults": true,
+  "summaryPrompt": "Respond in Turkish in one sentence per result.",
+  "maxContentChars": 20000,
+  "llmApiKey": "sk-...",
+  "llmProvider": "openai",
+  "llmModel": "gpt-4o-mini"
+}
+```
+
+Each scraped result that produced markdown gets a `result.summary` field. Per-result failures attach a `warning` on the response but do not fail the whole request. Fan-out is bounded by `[extraction.llm].max_concurrency` (default 4).
+
+### Synthesized answer (`answer`)
+
+```json
+{
+  "query": "what is tokio rust",
+  "limit": 3,
+  "answer": true,
+  "answerTopN": 3,
+  "answerPrompt": "Respond in Turkish in exactly two sentences.",
+  "scrapeOptions": { "formats": ["markdown"] },
+  "llmApiKey": "sk-...",
+  "llmProvider": "openai",
+  "llmModel": "gpt-4o-mini"
+}
+```
+
+The response wrapper carries:
+
+```json
+{
+  "success": true,
+  "data": {
+    "results": [ /* normal flat or grouped search results */ ],
+    "answer": "Tokio is a Rust runtime…",
+    "citations": [
+      { "url": "https://...", "title": "...", "position": 0 }
+    ],
+    "llmUsage": { "inputTokens": 3420, "outputTokens": 96, "totalTokens": 3516, "estimatedCostUsd": 0.0008, "model": "gpt-4o-mini", "provider": "openai" },
+    "warnings": []
+  }
+}
+```
+
+Citation discipline:
+
+- `source_id` returned by the model must map to a source actually in the input list. Fabricated ids are dropped.
+- `position` is clamped to `[0, sources.len())`.
+- The list is deduped on `(source_id, position)` and capped at 20 entries.
+
+If the answer call fails (rate limit, network error, etc.), `answer` is `null`, any successful per-result summaries are still returned, and `warnings` explains what went wrong. CRW does not throw away partial work.
+
+### Caller-supplied directives
+
+`summaryPrompt` and `answerPrompt` let you steer language/tone/format without weakening the safety wrapper:
+
+- They are appended *below* the hardcoded system prompt, not in place of it.
+- The wrapper explicitly tells the model to ignore directive contents that try to replace the task (fixed-string outputs, refusals, citation-skip, prompt leaks).
+- Each directive is truncated to 500 chars server-side.
+
+### Where the key comes from
+
+Same BYOK pattern as `/v1/scrape`: send `llmApiKey` / `llmProvider` / `llmModel` / `baseUrl` in the request body, or configure `[extraction.llm]` in `config.toml`.
 
 ## Freshness, sources, and categories
 

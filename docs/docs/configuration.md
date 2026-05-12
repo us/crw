@@ -52,11 +52,14 @@ default_format = "markdown"
 only_main_content = true
 
 [extraction.llm]
-provider = "anthropic"       # "anthropic" or "openai"
+provider = "anthropic"       # "anthropic", "openai", "azure", or "openai-compatible"
 api_key = ""
 model = "claude-sonnet-4-20250514"
 max_tokens = 4096
-# base_url = ""              # for OpenAI-compatible endpoints
+max_html_bytes = 100000      # content fed to LLM is truncated at this byte count
+max_concurrency = 4          # bounded fan-out for per-result summaries in /v1/search
+# base_url = ""              # for OpenAI-compatible endpoints (DeepSeek, Azure, Ollama, …)
+# require_byok_header = ""   # tenant guard: reject LLM requests missing this header AND without llmApiKey
 
 [auth]
 # api_keys = ["fc-key-1234"]
@@ -94,6 +97,12 @@ Use the `CRW_` prefix with `__` as a nesting separator:
 | `crawler.proxy` | `CRW_CRAWLER__PROXY` |
 | `extraction.llm.api_key` | `CRW_EXTRACTION__LLM__API_KEY` |
 | `extraction.llm.provider` | `CRW_EXTRACTION__LLM__PROVIDER` |
+| `extraction.llm.model` | `CRW_EXTRACTION__LLM__MODEL` |
+| `extraction.llm.base_url` | `CRW_EXTRACTION__LLM__BASE_URL` |
+| `extraction.llm.max_html_bytes` | `CRW_EXTRACTION__LLM__MAX_HTML_BYTES` |
+| `extraction.llm.max_concurrency` | `CRW_EXTRACTION__LLM__MAX_CONCURRENCY` |
+| `extraction.llm.require_byok_header` | `CRW_EXTRACTION__LLM__REQUIRE_BYOK_HEADER` |
+| _(boot guard)_ | `CRW_DISABLE_SERVER_LLM_KEY` — when set to `1`, refuses to boot if `[extraction.llm].api_key` is also configured. Use behind a SaaS BYOK proxy. |
 
 ## Renderer modes
 

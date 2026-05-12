@@ -108,6 +108,7 @@ mod tests {
             base_url: None,
             summary_prompt: None,
             answer_prompt: None,
+            max_content_chars: None,
         }
     }
 

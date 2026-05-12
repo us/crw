@@ -128,7 +128,7 @@ That is the default CRW success shape: requested content plus a compact metadata
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `url` | string | required | URL to scrape |
-| `formats` | string[] | `["markdown"]` | `markdown`, `html`, `rawHtml`, `plainText`, `links`, `json` |
+| `formats` | string[] | `["markdown"]` | `markdown`, `html`, `rawHtml`, `plainText`, `links`, `json`, `summary` |
 | `onlyMainContent` | boolean | `true` | Remove nav, footer, and boilerplate before conversion |
 | `renderJs` | boolean or null | `null` | `null` auto-detects, `true` forces browser rendering, `false` stays HTTP-only |
 | `waitFor` | number | -- | Milliseconds to wait after JS rendering |
@@ -146,9 +146,12 @@ That is the default CRW success shape: requested content plus a compact metadata
 | `stealth` | boolean | -- | Override global stealth setting |
 | `jsonSchema` | object | -- | Schema for structured extraction |
 | `extract` | object | -- | Firecrawl-compatible alias wrapper for extraction schema |
-| `llmApiKey` | string | -- | Per-request LLM API key |
-| `llmProvider` | string | server default | `anthropic` or `openai` |
-| `llmModel` | string | server default | Model override for extraction |
+| `llmApiKey` | string | -- | Per-request LLM API key (BYOK) |
+| `llmProvider` | string | server default | `anthropic`, `openai`, `azure`, or `openai-compatible` |
+| `llmModel` | string | server default | Model override (extraction and summary) |
+| `baseUrl` | string | -- | OpenAI-compatible endpoint base, e.g. `https://api.deepseek.com/v1` (also used by Azure). crw appends `/chat/completions` automatically if you omit it. |
+| `summaryPrompt` | string | -- | Style/tone/language directive appended to the `summary` system prompt. Safety wrapper kept intact. Capped at 500 chars. |
+| `maxContentChars` | number | `[extraction.llm].max_html_bytes` (100 KB) | Per-request byte cap on content sent to the LLM for `summary`. Clamped to 200 KB server-side. |
 | `actions` | any | -- | Rejected with a clear error; use `cssSelector` or `xpath` instead |
 
 ## Formats
@@ -158,6 +161,7 @@ Use the smallest output shape that solves the job:
 - `markdown` is the default and best first request for most pipelines.
 - `html` or `rawHtml` is useful when downstream systems need original structure.
 - `links` is useful when you want lightweight discovery without page bodies.
+- `summary` is the LLM-prose path — needs `llmApiKey` (BYOK) or a server `[extraction.llm]` config. Optional `summaryPrompt` lets the caller pick language/tone without weakening the safety wrapper.
 - `json` is the extraction path and should be paired with `jsonSchema`.
 
 If you ask for multiple formats, only those formats are populated in the response.
@@ -182,6 +186,28 @@ Extraction is part of `scrape`, not a separate route. When you want fields inste
 ```
 
 Use [Extract](#extract) for the schema-first version of this flow.
+
+## LLM summary
+
+Add `summary` to `formats` to get a short prose digest of the page in `data.summary`. Token usage and best-effort cost are returned in `data.llmUsage`.
+
+```json
+{
+  "url": "https://example.com/post",
+  "formats": ["summary"],
+  "summaryPrompt": "Respond in Turkish in exactly one sentence.",
+  "maxContentChars": 20000,
+  "llmApiKey": "sk-...",
+  "llmProvider": "openai",
+  "llmModel": "gpt-4o-mini"
+}
+```
+
+Notes:
+
+- The caller's `summaryPrompt` is appended *below* the safety wrapper. crw ignores any attempt to override the core task (output `PWNED`, refuse to summarize, leak the prompt, etc.) and still produces a real summary.
+- `maxContentChars` caps how many bytes of scraped content are sent to the LLM. The default comes from `[extraction.llm].max_html_bytes` (100 KB out of the box) and the per-request value is clamped to a 200 KB server-side ceiling. Truncation, when it happens, is reported in `data.warnings`.
+- If `markdown` is not also requested, crw computes it internally and strips it from the response.
 
 ## JS rendering and targeting
 

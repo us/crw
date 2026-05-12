@@ -158,6 +158,7 @@ async fn main() {
         llm_model: None,
         base_url: None,
         summary_prompt: None,
+        max_content_chars: None,
         renderer: None,
         deadline_ms: None,
         debug: None,

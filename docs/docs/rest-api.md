@@ -41,6 +41,8 @@
 | `GET /v1/crawl/{id}` | You need crawl progress and results | Returns status plus completed data |
 | `DELETE /v1/crawl/{id}` | You want to cancel an active crawl | Hosted and self-hosted |
 | `POST /mcp` | You are using MCP over HTTP | Prefer the [MCP page](#mcp) for setup |
+| `GET /health` | Liveness probe | Returns `{status, version, active_crawl_jobs}` |
+| `GET /v1/capabilities` | Discover server features | Reports supported formats, LLM providers, whether a server-side key is configured |
 
 ## Start with this request
 
@@ -56,7 +58,7 @@ If that request works, continue into [Scrape](#scraping) and only then branch in
 ## Shared reference pages
 
 - [Response Shapes](#response-shapes) for common envelopes
-- [Output Formats](#output-formats) for `markdown`, `html`, `rawHtml`, `plainText`, `links`, and `json`
+- [Output Formats](#output-formats) for `markdown`, `html`, `rawHtml`, `plainText`, `links`, `json`, and `summary`
 - [Error Codes](#error-codes) for failure handling
 - [Rate Limits](#rate-limits) and [Credit Costs](#credit-costs) for hosted usage planning
 
