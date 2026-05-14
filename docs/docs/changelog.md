@@ -8,6 +8,13 @@ The source of truth is the repository root changelog. Do not edit this docs page
 
 All notable changes to CRW are documented here.
 
+## [0.8.1](https://github.com/us/crw/compare/v0.8.0...v0.8.1) (2026-05-14)
+
+
+### Bug Fixes
+
+* **cli:** mark crw-cli as publish=false to fix release ([3104cc5](https://github.com/us/crw/commit/3104cc5acec6d6a0307adbb5cc9897ce04417a16))
+
 ## [0.8.0](https://github.com/us/crw/compare/v0.7.1...v0.8.0) (2026-05-14)
 
 

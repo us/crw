@@ -49,12 +49,12 @@
 
 ## What's New
 
-### [0.8.0](https://github.com/us/crw/compare/v0.7.1...v0.8.0) (2026-05-14)
+### [0.8.1](https://github.com/us/crw/compare/v0.8.0...v0.8.1) (2026-05-14)
 
 
-### Features
+### Bug Fixes
 
-* **cli:** add interactive setup wizard ([a5613b9](https://github.com/us/crw/commit/a5613b965d3444ab0ad214b976cbf6e56747e523))
+* **cli:** mark crw-cli as publish=false to fix release ([3104cc5](https://github.com/us/crw/commit/3104cc5acec6d6a0307adbb5cc9897ce04417a16))
 
 [Full changelog →](CHANGELOG.md)
 
