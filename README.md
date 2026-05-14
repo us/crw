@@ -49,12 +49,12 @@
 
 ## What's New
 
-### [0.8.1](https://github.com/us/crw/compare/v0.8.0...v0.8.1) (2026-05-14)
+### [0.8.2](https://github.com/us/crw/compare/v0.8.1...v0.8.2) (2026-05-14)
 
 
 ### Bug Fixes
 
-* **cli:** mark crw-cli as publish=false to fix release ([3104cc5](https://github.com/us/crw/commit/3104cc5acec6d6a0307adbb5cc9897ce04417a16))
+* **release:** move crw-cli to unpublished and update dep versions ([7f121f6](https://github.com/us/crw/commit/7f121f6f731e7bfa311be48fa442e0049bbda16d))
 
 [Full changelog →](CHANGELOG.md)
 
