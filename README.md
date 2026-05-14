@@ -121,6 +121,9 @@
 # Install:
 curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | CRW_BINARY=crw sh
 
+# Interactive setup wizard (recommended):
+crw setup
+
 # Scrape:
 crw example.com
 
@@ -686,6 +689,8 @@ model = "claude-sonnet-4-20250514"
 CRW auto-detects SPAs and renders them via a headless browser. [Full JS rendering docs →](https://docs.fastcrw.com/js-rendering/)
 
 ```bash
+crw setup          # interactive wizard (recommended)
+# or
 crw-server setup   # downloads LightPanda, creates config.local.toml
 ```
 
@@ -737,6 +742,27 @@ crw-server                    # start REST API on :3000
 crw-server setup              # optional: downloads LightPanda for JS rendering
 docker compose up             # alternative: Docker with LightPanda sidecar
 ```
+
+### Setup Wizard (CLI)
+
+The CLI includes an interactive setup wizard for easy configuration:
+
+```bash
+crw setup
+```
+
+The wizard guides you through:
+- **Cloud vs Local** mode selection
+- **Browser engine** setup (LightPanda or Chrome for JS rendering)
+- **Search engine** setup (SearXNG via Docker)
+- **LLM provider** configuration (BYOK for AI features)
+- **Shell configuration** (auto-adds to `.zshrc`/`.bashrc`)
+
+Options:
+- `crw setup --cloud` — skip to cloud setup
+- `crw setup --local` — skip to local setup
+- `crw setup --no-color` — disable colored output (accessibility)
+- Press **ESC** to cancel gracefully at any prompt
 
 See the [self-hosting guide](https://docs.fastcrw.com/#self-hosting) for production hardening, auth, reverse proxy, and resource tuning.
 

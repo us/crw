@@ -1,24 +1,57 @@
-use clap::{Parser, ValueEnum};
-use crw_core::config::{RendererConfig, RendererMode, StealthConfig};
-use crw_core::types::{OutputFormat, ScrapeRequest};
-use crw_crawl::single::scrape_url;
-use crw_renderer::FallbackRenderer;
-use std::collections::HashMap;
-use std::sync::Arc;
+//! CRW — Unified CLI for web scraping, crawling, and search.
+//!
+//! # Usage
+//!
+//! ```bash
+//! # Default: scrape (backwards compatible)
+//! crw example.com
+//! crw example.com --format json
+//!
+//! # Explicit subcommands
+//! crw scrape example.com
+//! crw search "rust web scraper"
+//! crw crawl example.com --depth 3
+//! crw map example.com
+//! crw serve --port 3000
+//! crw mcp
+//! crw browse
+//! crw setup
+//! ```
+
+mod commands;
+
+use clap::{Parser, Subcommand};
+use commands::scrape::Format;
 
 #[derive(Parser)]
 #[command(
     name = "crw",
-    about = "Scrape a URL and output markdown, JSON, HTML, or plain text",
-    long_about = "Lightweight web scraper. Fetches a URL and outputs clean content to stdout.\n\nExamples:\n  crw https://example.com\n  crw https://example.com --format json\n  crw https://example.com --raw -o page.md\n  crw https://example.com --css 'article' --format html"
+    about = "Web scraper for AI agents",
+    long_about = "Unified CLI for web scraping, crawling, search, and serving.\n\n\
+        The fastest web scraper built for AI agents and LLM data pipelines.\n\n\
+        Examples:\n  \
+        crw example.com                    # Scrape URL (default mode)\n  \
+        crw scrape example.com --format json\n  \
+        crw search \"rust web scraper\"     # Web search via SearXNG\n  \
+        crw crawl example.com --depth 3   # BFS crawl\n  \
+        crw map example.com               # Discover URLs\n  \
+        crw serve --port 3000             # Start REST API server\n  \
+        crw mcp                           # Start MCP server\n  \
+        crw browse                        # Start browser automation MCP\n  \
+        crw setup                         # Interactive setup wizard"
 )]
 struct Cli {
-    /// URL to scrape (http or https)
-    url: String,
+    #[command(subcommand)]
+    command: Option<Commands>,
 
-    /// Output format
+    // --- Default scrape mode (backwards compat) ---
+    /// URL to scrape (when no subcommand is given)
+    #[arg(value_name = "URL", conflicts_with = "command")]
+    url: Option<String>,
+
+    /// Output format (for default scrape mode)
     #[arg(short, long, value_enum, default_value = "markdown")]
-    format: Format,
+    format: Option<Format>,
 
     /// Write output to file instead of stdout
     #[arg(short, long, value_name = "FILE")]
@@ -28,7 +61,7 @@ struct Cli {
     #[arg(long)]
     raw: bool,
 
-    /// Enable JavaScript rendering (auto-detects LightPanda/Chrome, or use CRW_CDP_URL)
+    /// Enable JavaScript rendering
     #[arg(long)]
     js: bool,
 
@@ -40,173 +73,95 @@ struct Cli {
     #[arg(long, value_name = "EXPR")]
     xpath: Option<String>,
 
-    /// HTTP, HTTPS, or SOCKS5 proxy URL (e.g. http://user:pass@host:port or socks5://user:pass@host:1080)
+    /// HTTP, HTTPS, or SOCKS5 proxy URL
     #[arg(long, value_name = "URL")]
     proxy: Option<String>,
 
-    /// Enable stealth mode (rotate user agents, inject browser headers)
+    /// Enable stealth mode
     #[arg(long)]
     stealth: bool,
 }
 
-#[derive(Clone, ValueEnum)]
-enum Format {
-    Markdown,
-    Json,
-    Html,
-    Rawhtml,
-    Text,
-    Links,
+#[derive(Subcommand)]
+enum Commands {
+    /// Scrape a single URL and output content
+    Scrape(commands::scrape::ScrapeArgs),
+
+    /// Web search via SearXNG
+    Search(commands::search::SearchArgs),
+
+    /// BFS crawl a website starting from a URL
+    Crawl(commands::crawl::CrawlArgs),
+
+    /// Discover URLs on a website via sitemap and crawling
+    Map(commands::map::MapArgs),
+
+    /// Start the REST API server (Firecrawl-compatible)
+    Serve(commands::serve::ServeArgs),
+
+    /// Start the MCP (Model Context Protocol) server
+    Mcp(commands::mcp::McpArgs),
+
+    /// Start the browser automation MCP server
+    Browse(commands::browse::BrowseArgs),
+
+    /// Interactive setup wizard (Cloud or Local)
+    Setup(commands::setup::SetupArgs),
 }
 
 #[tokio::main]
 async fn main() {
-    let mut cli = Cli::parse();
+    let cli = Cli::parse();
 
-    // Auto-prepend https:// if no scheme is provided
-    if !cli.url.contains("://") {
-        cli.url = format!("https://{}", cli.url);
-    }
-
-    // Build renderer config — auto-detect browser if --js
-    let mut renderer_config = RendererConfig::default();
-    let _browser_guards = if cli.js {
-        // Check if user explicitly set a CDP URL (backwards compat)
-        if let Ok(ws_url) = std::env::var("CRW_CDP_URL") {
-            renderer_config.lightpanda = Some(crw_core::config::CdpEndpoint { ws_url });
-            Vec::new()
-        } else {
-            // Auto-detect: spawn all available browsers for fallback chain
-            let browsers = crw_renderer::browser::spawn_all_headless().await;
-            if browsers.is_empty() {
-                eprintln!(
-                    "warning: --js requested but no browser found. \
-                     Install LightPanda or Chrome for JS rendering. \
-                     Falling back to HTTP."
-                );
-            }
-            let mut guards = Vec::new();
-            for (guard, ws_url, kind) in browsers {
-                match kind {
-                    crw_renderer::browser::RendererKind::LightPanda => {
-                        renderer_config.lightpanda = Some(crw_core::config::CdpEndpoint { ws_url });
-                    }
-                    crw_renderer::browser::RendererKind::Chrome => {
-                        renderer_config.chrome = Some(crw_core::config::CdpEndpoint { ws_url });
-                    }
-                }
-                guards.push(guard);
-            }
-            guards
+    match cli.command {
+        Some(Commands::Scrape(args)) => {
+            commands::scrape::run(args).await;
         }
-    } else {
-        // HTTP-only — no CDP
-        renderer_config.mode = RendererMode::None;
-        Vec::new()
-    };
-
-    let stealth_config = StealthConfig {
-        enabled: cli.stealth,
-        inject_headers: cli.stealth,
-        ..Default::default()
-    };
-
-    let renderer = match FallbackRenderer::new(
-        &renderer_config,
-        "crw/0.0.3",
-        cli.proxy.as_deref(),
-        &stealth_config,
-    ) {
-        Ok(r) => Arc::new(r),
-        Err(e) => {
-            eprintln!("error: failed to build renderer: {e}");
-            std::process::exit(1);
+        Some(Commands::Search(args)) => {
+            commands::search::run(args).await;
         }
-    };
-
-    let output_format = match cli.format {
-        Format::Markdown => OutputFormat::Markdown,
-        Format::Json => OutputFormat::Json,
-        Format::Html => OutputFormat::Html,
-        Format::Rawhtml => OutputFormat::RawHtml,
-        Format::Text => OutputFormat::PlainText,
-        Format::Links => OutputFormat::Links,
-    };
-
-    let req = ScrapeRequest {
-        url: cli.url,
-        formats: vec![output_format],
-        only_main_content: !cli.raw,
-        render_js: if cli.js { Some(true) } else { None },
-        wait_for: None,
-        include_tags: vec![],
-        exclude_tags: vec![],
-        json_schema: None,
-        headers: HashMap::new(),
-        css_selector: cli.css,
-        xpath: cli.xpath,
-        chunk_strategy: None,
-        query: None,
-        filter_mode: None,
-        top_k: None,
-        proxy: cli.proxy,
-        stealth: if cli.stealth { Some(true) } else { None },
-        actions: None,
-        extract: None,
-        llm_api_key: None,
-        llm_provider: None,
-        llm_model: None,
-        base_url: None,
-        summary_prompt: None,
-        max_content_chars: None,
-        renderer: None,
-        deadline_ms: None,
-        debug: None,
-    };
-
-    let cli_deadline = crw_core::Deadline::from_request_ms(req.deadline_ms.unwrap_or(8000));
-    let cli_extraction_cfg = crw_core::config::ExtractionConfig::default();
-    let data = match scrape_url(
-        &req,
-        &renderer,
-        None,
-        &cli_extraction_cfg,
-        "crw/0.0.3",
-        cli.stealth,
-        None,
-        cli_deadline,
-    )
-    .await
-    {
-        Ok(d) => d,
-        Err(e) => {
-            eprintln!("error: {e}");
-            std::process::exit(1);
+        Some(Commands::Crawl(args)) => {
+            commands::crawl::run(args).await;
         }
-    };
-
-    let content = match cli.format {
-        Format::Markdown => data.markdown.unwrap_or_default(),
-        Format::Json => match serde_json::to_string_pretty(&data) {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("error: failed to serialize JSON: {e}");
-                std::process::exit(1);
-            }
-        },
-        Format::Html => data.html.unwrap_or_default(),
-        Format::Rawhtml => data.raw_html.unwrap_or_default(),
-        Format::Text => data.plain_text.unwrap_or_default(),
-        Format::Links => data.links.unwrap_or_default().join("\n"),
-    };
-
-    match cli.output {
-        Some(path) => {
-            if let Err(e) = std::fs::write(&path, &content) {
-                eprintln!("error: failed to write to {path}: {e}");
+        Some(Commands::Map(args)) => {
+            commands::map::run(args).await;
+        }
+        Some(Commands::Serve(args)) => {
+            commands::serve::run(args).await;
+        }
+        Some(Commands::Mcp(args)) => {
+            commands::mcp::run(args).await;
+        }
+        Some(Commands::Browse(args)) => {
+            if let Err(e) = commands::browse::run(args).await {
+                eprintln!("error: {e}");
                 std::process::exit(1);
             }
         }
-        None => print!("{content}"),
+        Some(Commands::Setup(args)) => {
+            commands::setup::run(args).await;
+        }
+        None => {
+            // Default mode: scrape (backwards compatible)
+            if let Some(url) = cli.url {
+                let args = commands::scrape::ScrapeArgs {
+                    url,
+                    format: cli.format.unwrap_or(Format::Markdown),
+                    output: cli.output,
+                    raw: cli.raw,
+                    js: cli.js,
+                    css: cli.css,
+                    xpath: cli.xpath,
+                    proxy: cli.proxy,
+                    stealth: cli.stealth,
+                };
+                commands::scrape::run(args).await;
+            } else {
+                // No URL provided — show help
+                use clap::CommandFactory;
+                Cli::command().print_help().unwrap();
+                println!();
+            }
+        }
     }
 }

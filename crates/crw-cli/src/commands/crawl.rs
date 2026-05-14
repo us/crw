@@ -1,0 +1,224 @@
+//! Crawl subcommand — BFS crawl a website starting from a URL.
+//!
+//! This is a simplified CLI version that outputs results as JSON lines.
+//! For full async crawl jobs with status polling, use `crw serve`.
+
+use crate::commands::scrape::Format;
+use clap::Args;
+use crw_core::config::{RendererConfig, RendererMode, StealthConfig};
+use crw_core::types::{CrawlRequest, CrawlState, CrawlStatus, OutputFormat};
+use crw_crawl::crawl::{CrawlOptions, run_crawl};
+use crw_renderer::FallbackRenderer;
+use std::sync::Arc;
+use tokio::sync::watch;
+use uuid::Uuid;
+
+#[derive(Args)]
+pub struct CrawlArgs {
+    /// Starting URL for the crawl
+    pub url: String,
+
+    /// Maximum crawl depth (0 = only starting URL)
+    #[arg(short, long, default_value = "2")]
+    pub depth: u32,
+
+    /// Maximum number of pages to crawl
+    #[arg(short, long, default_value = "10")]
+    pub limit: u32,
+
+    /// Output format for each page
+    #[arg(short, long, value_enum, default_value = "markdown")]
+    pub format: Format,
+
+    /// Enable JavaScript rendering
+    #[arg(long)]
+    pub js: bool,
+
+    /// Disable main content extraction (return full page content)
+    #[arg(long)]
+    pub raw: bool,
+
+    /// HTTP, HTTPS, or SOCKS5 proxy URL
+    #[arg(long, value_name = "URL")]
+    pub proxy: Option<String>,
+
+    /// Enable stealth mode
+    #[arg(long)]
+    pub stealth: bool,
+
+    /// Requests per second rate limit
+    #[arg(long, default_value = "2.0")]
+    pub rate_limit: f64,
+
+    /// Maximum concurrent requests
+    #[arg(long, default_value = "5")]
+    pub concurrency: usize,
+
+    /// Per-page timeout in milliseconds
+    #[arg(long, default_value = "30000")]
+    pub timeout: u64,
+}
+
+pub async fn run(mut args: CrawlArgs) {
+    // Auto-prepend https:// if no scheme is provided
+    if !args.url.contains("://") {
+        args.url = format!("https://{}", args.url);
+    }
+
+    // Build renderer config
+    let mut renderer_config = RendererConfig::default();
+    let _browser_guards = if args.js {
+        if let Ok(ws_url) = std::env::var("CRW_CDP_URL") {
+            renderer_config.lightpanda = Some(crw_core::config::CdpEndpoint { ws_url });
+            Vec::new()
+        } else {
+            let browsers = crw_renderer::browser::spawn_all_headless().await;
+            if browsers.is_empty() {
+                eprintln!(
+                    "warning: --js requested but no browser found. \
+                     Install LightPanda or Chrome for JS rendering. \
+                     Falling back to HTTP."
+                );
+            }
+            let mut guards = Vec::new();
+            for (guard, ws_url, kind) in browsers {
+                match kind {
+                    crw_renderer::browser::RendererKind::LightPanda => {
+                        renderer_config.lightpanda = Some(crw_core::config::CdpEndpoint { ws_url });
+                    }
+                    crw_renderer::browser::RendererKind::Chrome => {
+                        renderer_config.chrome = Some(crw_core::config::CdpEndpoint { ws_url });
+                    }
+                }
+                guards.push(guard);
+            }
+            guards
+        }
+    } else {
+        renderer_config.mode = RendererMode::None;
+        Vec::new()
+    };
+
+    let stealth_config = StealthConfig {
+        enabled: args.stealth,
+        inject_headers: args.stealth,
+        ..Default::default()
+    };
+
+    let renderer = match FallbackRenderer::new(
+        &renderer_config,
+        "crw/0.7.0",
+        args.proxy.as_deref(),
+        &stealth_config,
+    ) {
+        Ok(r) => Arc::new(r),
+        Err(e) => {
+            eprintln!("error: failed to build renderer: {e}");
+            std::process::exit(1);
+        }
+    };
+
+    let output_format = match args.format {
+        Format::Markdown => OutputFormat::Markdown,
+        Format::Json => OutputFormat::Json,
+        Format::Html => OutputFormat::Html,
+        Format::Rawhtml => OutputFormat::RawHtml,
+        Format::Text => OutputFormat::PlainText,
+        Format::Links => OutputFormat::Links,
+    };
+
+    let crawl_req = CrawlRequest {
+        url: args.url.clone(),
+        max_depth: Some(args.depth),
+        max_pages: Some(args.limit),
+        formats: vec![output_format],
+        only_main_content: !args.raw,
+        json_schema: None,
+        render_js: if args.js { Some(true) } else { None },
+        wait_for: None,
+        renderer: None,
+    };
+
+    let id = Uuid::new_v4();
+    let (state_tx, mut state_rx) = watch::channel(CrawlState {
+        id,
+        success: false,
+        status: CrawlStatus::InProgress,
+        total: 0,
+        completed: 0,
+        data: vec![],
+        error: None,
+    });
+
+    // Spawn the crawl task
+    let crawl_opts = CrawlOptions {
+        id,
+        req: crawl_req,
+        renderer: renderer.clone(),
+        max_concurrency: args.concurrency,
+        respect_robots: true,
+        requests_per_second: args.rate_limit,
+        user_agent: "crw/0.7.0",
+        state_tx,
+        llm_config: None,
+        proxy: args.proxy,
+        jitter_factor: 0.2,
+        deadline_ms_per_page: args.timeout,
+        per_host_max_concurrent: 1,
+    };
+
+    let crawl_handle = tokio::spawn(async move {
+        run_crawl(crawl_opts).await;
+    });
+
+    // Stream results as they come in
+    let mut last_completed = 0;
+    let mut output_count = 0;
+
+    loop {
+        state_rx.changed().await.ok();
+        let state = state_rx.borrow().clone();
+
+        // Output new results
+        for data in state.data.iter().skip(last_completed) {
+            let content = match args.format {
+                Format::Markdown => data.markdown.clone().unwrap_or_default(),
+                Format::Json => serde_json::to_string(&data).unwrap_or_default(),
+                Format::Html => data.html.clone().unwrap_or_default(),
+                Format::Rawhtml => data.raw_html.clone().unwrap_or_default(),
+                Format::Text => data.plain_text.clone().unwrap_or_default(),
+                Format::Links => data.links.clone().unwrap_or_default().join("\n"),
+            };
+
+            if !content.is_empty() {
+                output_count += 1;
+                eprintln!(
+                    "--- Page {} ({}) ---",
+                    output_count, data.metadata.source_url
+                );
+                println!("{content}");
+                println!();
+            }
+        }
+        last_completed = state.data.len();
+
+        // Check if done
+        match state.status {
+            CrawlStatus::Completed => {
+                eprintln!("Crawl completed: {} pages", state.completed);
+                break;
+            }
+            CrawlStatus::Failed => {
+                if let Some(err) = state.error {
+                    eprintln!("error: crawl failed: {err}");
+                } else {
+                    eprintln!("error: crawl failed");
+                }
+                std::process::exit(1);
+            }
+            CrawlStatus::InProgress => {}
+        }
+    }
+
+    crawl_handle.await.ok();
+}

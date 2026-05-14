@@ -7,18 +7,75 @@ repository.workspace = true
 homepage.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "crw — CLI tool for scraping URLs to markdown/JSON without a server"
+description = "crw — Unified CLI for web scraping, crawling, search, and serving"
 
 [[bin]]
 name = "crw"
 path = "src/main.rs"
 
+[features]
+default = ["serve", "mcp-embedded", "browse"]
+
+# Enable serve subcommand (REST API server)
+serve = ["dep:axum", "dep:tower", "dep:tower-http"]
+
+# Enable embedded MCP mode (self-contained, no server needed)
+mcp-embedded = ["dep:crw-server"]
+
+# Enable browse subcommand (browser automation MCP)
+browse = ["dep:crw-browse", "dep:rmcp", "dep:anyhow"]
+
 [dependencies]
+# Core crates
 crw-core = { path = "../crw-core", version = "0.7.1" }
 crw-renderer = { path = "../crw-renderer", version = "0.7.1", features = ["auto-browser", "cdp"] }
 crw-extract = { path = "../crw-extract", version = "0.7.1" }
 crw-crawl = { path = "../crw-crawl", version = "0.7.1" }
+crw-search = { path = "../crw-search", version = "0.7.1" }
 
+# Server (for serve + mcp-embedded + setup commands)
+crw-server = { path = "../crw-server", version = "0.7.1", optional = true, features = ["cdp"] }
+
+# Browse (for browse command)
+crw-browse = { path = "../crw-browse", version = "0.7.1", optional = true }
+
+# Web framework (for serve command)
+axum = { workspace = true, optional = true }
+tower = { workspace = true, optional = true }
+tower-http = { workspace = true, optional = true }
+
+# MCP (for browse command)
+rmcp = { version = "1.5", features = ["server", "macros", "transport-io"], optional = true }
+
+# Async runtime
 tokio = { workspace = true }
+futures = { workspace = true }
+
+# CLI
 clap = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
 serde_json = { workspace = true }
+
+# HTTP client
+reqwest = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# Error handling
+anyhow = { version = "1", optional = true }
+
+# UUID (for crawl job IDs)
+uuid = { workspace = true }
+
+# Interactive setup wizard
+dialoguer = { version = "0.11", features = ["fuzzy-select"] }
+console = "0.15"
+indicatif = "0.17"
+
+# Crypto (for checksum verification)
+sha2 = { workspace = true }
+hex = { workspace = true }
