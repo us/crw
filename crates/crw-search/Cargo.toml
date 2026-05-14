@@ -10,7 +10,7 @@ categories.workspace = true
 description = "SearXNG-backed search client and result transforms for the CRW web scraper"
 
 [dependencies]
-crw-core = { path = "../crw-core", version = "0.8.1" }
+crw-core = { path = "../crw-core", version = "0.8.2" }
 futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

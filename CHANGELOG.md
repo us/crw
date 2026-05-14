@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.8.2](https://github.com/us/crw/compare/v0.8.1...v0.8.2) (2026-05-14)
+
+
+### Bug Fixes
+
+* **release:** move crw-cli to unpublished and update dep versions ([7f121f6](https://github.com/us/crw/commit/7f121f6f731e7bfa311be48fa442e0049bbda16d))
+
 ## [0.8.1](https://github.com/us/crw/compare/v0.8.0...v0.8.1) (2026-05-14)
 
 
