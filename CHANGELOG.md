@@ -2,6 +2,19 @@
 
 All notable changes to CRW are documented here.
 
+## [0.8.2](https://github.com/us/crw/compare/v0.8.2...v0.8.2) (2026-05-15)
+
+
+### Features
+
+* **cli:** two-phase auto-fallback for `crw <url>` scrape ([a871e54](https://github.com/us/crw/commit/a871e544443673751974a8dc5ebb4f2b0eafd59f))
+* **setup:** make config.toml the canonical source for `crw setup` ([b07c154](https://github.com/us/crw/commit/b07c1549932399a355d30e15632d424f0ad28b85))
+
+
+### Miscellaneous
+
+* release 0.8.2 ([38ae764](https://github.com/us/crw/commit/38ae7641b44d321150febc38eda530db3d572046))
+
 ## [0.8.2](https://github.com/us/crw/compare/v0.8.1...v0.8.2) (2026-05-14)
 
 
