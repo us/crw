@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.9.0](https://github.com/us/crw/compare/v0.8.3...v0.9.0) (2026-05-16)
+
+
+### Features
+
+* **cli:** add AI extraction flags and `crw setup --reset` ([912eea0](https://github.com/us/crw/commit/912eea0a1fa0db5a838560f2c25da44b3ee33d44))
+
 ## [0.8.3](https://github.com/us/crw/compare/v0.8.2...v0.8.3) (2026-05-15)
 
 
