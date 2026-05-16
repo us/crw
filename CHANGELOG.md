@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.9.1](https://github.com/us/crw/compare/v0.9.0...v0.9.1) (2026-05-16)
+
+
+### Bug Fixes
+
+* **release:** sync crw-cli internal dep versions with workspace ([26c528e](https://github.com/us/crw/commit/26c528e737c5ed136d3c6e72da36b9324363805f))
+
 ## [0.9.0](https://github.com/us/crw/compare/v0.8.3...v0.9.0) (2026-05-16)
 
 
