@@ -49,12 +49,12 @@
 
 ## What's New
 
-### [0.9.0](https://github.com/us/crw/compare/v0.8.3...v0.9.0) (2026-05-16)
+### [0.9.1](https://github.com/us/crw/compare/v0.9.0...v0.9.1) (2026-05-16)
 
 
-### Features
+### Bug Fixes
 
-* **cli:** add AI extraction flags and `crw setup --reset` ([912eea0](https://github.com/us/crw/commit/912eea0a1fa0db5a838560f2c25da44b3ee33d44))
+* **release:** sync crw-cli internal dep versions with workspace ([26c528e](https://github.com/us/crw/commit/26c528e737c5ed136d3c6e72da36b9324363805f))
 
 [Full changelog →](CHANGELOG.md)
 
