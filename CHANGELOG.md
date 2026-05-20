@@ -2,6 +2,22 @@
 
 All notable changes to CRW are documented here.
 
+## [0.10.0](https://github.com/us/crw/compare/v0.9.1...v0.10.0) (2026-05-20)
+
+
+### Features
+
+* **detector:** add vendor-specific anti-bot block markers ([c88c508](https://github.com/us/crw/commit/c88c508fb90b166dfe3727fd5dfb4f1597e43667))
+* **renderer:** add chrome_proxy as 4th fallback tier ([b4da4f7](https://github.com/us/crw/commit/b4da4f79bb4d0ed71c25f14aaae5137d00f8b26b))
+* **renderer:** per-request country via CDP proxy auth ([11b4d32](https://github.com/us/crw/commit/11b4d32285ed8a4e6bee8f390c264f9fc0be1b1a))
+
+
+### Bug Fixes
+
+* **release:** harden npm publish + fix mcp-registry verifier ([9d4076f](https://github.com/us/crw/commit/9d4076fadd252a33e7887ee6e4925be8e6aa7d8e))
+* **renderer:** detect CloudFront/WAF 403 as bot-wall ([7e058b2](https://github.com/us/crw/commit/7e058b2915eff8b36d1186013e0810b2290492f4))
+* **renderer:** escalate JS tier on 4xx/5xx and vendor-detected blocks ([648c372](https://github.com/us/crw/commit/648c372ee5d52aed1459c22725be2e6d34d95afb))
+
 ## [0.9.1](https://github.com/us/crw/compare/v0.9.0...v0.9.1) (2026-05-16)
 
 

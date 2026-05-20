@@ -19,7 +19,7 @@ description = "Core types, config, and error handling for the CRW web scraper"
 cdp = []
 
 [dependencies]
-crw-mcp-proto = { path = "../crw-mcp-proto", version = "0.9.1" }
+crw-mcp-proto = { path = "../crw-mcp-proto", version = "0.10.0" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
