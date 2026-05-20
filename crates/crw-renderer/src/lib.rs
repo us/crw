@@ -66,6 +66,15 @@ use std::sync::Arc;
 use std::time::Duration;
 use traits::PageFetcher;
 
+tokio::task_local! {
+    /// Per-request country code (ISO 3166-1 alpha-2, lowercase) for the
+    /// chrome_proxy tier's CDP auth pump. Set by `FallbackRenderer::fetch`
+    /// when a `ScrapeRequest.country` is present; read in `cdp.rs` while
+    /// composing DataImpulse credentials. Task-local so child tasks
+    /// spawned by the pool inherit it without trait-signature churn.
+    pub static REQUEST_COUNTRY: Option<String>;
+}
+
 /// Map a renderer's name string to the closed `RendererKind` enum.
 /// Returns `None` for unknown names (e.g. "playwright" — treated as a
 /// JS renderer but not tracked in metrics/preferences).
@@ -406,7 +415,7 @@ impl FallbackRenderer {
                 {
                     let blocklist = blocklist::Blocklist::defaults()
                         .with_stylesheets(config.chrome_intercept_stylesheets);
-                    let renderer = cdp::CdpRenderer::new(
+                    let mut renderer = cdp::CdpRenderer::new(
                         "chrome_proxy",
                         &cp.ws_url,
                         config.chrome_proxy_timeout(),
@@ -418,8 +427,21 @@ impl FallbackRenderer {
                         blocklist,
                         config.chrome_host_intercept_disable.clone(),
                     );
+                    // Wire DataImpulse base creds when configured. The renderer
+                    // composes `{base_user}__cr.{country}` per request and replies
+                    // to Chrome's `Fetch.authRequired` via CDP — replacing the
+                    // removed gost forwarder.
+                    if let (Some(u), Some(p)) = (&config.proxy_base_user, &config.proxy_base_pass) {
+                        renderer = renderer.with_proxy_auth_base(
+                            u.clone(),
+                            p.clone(),
+                            config.proxy_default_country.clone(),
+                        );
+                    }
                     tracing::info!(
                         ws_url = %cp.ws_url,
+                        proxy_auth = config.proxy_base_user.is_some(),
+                        default_country = ?config.proxy_default_country,
                         "chrome_proxy tier enabled"
                     );
                     js_renderers.push(Arc::new(renderer));

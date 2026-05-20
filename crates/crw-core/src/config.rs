@@ -377,6 +377,22 @@ pub struct RendererConfig {
     /// Anti-bot detection policy (crawl4ai 3-tier classifier).
     #[serde(default)]
     pub antibot: AntibotConfig,
+    /// DataImpulse residential-proxy base username (without `__cr.<cc>`
+    /// country suffix). When set alongside [`proxy_base_pass`], the engine
+    /// drives Chrome's proxy auth via CDP `Fetch.authRequired` and composes
+    /// the country-suffixed username per request. Read only by the
+    /// `chrome_proxy` tier. None = no upstream proxy auth (chrome_proxy
+    /// tier still functional only if a no-auth or pre-authed proxy is in
+    /// front of Chrome).
+    #[serde(default)]
+    pub proxy_base_user: Option<String>,
+    /// DataImpulse base password — see [`proxy_base_user`].
+    #[serde(default)]
+    pub proxy_base_pass: Option<String>,
+    /// Fallback country code used when a request omits `country`. Lowercased
+    /// 2-letter ISO 3166-1 alpha-2 (e.g. "us"). None = global pool (no suffix).
+    #[serde(default)]
+    pub proxy_default_country: Option<String>,
 }
 
 /// Engine escalation policy — adds `ChromeStealth` and `ChromeStealthProxy`
@@ -541,6 +557,9 @@ impl Default for RendererConfig {
             use_predictor: false,
             escalation: EscalationConfig::default(),
             antibot: AntibotConfig::default(),
+            proxy_base_user: None,
+            proxy_base_pass: None,
+            proxy_default_country: None,
         }
     }
 }
@@ -570,6 +589,31 @@ impl RendererConfig {
     pub fn chrome_proxy_timeout(&self) -> u64 {
         self.chrome_proxy_timeout_ms
             .unwrap_or_else(|| self.chrome_timeout().saturating_add(15_000))
+    }
+
+    /// Compose the DataImpulse-style proxy credentials for a single request.
+    ///
+    /// Resolution order for the country suffix:
+    /// 1. `country` argument (per-request override)
+    /// 2. `self.proxy_default_country` (server default)
+    /// 3. No suffix → DataImpulse global pool
+    ///
+    /// Returns `None` when no base credentials are configured — caller treats
+    /// this as "no auth required". An invalid country code (wrong length,
+    /// non-alphabetic) silently falls through to the default; that keeps a
+    /// malformed `?country=` query from creating an unauthenticated request
+    /// while still letting through a well-known default.
+    pub fn effective_proxy_credentials(&self, country: Option<&str>) -> Option<(String, String)> {
+        let user = self.proxy_base_user.as_ref()?;
+        let pass = self.proxy_base_pass.as_ref()?;
+        let cc = country
+            .or(self.proxy_default_country.as_deref())
+            .map(|s| s.trim().to_lowercase())
+            .filter(|s| s.len() == 2 && s.chars().all(|c| c.is_ascii_alphabetic()));
+        Some(match cc {
+            Some(cc) => (format!("{user}__cr.{cc}"), pass.clone()),
+            None => (user.clone(), pass.clone()),
+        })
     }
 
     /// Number of active CDP tiers (lightpanda + playwright + chrome) under
@@ -1563,5 +1607,54 @@ searxng_url = "http://from-file:8080"
             Some("http://from-env:8080"),
             "env var must win over user config file"
         );
+    }
+
+    #[test]
+    fn effective_proxy_credentials_appends_country_suffix() {
+        let cfg = RendererConfig {
+            proxy_base_user: Some("abc".into()),
+            proxy_base_pass: Some("pw".into()),
+            proxy_default_country: Some("de".into()),
+            ..Default::default()
+        };
+        let (u, p) = cfg.effective_proxy_credentials(Some("us")).unwrap();
+        assert_eq!(u, "abc__cr.us");
+        assert_eq!(p, "pw");
+        // Per-request wins over default.
+        let (u, _) = cfg.effective_proxy_credentials(Some("GB")).unwrap();
+        assert_eq!(u, "abc__cr.gb", "uppercase input is normalized");
+        // Default country used when per-request omits it.
+        let (u, _) = cfg.effective_proxy_credentials(None).unwrap();
+        assert_eq!(u, "abc__cr.de");
+    }
+
+    #[test]
+    fn effective_proxy_credentials_invalid_country_uses_global_pool() {
+        let cfg = RendererConfig {
+            proxy_base_user: Some("abc".into()),
+            proxy_base_pass: Some("pw".into()),
+            ..Default::default()
+        };
+        // 3-letter ISO code → rejected, no suffix (global pool).
+        let (u, _) = cfg.effective_proxy_credentials(Some("usa")).unwrap();
+        assert_eq!(u, "abc");
+        // Digits → rejected.
+        let (u, _) = cfg.effective_proxy_credentials(Some("u1")).unwrap();
+        assert_eq!(u, "abc");
+        // Empty string after trim → rejected.
+        let (u, _) = cfg.effective_proxy_credentials(Some("  ")).unwrap();
+        assert_eq!(u, "abc");
+    }
+
+    #[test]
+    fn effective_proxy_credentials_no_base_returns_none() {
+        let cfg = RendererConfig::default();
+        assert!(cfg.effective_proxy_credentials(Some("us")).is_none());
+
+        let only_user = RendererConfig {
+            proxy_base_user: Some("abc".into()),
+            ..Default::default()
+        };
+        assert!(only_user.effective_proxy_credentials(Some("us")).is_none());
     }
 }

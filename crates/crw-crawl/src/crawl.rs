@@ -91,6 +91,15 @@ fn enqueue_discovered_links(
 
 /// Run a BFS crawl starting from a URL.
 pub async fn run_crawl(opts: CrawlOptions<'_>) {
+    // Propagate crawl-level country to every page-fetch through the renderer
+    // stack via the same task-local used by `single::scrape_url`.
+    let country = opts.req.country.clone();
+    crw_renderer::REQUEST_COUNTRY
+        .scope(country, run_crawl_inner(opts))
+        .await
+}
+
+async fn run_crawl_inner(opts: CrawlOptions<'_>) {
     let CrawlOptions {
         id,
         req,

@@ -411,6 +411,14 @@ pub struct CdpRenderer {
     /// per plan §"Out of scope"). When `Some`, `fetch` dispatches through
     /// `fetch_with_pool`; when `None`, legacy `fetch_with_ws` is used.
     pool: Option<Arc<crate::browser_pool::BrowserContextPool<CdpConnection>>>,
+    /// DataImpulse base credentials (username without country suffix, password).
+    /// When `Some`, the renderer drives Chrome's proxy auth via CDP
+    /// `Fetch.authRequired`, composing the country-suffixed username per request.
+    /// Only the chrome_proxy tier sets this; plain chrome leaves it `None`.
+    proxy_auth_base: Option<(String, String)>,
+    /// Country code used when a `ScrapeRequest.country` is not supplied.
+    /// `None` means "no suffix" → DataImpulse global pool.
+    default_country: Option<String>,
 }
 
 impl CdpRenderer {
@@ -428,7 +436,24 @@ impl CdpRenderer {
             host_intercept_disable: Vec::new(),
             conn_semaphore: Arc::new(Semaphore::new(pool_size)),
             pool: None,
+            proxy_auth_base: None,
+            default_country: None,
         }
+    }
+
+    /// Configure DataImpulse base proxy credentials. The `Fetch.authRequired`
+    /// pump composes the per-request username as `{base_user}__cr.{country}`,
+    /// resolved from `RequestContext::country` (set via `REQUEST_COUNTRY` task-local)
+    /// with `default_country` as the fallback when the request omits it.
+    pub fn with_proxy_auth_base(
+        mut self,
+        base_user: String,
+        base_pass: String,
+        default_country: Option<String>,
+    ) -> Self {
+        self.proxy_auth_base = Some((base_user, base_pass));
+        self.default_country = default_country;
+        self
     }
 
     /// Enable the browser-context pool. Builds an `Arc<BrowserContextPool>`
@@ -667,6 +692,75 @@ fn rewrite_ws_host(discovered: &str, configured: &str) -> String {
         "ws://"
     };
     format!("{scheme}{conf_host_port}{disc_path}")
+}
+
+/// Build the `Fetch.continueWithAuth` payload. Pure fn — testable without a
+/// live CDP connection. When `creds` is `Some`, replies with
+/// `ProvideCredentials`; when `None`, replies with `CancelAuth` (NOT `Default`,
+/// which is ambiguous in headless and may pop a dialog in headed mode).
+fn build_auth_response(request_id: &str, creds: Option<(&str, &str)>) -> serde_json::Value {
+    match creds {
+        Some((user, pass)) => serde_json::json!({
+            "requestId": request_id,
+            "authChallengeResponse": {
+                "response": "ProvideCredentials",
+                "username": user,
+                "password": pass,
+            },
+        }),
+        None => serde_json::json!({
+            "requestId": request_id,
+            "authChallengeResponse": { "response": "CancelAuth" },
+        }),
+    }
+}
+
+/// Drive `Fetch.authRequired` events to supply DataImpulse credentials per
+/// request. Mirrors `run_intercept_pump`'s shape (borrow `&CdpConnection`,
+/// filter by `session_id`, exit on `Closed`).
+///
+/// `creds` is composed *per `fetch_inner` call* with the request's country
+/// suffix already applied, captured by move into this future so concurrent
+/// pool slots cannot cross-contaminate credentials.
+async fn run_auth_pump(
+    conn: &CdpConnection,
+    mut rx: broadcast::Receiver<CdpEvent>,
+    creds: Option<(String, String)>,
+    session_id: &str,
+) {
+    let cmd_timeout = Duration::from_secs(2);
+    loop {
+        let ev = match rx.recv().await {
+            Ok(ev) => ev,
+            Err(broadcast::error::RecvError::Lagged(_)) => continue,
+            Err(broadcast::error::RecvError::Closed) => return,
+        };
+        if ev.method != "Fetch.authRequired" {
+            continue;
+        }
+        if ev.session_id.as_deref() != Some(session_id) {
+            continue;
+        }
+        let request_id = ev
+            .params
+            .get("requestId")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        if request_id.is_empty() {
+            continue;
+        }
+        let creds_ref = creds.as_ref().map(|(u, p)| (u.as_str(), p.as_str()));
+        let payload = build_auth_response(&request_id, creds_ref);
+        let _ = conn
+            .send_recv(
+                "Fetch.continueWithAuth",
+                payload,
+                Some(session_id),
+                cmd_timeout,
+            )
+            .await;
+    }
 }
 
 /// Drive `Fetch.requestPaused` events through the blocklist. Runs forever
@@ -1756,14 +1850,50 @@ impl CdpRenderer {
         // Subscribe to events BEFORE navigating so we don't miss loadEventFired.
         let events_rx = conn.subscribe();
 
+        // Compose per-call DataImpulse credentials for the chrome_proxy tier.
+        // Country priority: per-request (task-local) → renderer default → none.
+        // Two-letter lowercase ASCII guard mirrors `RendererConfig::effective_proxy_credentials`.
+        let effective_creds: Option<(String, String)> =
+            self.proxy_auth_base.as_ref().map(|(base_user, base_pass)| {
+                let req_country = crate::REQUEST_COUNTRY
+                    .try_with(|c| c.clone())
+                    .ok()
+                    .flatten();
+                let cc = req_country
+                    .as_deref()
+                    .or(self.default_country.as_deref())
+                    .map(|s| s.trim().to_lowercase())
+                    .filter(|s| s.len() == 2 && s.chars().all(|c| c.is_ascii_alphabetic()));
+                match cc {
+                    Some(cc) => (format!("{base_user}__cr.{cc}"), base_pass.clone()),
+                    None => (base_user.clone(), base_pass.clone()),
+                }
+            });
+        let auth_active = effective_creds.is_some();
+
         // Optionally enable request interception. Must be done before
         // `Page.navigate` because `Fetch.enable` pauses the document request
         // too — pump must already be consuming `Fetch.requestPaused` by then.
+        // When only auth is active (no interception), pass empty `patterns: []`
+        // — omitting the field defaults CDP to "match all" and would pause
+        // every request without a consumer.
         let intercept_active = self.intercept_active_for(url);
-        if intercept_active {
+        if intercept_active || auth_active {
+            let mut params = serde_json::Map::new();
+            params.insert(
+                "patterns".into(),
+                if intercept_active {
+                    serde_json::json!([{ "urlPattern": "*" }])
+                } else {
+                    serde_json::json!([])
+                },
+            );
+            if auth_active {
+                params.insert("handleAuthRequests".into(), serde_json::json!(true));
+            }
             conn.send_recv(
                 "Fetch.enable",
-                serde_json::json!({ "patterns": [{ "urlPattern": "*" }] }),
+                serde_json::Value::Object(params),
                 Some(&session_id),
                 self.page_timeout,
             )
@@ -1849,38 +1979,80 @@ impl CdpRenderer {
         // traffic settles before body innerText hits the threshold.
         let idle_pump = run_network_idle_pump(conn.subscribe(), net_tracker.clone(), &session_id);
 
-        let outcome = if intercept_active {
-            let pump_rx = conn.subscribe();
-            let pump = run_intercept_pump(conn, pump_rx, &self.blocklist, &session_id);
-            tokio::select! {
-                biased;
-                res = work => res,
-                _ = pump => Err(CrwError::RendererError(
-                    "interception pump exited unexpectedly".into(),
-                )),
-                _ = cap_pump => Err(CrwError::RendererError(
-                    "network capture pump exited unexpectedly".into(),
-                )),
-                _ = idle_pump => Err(CrwError::RendererError(
-                    "network idle pump exited unexpectedly".into(),
-                )),
+        let outcome = match (intercept_active, auth_active) {
+            (true, true) => {
+                let intercept_pump =
+                    run_intercept_pump(conn, conn.subscribe(), &self.blocklist, &session_id);
+                let auth_pump =
+                    run_auth_pump(conn, conn.subscribe(), effective_creds.clone(), &session_id);
+                tokio::select! {
+                    biased;
+                    res = work => res,
+                    _ = intercept_pump => Err(CrwError::RendererError(
+                        "interception pump exited unexpectedly".into(),
+                    )),
+                    _ = auth_pump => Err(CrwError::RendererError(
+                        "auth pump exited unexpectedly".into(),
+                    )),
+                    _ = cap_pump => Err(CrwError::RendererError(
+                        "network capture pump exited unexpectedly".into(),
+                    )),
+                    _ = idle_pump => Err(CrwError::RendererError(
+                        "network idle pump exited unexpectedly".into(),
+                    )),
+                }
             }
-        } else {
-            tokio::select! {
-                biased;
-                res = work => res,
-                _ = cap_pump => Err(CrwError::RendererError(
-                    "network capture pump exited unexpectedly".into(),
-                )),
-                _ = idle_pump => Err(CrwError::RendererError(
-                    "network idle pump exited unexpectedly".into(),
-                )),
+            (true, false) => {
+                let intercept_pump =
+                    run_intercept_pump(conn, conn.subscribe(), &self.blocklist, &session_id);
+                tokio::select! {
+                    biased;
+                    res = work => res,
+                    _ = intercept_pump => Err(CrwError::RendererError(
+                        "interception pump exited unexpectedly".into(),
+                    )),
+                    _ = cap_pump => Err(CrwError::RendererError(
+                        "network capture pump exited unexpectedly".into(),
+                    )),
+                    _ = idle_pump => Err(CrwError::RendererError(
+                        "network idle pump exited unexpectedly".into(),
+                    )),
+                }
+            }
+            (false, true) => {
+                let auth_pump =
+                    run_auth_pump(conn, conn.subscribe(), effective_creds.clone(), &session_id);
+                tokio::select! {
+                    biased;
+                    res = work => res,
+                    _ = auth_pump => Err(CrwError::RendererError(
+                        "auth pump exited unexpectedly".into(),
+                    )),
+                    _ = cap_pump => Err(CrwError::RendererError(
+                        "network capture pump exited unexpectedly".into(),
+                    )),
+                    _ = idle_pump => Err(CrwError::RendererError(
+                        "network idle pump exited unexpectedly".into(),
+                    )),
+                }
+            }
+            (false, false) => {
+                tokio::select! {
+                    biased;
+                    res = work => res,
+                    _ = cap_pump => Err(CrwError::RendererError(
+                        "network capture pump exited unexpectedly".into(),
+                    )),
+                    _ = idle_pump => Err(CrwError::RendererError(
+                        "network idle pump exited unexpectedly".into(),
+                    )),
+                }
             }
         };
 
         // Cleanup: `Fetch.disable` auto-continues any still-paused requests
         // per CDP docs, which avoids leaks if the pump was cancelled mid-flight.
-        if intercept_active {
+        if intercept_active || auth_active {
             let _ = conn
                 .send_recv(
                     "Fetch.disable",
@@ -2077,7 +2249,35 @@ fn is_spa_text_ready(text_len: i64) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::is_content_stable;
+    use super::{build_auth_response, is_content_stable};
+
+    #[test]
+    fn auth_response_provides_credentials_when_creds_set() {
+        let v = build_auth_response("req-1", Some(("abc__cr.us", "pw")));
+        assert_eq!(v["requestId"], "req-1");
+        assert_eq!(v["authChallengeResponse"]["response"], "ProvideCredentials");
+        assert_eq!(v["authChallengeResponse"]["username"], "abc__cr.us");
+        assert_eq!(v["authChallengeResponse"]["password"], "pw");
+    }
+
+    #[test]
+    fn auth_response_cancels_when_no_creds() {
+        let v = build_auth_response("req-2", None);
+        assert_eq!(v["authChallengeResponse"]["response"], "CancelAuth");
+        assert!(v["authChallengeResponse"].get("username").is_none());
+        assert!(v["authChallengeResponse"].get("password").is_none());
+    }
+
+    #[test]
+    fn auth_response_no_password_leak_on_cancel() {
+        // Sanity: a CancelAuth payload never carries credentials, even if the
+        // caller mistakenly passes some out-of-band data. (Defense-in-depth
+        // smoke test — guards against future shape changes.)
+        let v = build_auth_response("req-3", None);
+        let s = serde_json::to_string(&v).unwrap();
+        assert!(!s.contains("\"password\""));
+        assert!(!s.contains("\"username\""));
+    }
 
     #[test]
     fn first_tick_never_stable() {

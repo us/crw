@@ -138,6 +138,7 @@ pub async fn run(mut args: CrawlArgs) -> Result<(), CmdError> {
         render_js: if args.js { Some(true) } else { None },
         wait_for: None,
         renderer: None,
+        country: None,
     };
 
     let id = Uuid::new_v4();

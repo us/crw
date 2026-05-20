@@ -621,6 +621,7 @@ fn build_request(
         filter_mode: None,
         top_k: None,
         proxy,
+        country: None,
         stealth: if stealth { Some(true) } else { None },
         actions: None,
         extract,

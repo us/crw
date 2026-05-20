@@ -28,6 +28,37 @@ pub async fn scrape_url(
     render_js_default: Option<bool>,
     deadline: Deadline,
 ) -> CrwResult<ScrapeData> {
+    // Propagate per-request country into the renderer stack via task-local.
+    // Read by `crw-renderer::cdp` when composing DataImpulse credentials for
+    // the chrome_proxy tier. None = use `proxy_default_country` fallback.
+    crw_renderer::REQUEST_COUNTRY
+        .scope(req.country.clone(), async move {
+            scrape_url_inner(
+                req,
+                renderer,
+                llm_config,
+                extraction_cfg,
+                user_agent,
+                default_stealth,
+                render_js_default,
+                deadline,
+            )
+            .await
+        })
+        .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn scrape_url_inner(
+    req: &ScrapeRequest,
+    renderer: &Arc<FallbackRenderer>,
+    llm_config: Option<&LlmConfig>,
+    extraction_cfg: &ExtractionConfig,
+    user_agent: &str,
+    default_stealth: bool,
+    render_js_default: Option<bool>,
+    deadline: Deadline,
+) -> CrwResult<ScrapeData> {
     // Reject unsupported `actions` parameter early with a clear error.
     if req.actions.is_some() {
         return Err(crw_core::error::CrwError::InvalidRequest(

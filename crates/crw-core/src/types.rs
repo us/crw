@@ -165,6 +165,15 @@ pub struct ScrapeRequest {
     /// (e.g. "http://proxy:8080" or "socks5://user:pass@proxy:1080").
     #[serde(default)]
     pub proxy: Option<String>,
+    /// 2-letter ISO 3166-1 alpha-2 country code (e.g. "us", "gb") for the
+    /// residential-proxy chrome tier's egress. When the server has
+    /// DataImpulse credentials configured, the engine composes
+    /// `<base>__cr.<country>` per request and supplies it via CDP
+    /// `Fetch.authRequired`. Unset / empty = server default country (or
+    /// global pool when no default configured). Validated server-side;
+    /// invalid values fall back to default.
+    #[serde(default)]
+    pub country: Option<String>,
     /// Override stealth mode for this request (None = use global config).
     #[serde(default)]
     pub stealth: Option<bool>,
@@ -429,6 +438,10 @@ pub struct CrawlRequest {
     /// Pin every page in this crawl to a specific renderer. See `ScrapeRequest::renderer`.
     #[serde(default)]
     pub renderer: Option<RequestedRenderer>,
+    /// 2-letter ISO 3166-1 alpha-2 country code (e.g. "us", "gb") applied to
+    /// every page fetched in this crawl. See `ScrapeRequest::country`.
+    #[serde(default)]
+    pub country: Option<String>,
 }
 
 /// Resolve the effective `render_js` decision from a per-request value and the
