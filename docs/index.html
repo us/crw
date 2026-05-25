@@ -137,15 +137,16 @@ req = urllib.request.Request(
     method="POST",
 )
 with urllib.request.urlopen(req) as r:
-    body = json.loads(r.read())
+    body = json.loads(r.read())  # body == {"success": true, "data": [...]}
 
-# Each result row has `title`, `url`, `snippet`, `description`,
-# `position`, `score`, `category` — print the LLM-ready subset.
+# Results live under body["data"]. Each row has `title`, `url`, `snippet`,
+# `description`, `position`, `score`, `category` — print the LLM-ready subset.
 print(json.dumps(
     [{"title": x["title"], "url": x["url"], "snippet": x["snippet"]}
      for x in body["data"]],
     indent=2,
 ))
+# Run with: python3 search.py  (file is python3-only — no `python` alias needed)
 </code></pre>
 
     <h3>cURL</h3>

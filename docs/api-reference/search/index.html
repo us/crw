@@ -13,10 +13,53 @@
 <strong>Self-hosted:</strong> <code>http://localhost:3000/v1/search</code></p>
 <p><strong>Auth (hosted only):</strong> <code>Authorization: Bearer $CRW_API_KEY</code></p>
 <p><strong>Body:</strong> <code>{"query": string, "limit": number}</code></p>
-<p><strong>Response row:</strong> <code>{"title", "url", "snippet", "description", "position", "score", "category"}</code></p>
-<p><code>snippet</code> is the LLM-ready summary line (Firecrawl-compatible name); <code>description</code> is the same value under the SearXNG-native name. Both are emitted.</p>
-<p>The runnable Python + cURL example lives at the root agent shell:
-<a href="/">https://docs.fastcrw.com/</a></p>
+
+<h2>Response shape</h2>
+<pre><code>{
+  "success": true,
+  "data": [
+    {
+      "url": "https://...",
+      "title": "...",
+      "snippet": "LLM-ready summary line (same value as description)",
+      "description": "LLM-ready summary line (same value as snippet)",
+      "position": 1,
+      "score": 9.5,
+      "category": "general"
+    }
+  ]
+}</code></pre>
+<p>Results are nested under <code>response["data"]</code> — iterate that array.
+Each row has <code>title</code>, <code>url</code>, <code>snippet</code>,
+<code>description</code>, <code>position</code>, <code>score</code>,
+<code>category</code>. <code>snippet</code> is the LLM-ready summary line
+(Firecrawl-compatible name); <code>description</code> is the same value
+under the SearXNG-native name.</p>
+
+<h2>Python (stdlib)</h2>
+<pre><code>#!/usr/bin/env python3
+import json, os, urllib.request
+
+req = urllib.request.Request(
+    "https://api.fastcrw.com/v1/search",
+    data=json.dumps({"query": "...", "limit": 3}).encode(),
+    headers={
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {os.environ['CRW_API_KEY']}",
+    },
+    method="POST",
+)
+with urllib.request.urlopen(req) as r:
+    body = json.loads(r.read())  # body == {"success": true, "data": [...]}
+
+print(json.dumps(
+    [{"title": x["title"], "url": x["url"], "snippet": x["snippet"]}
+     for x in body["data"]],
+    indent=2,
+))
+# Run with: python3 search.py  (the script is python3-only)</code></pre>
+
+<p>Full quickstart at root: <a href="/">https://docs.fastcrw.com/</a></p>
 <noscript><p>Redirecting to <a href="/">https://docs.fastcrw.com/</a>…</p></noscript>
 </body>
 </html>
