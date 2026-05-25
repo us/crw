@@ -36,7 +36,9 @@ pub struct SearchArgs {
     /// SearXNG instance URL.
     ///
     /// Resolution order: this flag > `CRW_SEARXNG_URL` env > `search.searxng_url`
-    /// in `~/.config/crw/config.toml` > `http://localhost:8080`.
+    /// in `~/.config/crw/config.toml` > `http://127.0.0.1:8080` (the default
+    /// `crw setup --local` SearXNG sidecar). Public instances (searx.be, etc.)
+    /// usually block JSON requests with 403/429 — prefer a local sidecar.
     #[arg(long, env = "CRW_SEARXNG_URL")]
     pub searxng_url: Option<String>,
 
@@ -107,10 +109,24 @@ pub async fn run(args: SearchArgs) {
         Err(e) => {
             eprintln!("error: search failed: {e}");
             eprintln!();
-            eprintln!("hint: Make sure SearXNG is reachable at {}", searxng_url);
-            eprintln!("      Local:  docker run -p 8080:8080 searxng/searxng");
-            eprintln!("      Public: CRW_SEARXNG_URL=https://searx.be crw search ...");
-            eprintln!("      Or set `search.searxng_url` in ~/.config/crw/config.toml");
+            eprintln!(
+                "hint: SearXNG (the search backend) is unreachable at {}",
+                searxng_url
+            );
+            eprintln!();
+            eprintln!("      Easiest fix — let `crw setup` boot a local one for you:");
+            eprintln!("          crw setup --local");
+            eprintln!();
+            eprintln!("      Manual fix — boot SearXNG with JSON output enabled (the stock");
+            eprintln!("      image ships with JSON disabled, which causes 403s):");
+            eprintln!("          docker run -d --name searxng -p 8080:8080 \\");
+            eprintln!(
+                "            -v ~/.config/crw/searxng-settings.yml:/etc/searxng/settings.yml \\"
+            );
+            eprintln!("            searxng/searxng");
+            eprintln!();
+            eprintln!("      Public instances (searx.be, priv.au, etc.) usually block JSON");
+            eprintln!("      requests with 403/429 and are not recommended.");
             std::process::exit(1);
         }
     };
@@ -240,5 +256,8 @@ fn resolve_searxng_url(cli: Option<&str>) -> String {
     {
         return url;
     }
-    "http://localhost:8080".to_string()
+    // Prefer 127.0.0.1 over "localhost" — on some systems (macOS in particular)
+    // "localhost" resolves to ::1 first, and a v4-only SearXNG container fails
+    // with a misleading transport error before the v6→v4 fallback retries.
+    "http://127.0.0.1:8080".to_string()
 }

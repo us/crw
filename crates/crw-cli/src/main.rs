@@ -48,7 +48,8 @@ use teardown::{CmdError, finish, install_signal_teardown};
         curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | sh\n\n\
         DOCS:    https://docs.fastcrw.com  ·  https://github.com/us/crw\n\
         CLOUD:   https://fastcrw.com (500 free credits, no monthly reset)\n\
-        SEARCH:  set CRW_SEARXNG_URL=https://searx.be for a public SearXNG instance\n\
+        SEARCH:  `crw setup --local` boots a JSON-enabled SearXNG on 127.0.0.1:8080.\n\
+        \x20        Public instances (searx.be, priv.au, ...) usually block JSON requests.\n\
         "
 )]
 struct Cli {
