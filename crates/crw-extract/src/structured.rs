@@ -109,9 +109,9 @@ pub async fn extract_structured_with_usage(
 
     let (value, mut usage) = match llm.provider.as_str() {
         "anthropic" => call_anthropic(clipped, schema, llm).await,
-        "openai" => call_openai(clipped, schema, llm).await,
+        "openai" | "deepseek" | "openai-compatible" => call_openai(clipped, schema, llm).await,
         other => Err(CrwError::ExtractionError(format!(
-            "Unsupported LLM provider: {other}. Use 'anthropic' or 'openai'."
+            "Unsupported LLM provider: {other}. Use 'anthropic', 'openai', 'deepseek', or 'openai-compatible'."
         ))),
     }?;
 
@@ -377,7 +377,11 @@ async fn call_openai(
     schema: &serde_json::Value,
     llm: &LlmConfig,
 ) -> CrwResult<(serde_json::Value, Option<LlmUsage>)> {
-    let base_url = llm.base_url.as_deref().unwrap_or("https://api.openai.com");
+    let default_base = match llm.provider.as_str() {
+        "deepseek" => "https://api.deepseek.com",
+        _ => "https://api.openai.com",
+    };
+    let base_url = llm.base_url.as_deref().unwrap_or(default_base);
 
     let url = format!("{base_url}/v1/chat/completions");
 
