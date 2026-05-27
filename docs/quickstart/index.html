@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>fastCRW Quick Start</title>
+<meta name="description" content="fastCRW quick start: install or self-host, set your API key, make your first scrape call. Three steps, curl + Python.">
+<link rel="canonical" href="https://docs.fastcrw.com/quick-start/">
+<meta http-equiv="refresh" content="0; url=/quick-start/">
+</head>
+<body>
+<h1>fastCRW Quick Start</h1>
+<p>Hosted: <code>https://api.fastcrw.com</code> &middot; Self-hosted: <code>http://localhost:3000</code></p>
+<p><strong>Auth (hosted only):</strong> <code>Authorization: Bearer $CRW_API_KEY</code></p>
+<p><em>Self-hosted: no auth required by default.</em></p>
+
+<h2>Step 1. Install or self-host</h2>
+<p>Use the hosted API at <code>api.fastcrw.com</code> (no install), or run the
+self-hosted single binary:</p>
+<pre><code>docker run -p 3000:3000 ghcr.io/us/crw:latest
+# now: http://localhost:3000/v1/scrape</code></pre>
+
+<h2>Step 2. Get an API key (hosted only)</h2>
+<p>Sign in at <code>https://fastcrw.com</code>, copy the key from the dashboard,
+and export it:</p>
+<pre><code>export CRW_API_KEY=crw_live_...</code></pre>
+<p>Self-hosted: skip this; auth is off by default.</p>
+
+<h2>Step 3. First call</h2>
+<p>curl:</p>
+<pre><code>curl -X POST https://api.fastcrw.com/v1/scrape \
+  -H "Authorization: Bearer $CRW_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com","formats":["markdown"]}'</code></pre>
+
+<p>Python (stdlib):</p>
+<pre><code>#!/usr/bin/env python3
+import json, os, urllib.request
+
+req = urllib.request.Request(
+    "https://api.fastcrw.com/v1/scrape",
+    data=json.dumps({"url": "https://example.com", "formats": ["markdown"]}).encode(),
+    headers={"Content-Type": "application/json",
+             "Authorization": f"Bearer {os.environ['CRW_API_KEY']}"},
+    method="POST",
+)
+with urllib.request.urlopen(req) as r:
+    body = json.loads(r.read())
+print(body["data"]["markdown"][:500])
+# Run with: python3 quickstart.py</code></pre>
+
+<p>Expected response shape: <code>{"success": true, "data": {"markdown": "...",
+"metadata": { ... }}}</code>. From here, jump to
+<a href="/api-reference/crawl/">crawl</a> for multi-page jobs,
+<a href="/api-reference/map/">map</a> for URL discovery,
+<a href="/api-reference/extract/">extract</a> for structured JSON, or
+<a href="/api-reference/search/">search</a> for web search.</p>
+
+<p>&rarr; Canonical page: <a href="/quick-start">/quick-start</a></p>
+<noscript><p>Redirecting to <a href="/quick-start">/quick-start</a></p></noscript>
+</body>
+</html>

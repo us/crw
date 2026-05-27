@@ -1,22 +1,69 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>CRW API reference</title>
-<link rel="canonical" href="https://docs.fastcrw.com/">
-<meta http-equiv="refresh" content="0; url=/">
+<title>CRW API reference — /v1/scrape, /v1/crawl, /v1/extract, /v1/map, /v1/search</title>
+<meta name="description" content="One-page chooser for the CRW REST API: /v1/scrape (single-URL extraction), /v1/crawl (async multi-page), /v1/extract (structured JSON), /v1/map (URL discovery), /v1/search (web search via SearXNG).">
+<link rel="canonical" href="https://docs.fastcrw.com/api-reference/">
 </head>
 <body>
 <h1>CRW API</h1>
-<p><strong>Hosted base:</strong> <code>https://api.fastcrw.com</code></p>
-<p><strong>Self-hosted base:</strong> <code>http://localhost:3000</code></p>
-<ul>
-<li><a href="/api-reference/search/">POST /v1/search</a></li>
-<li><a href="/api-reference/scrape/">POST /v1/scrape</a></li>
-<li><a href="/api-reference/crawl/">POST /v1/crawl</a></li>
-<li><a href="/api-reference/map/">POST /v1/map</a></li>
-<li><a href="/api-reference/extract/">POST /v1/extract</a></li>
-</ul>
-<p>Full quickstart with runnable examples: <a href="/">https://docs.fastcrw.com/</a></p>
+<p><strong>Hosted base:</strong> <code>https://api.fastcrw.com</code> ·
+<strong>Self-hosted base:</strong> <code>http://localhost:3000</code></p>
+<p><strong>Auth (hosted only):</strong> <code>Authorization: Bearer $CRW_API_KEY</code></p>
+
+<p><strong><a href="/api-reference/scrape/">POST /v1/scrape</a></strong> — Single-URL content extraction with format selection. Body: <code>{"url": string, "formats": ["markdown" | "html" | "rawHtml" | "json"]}</code>. <a href="/api-reference/scrape/">Details</a>.</p>
+
+<p><strong><a href="/api-reference/crawl/">POST /v1/crawl</a></strong> — Async multi-page crawl; poll <code>GET /v1/crawl/{id}</code> for status. Body: <code>{"url": string, "maxPages": number}</code>. <a href="/api-reference/crawl/">Details</a>.</p>
+
+<p><strong><a href="/api-reference/extract/">POST /v1/extract</a></strong> — Structured JSON extraction (first-class, token-priced, min 2 cr). Body: <code>{"urls": string[], "schema": object, "prompt": string}</code>. <a href="/api-reference/extract/">Details</a>.</p>
+
+<p><strong><a href="/api-reference/map/">POST /v1/map</a></strong> — URL discovery without scraping bodies. Body: <code>{"url": string, "limit": number}</code>. <a href="/api-reference/map/">Details</a>.</p>
+
+<p><strong><a href="/api-reference/search/">POST /v1/search</a></strong> — Web search via SearXNG, returns ranked results. Body: <code>{"query": string, "limit": number}</code>. <a href="/api-reference/search/">Details</a>.</p>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  "name": "CRW API reference",
+  "url": "https://docs.fastcrw.com/api-reference/",
+  "description": "One-page chooser for the CRW REST API: scrape, crawl, extract, map, search.",
+  "mainEntity": [
+    {
+      "@type": "APIReference",
+      "name": "POST /v1/scrape",
+      "url": "https://docs.fastcrw.com/api-reference/scrape/",
+      "description": "Single-URL content extraction with format selection (markdown, html, rawHtml, json)."
+    },
+    {
+      "@type": "APIReference",
+      "name": "POST /v1/crawl",
+      "url": "https://docs.fastcrw.com/api-reference/crawl/",
+      "description": "Async multi-page crawl; poll GET /v1/crawl/{id} for job status."
+    },
+    {
+      "@type": "APIReference",
+      "name": "POST /v1/extract",
+      "url": "https://docs.fastcrw.com/api-reference/extract/",
+      "description": "Structured JSON extraction across one or more URLs (first-class, token-priced, min 2 cr)."
+    },
+    {
+      "@type": "APIReference",
+      "name": "POST /v1/map",
+      "url": "https://docs.fastcrw.com/api-reference/map/",
+      "description": "URL discovery for a site without scraping page bodies."
+    },
+    {
+      "@type": "APIReference",
+      "name": "POST /v1/search",
+      "url": "https://docs.fastcrw.com/api-reference/search/",
+      "description": "Web search via SearXNG; returns ranked results with snippets."
+    }
+  ]
+}
+</script>
+
+<p>Full quickstart at root: <a href="/">https://docs.fastcrw.com/</a></p>
 </body>
 </html>

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>fastCRW search feature — POST /v1/search</title>
+<meta name="description" content="fastCRW web search endpoint via SearXNG (self-hosted) or managed (hosted). Optional per-result scraping. Hosted at api.fastcrw.com; self-host at localhost:3000.">
+<link rel="canonical" href="https://docs.fastcrw.com/api-reference/search/">
+<meta http-equiv="refresh" content="0; url=/api-reference/search/">
+</head>
+<body>
+<h1>POST /v1/search</h1>
+<p>Hosted: <code>https://api.fastcrw.com</code> &middot; Self-hosted: <code>http://localhost:3000</code></p>
+<p><strong>Auth (hosted only):</strong> <code>Authorization: Bearer $CRW_API_KEY</code></p>
+<p><em>Self-hosted: no auth required by default.</em></p>
+
+<p>Search returns ranked web results. Pass <code>scrapeOptions</code> to scrape
+each result in the same call (saves a round trip per result).</p>
+
+<h2>Request body</h2>
+<pre><code>{
+  "query": "rust async runtime",
+  "limit": 5,
+  "scrapeOptions": { "formats": ["markdown"], "onlyMainContent": true }
+}</code></pre>
+<p>Required: <code>query</code>. Optional: <code>limit</code> (default 5),
+<code>scrapeOptions</code> object (same shape as POST /v1/scrape body minus
+<code>url</code>).</p>
+
+<h2>Response shape</h2>
+<pre><code>{
+  "success": true,
+  "data": [
+    {
+      "url": "https://...",
+      "title": "...",
+      "snippet": "LLM-ready summary line",
+      "description": "Same as snippet (SearXNG-native name)",
+      "position": 1,
+      "score": 9.5,
+      "category": "general"
+    }
+  ]
+}</code></pre>
+<p>Results nest under <code>data</code> array. <code>snippet</code> and
+<code>description</code> hold the same value (Firecrawl-compatible + native).</p>
+
+<h2>Python (stdlib)</h2>
+<pre><code>#!/usr/bin/env python3
+import json, os, urllib.request
+
+req = urllib.request.Request(
+    "https://api.fastcrw.com/v1/search",
+    data=json.dumps({"query": "rust async runtime", "limit": 3}).encode(),
+    headers={"Content-Type": "application/json",
+             "Authorization": f"Bearer {os.environ['CRW_API_KEY']}"},
+    method="POST",
+)
+with urllib.request.urlopen(req) as r:
+    body = json.loads(r.read())
+
+for row in body["data"]:
+    print(row["position"], row["title"], row["url"])
+# Run with: python3 search.py</code></pre>
+
+<p>&rarr; Canonical page: <a href="/api-reference/search/">/api-reference/search/</a></p>
+<noscript><p>Redirecting to <a href="/api-reference/search/">/api-reference/search/</a></p></noscript>
+</body>
+</html>

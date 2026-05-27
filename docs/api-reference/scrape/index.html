@@ -3,13 +3,90 @@
 <head>
 <meta charset="utf-8">
 <title>CRW /v1/scrape — endpoint reference</title>
-<link rel="canonical" href="https://docs.fastcrw.com/">
-<meta http-equiv="refresh" content="0; url=/">
+<meta name="description" content="CRW scrape endpoint. Single-URL extraction returning markdown, html, links, json, plainText, or rawHtml. Hosted at https://api.fastcrw.com/v1/scrape.">
+<link rel="canonical" href="https://docs.fastcrw.com/api-reference/scrape/">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "APIReference",
+  "name": "CRW POST /v1/scrape",
+  "description": "CRW scrape endpoint. Single-URL extraction returning markdown, html, links, json, plainText, or rawHtml. Hosted at https://api.fastcrw.com/v1/scrape.",
+  "url": "https://docs.fastcrw.com/api-reference/scrape/",
+  "about": {
+    "@type": "WebAPI",
+    "name": "CRW Scrape API",
+    "documentation": "https://docs.fastcrw.com/api-reference/scrape/",
+    "termsOfService": "https://fastcrw.com/terms",
+    "provider": {"@type":"Organization","name":"CRW","url":"https://fastcrw.com"},
+    "programmingModel": "REST"
+  }
+}
+</script>
 </head>
 <body>
 <h1>POST /v1/scrape</h1>
-<p><strong>Hosted:</strong> <code>https://api.fastcrw.com/v1/scrape</code></p>
-<p><strong>Body:</strong> <code>{"url": string, "formats": ["markdown" | "html" | "rawHtml" | "json"]}</code></p>
-<p>Full reference: <a href="/">https://docs.fastcrw.com/</a></p>
+<p>Hosted: <code>https://api.fastcrw.com</code> · Self-hosted: <code>http://localhost:3000</code></p>
+<p><strong>Auth (hosted only):</strong> <code>Authorization: Bearer $CRW_API_KEY</code></p>
+<p><em>Self-hosted: no auth required by default. See <a href="/configuration">configuration</a>.</em></p>
+
+<h2>Request body</h2>
+<pre><code class="language-json">{
+  "url": "https://example.com",
+  "formats": ["markdown", "html", "rawHtml", "plainText", "links", "screenshot"],
+  "renderer": "http",
+  "onlyMainContent": true,
+  "waitFor": 0
+}</code></pre>
+<p><code>formats</code> defaults to <code>["markdown"]</code>. <code>renderer</code>
+accepts <code>"http"</code>, <code>"chromium"</code>, or <code>"lightpanda"</code>;
+omit it to let CRW auto-select. <code>waitFor</code> is milliseconds before
+capture (browser renderers only).</p>
+
+<h2>Response</h2>
+<pre><code class="language-json">{
+  "success": true,
+  "data": {
+    "markdown": "# Example Domain\n\n...",
+    "html": "&lt;h1&gt;Example Domain&lt;/h1&gt;...",
+    "rawHtml": "&lt;!doctype html&gt;...",
+    "links": ["https://www.iana.org/domains/example"],
+    "metadata": {
+      "title": "Example Domain",
+      "description": "...",
+      "sourceURL": "https://example.com",
+      "statusCode": 200
+    },
+    "renderDecision": "http",
+    "creditCost": 1
+  }
+}</code></pre>
+
+<h2>Python</h2>
+<pre><code class="language-python"># Run with: python3 scrape.py
+import os, requests
+
+resp = requests.post(
+    "https://api.fastcrw.com/v1/scrape",
+    headers={"Authorization": f"Bearer {os.environ['CRW_API_KEY']}"},
+    json={"url": "https://example.com", "formats": ["markdown", "links"]},
+    timeout=60,
+)
+resp.raise_for_status()
+body = resp.json()  # {"success": true, "data": {...}}
+print(body["data"]["markdown"][:500])
+print("links:", body["data"].get("links", []))
+</code></pre>
+
+<h2>Related endpoints</h2>
+<ul>
+  <li><a href="/api-reference/search/">POST /v1/search</a> — web search</li>
+  <li><a href="/api-reference/extract/">POST /v1/extract</a> — structured extraction</li>
+  <li><a href="/api-reference/map/">POST /v1/map</a> — URL discovery</li>
+  <li><a href="/api-reference/crawl/">POST /v1/crawl</a> — multi-page crawl</li>
+  <li><a href="/openapi.json">openapi.json</a></li>
+  <li><a href="/rest-api">REST API guide</a></li>
+</ul>
+
+<p><a href="/">← CRW docs home</a></p>
 </body>
 </html>

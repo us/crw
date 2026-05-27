@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>fastCRW GET /v1/crawl/{id} — crawl status polling</title>
+<meta name="description" content="fastCRW crawl status endpoint. GET /v1/crawl/{id} polls an async crawl job until completed and returns scraped pages. Hosted at api.fastcrw.com; self-host at localhost:3000.">
+<link rel="canonical" href="https://docs.fastcrw.com/api-reference/crawl/">
+<meta http-equiv="refresh" content="0; url=/api-reference/crawl/">
+</head>
+<body>
+<h1>GET /v1/crawl/{id}</h1>
+<p>Hosted: <code>https://api.fastcrw.com</code> &middot; Self-hosted: <code>http://localhost:3000</code></p>
+<p><strong>Auth (hosted only):</strong> <code>Authorization: Bearer $CRW_API_KEY</code></p>
+<p><em>Self-hosted: no auth required by default.</em></p>
+
+<p>After <code>POST /v1/crawl</code> returns a job id, poll this endpoint until
+<code>status == "completed"</code> (or <code>"failed"</code>). 2&ndash;5 second
+intervals are typical.</p>
+
+<h2>Path parameter</h2>
+<p><code>id</code> &mdash; crawl job id returned by <code>POST /v1/crawl</code>
+(string).</p>
+
+<h2>Request</h2>
+<pre><code>GET /v1/crawl/9f7a...e3b HTTP/1.1
+Host: api.fastcrw.com
+Authorization: Bearer $CRW_API_KEY</code></pre>
+<p>No body. No query parameters.</p>
+
+<h2>Response shape</h2>
+<pre><code>{
+  "status": "scraping" | "completed" | "failed",
+  "completed": 12,
+  "total": 50,
+  "creditsUsed": 12,
+  "expiresAt": "2026-05-28T10:00:00Z",
+  "data": [
+    {
+      "markdown": "# Page title\n\n...",
+      "metadata": {
+        "title": "...",
+        "sourceURL": "https://example.com/page",
+        "statusCode": 200
+      }
+    }
+  ]
+}</code></pre>
+<p><code>404</code> is returned for unknown or expired job ids.</p>
+
+<h2>Python (stdlib) polling loop</h2>
+<pre><code>#!/usr/bin/env python3
+import json, os, time, urllib.request
+
+job_id = os.environ["CRW_JOB_ID"]
+headers = {"Authorization": f"Bearer {os.environ['CRW_API_KEY']}"}
+
+while True:
+    req = urllib.request.Request(
+        f"https://api.fastcrw.com/v1/crawl/{job_id}", headers=headers)
+    s = json.loads(urllib.request.urlopen(req).read())
+    print(s["status"], s.get("completed"), "/", s.get("total"))
+    if s["status"] in ("completed", "failed"):
+        break
+    time.sleep(2)
+
+print("pages:", len(s.get("data", [])))
+# Run with: CRW_JOB_ID=... python3 get-crawl-status.py</code></pre>
+
+<p>&rarr; Canonical page: <a href="/api-reference/crawl/">/api-reference/crawl/</a></p>
+<noscript><p>Redirecting to <a href="/api-reference/crawl/">/api-reference/crawl/</a></p></noscript>
+</body>
+</html>

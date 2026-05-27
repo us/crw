@@ -3,13 +3,104 @@
 <head>
 <meta charset="utf-8">
 <title>CRW /v1/crawl — endpoint reference</title>
-<link rel="canonical" href="https://docs.fastcrw.com/">
-<meta http-equiv="refresh" content="0; url=/">
+<meta name="description" content="CRW crawl endpoint. Start async multi-page crawl jobs and poll status. Hosted at https://api.fastcrw.com/v1/crawl.">
+<link rel="canonical" href="https://docs.fastcrw.com/api-reference/crawl/">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "APIReference",
+  "name": "CRW POST /v1/crawl",
+  "description": "CRW crawl endpoint. Start async multi-page crawl jobs and poll status. Hosted at https://api.fastcrw.com/v1/crawl.",
+  "url": "https://docs.fastcrw.com/api-reference/crawl/",
+  "about": {
+    "@type": "WebAPI",
+    "name": "CRW Crawl API",
+    "documentation": "https://docs.fastcrw.com/api-reference/crawl/",
+    "termsOfService": "https://fastcrw.com/terms",
+    "provider": {"@type":"Organization","name":"CRW","url":"https://fastcrw.com"},
+    "programmingModel": "REST"
+  }
+}
+</script>
 </head>
 <body>
 <h1>POST /v1/crawl</h1>
-<p><strong>Hosted:</strong> <code>https://api.fastcrw.com/v1/crawl</code></p>
-<p><strong>Body:</strong> <code>{"url": string, "maxPages": number}</code> — async; poll <code>GET /v1/crawl/{id}</code></p>
-<p>Full reference: <a href="/">https://docs.fastcrw.com/</a></p>
+<p>Hosted: <code>https://api.fastcrw.com</code> · Self-hosted: <code>http://localhost:3000</code></p>
+<p><strong>Auth (hosted only):</strong> <code>Authorization: Bearer $CRW_API_KEY</code></p>
+<p><em>Self-hosted: no auth required by default. See <a href="/configuration">configuration</a>.</em></p>
+
+<h2>Request body</h2>
+<pre><code class="language-json">{
+  "url": "https://example.com",
+  "limit": 100,
+  "includes": ["/blog/**"],
+  "excludes": ["/admin/**"],
+  "maxDepth": 2,
+  "scrapeOptions": {"formats": ["markdown"], "onlyMainContent": true}
+}</code></pre>
+
+<h2>Response</h2>
+<pre><code class="language-json">{
+  "success": true,
+  "data": {
+    "id": "01HXYZ...",
+    "url": "https://api.fastcrw.com/v1/crawl/01HXYZ..."
+  }
+}</code></pre>
+
+<h2>GET /v1/crawl/:id — polling status</h2>
+<p>Poll the URL returned above until <code>status === "completed"</code>.</p>
+<pre><code class="language-json">{
+  "success": true,
+  "data": {
+    "status": "in_progress",
+    "completed": 12,
+    "total": 100,
+    "data": [
+      {"success": true, "data": {"markdown": "...", "metadata": {"sourceURL": "https://example.com/"}}}
+    ]
+  }
+}</code></pre>
+<p><code>status</code> is one of <code>scraping</code> / <code>in_progress</code>,
+<code>completed</code>, or <code>failed</code>. Each item in <code>data.data</code>
+mirrors the <a href="/api-reference/scrape/">scrape</a> response shape.</p>
+
+<h2>Python</h2>
+<pre><code class="language-python"># Run with: python3 crawl.py
+import os, time, requests
+
+headers = {"Authorization": f"Bearer {os.environ['CRW_API_KEY']}"}
+start = requests.post(
+    "https://api.fastcrw.com/v1/crawl",
+    headers=headers,
+    json={"url": "https://example.com", "limit": 25, "maxDepth": 2},
+    timeout=60,
+).json()
+job_id = start["data"]["id"]
+
+while True:
+    status = requests.get(
+        f"https://api.fastcrw.com/v1/crawl/{job_id}",
+        headers=headers, timeout=60,
+    ).json()
+    if status["data"]["status"] in ("completed", "failed"):
+        break
+    time.sleep(2)
+
+for page in status["data"].get("data", []):
+    print(page["data"]["metadata"]["sourceURL"])
+</code></pre>
+
+<h2>Related endpoints</h2>
+<ul>
+  <li><a href="/api-reference/scrape/">POST /v1/scrape</a> — single-URL extraction</li>
+  <li><a href="/api-reference/search/">POST /v1/search</a> — web search</li>
+  <li><a href="/api-reference/extract/">POST /v1/extract</a> — structured extraction</li>
+  <li><a href="/api-reference/map/">POST /v1/map</a> — URL discovery</li>
+  <li><a href="/openapi.json">openapi.json</a></li>
+  <li><a href="/rest-api">REST API guide</a></li>
+</ul>
+
+<p><a href="/">← CRW docs home</a></p>
 </body>
 </html>

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>fastCRW crawl feature — POST /v1/crawl</title>
+<meta name="description" content="fastCRW async multi-page crawl. Submit a seed URL, get a job id, poll for results. Hosted at api.fastcrw.com; self-host at localhost:3000.">
+<link rel="canonical" href="https://docs.fastcrw.com/api-reference/crawl/">
+<meta http-equiv="refresh" content="0; url=/api-reference/crawl/">
+</head>
+<body>
+<h1>POST /v1/crawl</h1>
+<p>Hosted: <code>https://api.fastcrw.com</code> &middot; Self-hosted: <code>http://localhost:3000</code></p>
+<p><strong>Auth (hosted only):</strong> <code>Authorization: Bearer $CRW_API_KEY</code></p>
+<p><em>Self-hosted: no auth required by default.</em></p>
+
+<p>Crawl is async: <code>POST /v1/crawl</code> returns a job id; poll
+<code>GET /v1/crawl/{id}</code> until <code>status == "completed"</code>.</p>
+
+<h2>Request body</h2>
+<pre><code>{
+  "url": "https://example.com",
+  "limit": 50,
+  "maxDepth": 3,
+  "includePaths": ["^/docs/.*"],
+  "excludePaths": ["^/blog/.*"],
+  "scrapeOptions": { "formats": ["markdown"], "onlyMainContent": true }
+}</code></pre>
+<p>Required: <code>url</code>. Optional: <code>limit</code> (default 10),
+<code>maxDepth</code>, <code>includePaths</code>/<code>excludePaths</code> regex
+arrays, <code>scrapeOptions</code> (forwarded to each page scrape).</p>
+
+<h2>Response shape (job accepted)</h2>
+<pre><code>{
+  "success": true,
+  "id": "9f7a...e3b",
+  "url": "https://api.fastcrw.com/v1/crawl/9f7a...e3b"
+}</code></pre>
+
+<h2>Polling shape</h2>
+<pre><code>{
+  "status": "scraping" | "completed" | "failed",
+  "completed": 12,
+  "total": 50,
+  "data": [ { "markdown": "...", "metadata": { "sourceURL": "..." } } ]
+}</code></pre>
+
+<h2>Python (stdlib)</h2>
+<pre><code>#!/usr/bin/env python3
+import json, os, time, urllib.request
+
+def post(path, body):
+    req = urllib.request.Request(
+        f"https://api.fastcrw.com{path}",
+        data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {os.environ['CRW_API_KEY']}"},
+        method="POST")
+    return json.loads(urllib.request.urlopen(req).read())
+
+job = post("/v1/crawl", {"url": "https://example.com", "limit": 20})
+job_id = job["id"]
+
+while True:
+    req = urllib.request.Request(
+        f"https://api.fastcrw.com/v1/crawl/{job_id}",
+        headers={"Authorization": f"Bearer {os.environ['CRW_API_KEY']}"})
+    s = json.loads(urllib.request.urlopen(req).read())
+    if s["status"] in ("completed", "failed"):
+        break
+    time.sleep(2)
+
+print(len(s["data"]), "pages")
+# Run with: python3 crawl.py</code></pre>
+
+<p>&rarr; Canonical page: <a href="/api-reference/crawl/">/api-reference/crawl/</a></p>
+<noscript><p>Redirecting to <a href="/api-reference/crawl/">/api-reference/crawl/</a></p></noscript>
+</body>
+</html>

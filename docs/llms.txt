@@ -9,6 +9,15 @@
 - MCP server (Claude Code, Cursor, Windsurf): `npx crw-mcp` — https://www.npmjs.com/package/crw-mcp
 - Typed Python SDK: `pip install crw` — https://pypi.org/project/crw/
 
+## API endpoints (live HTML, agent-facing)
+
+- [POST /v1/search](https://docs.fastcrw.com/api-reference/search/): Web search via SearXNG, returns ranked results
+- [POST /v1/scrape](https://docs.fastcrw.com/api-reference/scrape/): Single-URL content extraction
+- [POST /v1/extract](https://docs.fastcrw.com/api-reference/extract/): Structured JSON extraction (first-class, token-priced, min 2 cr)
+- [POST /v1/map](https://docs.fastcrw.com/api-reference/map/): URL discovery without scraping bodies
+- [POST /v1/crawl](https://docs.fastcrw.com/api-reference/crawl/) + GET /v1/crawl/{id}: Async multi-page crawl
+- [API reference index](https://docs.fastcrw.com/api-reference/): One-page chooser
+
 ## Get Started
 - [Introduction](https://raw.githubusercontent.com/us/crw/main/docs/docs/introduction.md): The fastest way to understand what CRW does and where to start
 - [Quick Start](https://raw.githubusercontent.com/us/crw/main/docs/docs/quick-start.md): Make your first successful request in under a minute

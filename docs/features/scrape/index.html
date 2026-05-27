@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>fastCRW scrape feature — POST /v1/scrape</title>
+<meta name="description" content="fastCRW single-URL scrape endpoint. Convert any web page to markdown, html, rawHtml, or structured JSON. Hosted at api.fastcrw.com; self-host at localhost:3000.">
+<link rel="canonical" href="https://docs.fastcrw.com/api-reference/scrape/">
+<meta http-equiv="refresh" content="0; url=/api-reference/scrape/">
+</head>
+<body>
+<h1>POST /v1/scrape</h1>
+<p>Hosted: <code>https://api.fastcrw.com</code> &middot; Self-hosted: <code>http://localhost:3000</code></p>
+<p><strong>Auth (hosted only):</strong> <code>Authorization: Bearer $CRW_API_KEY</code></p>
+<p><em>Self-hosted: no auth required by default.</em></p>
+
+<h2>Request body</h2>
+<pre><code>{
+  "url": "https://example.com",
+  "formats": ["markdown"],
+  "onlyMainContent": true,
+  "waitFor": 0,
+  "timeout": 30000
+}</code></pre>
+<p>Required: <code>url</code>. Optional: <code>formats</code> array of
+<code>markdown</code> | <code>html</code> | <code>rawHtml</code> | <code>json</code> |
+<code>links</code> | <code>screenshot</code>; <code>onlyMainContent</code> boolean;
+<code>waitFor</code> ms; <code>timeout</code> ms; <code>jsonOptions</code> object
+(when <code>formats</code> includes <code>json</code>).</p>
+
+<h2>Response shape</h2>
+<pre><code>{
+  "success": true,
+  "data": {
+    "markdown": "# Heading\n\n...",
+    "html": "&lt;h1&gt;Heading&lt;/h1&gt;...",
+    "metadata": {
+      "title": "...",
+      "description": "...",
+      "sourceURL": "https://example.com",
+      "statusCode": 200
+    }
+  }
+}</code></pre>
+<p>Top-level <code>data</code> is an object (not array). Format keys
+(<code>markdown</code>, <code>html</code>, <code>rawHtml</code>, <code>json</code>)
+appear only when requested in <code>formats</code>.</p>
+
+<h2>Python (stdlib)</h2>
+<pre><code>#!/usr/bin/env python3
+import json, os, urllib.request
+
+req = urllib.request.Request(
+    "https://api.fastcrw.com/v1/scrape",
+    data=json.dumps({"url": "https://example.com", "formats": ["markdown"]}).encode(),
+    headers={
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {os.environ['CRW_API_KEY']}",
+    },
+    method="POST",
+)
+with urllib.request.urlopen(req) as r:
+    body = json.loads(r.read())
+
+print(body["data"]["markdown"][:500])
+# Run with: python3 scrape.py</code></pre>
+
+<p>&rarr; Canonical page: <a href="/api-reference/scrape/">/api-reference/scrape/</a></p>
+<noscript><p>Redirecting to <a href="/api-reference/scrape/">/api-reference/scrape/</a></p></noscript>
+</body>
+</html>

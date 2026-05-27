@@ -3,13 +3,99 @@
 <head>
 <meta charset="utf-8">
 <title>CRW /v1/extract — endpoint reference</title>
-<link rel="canonical" href="https://docs.fastcrw.com/">
-<meta http-equiv="refresh" content="0; url=/">
+<meta name="description" content="CRW extract endpoint. Structured JSON extraction from URLs using a schema or prompt. BYOK LLM. Hosted at https://api.fastcrw.com/v1/extract.">
+<link rel="canonical" href="https://docs.fastcrw.com/api-reference/extract/">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "APIReference",
+  "name": "CRW POST /v1/extract",
+  "description": "CRW extract endpoint. Structured JSON extraction from URLs using a schema or prompt. BYOK LLM. Hosted at https://api.fastcrw.com/v1/extract.",
+  "url": "https://docs.fastcrw.com/api-reference/extract/",
+  "about": {
+    "@type": "WebAPI",
+    "name": "CRW Extract API",
+    "documentation": "https://docs.fastcrw.com/api-reference/extract/",
+    "termsOfService": "https://fastcrw.com/terms",
+    "provider": {"@type":"Organization","name":"CRW","url":"https://fastcrw.com"},
+    "programmingModel": "REST"
+  }
+}
+</script>
 </head>
 <body>
 <h1>POST /v1/extract</h1>
-<p>Alias for <code>POST /v1/scrape</code> with <code>formats: ["json"]</code> and a <code>jsonOptions.schema</code>.</p>
-<p><strong>Hosted:</strong> <code>https://api.fastcrw.com/v1/extract</code></p>
-<p>Full reference: <a href="/">https://docs.fastcrw.com/</a></p>
+<p>Hosted: <code>https://api.fastcrw.com</code> · Self-hosted: <code>http://localhost:3000</code></p>
+<p><strong>Auth (hosted only):</strong> <code>Authorization: Bearer $CRW_API_KEY</code></p>
+<p><em>Self-hosted: no auth required by default. See <a href="/configuration">configuration</a>.</em></p>
+
+<h2>Request body</h2>
+<pre><code class="language-json">{
+  "url": "https://example.com/pricing",
+  "urls": ["https://example.com/pricing"],
+  "schema": {
+    "type": "object",
+    "properties": {
+      "plan": {"type": "string"},
+      "monthly_price_usd": {"type": "number"}
+    }
+  },
+  "prompt": "Extract the plan name and monthly USD price.",
+  "llmApiKey": "sk-...",
+  "llmProvider": "openai",
+  "llmModel": "gpt-4o-mini"
+}</code></pre>
+<p>Provide either <code>url</code> or <code>urls</code>. <strong>BYOK:</strong>
+<code>llmApiKey</code> is required unless the server is configured with a
+provider key. Minimum 2 credits per call (LLM round-trip).</p>
+
+<h2>Response</h2>
+<pre><code class="language-json">{
+  "success": true,
+  "data": {
+    "plan": "Pro",
+    "monthly_price_usd": 49
+  }
+}</code></pre>
+
+<h2>Python</h2>
+<pre><code class="language-python"># Run with: python3 extract.py
+import os, requests
+
+resp = requests.post(
+    "https://api.fastcrw.com/v1/extract",
+    headers={"Authorization": f"Bearer {os.environ['CRW_API_KEY']}"},
+    json={
+        "url": "https://example.com/pricing",
+        "prompt": "Extract the plan name and monthly USD price.",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "plan": {"type": "string"},
+                "monthly_price_usd": {"type": "number"},
+            },
+        },
+        "llmApiKey": os.environ["OPENAI_API_KEY"],
+        "llmProvider": "openai",
+        "llmModel": "gpt-4o-mini",
+    },
+    timeout=120,
+)
+resp.raise_for_status()
+body = resp.json()  # {"success": true, "data": {...}}
+print(body["data"])
+</code></pre>
+
+<h2>Related endpoints</h2>
+<ul>
+  <li><a href="/api-reference/scrape/">POST /v1/scrape</a> — single-URL extraction</li>
+  <li><a href="/api-reference/search/">POST /v1/search</a> — web search</li>
+  <li><a href="/api-reference/map/">POST /v1/map</a> — URL discovery</li>
+  <li><a href="/api-reference/crawl/">POST /v1/crawl</a> — multi-page crawl</li>
+  <li><a href="/openapi.json">openapi.json</a></li>
+  <li><a href="/rest-api">REST API guide</a></li>
+</ul>
+
+<p><a href="/">← CRW docs home</a></p>
 </body>
 </html>

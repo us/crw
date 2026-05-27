@@ -1,0 +1,810 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "CRW REST API",
+    "version": "0.10.0",
+    "description": "Firecrawl-compatible web scraping, crawling, mapping, search, and extraction API. Hosted at https://api.fastcrw.com; self-host with `docker run -p 3000:3000 ghcr.io/us/crw:latest`.",
+    "license": {
+      "name": "AGPL-3.0",
+      "url": "https://opensource.org/licenses/AGPL-3.0"
+    },
+    "contact": {
+      "url": "https://github.com/us/crw"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.fastcrw.com",
+      "description": "Hosted (requires Bearer token)"
+    },
+    {
+      "url": "http://localhost:3000",
+      "description": "Self-hosted (no auth by default)"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    },
+    {}
+  ],
+  "tags": [
+    {
+      "name": "search",
+      "description": "Web search via SearXNG (self-hosted) or managed (hosted)"
+    },
+    {
+      "name": "scrape",
+      "description": "Single-URL content extraction"
+    },
+    {
+      "name": "crawl",
+      "description": "Async multi-page crawl jobs"
+    },
+    {
+      "name": "map",
+      "description": "URL discovery without full scraping"
+    },
+    {
+      "name": "extract",
+      "description": "Structured JSON extraction via scrape + jsonOptions"
+    }
+  ],
+  "paths": {
+    "/v1/search": {
+      "post": {
+        "tags": [
+          "search"
+        ],
+        "summary": "Search the web and optionally scrape results",
+        "operationId": "search",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchRequest"
+              },
+              "examples": {
+                "minimal": {
+                  "summary": "Top 3 results, no scraping",
+                  "value": {
+                    "query": "renewable energy trends 2024",
+                    "limit": 3
+                  }
+                },
+                "with_scrape": {
+                  "summary": "Scrape each result as markdown",
+                  "value": {
+                    "query": "rust async runtime",
+                    "limit": 5,
+                    "scrapeOptions": {
+                      "formats": [
+                        "markdown"
+                      ],
+                      "onlyMainContent": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "$ref": "#/components/responses/SearchDisabled"
+          }
+        }
+      }
+    },
+    "/v1/scrape": {
+      "post": {
+        "tags": [
+          "scrape"
+        ],
+        "summary": "Scrape one URL",
+        "operationId": "scrape",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScrapeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Scrape result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScrapeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/v1/map": {
+      "post": {
+        "tags": [
+          "map"
+        ],
+        "summary": "Discover URLs on a site",
+        "operationId": "map",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MapRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "List of URLs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MapResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/crawl": {
+      "post": {
+        "tags": [
+          "crawl"
+        ],
+        "summary": "Start an async crawl job",
+        "operationId": "crawlStart",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrawlRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Crawl job accepted; poll with /v1/crawl/{id}",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrawlAccepted"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/crawl/{id}": {
+      "get": {
+        "tags": [
+          "crawl"
+        ],
+        "summary": "Get crawl job status and results",
+        "operationId": "crawlStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Crawl job id returned by POST /v1/crawl"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job status + collected pages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrawlStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/extract": {
+      "post": {
+        "tags": [
+          "extract"
+        ],
+        "summary": "Structured JSON extraction (alias for scrape + formats:[json])",
+        "operationId": "extract",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExtractRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Extracted JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtractResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API key",
+        "description": "Hosted only. Get a key at https://fastcrw.com/register."
+      }
+    },
+    "schemas": {
+      "SearchRequest": {
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "default": 5
+          },
+          "lang": {
+            "type": "string",
+            "example": "en"
+          },
+          "tbs": {
+            "type": "string",
+            "enum": [
+              "qdr:h",
+              "qdr:d",
+              "qdr:w",
+              "qdr:m",
+              "qdr:y"
+            ]
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "web",
+                "news",
+                "images"
+              ]
+            }
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scrapeOptions": {
+            "$ref": "#/components/schemas/ScrapeOptions"
+          }
+        }
+      },
+      "SearchResult": {
+        "type": "object",
+        "required": [
+          "url",
+          "title"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string"
+          },
+          "snippet": {
+            "type": "string",
+            "description": "Result blurb (LLM-ready summary line)"
+          },
+          "description": {
+            "type": "string",
+            "description": "Alias of snippet (same value, kept for Firecrawl response-shape parity)"
+          },
+          "position": {
+            "type": "integer"
+          },
+          "score": {
+            "type": "number"
+          },
+          "category": {
+            "type": "string",
+            "description": "SearXNG result category (e.g. 'general')"
+          },
+          "markdown": {
+            "type": "string",
+            "description": "Present when scrapeOptions.formats includes 'markdown'"
+          }
+        }
+      },
+      "SearchResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchResult"
+            }
+          }
+        }
+      },
+      "ScrapeOptions": {
+        "type": "object",
+        "properties": {
+          "formats": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "markdown",
+                "html",
+                "rawHtml",
+                "links"
+              ]
+            },
+            "default": [
+              "markdown"
+            ]
+          },
+          "onlyMainContent": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
+      "ScrapeRequest": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "formats": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "markdown",
+                "html",
+                "rawHtml",
+                "plainText",
+                "links",
+                "json"
+              ]
+            },
+            "default": [
+              "markdown"
+            ]
+          },
+          "onlyMainContent": {
+            "type": "boolean",
+            "default": true
+          },
+          "jsonOptions": {
+            "$ref": "#/components/schemas/JsonOptions"
+          }
+        }
+      },
+      "ScrapeResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "warning": {
+            "type": "string",
+            "description": "Top-level advisory (e.g. fallback render notice)"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "markdown": {
+                "type": "string"
+              },
+              "html": {
+                "type": "string"
+              },
+              "rawHtml": {
+                "type": "string"
+              },
+              "links": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "json": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PageMetadata"
+              },
+              "warning": {
+                "type": "string"
+              },
+              "warnings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "renderDecision": {
+                "type": "string",
+                "description": "Which renderer ran (e.g. 'http', 'browser')"
+              },
+              "creditCost": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      },
+      "JsonOptions": {
+        "type": "object",
+        "properties": {
+          "schema": {
+            "type": "object",
+            "description": "JSON schema for the extracted shape",
+            "additionalProperties": true
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "systemPrompt": {
+            "type": "string"
+          }
+        }
+      },
+      "MapRequest": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000,
+            "default": 100
+          },
+          "search": {
+            "type": "string",
+            "description": "Optional substring filter applied to discovered URLs"
+          }
+        }
+      },
+      "MapResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "data": {
+            "type": "object",
+            "required": [
+              "links"
+            ],
+            "properties": {
+              "links": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "droppedActionCount": {
+                "type": "integer"
+              },
+              "strippedTrackingCount": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "CrawlRequest": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "maxPages": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100
+          },
+          "maxDepth": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 2
+          },
+          "scrapeOptions": {
+            "$ref": "#/components/schemas/ScrapeOptions"
+          }
+        }
+      },
+      "CrawlAccepted": {
+        "type": "object",
+        "required": [
+          "success",
+          "id"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to poll with GET /v1/crawl/{id}"
+          }
+        }
+      },
+      "CrawlStatus": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "scraping",
+              "completed",
+              "failed"
+            ]
+          },
+          "completed": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScrapeResponse"
+            }
+          }
+        }
+      },
+      "ExtractRequest": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "schema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "llmApiKey": {
+            "type": "string",
+            "description": "BYOK: LLM provider API key (required unless server has one configured)"
+          },
+          "llmProvider": {
+            "type": "string",
+            "description": "LLM provider name (e.g. openai, anthropic)"
+          },
+          "llmModel": {
+            "type": "string",
+            "description": "Model identifier passed to the provider"
+          }
+        }
+      },
+      "ExtractResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "PageMetadata": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "sourceURL": {
+            "type": "string",
+            "format": "uri"
+          },
+          "statusCode": {
+            "type": "integer"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "success",
+          "error"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "error": {
+            "type": "string",
+            "description": "Machine-readable error code (see docs/error-codes.md)"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Invalid request body",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Missing or invalid bearer token (hosted only)",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "Rate limit exceeded",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "SearchDisabled": {
+        "description": "Search is disabled in self-hosted config (error: search_disabled)",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    }
+  }
+}

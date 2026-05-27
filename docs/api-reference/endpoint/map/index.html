@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>fastCRW /v1/map endpoint reference</title>
+<meta name="description" content="fastCRW URL discovery endpoint. POST /v1/map returns a flat string array of URLs reachable from a seed. Hosted at api.fastcrw.com; self-host at localhost:3000.">
+<link rel="canonical" href="https://docs.fastcrw.com/api-reference/map/">
+<meta http-equiv="refresh" content="0; url=/api-reference/map/">
+</head>
+<body>
+<h1>POST /v1/map</h1>
+<p>Hosted: <code>https://api.fastcrw.com</code> &middot; Self-hosted: <code>http://localhost:3000</code></p>
+<p><strong>Auth (hosted only):</strong> <code>Authorization: Bearer $CRW_API_KEY</code></p>
+<p><em>Self-hosted: no auth required by default.</em></p>
+
+<p>Map discovers URLs reachable from a seed without scraping page content. Use
+it to plan a crawl, build a sitemap, or filter links before a scrape pass.</p>
+
+<h2>Request body</h2>
+<pre><code>{
+  "url": "https://example.com",
+  "search": "docs",
+  "limit": 100,
+  "includeSubdomains": false,
+  "ignoreSitemap": false
+}</code></pre>
+<p>Required: <code>url</code>. Optional: <code>search</code> substring filter,
+<code>limit</code> (default 5000), <code>includeSubdomains</code>,
+<code>ignoreSitemap</code>.</p>
+
+<h2>Response shape</h2>
+<pre><code>{
+  "success": true,
+  "links": [
+    "https://example.com/",
+    "https://example.com/docs",
+    "https://example.com/docs/quickstart"
+  ]
+}</code></pre>
+<p>Top-level <code>links</code> is a flat string array (not objects). Order is
+discovery order; dedup is applied.</p>
+
+<h2>Python (stdlib)</h2>
+<pre><code>#!/usr/bin/env python3
+import json, os, urllib.request
+
+req = urllib.request.Request(
+    "https://api.fastcrw.com/v1/map",
+    data=json.dumps({"url": "https://example.com", "limit": 50}).encode(),
+    headers={"Content-Type": "application/json",
+             "Authorization": f"Bearer {os.environ['CRW_API_KEY']}"},
+    method="POST",
+)
+with urllib.request.urlopen(req) as r:
+    body = json.loads(r.read())
+
+for link in body["links"][:20]:
+    print(link)
+# Run with: python3 map.py</code></pre>
+
+<p>&rarr; Canonical page: <a href="/api-reference/map/">/api-reference/map/</a></p>
+<noscript><p>Redirecting to <a href="/api-reference/map/">/api-reference/map/</a></p></noscript>
+</body>
+</html>

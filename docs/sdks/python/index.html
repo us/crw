@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>fastCRW Python SDK examples</title>
+<meta name="description" content="fastCRW Python examples using requests. Scrape, crawl, map, extract, and search snippets against api.fastcrw.com or self-hosted localhost:3000.">
+<link rel="canonical" href="https://docs.fastcrw.com/sdk-examples/">
+<meta http-equiv="refresh" content="0; url=/sdk-examples/">
+</head>
+<body>
+<h1>fastCRW Python SDK examples</h1>
+<p>Hosted: <code>https://api.fastcrw.com</code> &middot; Self-hosted: <code>http://localhost:3000</code></p>
+<p><strong>Auth (hosted only):</strong> <code>Authorization: Bearer $CRW_API_KEY</code></p>
+<p><em>Self-hosted: no auth required by default.</em></p>
+
+<p>fastCRW has no proprietary client. The REST API is Firecrawl-compatible, so
+you can either point the official <code>firecrawl-py</code> client at
+<code>api.fastcrw.com</code>, or use plain <code>requests</code>.</p>
+
+<p>Install: <code>pip install requests</code></p>
+
+<h2>1. Scrape one URL</h2>
+<pre><code>import os, requests
+r = requests.post("https://api.fastcrw.com/v1/scrape",
+    json={"url": "https://example.com", "formats": ["markdown"]},
+    headers={"Authorization": f"Bearer {os.environ['CRW_API_KEY']}"})
+print(r.json()["data"]["markdown"][:500])
+# Run with: python3 scrape_example.py</code></pre>
+
+<h2>2. Crawl a site (async)</h2>
+<pre><code>import os, time, requests
+h = {"Authorization": f"Bearer {os.environ['CRW_API_KEY']}"}
+job = requests.post("https://api.fastcrw.com/v1/crawl",
+    json={"url": "https://example.com", "limit": 20}, headers=h).json()
+while True:
+    s = requests.get(f"https://api.fastcrw.com/v1/crawl/{job['id']}", headers=h).json()
+    if s["status"] in ("completed", "failed"): break
+    time.sleep(2)
+print(len(s["data"]), "pages")
+# Run with: python3 crawl_example.py</code></pre>
+
+<h2>3. Map URLs on a site</h2>
+<pre><code>import os, requests
+r = requests.post("https://api.fastcrw.com/v1/map",
+    json={"url": "https://example.com", "limit": 50},
+    headers={"Authorization": f"Bearer {os.environ['CRW_API_KEY']}"})
+for u in r.json()["links"][:10]: print(u)
+# Run with: python3 map_example.py</code></pre>
+
+<h2>4. Extract structured JSON</h2>
+<pre><code>import os, requests
+r = requests.post("https://api.fastcrw.com/v1/extract",
+    json={
+        "urls": ["https://example.com/product/1"],
+        "schema": {"type": "object",
+                   "properties": {"name": {"type": "string"},
+                                  "price": {"type": "number"}},
+                   "required": ["name", "price"]},
+    },
+    headers={"Authorization": f"Bearer {os.environ['CRW_API_KEY']}"})
+print(r.json()["data"])
+# Run with: python3 extract_example.py</code></pre>
+
+<h2>5. Search the web</h2>
+<pre><code>import os, requests
+r = requests.post("https://api.fastcrw.com/v1/search",
+    json={"query": "rust async runtime", "limit": 3},
+    headers={"Authorization": f"Bearer {os.environ['CRW_API_KEY']}"})
+for row in r.json()["data"]:
+    print(row["position"], row["title"], row["url"])
+# Run with: python3 search_example.py</code></pre>
+
+<p>&rarr; Canonical page: <a href="/sdk-examples">/sdk-examples</a></p>
+<noscript><p>Redirecting to <a href="/sdk-examples">/sdk-examples</a></p></noscript>
+</body>
+</html>
