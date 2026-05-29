@@ -7,6 +7,7 @@
 //! tool call. Multi-session + `session.new`/`session.close` tools land later
 //! in Phase 2 (see ROADMAP).
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -34,6 +35,9 @@ pub struct BrowseConfig {
     /// v0.2.9). Tools that require Chrome return `NOT_IMPLEMENTED` when
     /// this is `None`.
     pub chrome_ws_url: Option<String>,
+    /// Optional directory where screenshot `path` outputs may be created.
+    /// When unset, screenshots must be returned inline as base64.
+    pub screenshot_dir: Option<PathBuf>,
 }
 
 impl Default for BrowseConfig {
@@ -42,6 +46,7 @@ impl Default for BrowseConfig {
             ws_url: "ws://localhost:9222".to_string(),
             page_timeout: Duration::from_secs(30),
             chrome_ws_url: None,
+            screenshot_dir: None,
         }
     }
 }

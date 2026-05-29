@@ -13,11 +13,13 @@
 //! useful for visual regression and structural debugging, not for capturing
 //! the post-interaction state of a Lightpanda session.
 
+use std::path::{Component, Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use base64::Engine as _;
 use rmcp::{ErrorData as McpError, model::CallToolResult, schemars};
 use serde::{Deserialize, Serialize};
+use tokio::io::AsyncWriteExt;
 
 use crate::errors::{ErrorCode, ErrorResponse};
 use crate::response::ToolResponse;
@@ -160,16 +162,31 @@ pub async fn handle(
     };
 
     if let Some(path) = input.path {
-        // `tokio::fs` keeps the runtime non-blocking — `std::fs::write` would
-        // park the executor thread on a network-mounted or slow disk and stall
-        // every other in-flight tool call on the same runtime.
-        if let Err(e) = tokio::fs::write(&path, &bytes).await {
+        let safe_path = match resolve_screenshot_path(server, &path, &format).await {
+            Ok(path) => path,
+            Err(e) => return Ok(err_result(&e)),
+        };
+        let mut file = match tokio::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&safe_path)
+            .await
+        {
+            Ok(file) => file,
+            Err(e) => {
+                return Ok(err_result(&ErrorResponse::new(
+                    ErrorCode::Internal,
+                    format!("failed to create {}: {e}", safe_path.display()),
+                )));
+            }
+        };
+        if let Err(e) = file.write_all(&bytes).await {
             return Ok(err_result(&ErrorResponse::new(
                 ErrorCode::Internal,
-                format!("failed to write {path}: {e}"),
+                format!("failed to write {}: {e}", safe_path.display()),
             )));
         }
-        payload_data.path = Some(path);
+        payload_data.path = Some(safe_path.display().to_string());
     } else {
         payload_data.base64 = Some(base64::engine::general_purpose::STANDARD.encode(&bytes));
     }
@@ -184,12 +201,83 @@ pub async fn handle(
     Ok(ok_result(&payload))
 }
 
+async fn resolve_screenshot_path(
+    server: &CrwBrowse,
+    requested: &str,
+    format: &str,
+) -> Result<PathBuf, ErrorResponse> {
+    let root = server.config().screenshot_dir.as_ref().ok_or_else(|| {
+        ErrorResponse::new(
+            ErrorCode::InvalidArgs,
+            "screenshot path output requires --screenshot-dir; omit path to receive base64",
+        )
+    })?;
+    let rel = Path::new(requested);
+    if rel.is_absolute() {
+        return Err(ErrorResponse::new(
+            ErrorCode::InvalidArgs,
+            "screenshot path must be relative to the configured screenshot directory",
+        ));
+    }
+    let mut normal_components = 0;
+    for component in rel.components() {
+        match component {
+            Component::Normal(_) => normal_components += 1,
+            _ => {
+                return Err(ErrorResponse::new(
+                    ErrorCode::InvalidArgs,
+                    "screenshot path must not contain traversal or special components",
+                ));
+            }
+        }
+    }
+    if normal_components != 1 {
+        return Err(ErrorResponse::new(
+            ErrorCode::InvalidArgs,
+            "screenshot path must be a single file name inside the screenshot directory",
+        ));
+    }
+    let ext = rel
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase());
+    let expected = if format == "jpeg" { "jpg" } else { "png" };
+    if !matches!(ext.as_deref(), Some("png" | "jpg" | "jpeg")) {
+        return Err(ErrorResponse::new(
+            ErrorCode::InvalidArgs,
+            "screenshot path extension must be .png, .jpg, or .jpeg",
+        ));
+    }
+    if format == "png" && ext.as_deref() != Some("png") {
+        return Err(ErrorResponse::new(
+            ErrorCode::InvalidArgs,
+            "png screenshots must use a .png path",
+        ));
+    }
+    if format == "jpeg" && !matches!(ext.as_deref(), Some("jpg" | "jpeg")) {
+        return Err(ErrorResponse::new(
+            ErrorCode::InvalidArgs,
+            format!("jpeg screenshots must use a .{expected} or .jpeg path"),
+        ));
+    }
+    tokio::fs::create_dir_all(root).await.map_err(|e| {
+        ErrorResponse::new(
+            ErrorCode::Internal,
+            format!(
+                "failed to create screenshot directory {}: {e}",
+                root.display()
+            ),
+        )
+    })?;
+    Ok(root.join(rel))
+}
+
 /// Open a fresh Chrome target, navigate it to `url`, capture the screenshot,
 /// then close the target. We don't keep targets around between calls because
 /// the caller usually just wants a one-shot snapshot — keeping them open
 /// would slow down the next call (state to reset) without useful sharing.
 async fn capture_via_chrome(
-    conn: &crw_renderer::cdp_conn::CdpConnection,
+    conn: &std::sync::Arc<crw_renderer::cdp_conn::CdpConnection>,
     url: &str,
     format: &str,
     timeout: Duration,
@@ -243,7 +331,7 @@ async fn capture_via_chrome(
 }
 
 async fn capture_inner(
-    conn: &crw_renderer::cdp_conn::CdpConnection,
+    conn: &std::sync::Arc<crw_renderer::cdp_conn::CdpConnection>,
     target_id: &str,
     url: &str,
     format: &str,
@@ -281,35 +369,53 @@ async fn capture_inner(
                 ErrorResponse::new(ErrorCode::CdpError, format!("Chrome {method} failed: {e}"))
             })?;
     }
+    crate::tools::goto::enable_outbound_guard(conn, &sid, timeout)
+        .await
+        .map_err(|e| {
+            ErrorResponse::new(
+                ErrorCode::CdpError,
+                format!("Chrome Fetch.enable failed: {e}"),
+            )
+        })?;
 
     // Subscribe before navigate so we don't miss the load event.
     let mut events = conn.subscribe();
+    let guard_rx = conn.subscribe();
+    let guard_conn = conn.clone();
+    let guard_sid = sid.clone();
+    let guard = tokio::spawn(async move {
+        crate::tools::goto::run_outbound_guard(guard_conn, guard_rx, &guard_sid).await;
+    });
 
-    conn.send_recv(
-        "Page.navigate",
-        serde_json::json!({ "url": url }),
-        Some(&sid),
-        timeout,
-    )
-    .await
-    .map_err(|e| {
-        ErrorResponse::new(
+    let navigate = conn
+        .send_recv(
+            "Page.navigate",
+            serde_json::json!({ "url": url }),
+            Some(&sid),
+            timeout,
+        )
+        .await;
+    if let Err(e) = navigate {
+        guard.abort();
+        return Err(ErrorResponse::new(
             ErrorCode::NavBlocked,
             format!("Chrome Page.navigate failed: {e}"),
-        )
-    })?;
+        ));
+    }
 
     // Wait for load. Reuse the broadcast pattern from goto::wait_for_load.
     let deadline = tokio::time::Instant::now() + timeout;
     loop {
         match tokio::time::timeout_at(deadline, events.recv()).await {
             Err(_) => {
+                guard.abort();
                 return Err(ErrorResponse::new(
                     ErrorCode::Timeout,
                     "Chrome Page.loadEventFired did not arrive",
                 ));
             }
             Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => {
+                guard.abort();
                 return Err(ErrorResponse::new(
                     ErrorCode::CdpError,
                     "Chrome event channel closed",
@@ -324,7 +430,7 @@ async fn capture_inner(
         }
     }
 
-    let resp = conn
+    let resp = match conn
         .send_recv(
             "Page.captureScreenshot",
             serde_json::json!({ "format": format }),
@@ -332,12 +438,17 @@ async fn capture_inner(
             timeout,
         )
         .await
-        .map_err(|e| {
-            ErrorResponse::new(
+    {
+        Ok(resp) => resp,
+        Err(e) => {
+            guard.abort();
+            return Err(ErrorResponse::new(
                 ErrorCode::CdpError,
                 format!("Chrome Page.captureScreenshot failed: {e}"),
-            )
-        })?;
+            ));
+        }
+    };
+    guard.abort();
     let b64 = resp.get("data").and_then(|v| v.as_str()).ok_or_else(|| {
         ErrorResponse::new(
             ErrorCode::CdpError,
@@ -381,5 +492,41 @@ mod tests {
         // hundreds of bytes minimum.
         assert!(!is_likely_stub_screenshot(67));
         assert!(!is_likely_stub_screenshot(2_048));
+    }
+
+    #[tokio::test]
+    async fn path_output_requires_configured_directory() {
+        let server = CrwBrowse::new(crate::server::BrowseConfig::default());
+        let err = resolve_screenshot_path(&server, "shot.png", "png")
+            .await
+            .expect_err("path output without screenshot_dir must fail");
+        assert_eq!(err.code, ErrorCode::InvalidArgs);
+    }
+
+    #[tokio::test]
+    async fn path_output_rejects_absolute_traversal_and_extension_mismatch() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = crate::server::BrowseConfig {
+            screenshot_dir: Some(dir.path().to_path_buf()),
+            ..crate::server::BrowseConfig::default()
+        };
+        let server = CrwBrowse::new(config);
+
+        for bad in [
+            "/tmp/shot.png",
+            "../shot.png",
+            "nested/shot.png",
+            "shot.jpg",
+        ] {
+            let err = resolve_screenshot_path(&server, bad, "png")
+                .await
+                .expect_err(bad);
+            assert_eq!(err.code, ErrorCode::InvalidArgs);
+        }
+
+        let ok = resolve_screenshot_path(&server, "shot.png", "png")
+            .await
+            .expect("single filename inside screenshot_dir");
+        assert_eq!(ok, dir.path().join("shot.png"));
     }
 }

@@ -131,10 +131,12 @@ async fn run_crawl_inner(opts: CrawlOptions<'_>) {
     };
 
     let base_url = match url::Url::parse(&req.url) {
-        Ok(u) if is_safe_url(&u) => u,
-        Ok(_) => {
-            send_failed(id, &state_tx, "Only http/https URLs are allowed".into());
-            return;
+        Ok(u) => {
+            if let Err(e) = crw_core::url_safety::validate_safe_url_resolved(&u).await {
+                send_failed(id, &state_tx, e);
+                return;
+            }
+            u
         }
         Err(e) => {
             send_failed(id, &state_tx, format!("Invalid URL: {e}"));
@@ -433,11 +435,9 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResul
     let parsed = url::Url::parse(base_url)
         .map_err(|e| crw_core::error::CrwError::InvalidRequest(format!("Invalid URL: {e}")))?;
 
-    if !is_safe_url(&parsed) {
-        return Err(crw_core::error::CrwError::InvalidRequest(
-            "Only http/https URLs are allowed".into(),
-        ));
-    }
+    crw_core::url_safety::validate_safe_url_resolved(&parsed)
+        .await
+        .map_err(crw_core::error::CrwError::InvalidRequest)?;
 
     // Use the URL's full origin (scheme + host + explicit port). Dropping the
     // port here would silently break sitemap discovery on any non-default-port
@@ -583,6 +583,13 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResul
             Err(_) => break,
         };
         // Per-host limiter handled in FallbackRenderer (see run_crawl note).
+        if let Ok(parsed) = url::Url::parse(&url)
+            && crw_core::url_safety::validate_safe_url_resolved(&parsed)
+                .await
+                .is_err()
+        {
+            continue;
+        }
 
         let discover_deadline = crw_core::Deadline::from_request_ms(deadline_ms_per_page);
         let fetch = renderer
