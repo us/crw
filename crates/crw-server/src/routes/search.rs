@@ -393,7 +393,10 @@ async fn enrich_with_scrape(
             Ok(u) => u,
             Err(_) => continue,
         };
-        if crw_core::url_safety::validate_safe_url(&parsed).is_err() {
+        if crw_core::url_safety::validate_safe_url_resolved(&parsed)
+            .await
+            .is_err()
+        {
             continue;
         }
         jobs.push((idx, r.url.clone()));

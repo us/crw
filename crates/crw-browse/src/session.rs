@@ -132,6 +132,10 @@ pub struct BrowserSession {
     /// Listener task handle — aborted on session close so it can't outlive the
     /// connection. `None` until `ensure_attached` runs for the first time.
     event_listener: Mutex<Option<JoinHandle<()>>>,
+    /// CDP Fetch guard task. It must live for the full session lifetime because
+    /// navigations can be triggered by clicks, scripts, redirects, and SPA code
+    /// after the original `goto` has returned.
+    outbound_guard: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl BrowserSession {
@@ -155,6 +159,7 @@ impl BrowserSession {
             network_buffer: Arc::new(Mutex::new(VecDeque::with_capacity(NETWORK_BUFFER_CAP))),
             network_event_count: Arc::new(AtomicU64::new(0)),
             event_listener: Mutex::new(None),
+            outbound_guard: Mutex::new(None),
         }
     }
 
@@ -377,6 +382,17 @@ impl BrowserSession {
                 )
                 .await?;
         }
+        crate::tools::goto::enable_outbound_guard(&self.conn, &cdp_session_id, timeout).await?;
+        let mut outbound_guard = self.outbound_guard.lock().await;
+        if outbound_guard.as_ref().is_none_or(|h| h.is_finished()) {
+            let rx = self.conn.subscribe();
+            let conn = self.conn.clone();
+            let sid = cdp_session_id.clone();
+            *outbound_guard = Some(tokio::spawn(async move {
+                crate::tools::goto::run_outbound_guard(conn, rx, &sid).await;
+            }));
+        }
+        drop(outbound_guard);
 
         *self.target_id.write().await = Some(target_id);
         *self.cdp_session_id.write().await = Some(cdp_session_id.clone());
@@ -401,6 +417,9 @@ impl BrowserSession {
         // Abort the event listener before tearing the connection down so it
         // can't observe a half-closed broadcast and log a spurious error.
         if let Some(h) = self.event_listener.lock().await.take() {
+            h.abort();
+        }
+        if let Some(h) = self.outbound_guard.lock().await.take() {
             h.abort();
         }
         self.conn.close().await;

@@ -68,7 +68,6 @@ pub async fn handle(server: &CrwBrowse, input: GotoInput) -> Result<CallToolResu
             )));
         }
     };
-
     // Subscribe before navigating so we don't miss Page.loadEventFired.
     let events_rx = session.conn.subscribe();
 
@@ -134,7 +133,84 @@ pub(crate) fn validate_goto_url(url: &str) -> Result<(), String> {
             "scheme {scheme:?} not allowed — goto accepts http or https only"
         ));
     }
+    crw_core::url_safety::validate_safe_url(&parsed)?;
     Ok(())
+}
+
+async fn validate_goto_url_resolved(url: &str) -> Result<(), String> {
+    validate_goto_url(url)?;
+    let parsed = url::Url::parse(url).map_err(|e| format!("invalid url: {e}"))?;
+    tokio::time::timeout(
+        Duration::from_secs(2),
+        crw_core::url_safety::validate_safe_url_resolved(&parsed),
+    )
+    .await
+    .map_err(|_| "DNS validation timed out".to_string())?
+}
+
+pub(crate) async fn enable_outbound_guard(
+    conn: &crw_renderer::cdp_conn::CdpConnection,
+    cdp_session_id: &str,
+    timeout: Duration,
+) -> crw_core::error::CrwResult<()> {
+    conn.send_recv(
+        "Fetch.enable",
+        serde_json::json!({
+            "patterns": [
+                { "urlPattern": "*", "requestStage": "Request" }
+            ]
+        }),
+        Some(cdp_session_id),
+        timeout,
+    )
+    .await
+    .map(|_| ())
+}
+
+pub(crate) async fn run_outbound_guard(
+    conn: std::sync::Arc<crw_renderer::cdp_conn::CdpConnection>,
+    mut events: tokio::sync::broadcast::Receiver<CdpEvent>,
+    cdp_session_id: &str,
+) {
+    use tokio::sync::broadcast::error::RecvError;
+    let cmd_timeout = Duration::from_secs(2);
+    loop {
+        let ev = match events.recv().await {
+            Ok(ev) => ev,
+            Err(RecvError::Closed) => return,
+            Err(RecvError::Lagged(_)) => continue,
+        };
+        if ev.session_id.as_deref() != Some(cdp_session_id) || ev.method != "Fetch.requestPaused" {
+            continue;
+        }
+        let request_id = ev
+            .params
+            .get("requestId")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        if request_id.is_empty() {
+            continue;
+        }
+        let req_url = ev
+            .params
+            .get("request")
+            .and_then(|r| r.get("url"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let method = if validate_goto_url_resolved(req_url).await.is_ok() {
+            "Fetch.continueRequest"
+        } else {
+            "Fetch.failRequest"
+        };
+        let params = if method == "Fetch.continueRequest" {
+            serde_json::json!({ "requestId": request_id })
+        } else {
+            serde_json::json!({ "requestId": request_id, "errorReason": "BlockedByClient" })
+        };
+        let _ = conn
+            .send_recv(method, params, Some(cdp_session_id), cmd_timeout)
+            .await;
+    }
 }
 
 /// Waits until either `Page.loadEventFired` arrives or `timeout` elapses, and
@@ -246,6 +322,18 @@ mod tests {
     fn validate_goto_url_rejects_percent_encoded_scheme() {
         assert!(validate_goto_url("%68ttp://example.com").is_err());
         assert!(validate_goto_url("ht%74ps://example.com").is_err());
+    }
+
+    #[test]
+    fn validate_goto_url_rejects_internal_networks() {
+        for bad in [
+            "http://127.0.0.1",
+            "http://10.0.0.1",
+            "http://169.254.169.254/latest/meta-data/",
+            "http://[::1]/",
+        ] {
+            assert!(validate_goto_url(bad).is_err(), "{bad} should be rejected");
+        }
     }
 
     #[test]

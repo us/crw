@@ -19,6 +19,11 @@ pub struct BrowseArgs {
     /// those tools return `NOT_IMPLEMENTED`.
     #[arg(long, env = "CRW_BROWSE_CHROME_WS_URL")]
     pub chrome_ws_url: Option<String>,
+
+    /// Directory where screenshot(path=...) may create image artifacts.
+    /// If unset, screenshot output must be returned inline as base64.
+    #[arg(long, env = "CRW_BROWSE_SCREENSHOT_DIR")]
+    pub screenshot_dir: Option<std::path::PathBuf>,
 }
 
 pub async fn run(args: BrowseArgs) -> anyhow::Result<()> {
@@ -34,6 +39,7 @@ pub async fn run(args: BrowseArgs) -> anyhow::Result<()> {
         ws_url: args.ws_url.clone(),
         page_timeout: Duration::from_millis(args.page_timeout_ms),
         chrome_ws_url: args.chrome_ws_url,
+        screenshot_dir: args.screenshot_dir,
     };
 
     tracing::info!(ws_url = %config.ws_url, "starting crw browse");

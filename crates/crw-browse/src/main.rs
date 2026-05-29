@@ -24,6 +24,11 @@ struct Cli {
     /// those tools return `NOT_IMPLEMENTED`.
     #[arg(long, env = "CRW_BROWSE_CHROME_WS_URL")]
     chrome_ws_url: Option<String>,
+
+    /// Directory where screenshot(path=...) may create image artifacts.
+    /// If unset, screenshot output must be returned inline as base64.
+    #[arg(long, env = "CRW_BROWSE_SCREENSHOT_DIR")]
+    screenshot_dir: Option<std::path::PathBuf>,
 }
 
 #[tokio::main]
@@ -41,6 +46,7 @@ async fn main() -> Result<()> {
         ws_url: cli.ws_url,
         page_timeout: Duration::from_millis(cli.page_timeout_ms),
         chrome_ws_url: cli.chrome_ws_url,
+        screenshot_dir: cli.screenshot_dir,
     };
 
     tracing::info!(ws_url = %config.ws_url, "starting crw-browse");

@@ -16,7 +16,9 @@ pub async fn scrape(
     let Json(req) = body.map_err(AppError::from)?;
     let parsed_url = url::Url::parse(&req.url)
         .map_err(|e| CrwError::InvalidRequest(format!("Invalid URL: {e}")))?;
-    crw_core::url_safety::validate_safe_url(&parsed_url).map_err(CrwError::InvalidRequest)?;
+    crw_core::url_safety::validate_safe_url_resolved(&parsed_url)
+        .await
+        .map_err(CrwError::InvalidRequest)?;
     validate_renderer_pin(req.renderer, req.render_js, &state)?;
 
     let llm_config = state.config.extraction.llm.as_ref();

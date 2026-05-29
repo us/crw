@@ -16,9 +16,9 @@ const SERVER_NAME: &str = "crw";
 const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Validate URL safety for MCP tool calls (same checks as REST API routes).
-pub fn validate_url(url: &str) -> Result<(), String> {
+pub async fn validate_url(url: &str) -> Result<(), String> {
     let parsed = url::Url::parse(url).map_err(|e| format!("Invalid URL: {e}"))?;
-    crw_core::url_safety::validate_safe_url(&parsed)
+    crw_core::url_safety::validate_safe_url_resolved(&parsed).await
 }
 
 pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result<Value, String> {
@@ -26,7 +26,7 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
         "crw_scrape" => {
             let req: ScrapeRequest =
                 serde_json::from_value(args).map_err(|e| format!("invalid arguments: {e}"))?;
-            validate_url(&req.url)?;
+            validate_url(&req.url).await?;
             let llm_config = state.config.extraction.llm.as_ref();
             let user_agent = &state.config.crawler.user_agent;
             let default_stealth =
@@ -53,7 +53,7 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
         "crw_crawl" => {
             let req: CrawlRequest =
                 serde_json::from_value(args).map_err(|e| format!("invalid arguments: {e}"))?;
-            validate_url(&req.url)?;
+            validate_url(&req.url).await?;
             validate_crawl_renderer(&req, state).map_err(|e| format!("{e}"))?;
             let id = state.start_crawl_job(req).await;
             Ok(json!({"success": true, "id": id.to_string()}))
@@ -74,7 +74,7 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
         "crw_map" => {
             let req: MapRequest =
                 serde_json::from_value(args).map_err(|e| format!("invalid arguments: {e}"))?;
-            validate_url(&req.url)?;
+            validate_url(&req.url).await?;
             let max_depth = req
                 .max_depth
                 .unwrap_or(state.config.crawler.default_max_depth);
