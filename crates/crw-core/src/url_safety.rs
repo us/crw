@@ -1,4 +1,4 @@
-use std::net::IpAddr;
+use std::net::{IpAddr, ToSocketAddrs};
 
 /// Build a reqwest redirect policy that validates each redirect target
 /// against the SSRF safety checks. This prevents attackers from using
@@ -7,7 +7,7 @@ pub fn safe_redirect_policy() -> reqwest::redirect::Policy {
     reqwest::redirect::Policy::custom(|attempt| {
         if attempt.previous().len() >= 10 {
             attempt.error("too many redirects")
-        } else if let Err(e) = validate_safe_url(attempt.url()) {
+        } else if let Err(e) = validate_safe_url_blocking_resolved(attempt.url()) {
             attempt.error(format!("redirect blocked: {e}"))
         } else {
             attempt.follow()
@@ -104,6 +104,33 @@ pub async fn validate_safe_url_resolved(url: &url::Url) -> Result<(), String> {
         .await
         .map_err(|_| "DNS resolution failed".to_string())?;
     validate_resolved_ips(addrs.map(|addr| addr.ip()))
+}
+
+/// Synchronous resolved validation for places that cannot await, notably
+/// reqwest's redirect-policy callback. Keep use narrow; it performs DNS on the
+/// current thread and intentionally fails closed.
+pub fn validate_safe_url_blocking_resolved(url: &url::Url) -> Result<(), String> {
+    validate_safe_url(url)?;
+
+    let test_allow_loopback = std::env::var("CRW_ALLOW_LOOPBACK_FOR_TESTS").as_deref() == Ok("1");
+    if test_allow_loopback {
+        return Ok(());
+    }
+
+    let host = url
+        .host_str()
+        .ok_or_else(|| "URL has no host".to_string())?;
+    let stripped = host.trim_start_matches('[').trim_end_matches(']');
+    if stripped.parse::<IpAddr>().is_ok() {
+        return Ok(());
+    }
+    let port = url
+        .port_or_known_default()
+        .ok_or_else(|| "URL has no resolvable port".to_string())?;
+    (stripped, port)
+        .to_socket_addrs()
+        .map_err(|_| "DNS resolution failed".to_string())
+        .and_then(|addrs| validate_resolved_ips(addrs.map(|addr| addr.ip())))
 }
 
 pub fn validate_resolved_ips<I>(ips: I) -> Result<(), String>
@@ -275,5 +302,12 @@ mod tests {
             .is_err()
         );
         assert!(validate_resolved_ips([]).is_err());
+    }
+
+    #[test]
+    fn blocking_resolved_validation_rejects_denied_literal_ips() {
+        assert!(validate_safe_url_blocking_resolved(&url("http://169.254.169.254")).is_err());
+        assert!(validate_safe_url_blocking_resolved(&url("http://127.0.0.1")).is_err());
+        assert!(validate_safe_url_blocking_resolved(&url("http://[::1]")).is_err());
     }
 }
