@@ -173,6 +173,7 @@ pub(crate) async fn run_outbound_guard(
     cdp_session_id: &str,
 ) {
     use tokio::sync::broadcast::error::RecvError;
+    let concurrency = std::sync::Arc::new(tokio::sync::Semaphore::new(32));
     let cmd_timeout = Duration::from_secs(2);
     loop {
         let ev = match events.recv().await {
@@ -191,25 +192,49 @@ pub(crate) async fn run_outbound_guard(
         if request_id.is_empty() {
             continue;
         }
+        let permit = match concurrency.clone().try_acquire_owned() {
+            Ok(permit) => permit,
+            Err(_) => {
+                let _ = conn
+                    .send_recv(
+                        "Fetch.failRequest",
+                        serde_json::json!({
+                            "requestId": request_id,
+                            "errorReason": "BlockedByClient",
+                        }),
+                        Some(cdp_session_id),
+                        cmd_timeout,
+                    )
+                    .await;
+                continue;
+            }
+        };
         let req_url = ev
             .params
             .get("request")
             .and_then(|r| r.get("url"))
             .and_then(|v| v.as_str())
             .unwrap_or("");
-        let method = if validate_goto_url_resolved(req_url).await.is_ok() {
-            "Fetch.continueRequest"
-        } else {
-            "Fetch.failRequest"
-        };
-        let params = if method == "Fetch.continueRequest" {
-            serde_json::json!({ "requestId": request_id })
-        } else {
-            serde_json::json!({ "requestId": request_id, "errorReason": "BlockedByClient" })
-        };
-        let _ = conn
-            .send_recv(method, params, Some(cdp_session_id), cmd_timeout)
-            .await;
+        let request_id = request_id.to_string();
+        let req_url = req_url.to_string();
+        let conn = conn.clone();
+        let cdp_session_id = cdp_session_id.to_string();
+        tokio::spawn(async move {
+            let _permit = permit;
+            let method = if validate_goto_url_resolved(&req_url).await.is_ok() {
+                "Fetch.continueRequest"
+            } else {
+                "Fetch.failRequest"
+            };
+            let params = if method == "Fetch.continueRequest" {
+                serde_json::json!({ "requestId": request_id })
+            } else {
+                serde_json::json!({ "requestId": request_id, "errorReason": "BlockedByClient" })
+            };
+            let _ = conn
+                .send_recv(method, params, Some(&cdp_session_id), cmd_timeout)
+                .await;
+        });
     }
 }
 

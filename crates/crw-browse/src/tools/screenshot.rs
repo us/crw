@@ -260,11 +260,43 @@ async fn resolve_screenshot_path(
             format!("jpeg screenshots must use a .{expected} or .jpeg path"),
         ));
     }
+    if let Ok(meta) = tokio::fs::symlink_metadata(root).await
+        && meta.file_type().is_symlink()
+    {
+        return Err(ErrorResponse::new(
+            ErrorCode::InvalidArgs,
+            "screenshot directory must not be a symlink",
+        ));
+    }
     tokio::fs::create_dir_all(root).await.map_err(|e| {
         ErrorResponse::new(
             ErrorCode::Internal,
             format!(
                 "failed to create screenshot directory {}: {e}",
+                root.display()
+            ),
+        )
+    })?;
+    let meta = tokio::fs::symlink_metadata(root).await.map_err(|e| {
+        ErrorResponse::new(
+            ErrorCode::Internal,
+            format!(
+                "failed to inspect screenshot directory {}: {e}",
+                root.display()
+            ),
+        )
+    })?;
+    if meta.file_type().is_symlink() || !meta.is_dir() {
+        return Err(ErrorResponse::new(
+            ErrorCode::InvalidArgs,
+            "screenshot directory must be a real directory",
+        ));
+    }
+    let root = tokio::fs::canonicalize(root).await.map_err(|e| {
+        ErrorResponse::new(
+            ErrorCode::Internal,
+            format!(
+                "failed to canonicalize screenshot directory {}: {e}",
                 root.display()
             ),
         )
@@ -527,6 +559,28 @@ mod tests {
         let ok = resolve_screenshot_path(&server, "shot.png", "png")
             .await
             .expect("single filename inside screenshot_dir");
-        assert_eq!(ok, dir.path().join("shot.png"));
+        assert_eq!(ok, dir.path().canonicalize().unwrap().join("shot.png"));
+    }
+
+    #[tokio::test]
+    async fn path_output_rejects_symlinked_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("target");
+        let link = dir.path().join("link");
+        tokio::fs::create_dir(&target).await.unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_dir(&target, &link).unwrap();
+
+        let config = crate::server::BrowseConfig {
+            screenshot_dir: Some(link),
+            ..crate::server::BrowseConfig::default()
+        };
+        let server = CrwBrowse::new(config);
+        let err = resolve_screenshot_path(&server, "shot.png", "png")
+            .await
+            .expect_err("symlinked screenshot_dir must fail");
+        assert_eq!(err.code, ErrorCode::InvalidArgs);
     }
 }
