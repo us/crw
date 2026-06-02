@@ -235,6 +235,12 @@ pub async fn search_inner(
                 // estimateMaxCreditCostForSearch.
                 let mut leg_cfg = llm.clone();
                 leg_cfg.max_tokens = leg_cfg.max_tokens.min(SEARCH_LLM_MAX_TOKENS_PER_LEG);
+                // Eval determinism: a request-supplied answer temperature (the
+                // benchmark harness sets 0) overrides the provider default so
+                // A/B runs are reproducible. None = current prod behavior.
+                if req.answer_temperature.is_some() {
+                    leg_cfg.temperature = req.answer_temperature;
+                }
                 if wants_summaries {
                     let (count, usages) = attach_result_summaries(
                         &mut data,
@@ -895,6 +901,7 @@ mod tests {
             base_url: None,
             summary_prompt: None,
             answer_prompt: None,
+            answer_temperature: None,
             max_content_chars: None,
         }
     }

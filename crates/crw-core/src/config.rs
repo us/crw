@@ -995,6 +995,14 @@ pub struct LlmConfig {
     /// direct public callers can't access LLM features.
     #[serde(default)]
     pub require_byok_header: Option<String>,
+    /// Sampling temperature for the LLM call. `None` (default) sends no
+    /// `temperature` key, preserving each provider's default (DeepSeek = 1) and
+    /// current prod behavior. The benchmark/eval harness sets `0.0` (with a
+    /// seed) to make answers deterministic so a real +2-3pp lever is
+    /// distinguishable from sampling noise. Prod stays `None` until temp=0 is
+    /// proven not to raise abstention.
+    #[serde(default)]
+    pub temperature: Option<f32>,
 }
 
 impl Default for LlmConfig {
@@ -1009,6 +1017,7 @@ impl Default for LlmConfig {
             max_concurrency: default_llm_max_concurrency(),
             max_html_bytes: default_llm_max_html_bytes(),
             require_byok_header: None,
+            temperature: None,
         }
     }
 }

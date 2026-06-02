@@ -955,6 +955,12 @@ pub struct SearchRequest {
     /// stay intact. Capped at 500 chars server-side.
     #[serde(default, alias = "answer_prompt")]
     pub answer_prompt: Option<String>,
+    /// Sampling temperature for the answer-synthesis LLM call. Omitted (None)
+    /// keeps the provider default (prod behavior). The benchmark/eval harness
+    /// sets `0` (with a fixed seed) to make answers deterministic, so a real
+    /// accuracy lever is distinguishable from sampling noise.
+    #[serde(default, alias = "answer_temperature")]
+    pub answer_temperature: Option<f32>,
     /// Maximum number of bytes of each per-result markdown sent to the LLM
     /// when `summarize_results` is enabled. Defaults to
     /// `[extraction.llm].max_html_bytes` (100 KB). Clamped to a 200 KB

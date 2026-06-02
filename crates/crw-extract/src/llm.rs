@@ -85,6 +85,7 @@ pub async fn extract_via_llm(
         base_url,
         max_tokens,
         azure_api_version,
+        None, // extraction path: keep provider-default temperature
         EXTRACTION_SYSTEM_PROMPT,
         &user_msg,
     )
@@ -115,6 +116,7 @@ pub async fn chat(
         cfg.base_url.as_deref(),
         cfg.max_tokens,
         cfg.azure_api_version.as_deref(),
+        cfg.temperature,
         system_prompt,
         user_msg,
     )
@@ -164,6 +166,7 @@ async fn dispatch(
     base_url: Option<&str>,
     max_tokens: u32,
     azure_api_version: Option<&str>,
+    temperature: Option<f32>,
     system_prompt: &str,
     user_msg: &str,
 ) -> CrwResult<LlmCallResult> {
@@ -176,6 +179,7 @@ async fn dispatch(
                 model,
                 base_url,
                 max_tokens,
+                temperature,
                 system_prompt,
                 user_msg,
             )
@@ -192,6 +196,7 @@ async fn dispatch(
                 model,
                 base_url,
                 max_tokens,
+                temperature,
                 system_prompt,
                 user_msg,
                 provider_tag,
@@ -216,6 +221,7 @@ async fn dispatch(
                 model,
                 version,
                 max_tokens,
+                temperature,
                 system_prompt,
                 user_msg,
             )
@@ -234,16 +240,20 @@ async fn call_anthropic(
     model: &str,
     base_url: Option<&str>,
     max_tokens: u32,
+    temperature: Option<f32>,
     system_prompt: &str,
     user_msg: &str,
 ) -> CrwResult<LlmCallResult> {
     let url = base_url.unwrap_or(ANTHROPIC_DEFAULT_BASE_URL);
-    let body = serde_json::json!({
+    let mut body = serde_json::json!({
         "model": model,
         "max_tokens": max_tokens,
         "system": system_prompt,
         "messages": [{ "role": "user", "content": user_msg }],
     });
+    if let Some(t) = temperature {
+        body["temperature"] = serde_json::json!(t);
+    }
     let resp = client
         .post(url)
         .header("x-api-key", api_key)
@@ -293,6 +303,7 @@ async fn call_openai(
     model: &str,
     base_url: Option<&str>,
     max_tokens: u32,
+    temperature: Option<f32>,
     system_prompt: &str,
     user_msg: &str,
     provider: &str,
@@ -309,7 +320,7 @@ async fn call_openai(
             &url_owned
         }
     };
-    let body = serde_json::json!({
+    let mut body = serde_json::json!({
         "model": model,
         "max_tokens": max_tokens,
         "messages": [
@@ -317,6 +328,13 @@ async fn call_openai(
             { "role": "user", "content": user_msg }
         ],
     });
+    // Deterministic eval: temp=0 + fixed seed make answers reproducible so a
+    // real +2-3pp lever is distinguishable from sampling noise. None (prod
+    // default) sends neither, preserving the provider default.
+    if let Some(t) = temperature {
+        body["temperature"] = serde_json::json!(t);
+        body["seed"] = serde_json::json!(42);
+    }
     let resp = client
         .post(url)
         .bearer_auth(api_key)
@@ -362,6 +380,7 @@ async fn call_azure(
     deployment: &str,
     api_version: &str,
     max_tokens: u32,
+    temperature: Option<f32>,
     system_prompt: &str,
     user_msg: &str,
 ) -> CrwResult<LlmCallResult> {
@@ -369,13 +388,17 @@ async fn call_azure(
     let url = format!(
         "{endpoint_trimmed}/openai/deployments/{deployment}/chat/completions?api-version={api_version}"
     );
-    let body = serde_json::json!({
+    let mut body = serde_json::json!({
         "max_tokens": max_tokens,
         "messages": [
             { "role": "system", "content": system_prompt },
             { "role": "user", "content": user_msg }
         ],
     });
+    if let Some(t) = temperature {
+        body["temperature"] = serde_json::json!(t);
+        body["seed"] = serde_json::json!(42);
+    }
     let resp = client
         .post(&url)
         .header("api-key", api_key)
