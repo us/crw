@@ -273,6 +273,7 @@ pub async fn search_inner(
                         &leg_cfg,
                         state.config.search.passage_select,
                         state.config.search.answer_calibrated,
+                        state.config.search.snippet_fallback,
                     )
                     .await
                     {
@@ -507,6 +508,7 @@ async fn synthesize_answer(
     cfg: &LlmConfig,
     passage_select: bool,
     calibrated: bool,
+    snippet_fallback: bool,
 ) -> Result<
     (
         String,
@@ -544,9 +546,22 @@ async fn synthesize_answer(
     let sources: Vec<answer::Source> = pool
         .iter()
         .filter_map(|r| {
-            r.markdown
-                .as_ref()
-                .map(|md| (r.url.clone(), r.title.clone(), md.clone()))
+            if let Some(md) = r.markdown.as_ref() {
+                Some((r.url.clone(), r.title.clone(), md.clone()))
+            } else if snippet_fallback {
+                // Scrape failed/empty — instead of dropping the result (which
+                // can lose the answer-bearing page, Pattern A), fall back to the
+                // SearXNG snippet. It's verbatim upstream text, so it can only
+                // surface a fact already present, never invent one.
+                let desc = r.description.trim();
+                if desc.is_empty() {
+                    None
+                } else {
+                    Some((r.url.clone(), r.title.clone(), format!("[snippet] {desc}")))
+                }
+            } else {
+                None
+            }
         })
         .take(top_n)
         .collect();

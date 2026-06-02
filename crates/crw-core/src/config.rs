@@ -182,6 +182,15 @@ pub struct SearchConfig {
     /// no-source cases). Default false; A/B with an INCORRECT-guard before flip.
     #[serde(default)]
     pub answer_calibrated: bool,
+    /// Snippet fallback for the LLM answer path (gated): when a top-N result's
+    /// scrape failed (empty `markdown`), the result is normally dropped from the
+    /// answer pool — if it was the answer-bearing page, crw abstains though
+    /// retrieval succeeded (diagnosed Pattern A). With this on, such results
+    /// fall back to their SearXNG `description` snippet as a thin source instead
+    /// of vanishing. The snippet is verbatim upstream text, so it cannot inject
+    /// a fact not already present — near-zero INCORRECT exposure. Default false.
+    #[serde(default)]
+    pub snippet_fallback: bool,
 }
 
 impl Default for SearchConfig {
@@ -199,6 +208,7 @@ impl Default for SearchConfig {
             passage_select: false,
             page2_fallback: false,
             answer_calibrated: false,
+            snippet_fallback: false,
         }
     }
 }
