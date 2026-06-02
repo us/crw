@@ -161,6 +161,16 @@ pub struct SearchConfig {
     /// `false` (gated); answer prompt + plain path untouched.
     #[serde(default)]
     pub passage_select: bool,
+    /// Page-2 fallback for the LLM answer / summarize path: if the reranked
+    /// (junk-filtered, deduped) candidate pool comes back thinner than the
+    /// answer needs (`< answer_top_n`), fetch the SAME query's SearXNG page 2
+    /// once and union it in, then re-rank. The trigger is evaluated POST-rerank,
+    /// so a junk-heavy first page does not suppress it; the extra fetch only
+    /// fires on already-under-yielding queries (QPS never doubles across the
+    /// corpus). Recall-only + abstention is untouched (a sparse page1+page2 pool
+    /// still abstains). Defaults to `false` (gated); requires `rerank_enabled`.
+    #[serde(default)]
+    pub page2_fallback: bool,
 }
 
 impl Default for SearchConfig {
@@ -176,6 +186,7 @@ impl Default for SearchConfig {
             rerank_enabled: true,
             query_expand: false,
             passage_select: false,
+            page2_fallback: false,
         }
     }
 }

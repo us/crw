@@ -90,7 +90,7 @@ pub async fn search_inner(
     // Multi-query expansion (gated): on the LLM path, also fetch an
     // entity/keyword rewrite of the query and UNION the pools so the answer's
     // source is more likely to surface. Falls back to the single fetch.
-    let response = if state.config.search.query_expand
+    let mut response = if state.config.search.query_expand
         && llm_path
         && let Some(llm) = effective_llm
     {
@@ -117,6 +117,48 @@ pub async fn search_inner(
     } else {
         SearchData::Flat(transform_flat(&response, limit))
     };
+
+    // Page-2 fallback (gated, default-off): when the reranked clean pool came
+    // back thinner than the answer needs (junk filter stripped a sparse first
+    // page), fetch the SAME query's page 2 ONCE, union it in (dedup by URL like
+    // `fetch_expanded`), and re-rank. Trigger is evaluated POST-rerank so a
+    // junk-heavy first page doesn't suppress it; extra load only fires on
+    // already-under-yielding queries. Recall-only — synthesis/abstention in
+    // `answer.rs` is untouched.
+    if state.config.search.page2_fallback
+        && llm_path
+        && state.config.search.rerank_enabled
+        && !has_sources
+    {
+        let top_n = req
+            .answer_top_n
+            .unwrap_or(DEFAULT_ANSWER_TOP_N)
+            .min(MAX_ANSWER_TOP_N) as usize;
+        let clean_count = match &data {
+            SearchData::Flat(v) => v.len(),
+            SearchData::Grouped(_) => top_n,
+        };
+        if clean_count < top_n {
+            let mut p2 = params.clone();
+            p2.pageno = Some(2);
+            if let Ok(resp2) = client.fetch(&p2).await {
+                let mut seen: std::collections::HashSet<String> = response
+                    .results
+                    .iter()
+                    .filter_map(|r| r.url.clone())
+                    .collect();
+                for row in resp2.results {
+                    if let Some(u) = row.url.clone()
+                        && seen.insert(u)
+                    {
+                        response.results.push(row);
+                    }
+                }
+                response.number_of_results = response.results.len() as u64;
+                data = SearchData::Flat(transform_flat_reranked(&response, &req.query, limit));
+            }
+        }
+    }
 
     let mut warning: Option<String> = None;
     let mut warnings: Vec<String> = Vec::new();
