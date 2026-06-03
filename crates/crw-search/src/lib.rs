@@ -20,6 +20,6 @@ pub mod wikidata;
 
 pub use client::{SearchError, SearxngClient, SearxngResponse, SearxngResult};
 pub use params::{SearxngParams, clean_query, map_to_searxng_params};
-pub use rerank::rerank;
+pub use rerank::{rerank, rerank_relevance};
 pub use structured::{StructuredFact, structured_facts};
 pub use transform::{transform_flat, transform_flat_reranked, transform_grouped};

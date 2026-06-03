@@ -35,6 +35,13 @@ const MAX_QUERY_EXPAND_VARIANTS: usize = 5;
 /// Bounded so the single extra round stays well within the request deadline.
 const MAX_SCOUT_QUERIES: usize = 2;
 const SCOUT_FETCH_LIMIT: u32 = 6;
+/// Minimum request-deadline budget that must remain before the adaptive
+/// multi-round scout is allowed to start its extra round (scout LLM + up to
+/// `MAX_SCOUT_QUERIES` fetches + scrapes + one re-synthesis). Below this, an
+/// abstaining query returns round-1 immediately instead of risking a deadline
+/// overrun (504) — this is what bounds the worst-case latency that enabling
+/// `multi_round` adds.
+const MULTI_ROUND_MIN_BUDGET_MS: u64 = 20_000;
 
 /// Heuristic: did the synthesized answer ABSTAIN (sources lacked the fact)?
 /// Aligned with `answer.rs`'s calibrated clause ("ONLY if the sources genuinely
@@ -163,6 +170,11 @@ pub async fn search_inner(
         .min(state.config.search.max_limit)
         .max(1);
 
+    // Request-deadline clock, started at handler entry. Used by the adaptive
+    // multi-round gate (below) to decide whether enough budget remains to run a
+    // second scout round without risking a 504.
+    let req_deadline = Deadline::from_request_ms(state.config.effective_deadline_ms(None, None));
+
     // BYOK + LLM config is built up-front because multi-query expansion (below)
     // needs the LLM *before* the SearXNG fetch. Reused by the summarize/answer
     // legs further down. `llm_path` = this request enters LLM mode.
@@ -204,7 +216,12 @@ pub async fn search_inner(
         let sources = req.sources.clone().unwrap_or_default();
         SearchData::Grouped(transform_grouped(&response, &sources, limit))
     } else if llm_path && state.config.search.rerank_enabled {
-        SearchData::Flat(transform_flat_reranked(&response, &req.query, limit))
+        SearchData::Flat(transform_flat_reranked(
+            &response,
+            &req.query,
+            limit,
+            state.config.search.rerank_relevance,
+        ))
     } else {
         SearchData::Flat(transform_flat(&response, limit))
     };
@@ -274,7 +291,12 @@ pub async fn search_inner(
                     }
                 }
                 response.number_of_results = response.results.len() as u64;
-                data = SearchData::Flat(transform_flat_reranked(&response, &req.query, limit));
+                data = SearchData::Flat(transform_flat_reranked(
+                    &response,
+                    &req.query,
+                    limit,
+                    state.config.search.rerank_relevance,
+                ));
             }
         }
     }
@@ -388,6 +410,13 @@ pub async fn search_inner(
                     }
                 }
                 if wants_answer {
+                    // List-format answer (gated): a request override wins, else
+                    // the server flag; either way it only fires on list-intent
+                    // queries ("best/top X in Y"). Factual queries keep prose.
+                    let list_format = req
+                        .answer_list_format
+                        .unwrap_or(state.config.search.answer_list_format)
+                        && answer::is_list_intent(&req.query);
                     match synthesize_answer(
                         &req,
                         &data,
@@ -397,6 +426,7 @@ pub async fn search_inner(
                         state.config.search.snippet_fallback,
                         state.config.search.answer_guarded,
                         &structured_sources,
+                        list_format,
                     )
                     .await
                     {
@@ -424,8 +454,22 @@ pub async fn search_inner(
                             // so the single-shot fast path is unchanged for hits.
                             let want_multi =
                                 req.multi_round.unwrap_or(state.config.search.multi_round);
+                            // Deadline budget: the extra scout round can add tens
+                            // of seconds. If too little of the request deadline
+                            // remains, skip it and return round-1 promptly rather
+                            // than risk a 504 — this caps the worst-case latency
+                            // multi_round would otherwise add.
+                            let multi_budget_ok = req_deadline.remaining().as_millis() as u64
+                                >= MULTI_ROUND_MIN_BUDGET_MS;
+                            if want_multi && is_abstention(&ans) && !multi_budget_ok {
+                                warnings.push(
+                                    "multi-round skipped: insufficient deadline budget remaining"
+                                        .to_string(),
+                                );
+                            }
                             if want_multi
                                 && is_abstention(&ans)
+                                && multi_budget_ok
                                 && let Some(opts) = req.scrape_options.as_ref()
                             {
                                 let evidence = evidence_excerpt(&data, 5, 400);
@@ -445,6 +489,7 @@ pub async fn search_inner(
                                             &resp2,
                                             &req.query,
                                             SCOUT_FETCH_LIMIT,
+                                            state.config.search.rerank_relevance,
                                         );
                                         let mut sd = SearchData::Flat(extra);
                                         let _ = enrich_with_scrape(&mut sd, opts, state).await;
@@ -464,6 +509,7 @@ pub async fn search_inner(
                                             state.config.search.snippet_fallback,
                                             state.config.search.answer_guarded,
                                             &structured_sources,
+                                            list_format,
                                         )
                                         .await
                                     && !is_abstention(&ans2)
@@ -706,6 +752,7 @@ async fn synthesize_answer(
     guarded: bool,
     // W0: structured facts (infoboxes/answers) to PIN at the front of the pool.
     structured: &[answer::Source],
+    list_format: bool,
 ) -> Result<
     (
         String,
@@ -785,6 +832,7 @@ async fn synthesize_answer(
             req.answer_prompt.as_deref(),
             calibrated,
             guarded,
+            list_format,
         )
         .await
     } else {
@@ -796,6 +844,7 @@ async fn synthesize_answer(
             req.answer_prompt.as_deref(),
             calibrated,
             guarded,
+            list_format,
         )
         .await
     }
@@ -1125,6 +1174,7 @@ mod tests {
             answer_temperature: None,
             query_expand_variants: None,
             multi_round: None,
+            answer_list_format: None,
             max_content_chars: None,
         }
     }

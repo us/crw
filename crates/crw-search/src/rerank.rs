@@ -381,6 +381,19 @@ fn covers(r: &SearxngResult, important: &HashSet<String>) -> bool {
     hit as f64 / important.len() as f64 >= MIN_COVERAGE
 }
 
+/// Graded form of [`covers`]: the COUNT of important query terms present in a
+/// row (title + content). Used by the relevance gate in [`rerank_relevance`] to
+/// rank/keep rows by how many of the query's distinctive terms they actually
+/// cover, rather than by raw upstream score alone.
+fn coverage_count(r: &SearxngResult, important: &HashSet<String>) -> usize {
+    if important.is_empty() {
+        return 0;
+    }
+    let mut doc: HashSet<String> = toks(title_of(r)).into_iter().collect();
+    doc.extend(toks(content_of(r)));
+    important.iter().filter(|t| doc.contains(*t)).count()
+}
+
 /// `true` if a competing-region token appears anywhere in the row.
 /// Mirrors `score.py::geo_competing`.
 fn geo_competing(r: &SearxngResult, competing: &[&str]) -> bool {
@@ -433,7 +446,35 @@ fn important_terms(query: &str) -> HashSet<String> {
 /// best-first, deduped by registrable domain. Never returns empty unless
 /// `rows` is empty (graceful degrade). Mirrors `rerank.py::rank_full` with the
 /// junk filter always applied (including the degrade fallback).
+///
+/// This is the frozen lexical-core default path (raw-score ordering) proven on
+/// the benchmark. For the relevance-gated variant, see [`rerank_relevance`].
 pub fn rerank<'a>(rows: &'a [SearxngResult], query: &str) -> Vec<&'a SearxngResult> {
+    rerank_core(rows, query, false)
+}
+
+/// Relevance-gated re-rank (config flag `rerank_relevance`, default off). Same
+/// pipeline as [`rerank`], plus a final **max-coverage gate**: among the
+/// survivors, keep only the rows that cover the MOST important (non-stopword)
+/// query terms present in the pool. So for "best pizza in belgrade" — important
+/// terms `{pizza, belgrade}` — a genuine "pizza … belgrade" row (coverage 2/2)
+/// evicts a "pizza … REDMOND" homonym (coverage 1/2) the instant one is present.
+///
+/// Deployment-agnostic by design: it ranks purely on the query's own
+/// distinctive tokens, injecting NO geo / country / IP signal — so it behaves
+/// identically whether crw is hosted in Belgrade, Redmond, or a datacenter
+/// anywhere else (the self-host reality). Monotone-safe: the gate only fires
+/// when a strictly-better-covered row exists, and never empties a non-empty
+/// pool (the degrade fallback still applies first).
+pub fn rerank_relevance<'a>(rows: &'a [SearxngResult], query: &str) -> Vec<&'a SearxngResult> {
+    rerank_core(rows, query, true)
+}
+
+fn rerank_core<'a>(
+    rows: &'a [SearxngResult],
+    query: &str,
+    relevance: bool,
+) -> Vec<&'a SearxngResult> {
     if rows.is_empty() {
         return Vec::new();
     }
@@ -462,6 +503,30 @@ pub fn rerank<'a>(rows: &'a [SearxngResult], query: &str) -> Vec<&'a SearxngResu
         } else {
             non_junk
         };
+    }
+
+    // RELEVANCE GATE (config-gated, default off — see `rerank_relevance`). Keep
+    // only the rows covering the maximum number of important query terms found
+    // in the pool. This demotes partial-match homonyms (wrong-city "pizza")
+    // out of the top-N fed to the LLM, using only the query's own tokens (no
+    // geo database). Skipped when there are no important terms or nothing
+    // covers > 0 (degrade-safe; the gate can never empty a non-empty pool).
+    if relevance && !important.is_empty() {
+        let max_cov = cands
+            .iter()
+            .map(|r| coverage_count(r, &important))
+            .max()
+            .unwrap_or(0);
+        if max_cov > 0 {
+            let filtered: Vec<&SearxngResult> = cands
+                .iter()
+                .copied()
+                .filter(|r| coverage_count(r, &important) == max_cov)
+                .collect();
+            if !filtered.is_empty() {
+                cands = filtered;
+            }
+        }
     }
 
     // LEXICAL-CORE ordering. The filters above already dropped junk /

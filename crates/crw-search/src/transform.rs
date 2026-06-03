@@ -132,6 +132,7 @@ pub fn transform_flat_reranked(
     response: &SearxngResponse,
     query: &str,
     limit: u32,
+    relevance: bool,
 ) -> Vec<SearchResult> {
     let results: Vec<SearxngResult> = response
         .results
@@ -140,7 +141,12 @@ pub fn transform_flat_reranked(
         .take(MAX_UPSTREAM_ROWS)
         .cloned()
         .collect();
-    crate::rerank::rerank(&results, query)
+    let ranked = if relevance {
+        crate::rerank::rerank_relevance(&results, query)
+    } else {
+        crate::rerank::rerank(&results, query)
+    };
+    ranked
         .into_iter()
         .take(limit as usize)
         .enumerate()

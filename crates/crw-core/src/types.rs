@@ -1117,6 +1117,13 @@ pub struct SearchRequest {
     /// uses the server config. The eval harness sets this to A/B the lever.
     #[serde(default, alias = "multi_round")]
     pub multi_round: Option<bool>,
+    /// Per-request override for `[search].answer_list_format` — when the query
+    /// has list intent ("best/top X in Y", "recommend …"), render the answer as
+    /// a ranked list of named options instead of prose. None uses the server
+    /// config; Some(false) forces prose, Some(true) forces the list path (still
+    /// only fires on list-intent queries).
+    #[serde(default, alias = "answer_list_format")]
+    pub answer_list_format: Option<bool>,
     /// Maximum number of bytes of each per-result markdown sent to the LLM
     /// when `summarize_results` is enabled. Defaults to
     /// `[extraction.llm].max_html_bytes` (100 KB). Clamped to a 200 KB

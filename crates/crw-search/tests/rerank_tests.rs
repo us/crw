@@ -391,8 +391,116 @@ fn transform_flat_reranked_smoke() {
             resolution: None,
         },
     ];
-    let out = crw_search::transform_flat_reranked(&resp(rows), "best restaurants in belgrade", 5);
+    let out =
+        crw_search::transform_flat_reranked(&resp(rows), "best restaurants in belgrade", 5, false);
     assert_eq!(out.len(), 1, "junk dictionary row must be dropped");
     assert!(out[0].url.contains("tripadvisor"));
     assert_eq!(out[0].position, 1);
+}
+
+/// Builder for a minimal result row (only the fields the rerank pipeline reads).
+fn make_row(url: &str, title: &str, content: &str, score: f64) -> SearxngResult {
+    SearxngResult {
+        url: Some(url.into()),
+        title: Some(title.into()),
+        engine: Some("bing".into()),
+        content: Some(content.into()),
+        score: Some(score),
+        engines: vec!["bing".into()],
+        positions: vec![1],
+        category: Some("general".into()),
+        template: None,
+        published_date: None,
+        img_src: None,
+        thumbnail_src: None,
+        img_format: None,
+        resolution: None,
+    }
+}
+
+#[test]
+fn relevance_gate_drops_partial_match_homonym() {
+    // The reported bug: "best pizza in belgrade" surfaced Redmond, WA pizzerias
+    // (coverage 1/2 — "pizza" only, higher raw score) above the genuine
+    // Belgrade result (coverage 2/2). The relevance gate must evict the
+    // partial-match homonym from the answer pool, using only the query's own
+    // tokens (no geo signal — works on any self-hosted region).
+    let rows = vec![
+        // Wrong-city homonym: only "pizza" matches, but the higher raw score
+        // would float it to the top of the default raw-score sort.
+        make_row(
+            "https://www.yelp.com/search?find_desc=pizza&find_loc=Redmond+WA",
+            "The Best 10 Pizza Places near Redmond, WA 98052",
+            "best pizza restaurants near you in redmond washington",
+            9.0,
+        ),
+        // Genuine answer: both "pizza" and "belgrade" present, lower raw score.
+        make_row(
+            "https://www.tripadvisor.com/Restaurants-Belgrade-Pizza.html",
+            "THE 10 BEST Pizza Places in Belgrade",
+            "best pizza in belgrade serbia — top pizzerias",
+            6.0,
+        ),
+    ];
+    let q = "best pizza in the belgrade";
+
+    // Default path (relevance off) keeps both — proves the flag gates behavior
+    // and the frozen lexical-core ordering is unchanged.
+    let off = crw_search::transform_flat_reranked(&resp(rows.clone()), q, 5, false);
+    assert_eq!(
+        off.len(),
+        2,
+        "default path must keep both rows (byte-parity)"
+    );
+    assert!(
+        off[0].url.contains("redmond") || off[0].url.contains("Redmond"),
+        "default path orders by raw score → Redmond first: {:?}",
+        off.iter().map(|r| &r.url).collect::<Vec<_>>()
+    );
+
+    // Relevance gate (flag on): the Redmond row (coverage 1/2) is dropped, only
+    // the Belgrade row (coverage 2/2) reaches the LLM.
+    let on = crw_search::transform_flat_reranked(&resp(rows), q, 5, true);
+    assert_eq!(
+        on.len(),
+        1,
+        "relevance gate must keep only the full-match row"
+    );
+    assert!(
+        on[0].url.contains("tripadvisor") && on[0].url.to_lowercase().contains("belgrade"),
+        "expected the Belgrade pizza row, got: {:?}",
+        on[0].url
+    );
+    assert!(
+        !on.iter().any(|r| r.url.to_lowercase().contains("redmond")),
+        "Redmond homonym must not survive the relevance gate"
+    );
+}
+
+#[test]
+fn relevance_gate_is_degrade_safe_when_no_full_match() {
+    // When NO row covers more terms than the others (here every row matches
+    // only "pizza", none match "belgrade"), the gate must not empty the pool —
+    // it degrades to the same set the default path would return.
+    let rows = vec![
+        make_row(
+            "https://example-a.com/pizza",
+            "Great Pizza Places",
+            "pizza near you",
+            9.0,
+        ),
+        make_row(
+            "https://example-b.com/pizza",
+            "More Pizza Spots",
+            "pizza delivery",
+            5.0,
+        ),
+    ];
+    let q = "best pizza in the belgrade";
+    let on = crw_search::transform_flat_reranked(&resp(rows), q, 5, true);
+    assert_eq!(
+        on.len(),
+        2,
+        "relevance gate must never empty a non-empty pool when there is no strictly-better-covered row"
+    );
 }
