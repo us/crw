@@ -24,6 +24,9 @@ pub struct V2BatchStartResponse {
     pub success: bool,
     pub id: String,
     pub url: String,
+    // Firecrawl spells this `invalidURLs` (capital URL); camelCase would give
+    // `invalidUrls`, which the SDK's key-based normalization wouldn't match.
+    #[serde(rename = "invalidURLs")]
     pub invalid_urls: Vec<String>,
 }
 

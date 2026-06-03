@@ -34,7 +34,12 @@ def main() -> None:
             print(f"[FAIL] {name}: {e}")
 
     check("scrape", lambda: app.scrape("https://example.com", formats=["markdown"]))
-    check("map", lambda: app.map("https://firecrawl.dev", limit=10))
+    # Use a tiny, deterministic target — a large site can exceed the engine's
+    # map discovery budget (120s) and time out for reasons unrelated to shape.
+    check("map", lambda: app.map("https://example.com", limit=10))
+    # Note: search needs a SearXNG backend (CRW_SEARCH__SEARXNG_URL) and extract
+    # needs an LLM (CRW_EXTRACTION__LLM__*); without them the engine returns a
+    # graceful disabled/failed status that the SDK still parses without error.
     check("search", lambda: app.search("firecrawl", limit=3))
     check("crawl", lambda: app.crawl("https://example.com", limit=3))
     check("batch_scrape", lambda: app.batch_scrape(["https://example.com"], formats=["markdown"]))
