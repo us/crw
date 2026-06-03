@@ -312,6 +312,29 @@ pub struct SearchConfig {
     /// a fact not already present — near-zero INCORRECT exposure. Default false.
     #[serde(default)]
     pub snippet_fallback: bool,
+    /// Relevance gate for the LLM answer / summarize re-rank (gated). After the
+    /// lexical-core junk/coverage/geo filters, keep only the rows that cover the
+    /// MOST important (non-stopword) query terms present in the pool, so a
+    /// partial-match homonym ("best pizza in REDMOND" for "best pizza in
+    /// belgrade", coverage 1/2) is evicted the instant a full-match row
+    /// ("pizza … belgrade", 2/2) is present. Ranks on the query's OWN tokens —
+    /// no geo/country/IP signal — so it holds for self-hosted deployments in any
+    /// region. Monotone-safe (degrade fallback applies first; never empties a
+    /// non-empty pool). Requires `rerank_enabled`. Default false; A/B against
+    /// the frozen rerank benchmark before flip.
+    #[serde(default)]
+    pub rerank_relevance: bool,
+    /// List-format answers for the LLM answer path (gated). When the query has
+    /// list intent ("best/top X in Y", "recommend …", "list of …"), the answer
+    /// prompt's prose directive is swapped for a ranked-list directive so the
+    /// model emits up to 10 named options (`N. <name> — <why>`) instead of a
+    /// 3–6 sentence paragraph. A deterministic classifier (`is_list_intent`)
+    /// decides per query; factual/non-list queries are untouched. The "use ONLY
+    /// sources" grounding, the abstention rule, and the `===CITATIONS===` block
+    /// are preserved (no fabrication, citation moat intact). Default false; A/B
+    /// against the answer-accuracy benchmark before flip.
+    #[serde(default)]
+    pub answer_list_format: bool,
 }
 
 impl Default for SearchConfig {
@@ -335,6 +358,8 @@ impl Default for SearchConfig {
             use_structured_sources: false,
             wikidata_lookup: false,
             snippet_fallback: false,
+            rerank_relevance: false,
+            answer_list_format: false,
         }
     }
 }
