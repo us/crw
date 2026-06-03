@@ -87,6 +87,14 @@ searxng_url = "http://searxng-internal:8080"
 # here (code default is false/gated) so it survives container/compose churn.
 # passage_select stays OFF — cycle-3 over-filtered multi-hop (FRAMES 80%->8%).
 query_expand = true
+# Multi-variant query expansion (recall lever). A/B on a 25-q SimpleQA sample at
+# answerTemperature=0: n=1 -> n=3 lifted accuracy 80%->88% and truthfulness
+# (correct-incorrect) 18->20, fixing retrieval-misses where the answer page only
+# surfaces under an acronym-expanded / keyword-focused rewrite (e.g. a full name
+# completed, an abstain->correct). Fetched concurrently so N rewrites cost ~one
+# extra fetch of wall-clock. Watch hallucination on larger evals — extra recall
+# can occasionally surface a misleading page (1 abstain->wrong observed).
+query_expand_variants = 3
 # Calibrated answer path (the proven over-abstention fix). On a 152-q
 # SimpleQA+NQ+TriviaQA+PopQA+TruthfulQA set it lifted overall 81.6%->~85% with
 # INCORRECT FLAT (the moat held — inverse of cycle-1), abstentions converting
