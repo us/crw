@@ -2,6 +2,57 @@
 
 All notable changes to CRW are documented here.
 
+## [0.11.0](https://github.com/us/crw/compare/v0.10.0...v0.11.0) (2026-06-03)
+
+
+### Features
+
+* **api:** serve /openapi.json and /openapi-3.0.json from crw-server ([3dc79b4](https://github.com/us/crw/commit/3dc79b443b6a41c3f325865aaa6bccdf562fda49))
+* **docs:** ship OpenAPI spec, SKILL.md, and agent-shell ([2145c97](https://github.com/us/crw/commit/2145c977463b8d5577e5cf81d3c4106ea20eddb4))
+* **docs:** wave 1 — API surface unblock for AI agent citations ([9b28090](https://github.com/us/crw/commit/9b2809028cf8c1c666fd94cd9b11dcab50daa633))
+* **docs:** wave 2 — 15-page glossary cluster for AIO citations ([14cd7e1](https://github.com/us/crw/commit/14cd7e1db3f70cbd9dd7da08818b25d1e8688c71))
+* **extract:** wave 2 cache token telemetry + DeepSeek provider tag fix ([1b4f1aa](https://github.com/us/crw/commit/1b4f1aa4eec70657964864f8c7d134150b6e2354))
+* **mcp,cli,docs:** snippet alias + agent-shell polish for benchmark wins ([3472d13](https://github.com/us/crw/commit/3472d1333dd5520a481e226543e6271d940c145f))
+* **monitor:** add feature-gated self-host crw-monitor mode (M6) ([ff732f3](https://github.com/us/crw/commit/ff732f3a31a66cf97746e79f7e4017788841f94a))
+* **monitor:** add stateless change-tracking diff engine + LLM judge ([a078081](https://github.com/us/crw/commit/a07808127762b6d2acf248de65f0cb9d17aad2d6))
+* **monitor:** stateless change-tracking diff engine + LLM judge + self-host monitor ([dc432ce](https://github.com/us/crw/commit/dc432cef74e720afb4e8224bef7647212f220ed7))
+* **renderer:** add chrome_proxy tier + antibot-driven failover ([0e37e30](https://github.com/us/crw/commit/0e37e307b7dbe2bb52b0e4ef5b190fd2c1ec0217))
+* **search:** adaptive multi-round evidence-scout retrieval (gated) ([9dd3224](https://github.com/us/crw/commit/9dd32244eb3d072852f601ddfd538c019074c4b5))
+* **search:** commit-policy answer prompt to cut over-abstention ([#71](https://github.com/us/crw/issues/71)) ([cac7b29](https://github.com/us/crw/commit/cac7b29cbc78f358b3d4cc508ad9d97e250f8483))
+* **search:** gated calibrated-answer path to cut over-abstention ([#78](https://github.com/us/crw/issues/78)) ([a53225d](https://github.com/us/crw/commit/a53225d799082751dfe933b8fb3bae4c16d07a90))
+* **search:** gated page-2 fallback for thin reranked answer pools ([#77](https://github.com/us/crw/issues/77)) ([2a7f0ac](https://github.com/us/crw/commit/2a7f0ac247666e9e360dad4bc0f26da247d4355e))
+* **search:** gated synthesis temperature/seed for deterministic eval ([#81](https://github.com/us/crw/issues/81)) ([52a8c58](https://github.com/us/crw/commit/52a8c58edf3e81c84e8ca8317e46d8ac95a8bf94))
+* **search:** multi-query expansion for the answer path (gated, default off) ([#73](https://github.com/us/crw/issues/73)) ([4e387af](https://github.com/us/crw/commit/4e387afc0f3e979ce21b30842539e7e1b9b774df))
+* **search:** multi-variant query expansion for recall (gated) ([7bd093f](https://github.com/us/crw/commit/7bd093fa674c933b7c4206bbefb32cc2414bb471))
+* **search:** passage-level relevance gate for the answer path (gated, off) ([#75](https://github.com/us/crw/issues/75)) ([43ac625](https://github.com/us/crw/commit/43ac625caf60d49fa6ca6bfa7fdd54ad8a12418e))
+* **search:** RRF re-rank + junk/coverage/geo filter + query cleaning for answer path ([32efee6](https://github.com/us/crw/commit/32efee67ed4e180505de9e2aec05d489adc58a51))
+* **search:** RRF re-rank + junk/coverage/geo filter + query cleaning for answer path ([682fa1c](https://github.com/us/crw/commit/682fa1ccbe26a0cd919a2181831ad1c73b530642))
+* **search:** snippet-fallback (Pattern A) + bake calibrated-answer durable ([#79](https://github.com/us/crw/issues/79)) ([de1b1f1](https://github.com/us/crw/commit/de1b1f1eac4108095b3d6d7bdda97c035666102a))
+* **search:** wave 4 R1+R2 — aggregated llmUsage + per-leg max_tokens (v0.11.0) ([3570f82](https://github.com/us/crw/commit/3570f82e0e1fe00e9851dc405506bdd2f0e04c01))
+* **search:** wave 4 R1+R2 + bump 0.11.0 ([9ebd23d](https://github.com/us/crw/commit/9ebd23d9d658fb07700ffc4a3259fbe079763627))
+* **v2:** add Firecrawl /v2 API surface ([f793ec0](https://github.com/us/crw/commit/f793ec09c8c95dad142022f9579adb4c4e1cceb6))
+
+
+### Bug Fixes
+
+* **antibot:** strip inline data-URIs before classifier deep scan ([6f1cbd2](https://github.com/us/crw/commit/6f1cbd20b98f73df099f72b7ad08e41acada2a7e))
+* **browse:** address outbound hardening review feedback ([a3c2076](https://github.com/us/crw/commit/a3c2076ffdd8024579bf7ab97653816cb5bd3881))
+* **browse:** harden outbound URL handling ([c370972](https://github.com/us/crw/commit/c37097253c7df89a5cedb3ddb79e5c9386f75b1b))
+* **cli:** swap SearXNG default to 127.0.0.1 + actionable error hint ([618d41b](https://github.com/us/crw/commit/618d41b52c3fa0c971eb6c34ea98922f06ea094f))
+* **docker:** include OpenAPI specs in crw-api build context ([f70c7af](https://github.com/us/crw/commit/f70c7af6486a82d6bd86c9a7c1054c410f045877))
+* **docker:** include OpenAPI specs in crw-api build context ([0238138](https://github.com/us/crw/commit/0238138f832a507a70ed411d96ec0143cbb7333e))
+* **docs:** add 2 missing Firecrawl-shape shims caught by sapient ([22b3d54](https://github.com/us/crw/commit/22b3d5482ca224d0eebd76a795ed8428f108d080))
+* **extract:** accept deepseek/openai-compatible providers in structured extract ([2f0d86d](https://github.com/us/crw/commit/2f0d86d5245c24d388671299beb5acd76458c4ca))
+* **search:** default reranker to the proven lexical core ([#69](https://github.com/us/crw/issues/69)) ([06585b6](https://github.com/us/crw/commit/06585b60abd2093288e520157369f16286fd2737))
+* **search:** point engine at searxng-internal alias (search_rpc-only) ([#70](https://github.com/us/crw/issues/70)) ([110aee7](https://github.com/us/crw/commit/110aee729624b42d71b6f219f52dadd6d6bc6ddb))
+* **v2:** batch status mutates state in place (no O(n^2) snapshot copy) ([c03d359](https://github.com/us/crw/commit/c03d359cfdfc2b2cf4d9603cccff7a08e6c54c69))
+* **v2:** emit invalidURLs (not invalidUrls) on batch start ([611c54d](https://github.com/us/crw/commit/611c54ded77aaa962cb76ff504c11310c7005825))
+
+
+### Performance
+
+* **search:** calibrated answer top_n 8-&gt;5 (4x faster, accuracy holds) ([#80](https://github.com/us/crw/issues/80)) ([751f8ee](https://github.com/us/crw/commit/751f8ee160d28b84d352e533864ca4043793d294))
+
 ## [0.10.0](https://github.com/us/crw/compare/v0.9.1...v0.10.0) (2026-05-20)
 
 
