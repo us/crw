@@ -153,6 +153,11 @@ enabled = true
 timeout_ms = 15000
 default_limit = 5
 max_limit = 20
+# W0 (gated, default false): pin SearXNG infoboxes[]/answers[] (Wikidata/Wikipedia
+# structured facts the results[] path discards) at the front of the answer pool.
+# Still UNTRUSTED-wrapped. Flip with CRW_SEARCH__USE_STRUCTURED_SOURCES=true after
+# the diag500 re-baseline. See crates/crw-search/src/structured.rs.
+# use_structured_sources = false
 # Engines invoked when the request includes `categories: ["research"]`.
 research_engines = ["arxiv", "crossref", "google scholar", "semantic scholar"]
 # Engines invoked when the request includes `categories: ["github"]`.

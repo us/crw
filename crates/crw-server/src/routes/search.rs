@@ -209,6 +209,21 @@ pub async fn search_inner(
         SearchData::Flat(transform_flat(&response, limit))
     };
 
+    // W0: parse SearXNG's infoboxes[]/answers[] (Wikidata/Wikipedia structured
+    // facts the results[] transform discards) into pinned answer sources. Gated
+    // default-off; empty when the flag is off or no structured data was returned.
+    let structured_sources: Vec<answer::Source> = if state.config.search.use_structured_sources {
+        crw_search::structured_facts(&response)
+            .into_iter()
+            .map(|f| {
+                let md = f.to_markdown();
+                (f.url, f.title, md)
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+
     // Page-2 fallback (gated, default-off): when the reranked clean pool came
     // back thinner than the answer needs (junk filter stripped a sparse first
     // page), fetch the SAME query's page 2 ONCE, union it in (dedup by URL like
@@ -368,6 +383,7 @@ pub async fn search_inner(
                         state.config.search.answer_calibrated,
                         state.config.search.snippet_fallback,
                         state.config.search.answer_guarded,
+                        &structured_sources,
                     )
                     .await
                     {
@@ -434,6 +450,7 @@ pub async fn search_inner(
                                             state.config.search.answer_calibrated,
                                             state.config.search.snippet_fallback,
                                             state.config.search.answer_guarded,
+                                            &structured_sources,
                                         )
                                         .await
                                     && !is_abstention(&ans2)
@@ -665,6 +682,7 @@ async fn attach_result_summaries(
     (count, usages)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn synthesize_answer(
     req: &SearchRequest,
     data: &SearchData,
@@ -673,6 +691,8 @@ async fn synthesize_answer(
     calibrated: bool,
     snippet_fallback: bool,
     guarded: bool,
+    // W0: structured facts (infoboxes/answers) to PIN at the front of the pool.
+    structured: &[answer::Source],
 ) -> Result<
     (
         String,
@@ -707,7 +727,7 @@ async fn synthesize_answer(
             None => return Err("no web results to synthesize from".into()),
         },
     };
-    let sources: Vec<answer::Source> = pool
+    let scraped: Vec<answer::Source> = pool
         .iter()
         .filter_map(|r| {
             if let Some(md) = r.markdown.as_ref() {
@@ -729,6 +749,14 @@ async fn synthesize_answer(
         })
         .take(top_n)
         .collect();
+    // W0: PIN structured facts (Wikidata/Wikipedia infobox/answers) at the front
+    // so the synthesizer sees them first. They are still UNTRUSTED-wrapped by
+    // `answer::synthesize` — this widens evidence, it does not bypass safety.
+    let sources: Vec<answer::Source> = if structured.is_empty() {
+        scraped
+    } else {
+        structured.iter().cloned().chain(scraped).collect()
+    };
     if sources.is_empty() {
         return Err("no results carry markdown to synthesize an answer from".into());
     }
