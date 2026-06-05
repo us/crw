@@ -294,6 +294,15 @@ docker run -p 3000:3000 ghcr.io/us/crw:latest
 cd crw
 docker compose up
 </code></pre>
+<blockquote>
+<p><strong>Build memory.</strong> The <code>crw</code> image builds from source with a release LTO link
+(<code>-C lto -C codegen-units=1</code> in the release profile), which is memory-hungry.
+Give Docker <strong>≥ 8 GB RAM</strong> for the build — on a 4 GB Docker VM the final
+<code>crw-server</code> link gets OOM-killed (<code>failed to solve: ResourceExhausted: cannot allocate memory</code>). If you&#39;re capped at 4 GB, serialize the build so only one
+codegen unit links at a time: <code>CARGO_BUILD_JOBS=1 docker compose build crw</code>,
+then <code>docker compose up -d</code>. This is a one-time build cost — the runtime image
+is small.</p>
+</blockquote>
 <p>The bundled <code>docker-compose.yml</code> starts these services:</p>
 <table>
 <thead>

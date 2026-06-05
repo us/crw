@@ -19,6 +19,15 @@ cd crw
 docker compose up
 ```
 
+> **Build memory.** The `crw` image builds from source with a release LTO link
+> (`-C lto -C codegen-units=1` in the release profile), which is memory-hungry.
+> Give Docker **≥ 8 GB RAM** for the build — on a 4 GB Docker VM the final
+> `crw-server` link gets OOM-killed (`failed to solve: ResourceExhausted: cannot
+> allocate memory`). If you're capped at 4 GB, serialize the build so only one
+> codegen unit links at a time: `CARGO_BUILD_JOBS=1 docker compose build crw`,
+> then `docker compose up -d`. This is a one-time build cost — the runtime image
+> is small.
+
 The bundled `docker-compose.yml` starts these services:
 
 | Service | Port | Default? | Description |
