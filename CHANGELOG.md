@@ -2,6 +2,14 @@
 
 All notable changes to CRW are documented here.
 
+## [0.12.1](https://github.com/us/crw/compare/v0.12.0...v0.12.1) (2026-06-05)
+
+
+### Bug Fixes
+
+* **release:** bump internal dep pins and track them in release config ([0139ec2](https://github.com/us/crw/commit/0139ec247c7f328ef172646eac3de5e0f287c42a))
+* **release:** sync Cargo.lock with bumped internal dep versions ([5c89d60](https://github.com/us/crw/commit/5c89d6037e32435a49cfd4fbdf1c2ba05ad83ae8))
+
 ## [0.12.0](https://github.com/us/crw/compare/v0.11.0...v0.12.0) (2026-06-05)
 
 
