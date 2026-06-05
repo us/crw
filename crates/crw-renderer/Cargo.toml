@@ -16,7 +16,7 @@ auto-browser = ["dep:dirs"]
 
 [dependencies]
 crw-core = { path = "../crw-core", version = "0.12.0" }
-crw-extract = { path = "../crw-extract", version = "0.11.0" }
+crw-extract = { path = "../crw-extract", version = "0.12.0" }
 reqwest = { workspace = true }
 tokio = { workspace = true }
 tokio-tungstenite = { version = "0.28", features = ["rustls-tls-native-roots"], optional = true }

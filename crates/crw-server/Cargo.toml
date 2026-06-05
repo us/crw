@@ -20,13 +20,13 @@ monitor = ["dep:crw-monitor"]
 
 [dependencies]
 crw-core = { path = "../crw-core", version = "0.12.0" }
-crw-diff = { path = "../crw-diff", version = "0.11.0" }
+crw-diff = { path = "../crw-diff", version = "0.12.0" }
 crw-renderer = { path = "../crw-renderer", version = "0.12.0" }
 crw-extract = { path = "../crw-extract", version = "0.12.0" }
 crw-crawl = { path = "../crw-crawl", version = "0.12.0" }
 crw-search = { path = "../crw-search", version = "0.12.0" }
 # Optional self-host monitor mode (default OFF — see the `monitor` feature).
-crw-monitor = { path = "../crw-monitor", version = "0.11.0", optional = true }
+crw-monitor = { path = "../crw-monitor", version = "0.12.0", optional = true }
 axum = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }

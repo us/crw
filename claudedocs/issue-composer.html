@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CRW Issue Composer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2128;
+    --border: #30363d;
+    --border-focus: #58a6ff;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --accent-hover: #79c0ff;
+    --green: #3fb950;
+    --red: #f85149;
+    --orange: #d29922;
+    --purple: #bc8cff;
+    --label-bg: rgba(88,166,255,0.15);
+    --radius: 6px;
+    --mono: 'SFMono-Regular', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  /* ── Layout ─────────────────────────────── */
+  .app {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  header h1 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  header h1 span { color: var(--text-muted); font-weight: 400; }
+
+  .header-actions { display: flex; gap: 8px; align-items: center; }
+
+  .main-area {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    overflow: hidden;
+  }
+
+  .main-area.edit-only { grid-template-columns: 1fr 0fr; }
+  .main-area.preview-only { grid-template-columns: 0fr 1fr; }
+  .main-area.edit-only .preview-pane { display: none; }
+  .main-area.preview-only .edit-pane { display: none; }
+
+  /* ── Edit pane ──────────────────────────── */
+  .edit-pane {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .field-group {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .field-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+
+  .field-group input[type="text"] {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    padding: 8px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .field-group input[type="text"]:focus {
+    border-color: var(--border-focus);
+  }
+
+  .labels-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .label-chip {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 2px 10px;
+    border-radius: 12px;
+    cursor: pointer;
+    user-select: none;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+    opacity: 0.45;
+  }
+
+  .label-chip.active { opacity: 1; }
+
+  .label-chip[data-color="red"]    { background: rgba(248,81,73,0.2); color: #f85149; border-color: rgba(248,81,73,0.3); }
+  .label-chip[data-color="orange"] { background: rgba(210,153,34,0.2); color: #d29922; border-color: rgba(210,153,34,0.3); }
+  .label-chip[data-color="green"]  { background: rgba(63,185,80,0.2); color: #3fb950; border-color: rgba(63,185,80,0.3); }
+  .label-chip[data-color="blue"]   { background: rgba(88,166,255,0.15); color: #58a6ff; border-color: rgba(88,166,255,0.25); }
+  .label-chip[data-color="purple"] { background: rgba(188,140,255,0.15); color: #bc8cff; border-color: rgba(188,140,255,0.25); }
+
+  .body-editor-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0 16px 12px;
+  }
+
+  .body-editor-wrap label { padding-top: 12px; padding-bottom: 6px; }
+
+  #issue-body {
+    flex: 1;
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 12px;
+    resize: none;
+    outline: none;
+    tab-size: 2;
+    transition: border-color 0.15s;
+  }
+
+  #issue-body:focus { border-color: var(--border-focus); }
+
+  /* ── Preview pane ───────────────────────── */
+  .preview-pane {
+    overflow-y: auto;
+    padding: 24px 32px;
+    background: var(--bg);
+  }
+
+  .preview-title {
+    font-size: 28px;
+    font-weight: 600;
+    line-height: 1.3;
+    margin-bottom: 8px;
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 12px;
+  }
+
+  .preview-labels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+
+  .preview-label {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 2px 10px;
+    border-radius: 12px;
+  }
+
+  .preview-body { font-size: 14px; line-height: 1.7; color: var(--text); }
+  .preview-body h1 { font-size: 24px; margin: 24px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .preview-body h2 { font-size: 20px; margin: 20px 0 10px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+  .preview-body h3 { font-size: 16px; margin: 16px 0 8px; }
+  .preview-body p { margin: 8px 0; }
+  .preview-body ul, .preview-body ol { margin: 8px 0; padding-left: 24px; }
+  .preview-body li { margin: 4px 0; }
+  .preview-body li > ul, .preview-body li > ol { margin: 2px 0; }
+  .preview-body strong { font-weight: 600; }
+  .preview-body em { font-style: italic; }
+
+  .preview-body code {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: rgba(110,118,129,0.15);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  .preview-body pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    overflow-x: auto;
+    margin: 12px 0;
+  }
+
+  .preview-body pre code {
+    background: none;
+    padding: 0;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .preview-body blockquote {
+    border-left: 3px solid var(--border);
+    padding-left: 16px;
+    color: var(--text-muted);
+    margin: 12px 0;
+  }
+
+  .preview-body a { color: var(--accent); text-decoration: none; }
+  .preview-body a:hover { text-decoration: underline; }
+
+  .preview-body hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 16px 0;
+  }
+
+  .preview-body table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 12px 0;
+  }
+
+  .preview-body th, .preview-body td {
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    text-align: left;
+    font-size: 13px;
+  }
+
+  .preview-body th { background: var(--surface); font-weight: 600; }
+
+  .preview-body .task-list-item {
+    list-style: none;
+    margin-left: -20px;
+  }
+
+  .preview-body .task-list-item input[type="checkbox"] {
+    margin-right: 6px;
+  }
+
+  /* ── Footer / output ────────────────────── */
+  footer {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  footer .stats {
+    font-size: 12px;
+    color: var(--text-muted);
+    flex: 1;
+  }
+
+  /* ── Buttons ────────────────────────────── */
+  .btn {
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 6px 14px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .btn:hover { border-color: var(--text-muted); }
+
+  .btn.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+
+  .btn.primary {
+    background: var(--green);
+    color: #fff;
+    border-color: var(--green);
+    font-weight: 600;
+  }
+
+  .btn.primary:hover { background: #46c25a; }
+
+  .btn-group {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .btn-group .btn {
+    border: none;
+    border-radius: 0;
+    border-right: 1px solid var(--border);
+  }
+
+  .btn-group .btn:last-child { border-right: none; }
+
+  .copy-feedback {
+    font-size: 12px;
+    color: var(--green);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .copy-feedback.show { opacity: 1; }
+
+  /* ── Preset bar ─────────────────────────── */
+  .preset-bar {
+    padding: 8px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+    overflow-x: auto;
+  }
+
+  .preset-bar span { font-weight: 600; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <header>
+    <h1>Issue Composer <span>-- CRW Security</span></h1>
+    <div class="header-actions">
+      <div class="btn-group">
+        <button class="btn active" data-view="split" onclick="setView('split')">Split</button>
+        <button class="btn" data-view="edit" onclick="setView('edit')">Edit</button>
+        <button class="btn" data-view="preview" onclick="setView('preview')">Preview</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Presets -->
+  <div class="preset-bar">
+    <span>Presets:</span>
+    <button class="btn" onclick="loadPreset('full')">Full (both fixes)</button>
+    <button class="btn" onclick="loadPreset('goto-only')">goto SSRF only</button>
+    <button class="btn" onclick="loadPreset('screenshot-only')">screenshot path only</button>
+    <button class="btn" onclick="loadPreset('minimal')">Minimal</button>
+  </div>
+
+  <!-- Main -->
+  <div class="main-area" id="main-area">
+
+    <!-- Edit pane -->
+    <div class="edit-pane">
+      <div class="field-group">
+        <label>Title</label>
+        <input type="text" id="issue-title" oninput="updateAll()" />
+      </div>
+      <div class="field-group">
+        <label>Labels</label>
+        <div class="labels-row" id="labels-row"></div>
+      </div>
+      <div class="body-editor-wrap">
+        <label>Body (Markdown)</label>
+        <textarea id="issue-body" oninput="updateAll()" spellcheck="false"></textarea>
+      </div>
+    </div>
+
+    <!-- Preview pane -->
+    <div class="preview-pane">
+      <div class="preview-title" id="preview-title"></div>
+      <div class="preview-labels" id="preview-labels"></div>
+      <div class="preview-body" id="preview-body"></div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <div class="stats" id="stats"></div>
+    <span class="copy-feedback" id="copy-feedback">Copied!</span>
+    <button class="btn" onclick="copyMarkdown()">Copy Markdown</button>
+    <button class="btn primary" onclick="copyFull()">Copy Full Issue</button>
+  </footer>
+
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────
+
+const LABELS = [
+  { name: 'security',      color: 'red' },
+  { name: 'bug',            color: 'orange' },
+  { name: 'enhancement',    color: 'green' },
+  { name: 'browse-mode',    color: 'blue' },
+  { name: 'good first issue', color: 'purple' },
+];
+
+const state = {
+  title: '',
+  body: '',
+  labels: new Set(),
+  view: 'split',
+};
+
+// ── Presets ────────────────────────────────────────
+
+const PRESETS = {
+  'full': {
+    title: 'security: apply SSRF protection and path validation to browse mode',
+    labels: ['security', 'enhancement', 'browse-mode'],
+    body: `## Summary
+
+The browse mode MCP server (\`crw browse\`) currently has weaker input validation than the REST API server. Two gaps were identified during a security review:
+
+1. **\`goto\` tool does not block private/internal IPs** -- it validates URL schemes (correctly blocking \`file://\`, \`javascript:\`, etc.) but does not call \`validate_safe_url()\` to block loopback, private RFC 1918, link-local, and cloud metadata addresses.
+2. **\`screenshot\` tool writes to arbitrary file paths** -- accepts any path the process user can write to. A path length cap (1024 bytes) exists, but there is no directory scoping or path traversal prevention.
+
+The REST API (\`/v1/scrape\`, \`/v1/crawl\`, \`/v1/map\`, \`/v1/search\`, \`/mcp\`) correctly applies \`validate_safe_url()\` on all entry points and redirect hops. Browse mode should have the same guardrails.
+
+## Affected files
+
+| File | Issue |
+|------|-------|
+| \`crates/crw-browse/src/tools/goto.rs\` | \`validate_goto_url()\` checks scheme only, does not call \`validate_safe_url()\` |
+| \`crates/crw-browse/src/tools/screenshot.rs\` | Accepts arbitrary \`path\` parameter for file write (length-capped at 1024 bytes, but no directory scoping or traversal prevention) |
+| \`crates/crw-core/src/url_safety.rs\` | Contains \`validate_safe_url()\` -- already used by server routes |
+
+## Risk
+
+A prompt-injected AI agent connected via MCP could:
+- Navigate the browser to \`http://169.254.169.254/latest/meta-data/\` (cloud metadata -- reachable when the browser runs on the host or with \`--network=host\`; Docker bridge networking typically blocks link-local routing)
+- Navigate to \`http://localhost:<port>\` (local services)
+- Navigate to \`http://10.x.x.x/\` or \`http://192.168.x.x/\` (internal network)
+- Combined with the \`evaluate\` and \`storage\` tools, extract page content, cookies, and localStorage from internal endpoints
+- Write screenshot files to sensitive paths
+
+For self-hosted users running CRW locally, the browser container can reach the host network. In rootless container setups the blast radius is smaller but not eliminated.
+
+## Proposed fix
+
+### 1. goto SSRF protection
+
+In \`crates/crw-browse/src/tools/goto.rs\`, add \`validate_safe_url()\` to \`validate_goto_url()\`:
+
+\`\`\`rust
+pub(crate) fn validate_goto_url(url: &str) -> Result<(), String> {
+    let parsed = url::Url::parse(url).map_err(|e| format!("invalid url: {e}"))?;
+    let scheme = parsed.scheme();
+    if !ALLOWED_GOTO_SCHEMES.contains(&scheme) {
+        return Err(format!(
+            "scheme {scheme:?} not allowed -- goto accepts http or https only"
+        ));
+    }
+    // Block private/loopback/metadata IPs
+    crw_core::url_safety::validate_safe_url(&parsed)
+        .map_err(|e| format!("blocked: {e}"))?;
+    Ok(())
+}
+\`\`\`
+
+### 2. Screenshot path restriction
+
+In \`crates/crw-browse/src/tools/screenshot.rs\`, validate that the output path is within a configurable output directory (defaulting to the current working directory) and reject path traversal:
+
+- Canonicalize the path and verify it starts with the allowed prefix
+- Reject paths containing \`../\` segments before canonicalization
+- Reject symlinks at the target location
+
+### 3. Tests
+
+Add tests mirroring the existing \`crates/crw-server/tests/security.rs\` patterns:
+- \`goto\` rejects \`http://127.0.0.1\`, \`http://169.254.169.254\`, \`http://10.0.0.1\`, \`http://[::1]\`
+- \`goto\` still allows \`http://example.com\`, \`https://github.com\`
+- \`screenshot\` rejects paths outside the allowed directory
+- \`screenshot\` rejects \`../\` traversal
+
+## Context
+
+The \`crw-browse\` crate currently has zero references to \`validate_safe_url\` or \`url_safety\`. The server crate applies it consistently across all route handlers. This appears to be an oversight rather than a deliberate design decision, since the scheme validation in \`goto.rs\` shows security intent was present during development.
+`,
+  },
+  'goto-only': {
+    title: 'security: apply SSRF protection to browse mode goto handler',
+    labels: ['security', 'browse-mode'],
+    body: `## Summary
+
+The browse mode MCP server's \`goto\` tool validates URL schemes (blocking \`file://\`, \`javascript:\`, etc.) but does not call \`validate_safe_url()\` to block private, loopback, link-local, and cloud metadata IP addresses.
+
+The REST API applies \`validate_safe_url()\` consistently on all five route handlers and redirect hops. Browse mode should do the same.
+
+## Affected file
+
+\`crates/crw-browse/src/tools/goto.rs\` -- \`validate_goto_url()\` checks scheme only.
+
+The fix is to add a call to \`crw_core::url_safety::validate_safe_url(&parsed)\` after the existing scheme check.
+
+## Risk
+
+A prompt-injected AI agent could navigate the browser to internal addresses (\`http://169.254.169.254\`, \`http://localhost:*\`, \`http://10.x.x.x\`) and extract content via the \`evaluate\` or \`storage\` tools.
+
+## Proposed fix
+
+\`\`\`rust
+// In validate_goto_url(), after the scheme check:
+crw_core::url_safety::validate_safe_url(&parsed)
+    .map_err(|e| format!("blocked: {e}"))?;
+\`\`\`
+
+Add tests mirroring \`crates/crw-server/tests/security.rs\`: reject loopback, private ranges, and link-local; allow public addresses.
+`,
+  },
+  'screenshot-only': {
+    title: 'security: restrict screenshot tool file write paths in browse mode',
+    labels: ['security', 'browse-mode'],
+    body: `## Summary
+
+The browse mode \`screenshot\` tool accepts an arbitrary file path parameter and writes image bytes to it. A path length cap (1024 bytes) exists, but there is no directory scoping or path traversal prevention.
+
+## Affected file
+
+\`crates/crw-browse/src/tools/screenshot.rs\` -- the \`path\` field is written to directly via \`tokio::fs::write()\`.
+
+## Risk
+
+An AI agent (or a prompt-injected one) could write files to sensitive locations. While the content is binary image data, overwriting important files (configs, scripts) could cause denial of service.
+
+## Proposed fix
+
+- Restrict writes to a configurable output directory (default: current working directory or a temp dir)
+- Canonicalize the path and verify it stays within the allowed prefix
+- Reject paths containing \`../\` traversal segments
+- Reject symlinks at the target
+`,
+  },
+  'minimal': {
+    title: 'security: harden browse mode input validation',
+    labels: ['security', 'enhancement'],
+    body: `## Summary
+
+Browse mode (\`crw browse\`) should apply the same SSRF protections as the REST API.
+
+- \`goto\` tool: add \`validate_safe_url()\` call (blocks private IPs, loopback, metadata endpoints)
+- \`screenshot\` tool: restrict file write paths to a safe output directory
+
+See \`crates/crw-core/src/url_safety.rs\` for the existing validation function used by all server routes.
+`,
+  },
+};
+
+// ── Init ──────────────────────────────────────────
+
+function init() {
+  renderLabels();
+  loadPreset('full');
+}
+
+function renderLabels() {
+  const row = document.getElementById('labels-row');
+  row.innerHTML = LABELS.map(l =>
+    `<span class="label-chip" data-color="${l.color}" data-name="${l.name}" onclick="toggleLabel('${l.name}')">${l.name}</span>`
+  ).join('');
+}
+
+function toggleLabel(name) {
+  if (state.labels.has(name)) state.labels.delete(name);
+  else state.labels.add(name);
+  updateAll();
+}
+
+function loadPreset(key) {
+  const p = PRESETS[key];
+  state.title = p.title;
+  state.labels = new Set(p.labels);
+  state.body = p.body;
+  document.getElementById('issue-title').value = state.title;
+  document.getElementById('issue-body').value = state.body;
+  updateAll();
+}
+
+// ── View toggle ───────────────────────────────────
+
+function setView(v) {
+  state.view = v;
+  const main = document.getElementById('main-area');
+  main.className = 'main-area' + (v === 'edit' ? ' edit-only' : v === 'preview' ? ' preview-only' : '');
+  document.querySelectorAll('[data-view]').forEach(b => {
+    b.classList.toggle('active', b.dataset.view === v);
+  });
+}
+
+// ── Update ────────────────────────────────────────
+
+function updateAll() {
+  state.title = document.getElementById('issue-title').value;
+  state.body = document.getElementById('issue-body').value;
+
+  // Label chips
+  document.querySelectorAll('.label-chip').forEach(c => {
+    c.classList.toggle('active', state.labels.has(c.dataset.name));
+  });
+
+  // Preview title
+  document.getElementById('preview-title').textContent = state.title || 'Untitled Issue';
+
+  // Preview labels
+  const plabels = document.getElementById('preview-labels');
+  plabels.innerHTML = [...state.labels].map(name => {
+    const l = LABELS.find(x => x.name === name);
+    const chip = document.createElement('span');
+    chip.className = 'label-chip active';
+    chip.dataset.color = l ? l.color : 'blue';
+    chip.textContent = name;
+    return chip.outerHTML;
+  }).join('');
+
+  // Preview body
+  document.getElementById('preview-body').innerHTML = renderMarkdown(state.body);
+
+  // Stats
+  const lines = state.body.split('\n').length;
+  const chars = state.body.length;
+  document.getElementById('stats').textContent =
+    `${lines} line${lines !== 1 ? 's' : ''} | ${chars} char${chars !== 1 ? 's' : ''} | ${state.labels.size} label${state.labels.size !== 1 ? 's' : ''}`;
+}
+
+// ── Markdown renderer (no dependencies) ───────────
+
+function renderMarkdown(md) {
+  if (!md) return '<p style="color:var(--text-muted)">Start typing in the editor...</p>';
+
+  let html = escapeHtml(md);
+
+  // Code blocks (fenced)
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+    return `<pre><code class="language-${lang}">${code.trim()}</code></pre>`;
+  });
+
+  // Inline code
+  html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+
+  // Headers
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+  // Bold and italic
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+  // Horizontal rule
+  html = html.replace(/^---$/gm, '<hr>');
+
+  // Tables
+  html = html.replace(/^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)*)/gm, (_, headerLine, sepLine, bodyLines) => {
+    const headers = headerLine.split('|').filter(c => c.trim()).map(c => `<th>${c.trim()}</th>`).join('');
+    const rows = bodyLines.trim().split('\n').map(row => {
+      const cells = row.split('|').filter(c => c.trim()).map(c => `<td>${c.trim()}</td>`).join('');
+      return `<tr>${cells}</tr>`;
+    }).join('');
+    return `<table><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table>`;
+  });
+
+  // Task lists
+  html = html.replace(/^- \[x\] (.+)$/gm, '<li class="task-list-item"><input type="checkbox" checked disabled> $1</li>');
+  html = html.replace(/^- \[ \] (.+)$/gm, '<li class="task-list-item"><input type="checkbox" disabled> $1</li>');
+
+  // Unordered lists (handle nested)
+  html = html.replace(/^(\s*)- (.+)$/gm, (_, indent, content) => {
+    return `${indent}<li>${content}</li>`;
+  });
+
+  // Wrap consecutive <li> in <ul>
+  html = html.replace(/((?:<li[^>]*>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
+
+  // Blockquotes
+  html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
+  html = html.replace(/<\/blockquote>\n<blockquote>/g, '\n');
+
+  // Links
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+
+  // Paragraphs (wrap remaining bare lines)
+  html = html.replace(/^(?!<[a-z/])((?!^\s*$).+)$/gm, '<p>$1</p>');
+
+  // Clean up extra blank lines
+  html = html.replace(/\n{3,}/g, '\n\n');
+
+  return html;
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ── Copy ──────────────────────────────────────────
+
+function copyMarkdown() {
+  navigator.clipboard.writeText(state.body).then(flashCopied);
+}
+
+function copyFull() {
+  const labels = state.labels.size > 0 ? `Labels: ${[...state.labels].join(', ')}\n\n` : '';
+  const full = `# ${state.title}\n\n${labels}${state.body}`;
+  navigator.clipboard.writeText(full).then(flashCopied);
+}
+
+function flashCopied() {
+  const el = document.getElementById('copy-feedback');
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 1500);
+}
+
+// ── Boot ──────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
