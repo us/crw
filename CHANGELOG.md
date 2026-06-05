@@ -2,6 +2,21 @@
 
 All notable changes to CRW are documented here.
 
+## [0.12.0](https://github.com/us/crw/compare/v0.11.0...v0.12.0) (2026-06-05)
+
+
+### Features
+
+* **answer:** gated moat-hardening abstention (answer_guarded) ([7ef7f32](https://github.com/us/crw/commit/7ef7f32c085f4e01429b4afa6794c52836cdd4e6))
+* **mcp:** emit structuredContent for crw_search; bump protocol to 2025-06-18 ([0cd9a4f](https://github.com/us/crw/commit/0cd9a4fa0e338683b75c5719bc3c54cca3b2dba6)), closes [#89](https://github.com/us/crw/issues/89)
+* **search:** diagnose search config and name unreachable host ([#90](https://github.com/us/crw/issues/90)) ([25f9441](https://github.com/us/crw/commit/25f94410869e24cb79a7835e2f05627d0eb07351))
+* **search:** pin SearXNG infoboxes/answers as structured sources (W0) ([554f18c](https://github.com/us/crw/commit/554f18ce4747057a04ec64f9f983faf46a48dee2))
+
+
+### Bug Fixes
+
+* **search:** use resolvable searxng host in docker config ([#90](https://github.com/us/crw/issues/90)) ([d966021](https://github.com/us/crw/commit/d9660219d23bdd4364940c97c9911dd31e73567b))
+
 ## [0.11.0](https://github.com/us/crw/compare/v0.10.0...v0.11.0) (2026-06-03)
 
 
