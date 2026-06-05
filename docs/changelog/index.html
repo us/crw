@@ -288,6 +288,53 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 The source of truth is the repository root changelog. Do not edit this docs page manually.
 :::</p>
 <p>All notable changes to CRW are documented here.</p>
+<h2><a href="https://github.com/us/crw/compare/v0.10.0...v0.11.0">0.11.0</a> (2026-06-03)</h2>
+<h3>Features</h3>
+<ul>
+<li><strong>api:</strong> serve /openapi.json and /openapi-3.0.json from crw-server (<a href="https://github.com/us/crw/commit/3dc79b443b6a41c3f325865aaa6bccdf562fda49">3dc79b4</a>)</li>
+<li><strong>docs:</strong> ship OpenAPI spec, SKILL.md, and agent-shell (<a href="https://github.com/us/crw/commit/2145c977463b8d5577e5cf81d3c4106ea20eddb4">2145c97</a>)</li>
+<li><strong>docs:</strong> wave 1 — API surface unblock for AI agent citations (<a href="https://github.com/us/crw/commit/9b2809028cf8c1c666fd94cd9b11dcab50daa633">9b28090</a>)</li>
+<li><strong>docs:</strong> wave 2 — 15-page glossary cluster for AIO citations (<a href="https://github.com/us/crw/commit/14cd7e1db3f70cbd9dd7da08818b25d1e8688c71">14cd7e1</a>)</li>
+<li><strong>extract:</strong> wave 2 cache token telemetry + DeepSeek provider tag fix (<a href="https://github.com/us/crw/commit/1b4f1aa4eec70657964864f8c7d134150b6e2354">1b4f1aa</a>)</li>
+<li><strong>mcp,cli,docs:</strong> snippet alias + agent-shell polish for benchmark wins (<a href="https://github.com/us/crw/commit/3472d1333dd5520a481e226543e6271d940c145f">3472d13</a>)</li>
+<li><strong>monitor:</strong> add feature-gated self-host crw-monitor mode (M6) (<a href="https://github.com/us/crw/commit/ff732f3a31a66cf97746e79f7e4017788841f94a">ff732f3</a>)</li>
+<li><strong>monitor:</strong> add stateless change-tracking diff engine + LLM judge (<a href="https://github.com/us/crw/commit/a07808127762b6d2acf248de65f0cb9d17aad2d6">a078081</a>)</li>
+<li><strong>monitor:</strong> stateless change-tracking diff engine + LLM judge + self-host monitor (<a href="https://github.com/us/crw/commit/dc432cef74e720afb4e8224bef7647212f220ed7">dc432ce</a>)</li>
+<li><strong>renderer:</strong> add chrome_proxy tier + antibot-driven failover (<a href="https://github.com/us/crw/commit/0e37e307b7dbe2bb52b0e4ef5b190fd2c1ec0217">0e37e30</a>)</li>
+<li><strong>search:</strong> adaptive multi-round evidence-scout retrieval (gated) (<a href="https://github.com/us/crw/commit/9dd32244eb3d072852f601ddfd538c019074c4b5">9dd3224</a>)</li>
+<li><strong>search:</strong> commit-policy answer prompt to cut over-abstention (<a href="https://github.com/us/crw/issues/71">#71</a>) (<a href="https://github.com/us/crw/commit/cac7b29cbc78f358b3d4cc508ad9d97e250f8483">cac7b29</a>)</li>
+<li><strong>search:</strong> gated calibrated-answer path to cut over-abstention (<a href="https://github.com/us/crw/issues/78">#78</a>) (<a href="https://github.com/us/crw/commit/a53225d799082751dfe933b8fb3bae4c16d07a90">a53225d</a>)</li>
+<li><strong>search:</strong> gated page-2 fallback for thin reranked answer pools (<a href="https://github.com/us/crw/issues/77">#77</a>) (<a href="https://github.com/us/crw/commit/2a7f0ac247666e9e360dad4bc0f26da247d4355e">2a7f0ac</a>)</li>
+<li><strong>search:</strong> gated synthesis temperature/seed for deterministic eval (<a href="https://github.com/us/crw/issues/81">#81</a>) (<a href="https://github.com/us/crw/commit/52a8c58edf3e81c84e8ca8317e46d8ac95a8bf94">52a8c58</a>)</li>
+<li><strong>search:</strong> multi-query expansion for the answer path (gated, default off) (<a href="https://github.com/us/crw/issues/73">#73</a>) (<a href="https://github.com/us/crw/commit/4e387afc0f3e979ce21b30842539e7e1b9b774df">4e387af</a>)</li>
+<li><strong>search:</strong> multi-variant query expansion for recall (gated) (<a href="https://github.com/us/crw/commit/7bd093fa674c933b7c4206bbefb32cc2414bb471">7bd093f</a>)</li>
+<li><strong>search:</strong> passage-level relevance gate for the answer path (gated, off) (<a href="https://github.com/us/crw/issues/75">#75</a>) (<a href="https://github.com/us/crw/commit/43ac625caf60d49fa6ca6bfa7fdd54ad8a12418e">43ac625</a>)</li>
+<li><strong>search:</strong> RRF re-rank + junk/coverage/geo filter + query cleaning for answer path (<a href="https://github.com/us/crw/commit/32efee67ed4e180505de9e2aec05d489adc58a51">32efee6</a>)</li>
+<li><strong>search:</strong> RRF re-rank + junk/coverage/geo filter + query cleaning for answer path (<a href="https://github.com/us/crw/commit/682fa1ccbe26a0cd919a2181831ad1c73b530642">682fa1c</a>)</li>
+<li><strong>search:</strong> snippet-fallback (Pattern A) + bake calibrated-answer durable (<a href="https://github.com/us/crw/issues/79">#79</a>) (<a href="https://github.com/us/crw/commit/de1b1f1eac4108095b3d6d7bdda97c035666102a">de1b1f1</a>)</li>
+<li><strong>search:</strong> wave 4 R1+R2 — aggregated llmUsage + per-leg max_tokens (v0.11.0) (<a href="https://github.com/us/crw/commit/3570f82e0e1fe00e9851dc405506bdd2f0e04c01">3570f82</a>)</li>
+<li><strong>search:</strong> wave 4 R1+R2 + bump 0.11.0 (<a href="https://github.com/us/crw/commit/9ebd23d9d658fb07700ffc4a3259fbe079763627">9ebd23d</a>)</li>
+<li><strong>v2:</strong> add Firecrawl /v2 API surface (<a href="https://github.com/us/crw/commit/f793ec09c8c95dad142022f9579adb4c4e1cceb6">f793ec0</a>)</li>
+</ul>
+<h3>Bug Fixes</h3>
+<ul>
+<li><strong>antibot:</strong> strip inline data-URIs before classifier deep scan (<a href="https://github.com/us/crw/commit/6f1cbd20b98f73df099f72b7ad08e41acada2a7e">6f1cbd2</a>)</li>
+<li><strong>browse:</strong> address outbound hardening review feedback (<a href="https://github.com/us/crw/commit/a3c2076ffdd8024579bf7ab97653816cb5bd3881">a3c2076</a>)</li>
+<li><strong>browse:</strong> harden outbound URL handling (<a href="https://github.com/us/crw/commit/c37097253c7df89a5cedb3ddb79e5c9386f75b1b">c370972</a>)</li>
+<li><strong>cli:</strong> swap SearXNG default to 127.0.0.1 + actionable error hint (<a href="https://github.com/us/crw/commit/618d41b52c3fa0c971eb6c34ea98922f06ea094f">618d41b</a>)</li>
+<li><strong>docker:</strong> include OpenAPI specs in crw-api build context (<a href="https://github.com/us/crw/commit/f70c7af6486a82d6bd86c9a7c1054c410f045877">f70c7af</a>)</li>
+<li><strong>docker:</strong> include OpenAPI specs in crw-api build context (<a href="https://github.com/us/crw/commit/0238138f832a507a70ed411d96ec0143cbb7333e">0238138</a>)</li>
+<li><strong>docs:</strong> add 2 missing Firecrawl-shape shims caught by sapient (<a href="https://github.com/us/crw/commit/22b3d5482ca224d0eebd76a795ed8428f108d080">22b3d54</a>)</li>
+<li><strong>extract:</strong> accept deepseek/openai-compatible providers in structured extract (<a href="https://github.com/us/crw/commit/2f0d86d5245c24d388671299beb5acd76458c4ca">2f0d86d</a>)</li>
+<li><strong>search:</strong> default reranker to the proven lexical core (<a href="https://github.com/us/crw/issues/69">#69</a>) (<a href="https://github.com/us/crw/commit/06585b60abd2093288e520157369f16286fd2737">06585b6</a>)</li>
+<li><strong>search:</strong> point engine at searxng-internal alias (search_rpc-only) (<a href="https://github.com/us/crw/issues/70">#70</a>) (<a href="https://github.com/us/crw/commit/110aee729624b42d71b6f219f52dadd6d6bc6ddb">110aee7</a>)</li>
+<li><strong>v2:</strong> batch status mutates state in place (no O(n^2) snapshot copy) (<a href="https://github.com/us/crw/commit/c03d359cfdfc2b2cf4d9603cccff7a08e6c54c69">c03d359</a>)</li>
+<li><strong>v2:</strong> emit invalidURLs (not invalidUrls) on batch start (<a href="https://github.com/us/crw/commit/611c54ded77aaa962cb76ff504c11310c7005825">611c54d</a>)</li>
+</ul>
+<h3>Performance</h3>
+<ul>
+<li><strong>search:</strong> calibrated answer top_n 8-&gt;5 (4x faster, accuracy holds) (<a href="https://github.com/us/crw/issues/80">#80</a>) (<a href="https://github.com/us/crw/commit/751f8ee160d28b84d352e533864ca4043793d294">751f8ee</a>)</li>
+</ul>
 <h2><a href="https://github.com/us/crw/compare/v0.9.1...v0.10.0">0.10.0</a> (2026-05-20)</h2>
 <h3>Features</h3>
 <ul>
@@ -421,7 +468,7 @@ The source of truth is the repository root changelog. Do not edit this docs page
 <li><strong>renderer:</strong> leak-through fallback when global breaker open &amp; host clean (<a href="https://github.com/us/crw/commit/86a9e36880f2dddcb3d7b7bd6c993825559cf487">86a9e36</a>)</li>
 <li><strong>renderer:</strong> outcome-aware breaker + extraction and stealth fixes (<a href="https://github.com/us/crw/commit/86dd10fd014235cb9bd107e32c7cf6e04cb03367">86dd10f</a>)</li>
 <li><strong>renderer:</strong> own per-eTLD+1 host limiter in FallbackRenderer (<a href="https://github.com/us/crw/commit/0577516bd41dc284f24cbaf3ed95544504ba50be">0577516</a>)</li>
-<li><strong>renderer:</strong> recover FC-wins URLs (lifts truth-recall toward the canonical 3-way result; see <code>bench/server-runs/RESULT_3WAY_1000_FULL.md</code>) (<a href="https://github.com/us/crw/commit/ba12424e44c34aa44bb8a41bc1f16d1dd87f498a">ba12424</a>)</li>
+<li><strong>renderer:</strong> recover FC-wins URLs to reach 92% bench coverage (<a href="https://github.com/us/crw/commit/ba12424e44c34aa44bb8a41bc1f16d1dd87f498a">ba12424</a>)</li>
 </ul>
 <h3>Bug Fixes</h3>
 <ul>

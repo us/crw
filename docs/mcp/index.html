@@ -754,7 +754,7 @@ codex mcp add crw -- npx crw-mcp
 </code></pre>
 <p>In embedded mode, the scraping engine runs in-process with zero overhead. In proxy mode, tool calls are forwarded over HTTP. The HTTP transport calls <code>crw-server</code> functions directly.</p>
 <p>Protocol version: <code>2025-06-18</code></p>
-<p>The <code>crw_search</code> tool declares an <code>outputSchema</code> and returns its result both as the usual text content block and as a spec-compliant <code>structuredContent</code> object (MCP 2025-06-18) shaped like <code>{ success, data: { results: [...] } }</code> — strict clients can validate it directly, while lenient clients keep reading the text block unchanged.</p>
+<p>The <code>crw_search</code> tool declares an <code>outputSchema</code> and therefore returns its result both as the usual text content block and as a spec-compliant <code>structuredContent</code> object (MCP 2025-06-18) shaped like <code>{ success, data: { results: [...] } }</code> — strict clients can validate it directly, while lenient clients keep reading the text block unchanged.</p>
 <h2>Operational Notes</h2>
 <ul>
 <li>Keep MCP tool descriptions tight so the agent knows when to use <code>map</code> versus <code>scrape</code>.</li>
