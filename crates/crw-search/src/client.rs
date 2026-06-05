@@ -152,6 +152,13 @@ impl SearxngClient {
         }
     }
 
+    /// Configured base URL (trailing slash trimmed). Exposed so the route layer
+    /// can name the host in `target_unreachable` errors without leaking it raw
+    /// (callers sanitize to the origin first — see crw-server `diagnostics`).
+    pub fn base_url(&self) -> &str {
+        &self.base_url
+    }
+
     /// Issue a JSON search request. Errors surface as a typed [`SearchError`]
     /// — the route layer maps them onto `CrwError` for HTTP responses.
     pub async fn fetch(&self, params: &SearxngParams) -> Result<SearxngResponse, SearchError> {
@@ -191,7 +198,10 @@ impl SearxngClient {
                 if e.is_timeout() {
                     SearchError::Timeout
                 } else {
-                    SearchError::Transport(e.to_string())
+                    // `without_url()` strips reqwest's embedded request URL from
+                    // the Display string — that URL can carry credentials/tokens
+                    // (issue #90). The route layer re-attaches a sanitized origin.
+                    SearchError::Transport(e.without_url().to_string())
                 }
             })?;
 

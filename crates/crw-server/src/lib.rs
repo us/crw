@@ -21,6 +21,7 @@
 //! ```
 
 pub mod app;
+pub mod diagnostics;
 pub mod error;
 pub mod middleware;
 pub mod routes;

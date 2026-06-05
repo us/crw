@@ -187,12 +187,12 @@ pub async fn search_inner(
             .clamp(1, MAX_QUERY_EXPAND_VARIANTS);
         fetch_expanded(&client, &req.query, &params, llm, variants_n)
             .await
-            .map_err(|e| map_search_error(e, state.config.search.timeout_ms))?
+            .map_err(|e| map_search_error(e, state.config.search.timeout_ms, client.base_url()))?
     } else {
         client
             .fetch(&params)
             .await
-            .map_err(|e| map_search_error(e, state.config.search.timeout_ms))?
+            .map_err(|e| map_search_error(e, state.config.search.timeout_ms, client.base_url()))?
     };
 
     let has_sources = req.sources.as_ref().is_some_and(|s| !s.is_empty());
@@ -859,7 +859,12 @@ fn validate_request(req: &SearchRequest, max_limit: u32) -> Result<(), CrwError>
     Ok(())
 }
 
-fn map_search_error(err: SearchError, timeout_ms: u64) -> CrwError {
+/// Map a transport/timeout/upstream `SearchError` onto the HTTP `CrwError`.
+/// `base_url` is the configured SearXNG URL; the transport (`target_unreachable`)
+/// arm names its **origin** (issue #90) so the operator sees *which* host failed
+/// — sanitized, so a credentialed URL never reaches the response. Timeouts keep
+/// `error_code: "timeout"`; the host is correlated via the startup log instead.
+fn map_search_error(err: SearchError, timeout_ms: u64, base_url: &str) -> CrwError {
     match err {
         SearchError::Timeout => CrwError::Timeout(timeout_ms),
         SearchError::Upstream { status, body } => CrwError::HttpError(format!(
@@ -869,7 +874,10 @@ fn map_search_error(err: SearchError, timeout_ms: u64) -> CrwError {
         SearchError::InvalidResponse(msg) => {
             CrwError::HttpError(format!("SearXNG returned invalid JSON: {msg}"))
         }
-        SearchError::Transport(msg) => CrwError::TargetUnreachable(format!("SearXNG: {msg}")),
+        SearchError::Transport(msg) => CrwError::TargetUnreachable(format!(
+            "SearXNG ({}): {msg}",
+            crate::diagnostics::sanitize_url_origin(base_url)
+        )),
     }
 }
 
@@ -1152,7 +1160,7 @@ mod tests {
     #[test]
     fn map_search_error_timeout_to_timeout() {
         assert!(matches!(
-            map_search_error(SearchError::Timeout, 7500),
+            map_search_error(SearchError::Timeout, 7500, "http://searxng:8080"),
             CrwError::Timeout(7500)
         ));
     }
@@ -1164,9 +1172,26 @@ mod tests {
             body: "down".into(),
         };
         assert!(matches!(
-            map_search_error(err, 5000),
+            map_search_error(err, 5000, "http://searxng:8080"),
             CrwError::HttpError(_)
         ));
+    }
+
+    #[test]
+    fn map_search_error_transport_names_sanitized_host() {
+        // issue #90: the unreachable error must name the configured host so the
+        // operator knows *what* failed — but origin-only, never the raw URL.
+        let err = SearchError::Transport("dns error: failed to lookup address".into());
+        let mapped = map_search_error(err, 5000, "https://user:pass@searxng:8080/tok?k=v");
+        match mapped {
+            CrwError::TargetUnreachable(msg) => {
+                assert!(msg.contains("https://searxng:8080"), "{msg}");
+                assert!(!msg.contains("user"), "must not leak userinfo: {msg}");
+                assert!(!msg.contains("pass"), "must not leak credentials: {msg}");
+                assert!(!msg.contains("tok"), "must not leak path token: {msg}");
+            }
+            other => panic!("expected TargetUnreachable, got {other:?}"),
+        }
     }
 
     #[test]
