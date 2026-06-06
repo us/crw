@@ -1,82 +1,119 @@
 #!/usr/bin/env bash
 # Mechanical guard against the stale-internal-dependency-version release break.
 #
-# Every internal crate is published to crates.io, so its sibling path
-# dependencies carry a `version = "X"` compatibility assertion alongside
-# `path = "..."`. That `X` MUST equal the unified workspace version
-# (`[workspace.package].version`). If a release bumps the workspace version
-# but leaves a sibling `version` string behind, cargo can no longer resolve
-# the path crate (`^old` excludes the new version) and every publish job in
-# the Release workflow is skipped — shipping an empty tag.
+# Every internal crate is published to crates.io, so its sibling dependencies
+# carry a `version = "X"` compatibility assertion. Those versions are now
+# centralized in the root `[workspace.dependencies]` table (members inherit via
+# `{ workspace = true }`), so there is ONE place per internal crate to keep in
+# sync with the unified workspace version (`[workspace.package].version`). If a
+# release bumps the workspace version but leaves a `[workspace.dependencies]`
+# entry behind, cargo can no longer resolve the path crate (`^old` excludes the
+# new version) and every publish job in the Release workflow is skipped —
+# shipping an empty tag.
 #
-# This is exactly what happened to v0.9.0: crw-cli's crw-search/crw-server/
-# crw-browse deps stayed at "0.8.1" while the workspace went to 0.9.0. The
-# heavy `cargo build` CI step did not block the release-please PR (Cargo.lock
-# cache short-circuited resolution), so this dedicated, cache-proof invariant
-# check runs on every PR — including the release-please version-bump PR,
-# where a mismatch first becomes visible — turning a catastrophic post-tag
-# failure into a pre-merge red X.
+# This is exactly what happened to v0.9.0 (crw-cli pins stayed 0.8.1) and again
+# to v0.12.0 (crw-diff -> crw-core stayed 0.11.0). The heavy `cargo build` CI
+# step did not block the release-please PR (Cargo.lock cache short-circuited
+# resolution), so this dedicated, cache-proof invariant check turns a
+# catastrophic post-tag failure into a pre-merge red X.
 #
-# The internal-crate set is derived from `[workspace] members`, so this
-# guard never needs editing when crates are added or removed.
+# Three invariants, all derived from `[workspace] members` (so the guard never
+# needs editing when crates are added or removed):
+#   1. every internal pin in [workspace.dependencies] == the workspace version;
+#   2. anti-vacuity — there MUST be centralized internal pins (an empty scan is
+#      itself an error, so the migration to inheritance can't silently disable
+#      this guard);
+#   3. residual scan — no member manifest may re-declare an inline `path` pin
+#      for an internal crate (it must inherit), with one allowlisted exception:
+#      crw-server's self dev-dependency (`path = "."`, no version).
 #
 # Portable: bash + python3 (present on ubuntu-latest and macOS).
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+# Repo root defaults to this script's parent, but tests override it with a
+# fixture dir (scripts/release/test_guards.py) to exercise failure modes.
+cd "${CHECK_REPO_ROOT:-$(dirname "$0")/..}"
 
 python3 - <<'PY'
-import re, sys, glob, os
+import sys, tomllib
+from pathlib import Path
 
-root = open("Cargo.toml").read()
+root = tomllib.loads(Path("Cargo.toml").read_text())
+ws = root.get("workspace", {})
 
-m = re.search(r'\[workspace\.package\][^\[]*?\bversion\s*=\s*"([^"]+)"', root, re.S)
-if not m:
+ws_version = ws.get("package", {}).get("version")
+if not ws_version:
     print("error: could not find [workspace.package] version in root Cargo.toml")
     sys.exit(2)
-ws_version = m.group(1)
 
-# Internal crate names = basenames of [workspace] members.
-mm = re.search(r'\[workspace\][^\[]*?members\s*=\s*\[(.*?)\]', root, re.S)
-if not mm:
+members = ws.get("members")
+if not members:
     print("error: could not find [workspace] members in root Cargo.toml")
     sys.exit(2)
-members = re.findall(r'"([^"]+)"', mm.group(1))
-internal = {os.path.basename(p) for p in members}
+# Internal crate names = basenames of [workspace] members.
+internal = {Path(m).name for m in members}
 
 problems = []
-for f in sorted(glob.glob("crates/*/Cargo.toml")):
-    txt = open(f).read()
-    # Walk only dependency tables; ignore [package], [features], etc.
-    for tm in re.finditer(
-        r'^\[(?:target\.[^\]]+\.)?(dependencies|dev-dependencies|build-dependencies)\]\s*$',
-        txt, re.M):
-        start = tm.end()
-        nxt = re.search(r'^\[', txt[start:], re.M)
-        block = txt[start:start + (nxt.start() if nxt else len(txt))]
-        for dm in re.finditer(r'^([A-Za-z0-9_-]+)\s*=\s*\{([^}]*)\}', block, re.M):
-            name, body = dm.group(1), dm.group(2)
+
+# (1) Centralized internal pins in root [workspace.dependencies] must equal the
+#     workspace version.
+central = {
+    name: spec["version"]
+    for name, spec in ws.get("dependencies", {}).items()
+    if name in internal
+    and isinstance(spec, dict)
+    and "path" in spec
+    and "version" in spec
+}
+for name, ver in sorted(central.items()):
+    if ver != ws_version:
+        problems.append(
+            f'[workspace.dependencies] {name}: version "{ver}" '
+            f'must equal workspace version "{ws_version}"'
+        )
+
+# (2) Anti-vacuity: an empty centralized set means the guard would check nothing.
+if not central:
+    problems.append(
+        "no internal crate pins found in root [workspace.dependencies] — the "
+        "guard would pass vacuously; refusing to pass (did the workspace-deps "
+        "migration regress?)"
+    )
+
+# (3) Residual scan: members must inherit internal deps via `{ workspace = true }`,
+#     never re-declare an inline `path` pin (which escapes centralized bumping).
+#     Sole allowed exception: a crate's self dev-dependency (path = ".").
+ALLOWLIST = {("crates/crw-server/Cargo.toml", "crw-server")}
+_TABLES = ("dependencies", "dev-dependencies", "build-dependencies")
+for cargo in sorted(Path("crates").glob("*/Cargo.toml")):
+    data = tomllib.loads(cargo.read_text())
+    for table in _TABLES:
+        for name, spec in data.get(table, {}).items():
             if name not in internal:
                 continue
-            if "path" not in body:
-                continue
-            vm = re.search(r'version\s*=\s*"([^"]+)"', body)
-            if not vm:
-                continue  # path-only dep: no version assertion to keep in sync
-            ver = vm.group(1)
-            if ver != ws_version:
-                problems.append((f, name, ver))
+            if isinstance(spec, dict) and "path" in spec:
+                if (cargo.as_posix(), name) in ALLOWLIST:
+                    continue
+                problems.append(
+                    f"{cargo.as_posix()}: {name} re-declares an inline `path` pin "
+                    f"in [{table}]; internal deps must inherit via "
+                    f"`{{ workspace = true }}` so release-please bumps them centrally"
+                )
 
 if problems:
-    print(f"❌ internal dependency version drift (workspace version is {ws_version}):\n")
-    for f, name, ver in problems:
-        print(f'  {f}: {name} = {{ ..., version = "{ver}" }}  →  must be "{ws_version}"')
+    print(f"❌ internal dependency version guard failed (workspace version is {ws_version}):\n")
+    for p in problems:
+        print(f"  {p}")
     print(
-        "\nFix: set each listed `version` to the workspace version, and add the "
-        "matching entry to release-please-config.json `extra-files` so future "
-        "releases keep it in sync automatically."
+        "\nFix: internal crate versions live ONLY in root [workspace.dependencies]; "
+        "set each to the workspace version and add the matching "
+        "release-please-config.json extra-files entry "
+        "($.workspace.dependencies.<crate>.version)."
     )
     sys.exit(1)
 
-print(f"✅ all internal path-dependency versions match workspace version {ws_version}")
+print(
+    f"✅ {len(central)} centralized internal pins all match workspace version "
+    f"{ws_version}; no stray inline pins"
+)
 PY

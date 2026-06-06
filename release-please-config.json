@@ -23,173 +23,53 @@
         },
         {
           "type": "toml",
-          "path": "crates/crw-renderer/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-core.version"
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.dependencies.crw-mcp-proto.version"
         },
         {
           "type": "toml",
-          "path": "crates/crw-extract/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-core.version"
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.dependencies.crw-core.version"
         },
         {
           "type": "toml",
-          "path": "crates/crw-crawl/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-core.version"
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.dependencies.crw-extract.version"
         },
         {
           "type": "toml",
-          "path": "crates/crw-crawl/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-renderer.version"
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.dependencies.crw-renderer.version"
         },
         {
           "type": "toml",
-          "path": "crates/crw-crawl/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-extract.version"
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.dependencies.crw-search.version"
         },
         {
           "type": "toml",
-          "path": "crates/crw-server/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-core.version"
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.dependencies.crw-diff.version"
         },
         {
           "type": "toml",
-          "path": "crates/crw-server/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-renderer.version"
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.dependencies.crw-crawl.version"
         },
         {
           "type": "toml",
-          "path": "crates/crw-server/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-extract.version"
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.dependencies.crw-monitor.version"
         },
         {
           "type": "toml",
-          "path": "crates/crw-server/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-crawl.version"
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.dependencies.crw-server.version"
         },
         {
           "type": "toml",
-          "path": "crates/crw-server/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-search.version"
-        },
-        {
-          "type": "toml",
-          "path": "crates/crw-search/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-core.version"
-        },
-        {
-          "type": "toml",
-          "path": "crates/crw-cli/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-core.version"
-        },
-        {
-          "type": "toml",
-          "path": "crates/crw-cli/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-renderer.version"
-        },
-        {
-          "type": "toml",
-          "path": "crates/crw-cli/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-extract.version"
-        },
-        {
-          "type": "toml",
-          "path": "crates/crw-cli/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-crawl.version"
-        },
-        {
-          "type": "toml",
-          "path": "crates/crw-cli/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-search.version"
-        },
-        {
-          "type": "toml",
-          "path": "crates/crw-cli/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-server.version"
-        },
-        {
-          "type": "toml",
-          "path": "crates/crw-cli/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-browse.version"
-        },
-        {
-          "type": "toml",
-          "path": "crates/crw-mcp/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-core.version"
-        },
-        {
-          "type": "toml",
-          "path": "crates/crw-mcp/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-renderer.version"
-        },
-        {
-          "type": "toml",
-          "path": "crates/crw-mcp/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-server.version"
-        },
-        {
-          "type": "toml",
-          "path": "crates/crw-core/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-mcp-proto.version"
-        },
-        {
-          "type": "toml",
-          "path": "crates/crw-browse/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-core.version"
-        },
-        {
-          "type": "toml",
-          "path": "crates/crw-browse/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-renderer.version"
-        },
-        {
-          "type": "toml",
-          "path": "crates/crw-diff/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-core.version"
-        },
-        {
-          "type": "toml",
-          "path": "crates/crw-renderer/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-extract.version"
-        },
-        {
-          "type": "toml",
-          "path": "crates/crw-crawl/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-diff.version"
-        },
-        {
-          "type": "toml",
-          "path": "crates/crw-server/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-diff.version"
-        },
-        {
-          "type": "toml",
-          "path": "crates/crw-server/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-monitor.version"
-        },
-        {
-          "type": "toml",
-          "path": "crates/crw-monitor/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-core.version"
-        },
-        {
-          "type": "toml",
-          "path": "crates/crw-monitor/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-diff.version"
-        },
-        {
-          "type": "toml",
-          "path": "crates/crw-monitor/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-crawl.version"
-        },
-        {
-          "type": "toml",
-          "path": "crates/crw-monitor/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-extract.version"
-        },
-        {
-          "type": "toml",
-          "path": "crates/crw-monitor/Cargo.toml",
-          "jsonpath": "$.dependencies.crw-renderer.version"
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.dependencies.crw-browse.version"
         },
         {
           "type": "json",

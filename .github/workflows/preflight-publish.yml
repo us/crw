@@ -47,6 +47,12 @@ jobs:
           set -euo pipefail
           uv run python scripts/release/audit_release_please_config.py
 
+      - name: Guard regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run python scripts/release/test_guards.py
+
       - name: Shellcheck release scripts
         shell: bash
         run: |

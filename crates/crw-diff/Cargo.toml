@@ -13,7 +13,7 @@ description = "Stateless change-tracking diff engine for the CRW web scraper"
 # Shared types only (ChangeTrackingOptions/Result, DiffAst, etc.). This crate
 # MUST NOT depend on crw-extract — judging is injected upstream so the diff
 # engine stays pure (no LLM, no HTTP, no I/O).
-crw-core = { path = "../crw-core", version = "0.12.1" }
+crw-core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 similar = { workspace = true }

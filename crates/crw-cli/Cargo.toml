@@ -28,17 +28,17 @@ browse = ["dep:crw-browse", "dep:rmcp", "dep:anyhow"]
 
 [dependencies]
 # Core crates
-crw-core = { path = "../crw-core", version = "0.12.1" }
-crw-renderer = { path = "../crw-renderer", version = "0.12.1", features = ["auto-browser", "cdp"] }
-crw-extract = { path = "../crw-extract", version = "0.12.1" }
-crw-crawl = { path = "../crw-crawl", version = "0.12.1" }
-crw-search = { path = "../crw-search", version = "0.12.1" }
+crw-core = { workspace = true }
+crw-renderer = { workspace = true, features = ["auto-browser", "cdp"] }
+crw-extract = { workspace = true }
+crw-crawl = { workspace = true }
+crw-search = { workspace = true }
 
 # Server (for serve + mcp-embedded + setup commands)
-crw-server = { path = "../crw-server", version = "0.12.1", optional = true, features = ["cdp"] }
+crw-server = { workspace = true, optional = true, features = ["cdp"] }
 
 # Browse (for browse command)
-crw-browse = { path = "../crw-browse", version = "0.12.1", optional = true }
+crw-browse = { workspace = true, optional = true }
 
 # Web framework (for serve command)
 axum = { workspace = true, optional = true }

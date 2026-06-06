@@ -53,33 +53,41 @@ def _json_jsonpath_lookup(data, jsonpath: str) -> bool:
     return bool(jsonpath_ng.parse(jsonpath).find(data))
 
 
-_DEP_TABLES = ("dependencies", "dev-dependencies", "build-dependencies")
+# Where centralized internal version pins live and the jsonpath segment that
+# addresses them. Internal crate-to-crate versions are declared ONCE in the
+# root `[workspace.dependencies]` table (members inherit via `workspace = true`),
+# so the only version strings release-please must bump are these.
+_WS_DEPS_PATH = "Cargo.toml"
+_WS_DEPS_TABLE = "workspace.dependencies"
 
 
 def _internal_version_pins() -> set[tuple[str, str, str]]:
-    """Every internal `crw-*` dependency that carries an explicit version pin.
+    """Every internal `crw-*` pin in root `[workspace.dependencies]`.
 
-    Returns (cargo_path, table, dep_name) tuples for deps that have BOTH a
+    Returns (cargo_path, table, dep_name) tuples for entries that carry BOTH a
     `path` (so they resolve to a workspace crate) and a `version` requirement.
     Those version strings must be bumped in lockstep with the workspace version
     on every release, which means each one needs a release-please-config
-    extra-files entry. A pin without an entry is the exact bug that broke the
-    0.12.0 release (crw-diff -> crw-core stayed at 0.11.0 after the bump).
+    extra-files entry of shape `$.workspace.dependencies.<dep>.version`. A pin
+    without an entry is the exact bug that broke the 0.12.0 release (crw-diff
+    -> crw-core stayed at 0.11.0 after the bump). Since the migration to
+    workspace inheritance, these pins are centralized in ONE file instead of
+    scattered across every member manifest.
     """
     pins: set[tuple[str, str, str]] = set()
-    for cargo in sorted(Path("crates").glob("*/Cargo.toml")):
-        data = tomllib.loads(cargo.read_text())
-        for table in _DEP_TABLES:
-            for name, spec in data.get(table, {}).items():
-                if not name.startswith("crw-"):
-                    continue
-                if isinstance(spec, dict) and "version" in spec and "path" in spec:
-                    pins.add((cargo.as_posix(), table, name))
+    root = tomllib.loads(Path(_WS_DEPS_PATH).read_text())
+    ws_deps = root.get("workspace", {}).get("dependencies", {})
+    for name, spec in ws_deps.items():
+        if not name.startswith("crw-"):
+            continue
+        if isinstance(spec, dict) and "version" in spec and "path" in spec:
+            pins.add((_WS_DEPS_PATH, _WS_DEPS_TABLE, name))
     return pins
 
 
 def _config_covered_pins(cfg: dict) -> set[tuple[str, str, str]]:
-    """(path, table, dep) covered by a `$.<table>.<dep>.version` extra-file."""
+    """(path, table, dep) covered by a `$.workspace.dependencies.<dep>.version`
+    extra-file entry into the root manifest."""
     covered: set[tuple[str, str, str]] = set()
     for pkg in cfg.get("packages", {}).values():
         for ef in pkg.get("extra-files", []):
@@ -89,8 +97,14 @@ def _config_covered_pins(cfg: dict) -> set[tuple[str, str, str]]:
             if not path_str or not jsonpath:
                 continue
             parts = re.findall(r"[\w-]+", jsonpath)
-            if len(parts) == 3 and parts[0] in _DEP_TABLES and parts[2] == "version":
-                covered.add((path_str, parts[0], parts[1]))
+            # New centralized shape: $.workspace.dependencies.<dep>.version
+            if (
+                len(parts) == 4
+                and parts[0] == "workspace"
+                and parts[1] == "dependencies"
+                and parts[3] == "version"
+            ):
+                covered.add((path_str, _WS_DEPS_TABLE, parts[2]))
     return covered
 
 
@@ -107,7 +121,18 @@ def main(config_path: Path = Path("release-please-config.json")) -> int:
     # the workspace version. Missing entries silently break the build on the
     # first bump after a crate/dep is added.
     covered = _config_covered_pins(cfg)
-    for path_str, table, dep in sorted(_internal_version_pins()):
+    required = _internal_version_pins()
+    # Anti-vacuity: an empty required set means the centralized internal pins
+    # vanished (botched migration, renamed table, parse error). Without this the
+    # completeness loop below would iterate zero times and pass silently —
+    # exactly the vacuous-green failure this guard exists to prevent.
+    if not required:
+        errors.append(
+            "no internal crw-* pins found in root [workspace.dependencies] "
+            "(expected the centralized internal crates) — completeness check "
+            "would be vacuous; refusing to pass"
+        )
+    for path_str, table, dep in sorted(required):
         if (path_str, table, dep) not in covered:
             errors.append(
                 f"{path_str}::$.{table}.{dep}.version: internal version pin not "

@@ -47,6 +47,12 @@ jobs:
       - name: Audit release-please config completeness
         run: python3 scripts/release/audit_release_please_config.py
 
+      # The guards above are load-bearing; this regression suite fails red if a
+      # future change weakens them (drift/missing-entry/anti-vacuity/invalid
+      # jsonpath), instead of letting them pass vacuously.
+      - name: Guard regression tests
+        run: python3 scripts/release/test_guards.py
+
       - name: Build
         run: cargo build --workspace --all-targets
 
