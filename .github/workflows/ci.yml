@@ -41,9 +41,10 @@ jobs:
 
       # Catches the config GAP at feature-PR time, independent of version state:
       # a new internal dep pin that isn't tracked in release-please-config.json
-      # fails here long before it can go stale on a release bump. The
-      # release-please PR itself does not trigger this CI (bot GITHUB_TOKEN),
-      # so the gap must be caught on the human PR that introduces the dep.
+      # fails here long before it can go stale on a release bump. Since
+      # release-please now authors its bump PR with an elevated token (see
+      # release-please.yml), that PR ALSO triggers this CI on its own head SHA,
+      # so a stale pin is caught pre-merge instead of post-tag.
       - name: Audit release-please config completeness
         run: python3 scripts/release/audit_release_please_config.py
 

@@ -15,8 +15,23 @@ jobs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
+      # Author the release PR with an elevated token (NOT the default
+      # GITHUB_TOKEN). A PR opened by GITHUB_TOKEN cannot trigger other
+      # workflows, so the version-surface checks (preflight-publish.yml,
+      # ci.yml — both `on: pull_request`) never ran on the bump PR and a stale
+      # surface only surfaced post-tag. With this token the bump PR triggers
+      # those checks on its OWN head SHA, so — once `preflight-publish` is a
+      # Required status check in branch protection — a stale internal pin / npm
+      # surface BLOCKS the merge (and therefore the tag) instead of shipping a
+      # red, already-tagged release.
+      #
+      # GH_DISPATCH_PAT is the existing dispatch PAT; prefer migrating to a
+      # GitHub App installation token (actions/create-github-app-token) so the
+      # author is a bot identity with no human seat and a scoped, rotating key.
       - uses: googleapis/release-please-action@v4
         id: release
+        with:
+          token: ${{ secrets.GH_DISPATCH_PAT }}
 
   dispatch-release:
     needs: release-please

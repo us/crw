@@ -145,32 +145,46 @@ def collect_version_surfaces(ws_version: str) -> list[tuple[str, str, str]]:
         d = tomllib.loads(py.read_text())
         rows.append((str(py), ws_version, d.get("project", {}).get("version", "MISSING")))
 
-    # npm main + platform packages
+    # npm platform packages, discovered by globbing `npm/crw-mcp-*/package.json`
+    # (the main package `npm/crw-mcp` has no trailing `-` so it is excluded).
+    # Self-deriving: adding a platform needs NO edit here — the old hardcoded
+    # 6-tuples meant a 7th platform was silently unchecked.
+    platform_pkgs = sorted(Path("npm").glob("crw-mcp-*/package.json"))
+    disk_platforms = {p.parent.name for p in platform_pkgs}
+
+    # npm main package: version + every internal optionalDependencies pin, with
+    # the platform key set read from the manifest itself.
     npm_main = Path("npm/crw-mcp/package.json")
+    opt_platforms: set[str] = set()
     if npm_main.exists():
         d = json.loads(npm_main.read_text())
         rows.append((str(npm_main) + ":version", ws_version, d.get("version", "MISSING")))
-        opt = d.get("optionalDependencies", {})
-        for plat in (
-            "crw-mcp-darwin-x64", "crw-mcp-darwin-arm64",
-            "crw-mcp-linux-x64", "crw-mcp-linux-arm64",
-            "crw-mcp-win32-x64", "crw-mcp-win32-arm64",
-        ):
-            actual = opt.get(plat, "MISSING")
+        for dep, actual in sorted(d.get("optionalDependencies", {}).items()):
+            if not dep.startswith("crw-mcp-"):
+                continue
+            opt_platforms.add(dep)
             # Accept exact, ^v, ~v.
             if actual in (ws_version, f"^{ws_version}", f"~{ws_version}"):
                 continue
-            rows.append((f"{npm_main}:optionalDependencies.{plat}", ws_version, actual))
+            rows.append((f"{npm_main}:optionalDependencies.{dep}", ws_version, actual))
 
-    for plat in (
-        "crw-mcp-darwin-x64", "crw-mcp-darwin-arm64",
-        "crw-mcp-linux-x64", "crw-mcp-linux-arm64",
-        "crw-mcp-win32-x64", "crw-mcp-win32-arm64",
-    ):
-        pkg_json = Path(f"npm/{plat}/package.json")
-        if pkg_json.exists():
-            d = json.loads(pkg_json.read_text())
-            rows.append((str(pkg_json) + ":version", ws_version, d.get("version", "MISSING")))
+        # Cross-check: every platform package on disk must be listed in
+        # optionalDependencies (and vice-versa), so a new platform can't be
+        # half-wired and silently skipped.
+        for missing in sorted(disk_platforms - opt_platforms):
+            rows.append((
+                f"{npm_main}:optionalDependencies.{missing}", ws_version,
+                "MISSING (platform package exists on disk but not in optionalDependencies)",
+            ))
+        for extra in sorted(opt_platforms - disk_platforms):
+            rows.append((
+                f"{npm_main}:optionalDependencies.{extra}", "a platform package dir",
+                "MISSING (listed in optionalDependencies but no npm/<plat>/package.json)",
+            ))
+
+    for pkg_json in platform_pkgs:
+        d = json.loads(pkg_json.read_text())
+        rows.append((str(pkg_json) + ":version", ws_version, d.get("version", "MISSING")))
 
     # server.json (MCP registry)
     sj = Path("server.json")

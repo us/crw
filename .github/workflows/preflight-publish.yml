@@ -15,6 +15,8 @@ on:
       - "scripts/release/release_manifest.toml"
       - "scripts/release/preflight.py"
       - "scripts/release/audit_release_please_config.py"
+      - "scripts/release/test_guards.py"
+      - "scripts/check-internal-dep-versions.sh"
       - "npm/**/package.json"
       - "python/pyproject.toml"
       - "server.json"
@@ -34,6 +36,15 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+
+      # Cache-proof internal-pin invariant. Runs here too (not just ci.yml) so
+      # that once the release-please bump PR triggers this workflow (via the
+      # elevated token in release-please.yml) the full guard set gates the merge.
+      - name: Internal dependency versions match workspace version
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/check-internal-dep-versions.sh
 
       - name: Run preflight (workspace + version surfaces)
         shell: bash
