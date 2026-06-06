@@ -167,7 +167,22 @@ jobs:
 
       - name: Install cross (Linux ARM only)
         if: matrix.cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
+        # Retry: `cargo install cross` builds from source and pulls crates from
+        # the network; a single transient curl/HTTP2 hiccup (e.g. "Error in the
+        # HTTP2 framing layer") otherwise fails the whole arm64 binary and
+        # cascades to skip asset-gate -> pypi/npm/apt/homebrew. 3 attempts with
+        # backoff turn a flaky download into a non-event.
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if cargo install cross --git https://github.com/cross-rs/cross; then
+              exit 0
+            fi
+            echo "::warning::cross install attempt ${attempt}/3 failed (transient network); retrying in $((attempt * 20))s"
+            sleep "$((attempt * 20))"
+          done
+          echo "::error::cross install failed after 3 attempts"
+          exit 1
 
       - name: Build
         shell: bash
