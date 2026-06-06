@@ -33,7 +33,14 @@ run_check() {
 
 run_check "crates.io"   "$SCRIPT_DIR/verify_crates.sh"        "$v"
 run_check "PyPI"        "$SCRIPT_DIR/verify_pypi.sh"          "$v"
-run_check "npm"         "$SCRIPT_DIR/verify_npm.sh"           "$v"
+# npm can be temporarily disabled (SKIP_NPM=true) when the npm token can't
+# publish (e.g. 2FA-bypass token not yet configured). Skipping is explicit in
+# the audit — not a silent pass. Re-enable by clearing the SKIP_NPM repo var.
+if [ "${SKIP_NPM:-}" = "true" ]; then
+  results+=("| npm | skipped (SKIP_NPM) |")
+else
+  run_check "npm"       "$SCRIPT_DIR/verify_npm.sh"           "$v"
+fi
 run_check "Docker GHCR" "$SCRIPT_DIR/verify_docker.sh"        "$v"
 run_check "MCP registry""$SCRIPT_DIR/verify_mcp_registry.sh"  "$v"
 if [ -n "$corr" ]; then

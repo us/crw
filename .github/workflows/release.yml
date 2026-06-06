@@ -259,6 +259,11 @@ jobs:
 
   publish-npm:
     needs: [release-context, asset-gate]
+    # Temporarily disable npm publishing by setting repo variable SKIP_NPM=true
+    # (e.g. while the npm token can't publish — 2FA-bypass granular token not yet
+    # configured). The job is cleanly SKIPPED (gray), not failed/masked. Clear
+    # the SKIP_NPM repo variable to re-enable. See RELEASE.md.
+    if: ${{ vars.SKIP_NPM != 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -486,6 +491,10 @@ jobs:
       - publish-mcp-registry
       - update-apt
       - update-homebrew
+    # Run even when an optional publish job is skipped (e.g. publish-npm under
+    # SKIP_NPM) — `!cancelled()` lets verification report on whatever shipped
+    # instead of being skipped along with the gated job.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -498,6 +507,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SKIP_NPM: ${{ vars.SKIP_NPM }}
         run: |
           set -euo pipefail
           bash scripts/release/verify_publish.sh \

@@ -46,6 +46,18 @@ The pipeline is idempotent — re-run is safe.
 - **MCP Registry**: re-run `mcp-publisher publish`.
 - **APT/Homebrew**: re-trigger via `gh workflow run release.yml --ref main -f tag=vX.Y.Z`.
 
+### Temporarily disabling npm publishing
+
+If the npm token can't publish (npm now rejects classic automation tokens with
+`403 ... two-factor authentication ... required`), set the repo variable
+`SKIP_NPM=true` (`gh variable set SKIP_NPM --body true`). `publish-npm` is then
+cleanly **skipped** (gray, not failed) and `verify-publish` records npm as
+`skipped` — the release goes green on every other registry. **Re-enable** by
+clearing it (`gh variable delete SKIP_NPM`) once `NPM_TOKEN` is a *granular*
+access token with publish permission (these bypass 2FA), or after configuring
+npm OIDC trusted publishing for each package (the workflow already grants
+`id-token: write`).
+
 ### A version was published with broken metadata (e.g. wrong npm optionalDeps)
 
 crates.io and npm versions are **immutable**. Do not try to overwrite. Instead:
