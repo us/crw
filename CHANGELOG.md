@@ -2,6 +2,18 @@
 
 All notable changes to CRW are documented here.
 
+## [0.13.0](https://github.com/us/crw/compare/v0.12.1...v0.13.0) (2026-06-06)
+
+
+### Features
+
+* **search:** deterministic Wikidata entity-relation lookup (W3) ([aa96e3e](https://github.com/us/crw/commit/aa96e3e182fad6d8e2caf03628461515ca5aab7f))
+
+
+### Bug Fixes
+
+* **release:** sync Cargo.lock internal crate versions to 0.12.1 ([b5fc8a5](https://github.com/us/crw/commit/b5fc8a5b988401bb2ecca6fdd3be328d1ccd683a))
+
 ## [0.12.1](https://github.com/us/crw/compare/v0.12.0...v0.12.1) (2026-06-05)
 
 
