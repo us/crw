@@ -8,6 +8,13 @@ The source of truth is the repository root changelog. Do not edit this docs page
 
 All notable changes to CRW are documented here.
 
+## [0.13.2](https://github.com/us/crw/compare/v0.13.1...v0.13.2) (2026-06-06)
+
+
+### Bug Fixes
+
+* **server:** embed openapi spec inside the crate so it can publish ([e606cb9](https://github.com/us/crw/commit/e606cb9303cec3716b7dbffd4d848164486368ea))
+
 ## [0.13.1](https://github.com/us/crw/compare/v0.13.0...v0.13.1) (2026-06-06)
 
 
