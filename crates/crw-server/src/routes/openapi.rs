@@ -4,13 +4,19 @@ use axum::response::{IntoResponse, Response};
 /// Embedded OpenAPI 3.1.0 spec — the canonical schema for api.fastcrw.com.
 /// Served at GET /openapi.json. Pulled in at compile time so the binary is
 /// self-contained (no runtime filesystem dependency).
-const OPENAPI_3_1: &str = include_str!("../../../../docs/openapi.json");
+///
+/// The spec lives INSIDE the crate (`crates/crw-server/openapi/`) so it is
+/// included in the published `.crate` tarball — an earlier `../../../../docs/`
+/// path reached outside the crate and broke `cargo publish` (the workspace-root
+/// docs/ dir isn't packaged). `crates/crw-server/openapi/*` is kept byte-equal
+/// to the repo-root `docs/*` copy the docs site serves; a CI guard enforces it.
+const OPENAPI_3_1: &str = include_str!("../../openapi/openapi.json");
 
 /// Embedded OpenAPI 3.0.3 downgrade — for tools that don't yet grok 3.1
 /// (Postman <11, Insomnia <2024, older openapi-generator). Same paths/schemas,
 /// only the version banner and a couple of JSON-Schema-2020 idioms differ.
 /// Served at GET /openapi-3.0.json.
-const OPENAPI_3_0: &str = include_str!("../../../../docs/openapi-3.0.json");
+const OPENAPI_3_0: &str = include_str!("../../openapi/openapi-3.0.json");
 
 /// GET /openapi.json — serve the 3.1.0 spec.
 pub async fn serve_openapi_3_1() -> Response {

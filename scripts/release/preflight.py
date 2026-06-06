@@ -34,6 +34,7 @@ Exits non-zero on any failure with `::error::` annotations for GitHub Actions.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import tomllib
@@ -268,6 +269,41 @@ def main() -> int:
                     f"earlier tier; move {dn} up or {name} down in "
                     f"release_manifest.toml."
                 )
+
+    # 3c. No published crate may include_str!/include_bytes! a path that escapes
+    #     its own directory — cargo publish only packages files INSIDE the crate,
+    #     so an out-of-crate include compiles locally but breaks the publish
+    #     verify build (this kept crw-server unpublishable: it embedded the
+    #     workspace-root docs/openapi.json via ../../../../).
+    inc_re = re.compile(r"include_(?:str|bytes)!\s*\(\s*\"([^\"]+)\"")
+    for member in sorted(published):
+        crate_dir = (Path("crates") / member).resolve()
+        if not crate_dir.is_dir():
+            continue
+        for rs in sorted(crate_dir.rglob("*.rs")):
+            for inc in inc_re.findall(rs.read_text()):
+                target = (rs.parent / inc).resolve()
+                try:
+                    target.relative_to(crate_dir)
+                except ValueError:
+                    errors.append(
+                        f"{rs.relative_to(crate_dir.parent.parent)}: include of "
+                        f"'{inc}' reaches outside the crate — it won't be in the "
+                        f"published .crate tarball; move the file inside "
+                        f"crates/{member}/."
+                    )
+
+    # 3d. Duplicated spec copies kept for publishability must not drift.
+    for a, b in [
+        ("docs/openapi.json", "crates/crw-server/openapi/openapi.json"),
+        ("docs/openapi-3.0.json", "crates/crw-server/openapi/openapi-3.0.json"),
+    ]:
+        pa, pb = Path(a), Path(b)
+        if pa.exists() and pb.exists() and pa.read_bytes() != pb.read_bytes():
+            errors.append(
+                f"{a} and {b} have drifted — the crate copy (published) must stay "
+                f"byte-identical to the docs-site copy. Re-sync them."
+            )
 
     # 4. Path/git deps need version field
     for pkg in meta["packages"]:

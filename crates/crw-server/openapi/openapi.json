@@ -1,0 +1,557 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "CRW REST API",
+    "version": "0.10.0",
+    "description": "Firecrawl-compatible web scraping, crawling, mapping, search, and extraction API. Hosted at https://api.fastcrw.com; self-host with `docker run -p 3000:3000 ghcr.io/us/crw:latest`.",
+    "license": {
+      "name": "AGPL-3.0",
+      "url": "https://opensource.org/licenses/AGPL-3.0"
+    },
+    "contact": {
+      "url": "https://github.com/us/crw"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.fastcrw.com",
+      "description": "Hosted (requires Bearer token)"
+    },
+    {
+      "url": "http://localhost:3000",
+      "description": "Self-hosted (no auth by default)"
+    }
+  ],
+  "security": [
+    { "bearerAuth": [] },
+    {}
+  ],
+  "tags": [
+    { "name": "search", "description": "Web search via SearXNG (self-hosted) or managed (hosted)" },
+    { "name": "scrape",  "description": "Single-URL content extraction" },
+    { "name": "crawl",   "description": "Async multi-page crawl jobs" },
+    { "name": "map",     "description": "URL discovery without full scraping" },
+    { "name": "extract", "description": "Structured JSON extraction via scrape + jsonOptions" },
+    { "name": "change-tracking", "description": "Stateless diff of a scrape against a caller-supplied previous snapshot (monitor primitive)" }
+  ],
+  "paths": {
+    "/v1/search": {
+      "post": {
+        "tags": ["search"],
+        "summary": "Search the web and optionally scrape results",
+        "operationId": "search",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SearchRequest" },
+              "examples": {
+                "minimal": {
+                  "summary": "Top 3 results, no scraping",
+                  "value": { "query": "renewable energy trends 2024", "limit": 3 }
+                },
+                "with_scrape": {
+                  "summary": "Scrape each result as markdown",
+                  "value": {
+                    "query": "rust async runtime",
+                    "limit": 5,
+                    "scrapeOptions": { "formats": ["markdown"], "onlyMainContent": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Search results",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SearchResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "503": { "$ref": "#/components/responses/SearchDisabled" }
+        }
+      }
+    },
+    "/v1/scrape": {
+      "post": {
+        "tags": ["scrape"],
+        "summary": "Scrape one URL",
+        "operationId": "scrape",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ScrapeRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Scrape result",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ScrapeResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/v1/map": {
+      "post": {
+        "tags": ["map"],
+        "summary": "Discover URLs on a site",
+        "operationId": "map",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/MapRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "List of URLs",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MapResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/crawl": {
+      "post": {
+        "tags": ["crawl"],
+        "summary": "Start an async crawl job",
+        "operationId": "crawlStart",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CrawlRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Crawl job accepted; poll with /v1/crawl/{id}",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CrawlAccepted" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/crawl/{id}": {
+      "get": {
+        "tags": ["crawl"],
+        "summary": "Get crawl job status and results",
+        "operationId": "crawlStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Crawl job id returned by POST /v1/crawl"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job status + collected pages",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CrawlStatus" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/v1/change-tracking/diff": {
+      "post": {
+        "tags": ["change-tracking"],
+        "summary": "Diff current scrape content against a previous snapshot",
+        "description": "Stateless: opencore stores nothing — the caller supplies the `previous` snapshot. Accepts a single body or a `batch` array (presence of `batch` selects batch mode). The crawl-path workhorse for monitors.",
+        "operationId": "changeTrackingDiff",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ChangeTrackingDiffRequest" },
+              "examples": {
+                "single_gitdiff": {
+                  "summary": "Single page, markdown git-diff",
+                  "value": {
+                    "modes": ["gitDiff"],
+                    "previous": { "markdown": "Starter $19", "contentHash": "abc" },
+                    "current": { "markdown": "Starter $24" }
+                  }
+                },
+                "batch_json": {
+                  "summary": "Batch, json per-field mode",
+                  "value": {
+                    "modes": ["json"],
+                    "batch": [
+                      { "url": "https://example.com/pricing", "previous": { "json": { "price": "$19" }, "contentHash": "abc" }, "current": { "json": { "price": "$24" } } }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Diff result (object for single, array for batch) wrapped in the standard envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["success", "data"],
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "oneOf": [
+                        { "$ref": "#/components/schemas/ChangeTrackingResult" },
+                        { "type": "array", "items": { "$ref": "#/components/schemas/ChangeTrackingResult" } }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/v1/extract": {
+      "post": {
+        "tags": ["extract"],
+        "summary": "Structured JSON extraction (alias for scrape + formats:[json])",
+        "operationId": "extract",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ExtractRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Extracted JSON",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ExtractResponse" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API key",
+        "description": "Hosted only. Get a key at https://fastcrw.com/register."
+      }
+    },
+    "schemas": {
+      "SearchRequest": {
+        "type": "object",
+        "required": ["query"],
+        "properties": {
+          "query": { "type": "string", "minLength": 1, "maxLength": 2000 },
+          "limit": { "type": "integer", "minimum": 1, "maximum": 20, "default": 5 },
+          "lang":  { "type": "string", "example": "en" },
+          "tbs":   { "type": "string", "enum": ["qdr:h", "qdr:d", "qdr:w", "qdr:m", "qdr:y"] },
+          "sources":    { "type": "array", "items": { "type": "string", "enum": ["web", "news", "images"] } },
+          "categories": { "type": "array", "items": { "type": "string" } },
+          "scrapeOptions": { "$ref": "#/components/schemas/ScrapeOptions" }
+        }
+      },
+      "SearchResult": {
+        "type": "object",
+        "required": ["url", "title"],
+        "properties": {
+          "url":         { "type": "string", "format": "uri" },
+          "title":       { "type": "string" },
+          "snippet":     { "type": "string", "description": "Result blurb (LLM-ready summary line)" },
+          "description": { "type": "string", "description": "Alias of snippet (same value, kept for Firecrawl response-shape parity)" },
+          "position":    { "type": "integer" },
+          "score":       { "type": "number" },
+          "category":    { "type": "string", "description": "SearXNG result category (e.g. 'general')" },
+          "markdown":    { "type": "string", "description": "Present when scrapeOptions.formats includes 'markdown'" }
+        }
+      },
+      "SearchResponse": {
+        "type": "object",
+        "required": ["success", "data"],
+        "properties": {
+          "success": { "type": "boolean" },
+          "data":    { "type": "array", "items": { "$ref": "#/components/schemas/SearchResult" } }
+        }
+      },
+      "ScrapeOptions": {
+        "type": "object",
+        "properties": {
+          "formats":         { "type": "array", "items": { "type": "string", "enum": ["markdown", "html", "rawHtml", "links"] }, "default": ["markdown"] },
+          "onlyMainContent": { "type": "boolean", "default": true }
+        }
+      },
+      "ScrapeRequest": {
+        "type": "object",
+        "required": ["url"],
+        "properties": {
+          "url":             { "type": "string", "format": "uri" },
+          "formats":         { "type": "array", "items": { "type": "string", "enum": ["markdown", "html", "rawHtml", "plainText", "links", "json", "summary", "changeTracking"] }, "default": ["markdown"] },
+          "onlyMainContent": { "type": "boolean", "default": true },
+          "jsonOptions":     { "$ref": "#/components/schemas/JsonOptions" },
+          "changeTracking":  { "$ref": "#/components/schemas/ChangeTrackingOptions", "description": "Activated when formats includes 'changeTracking'. The format entry is the plain string; options ride on this sibling field." },
+          "goal":            { "type": "string", "maxLength": 2048, "description": "Plain-language monitor goal for the meaningful-change judge" },
+          "judgeEnabled":    { "type": "boolean", "description": "Run the LLM meaningful-change judge on a changed page (requires goal)" }
+        }
+      },
+      "ScrapeResponse": {
+        "type": "object",
+        "required": ["success", "data"],
+        "properties": {
+          "success": { "type": "boolean" },
+          "warning": { "type": "string", "description": "Top-level advisory (e.g. fallback render notice)" },
+          "data": {
+            "type": "object",
+            "properties": {
+              "markdown": { "type": "string" },
+              "html":     { "type": "string" },
+              "rawHtml":  { "type": "string" },
+              "links":    { "type": "array", "items": { "type": "string", "format": "uri" } },
+              "json":     { "type": "object", "additionalProperties": true },
+              "metadata": { "$ref": "#/components/schemas/PageMetadata" },
+              "warning":  { "type": "string" },
+              "warnings": { "type": "array", "items": { "type": "string" } },
+              "renderDecision": { "type": "string", "description": "Which renderer ran (e.g. 'http', 'browser')" },
+              "creditCost":     { "type": "number" }
+            }
+          }
+        }
+      },
+      "JsonOptions": {
+        "type": "object",
+        "properties": {
+          "schema":       { "type": "object", "description": "JSON schema for the extracted shape", "additionalProperties": true },
+          "prompt":       { "type": "string" },
+          "systemPrompt": { "type": "string" }
+        }
+      },
+      "MapRequest": {
+        "type": "object",
+        "required": ["url"],
+        "properties": {
+          "url":   { "type": "string", "format": "uri" },
+          "limit": { "type": "integer", "minimum": 1, "maximum": 5000, "default": 100 },
+          "search":{ "type": "string", "description": "Optional substring filter applied to discovered URLs" }
+        }
+      },
+      "MapResponse": {
+        "type": "object",
+        "required": ["success", "data"],
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": {
+            "type": "object",
+            "required": ["links"],
+            "properties": {
+              "links": { "type": "array", "items": { "type": "string", "format": "uri" } },
+              "droppedActionCount":    { "type": "integer" },
+              "strippedTrackingCount": { "type": "integer" }
+            }
+          }
+        }
+      },
+      "CrawlRequest": {
+        "type": "object",
+        "required": ["url"],
+        "properties": {
+          "url":      { "type": "string", "format": "uri" },
+          "maxPages": { "type": "integer", "minimum": 1, "default": 100 },
+          "maxDepth": { "type": "integer", "minimum": 0, "default": 2 },
+          "scrapeOptions": { "$ref": "#/components/schemas/ScrapeOptions" }
+        }
+      },
+      "CrawlAccepted": {
+        "type": "object",
+        "required": ["success", "id"],
+        "properties": {
+          "success": { "type": "boolean" },
+          "id":      { "type": "string" },
+          "url":     { "type": "string", "format": "uri", "description": "URL to poll with GET /v1/crawl/{id}" }
+        }
+      },
+      "CrawlStatus": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status":    { "type": "string", "enum": ["scraping", "completed", "failed"] },
+          "completed": { "type": "integer" },
+          "total":     { "type": "integer" },
+          "data":      { "type": "array", "items": { "$ref": "#/components/schemas/ScrapeResponse" } }
+        }
+      },
+      "ExtractRequest": {
+        "type": "object",
+        "required": ["url"],
+        "properties": {
+          "url":    { "type": "string", "format": "uri" },
+          "schema": { "type": "object", "additionalProperties": true },
+          "prompt": { "type": "string" },
+          "llmApiKey":   { "type": "string", "description": "BYOK: LLM provider API key (required unless server has one configured)" },
+          "llmProvider": { "type": "string", "description": "LLM provider name (e.g. openai, anthropic)" },
+          "llmModel":    { "type": "string", "description": "Model identifier passed to the provider" }
+        }
+      },
+      "ExtractResponse": {
+        "type": "object",
+        "required": ["success", "data"],
+        "properties": {
+          "success": { "type": "boolean" },
+          "data":    { "type": "object", "additionalProperties": true }
+        }
+      },
+      "PageMetadata": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "title":       { "type": "string" },
+          "description": { "type": "string" },
+          "sourceURL":   { "type": "string", "format": "uri" },
+          "statusCode":  { "type": "integer" }
+        }
+      },
+      "ChangeTrackingOptions": {
+        "type": "object",
+        "properties": {
+          "modes":   { "type": "array", "items": { "type": "string", "enum": ["gitDiff", "json"] }, "description": "Diff surfaces. gitDiff = markdown unified diff + AST; json = per-field diff; both = mixed." },
+          "schema":  { "type": "object", "additionalProperties": true, "description": "JSON schema of tracked fields (json/mixed mode)" },
+          "prompt":  { "type": "string" },
+          "previous": { "$ref": "#/components/schemas/ChangeTrackingSnapshot" },
+          "tag":     { "type": "string", "description": "Opaque caller tag echoed on the result" },
+          "contentType": { "type": "string", "description": "MIME type; non-text content is hashed, not diffed" }
+        }
+      },
+      "ChangeTrackingSnapshot": {
+        "type": "object",
+        "properties": {
+          "markdown":    { "type": "string", "description": "Present for gitDiff/mixed mode" },
+          "json":        { "type": "object", "additionalProperties": true, "description": "Present for json/mixed mode" },
+          "contentHash": { "type": "string", "description": "Mode-aware hash; persist + supply on the next check" },
+          "capturedAt":  { "type": "string", "description": "Caller-stamped capture time, echoed untouched" }
+        }
+      },
+      "ChangeDiff": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string", "description": "Unified markdown diff (gitDiff/mixed)" },
+          "json": { "type": "object", "additionalProperties": true, "description": "Parse-diff AST (gitDiff-only) OR per-field path map {previous,current} (json/mixed)" }
+        }
+      },
+      "ChangeJudgment": {
+        "type": "object",
+        "required": ["meaningful", "confidence", "reason"],
+        "properties": {
+          "meaningful": { "type": "boolean" },
+          "confidence": { "type": "string", "enum": ["low", "medium", "high"] },
+          "reason":     { "type": "string" },
+          "meaningfulChanges": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type":   { "type": "string", "enum": ["added", "removed", "changed"] },
+                "before": { "type": "string" },
+                "after":  { "type": "string" },
+                "reason": { "type": "string" }
+              }
+            }
+          }
+        }
+      },
+      "ChangeTrackingResult": {
+        "type": "object",
+        "required": ["status", "contentHash"],
+        "properties": {
+          "status":           { "type": "string", "enum": ["same", "changed"], "description": "Per-page status. Set-level new/removed are computed by the caller's reconciler." },
+          "firstObservation": { "type": "boolean", "description": "True when no previous was supplied — caller maps to 'new'" },
+          "contentHash":      { "type": "string" },
+          "snapshot":         { "$ref": "#/components/schemas/ChangeTrackingSnapshot" },
+          "diff":             { "$ref": "#/components/schemas/ChangeDiff" },
+          "judgment":         { "$ref": "#/components/schemas/ChangeJudgment" },
+          "tag":              { "type": "string" },
+          "truncated":        { "type": "boolean" }
+        }
+      },
+      "ChangeTrackingDiffItem": {
+        "type": "object",
+        "required": ["current"],
+        "properties": {
+          "url":      { "type": "string", "format": "uri" },
+          "current":  { "type": "object", "properties": { "markdown": { "type": "string" }, "json": { "type": "object", "additionalProperties": true } } },
+          "previous": { "$ref": "#/components/schemas/ChangeTrackingSnapshot" },
+          "modes":    { "type": "array", "items": { "type": "string", "enum": ["gitDiff", "json"] } },
+          "schema":   { "type": "object", "additionalProperties": true },
+          "prompt":   { "type": "string" },
+          "contentType": { "type": "string" },
+          "tag":      { "type": "string" }
+        }
+      },
+      "ChangeTrackingDiffRequest": {
+        "type": "object",
+        "description": "Single body (provide 'current') OR batch (provide 'batch'). Top-level modes/schema/prompt/contentType act as shared defaults in batch mode.",
+        "properties": {
+          "batch":    { "type": "array", "items": { "$ref": "#/components/schemas/ChangeTrackingDiffItem" } },
+          "current":  { "type": "object", "properties": { "markdown": { "type": "string" }, "json": { "type": "object", "additionalProperties": true } } },
+          "previous": { "$ref": "#/components/schemas/ChangeTrackingSnapshot" },
+          "modes":    { "type": "array", "items": { "type": "string", "enum": ["gitDiff", "json"] } },
+          "schema":   { "type": "object", "additionalProperties": true },
+          "prompt":   { "type": "string" },
+          "contentType": { "type": "string" }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": ["success", "error"],
+        "properties": {
+          "success": { "type": "boolean", "const": false },
+          "error":   { "type": "string", "description": "Machine-readable error code (see docs/error-codes.md)" },
+          "message": { "type": "string" }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest":      { "description": "Invalid request body", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "Unauthorized":    { "description": "Missing or invalid bearer token (hosted only)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "NotFound":        { "description": "Resource not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "RateLimited":     { "description": "Rate limit exceeded", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "SearchDisabled":  { "description": "Search is disabled in self-hosted config (error: search_disabled)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+    }
+  }
+}
