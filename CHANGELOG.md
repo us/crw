@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.13.4](https://github.com/us/crw/compare/v0.13.3...v0.13.4) (2026-06-07)
+
+
+### Bug Fixes
+
+* **docker:** install aarch64 libc headers for cross-compile + CI guard ([8cd31ac](https://github.com/us/crw/commit/8cd31ac016177d3d2621e8ecfa03a027b1621a3a))
+
 ## [0.13.3](https://github.com/us/crw/compare/v0.13.2...v0.13.3) (2026-06-06)
 
 
