@@ -2,6 +2,18 @@
 
 All notable changes to CRW are documented here.
 
+## [0.13.3](https://github.com/us/crw/compare/v0.13.2...v0.13.3) (2026-06-06)
+
+
+### Bug Fixes
+
+* **release:** stop verify-publish reporting false failures ([d57c8c6](https://github.com/us/crw/commit/d57c8c6285a014031bcf310386e83493c7dcd2f2))
+
+
+### Performance
+
+* **docker:** cross-compile arm64 instead of QEMU (2h -&gt; ~3min) ([a7cab42](https://github.com/us/crw/commit/a7cab423d11fd8a7474c587796f86eacf2c32df9))
+
 ## [0.13.2](https://github.com/us/crw/compare/v0.13.1...v0.13.2) (2026-06-06)
 
 
