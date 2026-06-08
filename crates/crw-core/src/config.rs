@@ -1102,9 +1102,42 @@ fn default_true_ext() -> bool {
     true
 }
 
+/// Custom deserializer for Vec<String> that accepts:
+/// - TOML array: `api_keys = ["key1", "key2"]`
+/// - JSON array: `["key1", "key2"]` (for env vars)
+/// - Comma-separated: `key1,key2` (for simple env var usage)
+fn deserialize_string_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(serde::Deserialize)]
+    #[serde(untagged)]
+    enum StringOrVec {
+        Vec(Vec<String>),
+        Str(String),
+    }
+
+    match StringOrVec::deserialize(deserializer)? {
+        StringOrVec::Vec(v) => Ok(v),
+        StringOrVec::Str(s) => {
+            let s = s.trim();
+            // Try JSON array first
+            if s.starts_with('[') {
+                serde_json::from_str(s).map_err(serde::de::Error::custom)
+            } else {
+                // Comma-separated fallback
+                Ok(s.split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect())
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct AuthConfig {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_string_vec")]
     pub api_keys: Vec<String>,
 }
 

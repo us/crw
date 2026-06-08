@@ -80,3 +80,43 @@ fn app_config_deserialize_empty() {
     assert_eq!(config.renderer.mode, RendererMode::Auto);
     assert_eq!(config.crawler.max_concurrency, 10);
 }
+
+#[test]
+fn auth_config_api_keys_toml_array() {
+    let toml_str = r#"
+        api_keys = ["key1", "key2"]
+    "#;
+    let config: AuthConfig = toml::from_str(toml_str).unwrap();
+    assert_eq!(config.api_keys, vec!["key1", "key2"]);
+}
+
+#[test]
+fn auth_config_api_keys_empty() {
+    let toml_str = "";
+    let config: AuthConfig = toml::from_str(toml_str).unwrap();
+    assert!(config.api_keys.is_empty());
+}
+
+#[test]
+fn auth_config_api_keys_json_string() {
+    // JSON array as string (what env vars pass)
+    let toml_str = r#"api_keys = "[\"key1\", \"key2\"]""#;
+    let config: AuthConfig = toml::from_str(toml_str).unwrap();
+    assert_eq!(config.api_keys, vec!["key1", "key2"]);
+}
+
+#[test]
+fn auth_config_api_keys_comma_separated() {
+    // Comma-separated string
+    let toml_str = r#"api_keys = "key1,key2""#;
+    let config: AuthConfig = toml::from_str(toml_str).unwrap();
+    assert_eq!(config.api_keys, vec!["key1", "key2"]);
+}
+
+#[test]
+fn auth_config_api_keys_comma_with_spaces() {
+    // Comma-separated with spaces
+    let toml_str = r#"api_keys = "key1, key2 , key3""#;
+    let config: AuthConfig = toml::from_str(toml_str).unwrap();
+    assert_eq!(config.api_keys, vec!["key1", "key2", "key3"]);
+}
