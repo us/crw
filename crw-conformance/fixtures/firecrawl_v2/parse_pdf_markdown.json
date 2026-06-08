@@ -1,0 +1,21 @@
+{
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": {
+      "markdown": "Hello fastCRW PDF parsing\n\nThis is a text-based test document.\n\n* * *\n\nSecond page content here.",
+      "metadata": {
+        "scrapeId": "019ea479-904f-758c-9909-b48922df4472",
+        "sourceURL": "sample.pdf",
+        "url": "https://parse.firecrawl.dev/uploads/sample.pdf",
+        "statusCode": 200,
+        "numPages": 2,
+        "title": "untitled",
+        "contentType": "application/pdf",
+        "proxyUsed": "basic",
+        "creditsUsed": 2,
+        "concurrencyLimited": false
+      }
+    }
+  }
+}

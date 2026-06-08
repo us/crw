@@ -109,6 +109,37 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
                 .map_err(|e| format!("{e}"))?;
             serde_json::to_value(&resp).map_err(|e| format!("serialize error: {e}"))
         }
+        "crw_parse_file" => {
+            use base64::Engine;
+            let b64 = args
+                .get("contentBase64")
+                .and_then(|v| v.as_str())
+                .ok_or("missing required parameter: contentBase64")?;
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(b64.trim())
+                .map_err(|e| format!("invalid base64 in contentBase64: {e}"))?;
+
+            // Optional ScrapeRequest-shaped fields (formats/jsonSchema/parsers).
+            let req: ScrapeRequest = serde_json::from_value(args.clone()).unwrap_or_default();
+            let llm_config = state.config.extraction.llm.as_ref();
+            let filename = args
+                .get("filename")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let source = crw_crawl::pdf::PdfSource {
+                source_url: format!("upload://{}", filename.as_deref().unwrap_or("document.pdf")),
+                status_code: 200,
+                elapsed_ms: 0,
+                source_filename: filename,
+            };
+            let mut data = crw_crawl::pdf::convert_pdf_bytes_strict(bytes, &req, source)
+                .await
+                .map_err(|(crw_err, _)| format!("{crw_err}"))?;
+            crw_crawl::pdf::apply_llm_formats(&mut data, &req, llm_config)
+                .await
+                .map_err(|e| format!("{e}"))?;
+            serde_json::to_value(&data).map_err(|e| format!("serialize error: {e}"))
+        }
         _ => Err(format!("unknown tool: {tool_name}")),
     }
 }

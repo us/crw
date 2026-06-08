@@ -21,10 +21,27 @@ This is a **capability matrix**, not an API-shape compatibility matrix (which th
 | `/v1/search` (web search → grounded results) | ✅ | ⚠️ (no Fire-engine; Cloud has stronger anti-bot) | ✅ (SearXNG-backed) |
 | `/v1/extract` (LLM extraction) | ✅ (standalone route) | ⚠️ (requires LLM provider key + manual `.env`) | ⚠️ **No standalone `/v1/extract` route.** LLM extraction is exposed via `/v1/scrape` with `formats: ["json"]` + a JSON schema. Firecrawl `/extract` callers must port to `/v1/scrape` (single-URL only — multi-URL `/extract` is not matched). |
 | `/v1/deep-research` | ✅ | ❌ (Cloud-only) | ❌ |
-| `/v1/parse` (Rust-based engine, Apr 2026) | ✅ | ⚠️ (rolling out) | N/A (different model) |
+| `/v2/parse` (file upload → markdown) | ✅ (PDF/DOCX/XLSX/HTML/…) | ⚠️ (rolling out) | ✅ **PDF only** (multipart `file` + `options`; pure-Rust `pdf-inspector`, no OCR) |
 | `/v1/agent` (Spark models) | ✅ | ❌ | ❌ |
 
 **Source:** `github.com/firecrawl/firecrawl/blob/main/SELF_HOST.md`. Capture commit hash and pin per page citing this row before publish.
+
+### Document parsing (`parsers` + `/v2/parse`)
+
+- **`parsers` on `/v2/scrape`** — Firecrawl-compatible. A URL returning
+  `application/pdf` is auto-converted to markdown by default (no field needed,
+  matches Firecrawl). Accepts both `parsers: ["pdf"]` and
+  `parsers: [{ "type": "pdf", "mode": "auto"|"fast"|"ocr", "maxPages": N }]`.
+  `parsers: []` disables conversion (raw bytes).
+- **`mode`** — accepted for wire-compatibility. fastCRW has **no OCR**, so
+  `mode: "ocr"` (and the OCR-fallback half of `auto`) degrades to text-layer
+  extraction with a `pdf_ocr_unsupported` / `pdf_scanned` warning rather than an
+  error. `fast` (text-only) is the native behavior.
+- **`POST /v2/parse`** — multipart `file` + `options` (JSON string), same
+  response envelope as `/v2/scrape`. fastCRW supports **PDF only** (the
+  `pdf-inspector` engine); Firecrawl additionally parses DOCX/XLSX/RTF/ODT.
+  Advertised at `GET /v2/capabilities` → `documents.parsers` / `fileUpload` so
+  callers can detect support before sending.
 
 ---
 

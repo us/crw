@@ -180,3 +180,46 @@ gov_tld_drop_actions = false
 extra_tracking_params = []
 extra_action_params = []
 extra_preserve_params = []
+
+# ── Document (PDF) parsing ──────────────────────────────────────────────────
+# Controls conversion of binary documents (currently PDF) to markdown. A URL
+# that returns application/pdf is auto-converted; files can also be uploaded to
+# POST /v2/parse. PDF support is also a compile-time cargo feature (`pdf`,
+# default ON) — this section only governs runtime behaviour. All keys honor
+# CRW_DOCUMENT__* env overrides.
+[document]
+# Master runtime switch. When false, PDFs are left unparsed (raw bytes).
+enabled = true
+# Cap pages converted per document. 0 = no limit.
+max_pages = 0
+# Best-effort text from scanned/image PDFs. pdf-inspector has NO OCR, so this
+# is usually empty — left off by default.
+attempt_scanned = false
+# Maximum upload size (bytes) for POST /v2/parse. Default 50 MiB, matching the
+# HTTP renderer's response cap.
+max_upload_bytes = 52428800
+# Max concurrent uploads being parsed (bounds peak memory: each in-flight
+# upload buffers up to max_upload_bytes).
+upload_concurrency = 4
+# Process-wide cap on concurrent PDF parses across ALL surfaces (URL scrape,
+# crawl, batch, upload). Primary memory/CPU-DoS guard — a malicious PDF can
+# decompress far beyond its wire size, so bound how many parse at once.
+max_concurrent_parses = 4
+# Wall-clock timeout (ms) per PDF parse. A document exceeding this returns a
+# pdf_timeout error instead of pinning a worker. 0 disables.
+parse_timeout_ms = 30000
+# Decompression-bomb guard: max total DECOMPRESSED bytes a PDF's FlateDecode
+# streams may inflate to. Checked in bounded memory BEFORE parsing, so a small
+# file that explodes to many GB is rejected (pdf_too_large) having allocated
+# only kilobytes — the primary OOM-crash guard. Default 100 MiB (huge for text;
+# raise only for image-heavy PDFs). 0 disables.
+max_decompressed_bytes = 104857600
+# Run each PDF parse in an ISOLATED child process (Unix only). The child gets a
+# hard OS memory ceiling + CPU limit, inherits no secrets, and is killed on
+# timeout — a crash/OOM/parser-exploit is contained to the child, the server
+# (scrape/crawl) keeps running. ~1-3ms spawn overhead per parse. Turn ON for
+# hosts that accept untrusted uploads.
+sandbox = false
+# Hard address-space limit (bytes) for a sandbox child (RLIMIT_AS). Aborted by
+# the OS if exceeded — the ultimate memory-DoS backstop. Default 512 MiB.
+sandbox_memory_bytes = 536870912

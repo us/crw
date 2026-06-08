@@ -12,10 +12,12 @@ pub mod crawl;
 pub mod extract;
 pub mod formats;
 pub mod map;
+pub mod parse;
 pub mod scrape;
 pub mod search;
 
 use axum::Router;
+use axum::extract::DefaultBodyLimit;
 use axum::routing::{get, post};
 
 use crate::routes::method_not_allowed;
@@ -50,6 +52,20 @@ pub fn router() -> Router<AppState> {
         .route(
             "/v2/crawl/{id}/errors",
             get(crawl::get_errors).fallback(method_not_allowed),
+        )
+        .route(
+            // File-upload parsing. Per-route 50 MB body limit overrides the
+            // global 1 MB cap (innermost DefaultBodyLimit wins) — applied only
+            // here so JSON endpoints stay DoS-bounded.
+            "/v2/parse",
+            post(parse::parse)
+                .layer(DefaultBodyLimit::max(parse::MAX_UPLOAD_BYTES))
+                .fallback(method_not_allowed),
+        )
+        .route(
+            // Same handler as /v1/capabilities; v2 alias for SDK symmetry.
+            "/v2/capabilities",
+            get(crate::routes::capabilities::capabilities).fallback(method_not_allowed),
         )
         .route("/v2/map", post(map::map).fallback(method_not_allowed))
         .route(

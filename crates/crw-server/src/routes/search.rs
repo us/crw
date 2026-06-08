@@ -1042,6 +1042,7 @@ async fn enrich_with_scrape(
                 change_tracking: None,
                 goal: None,
                 judge_enabled: None,
+                parsers: None,
             };
             let deadline = Deadline::from_request_ms(deadline_ms);
             let result = scrape_url(

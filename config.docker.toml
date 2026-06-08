@@ -107,3 +107,19 @@ answer_calibrated = true
 strip_tracking_params = true
 drop_action_urls = true
 gov_tld_drop_actions = false
+
+# Document (PDF) parsing — see config.default.toml for field docs.
+[document]
+enabled = true
+max_pages = 0
+attempt_scanned = false
+max_upload_bytes = 52428800
+upload_concurrency = 2
+# Sized so concurrent sandbox children fit the container mem_limit (2g):
+# 2 × sandbox_memory_bytes (512 MiB) + engine base ≈ 1.3 GiB < 2 GiB.
+max_concurrent_parses = 2
+parse_timeout_ms = 30000
+max_decompressed_bytes = 104857600
+# Docker images accept untrusted uploads → isolate parses by default.
+sandbox = true
+sandbox_memory_bytes = 536870912

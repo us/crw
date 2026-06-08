@@ -18,6 +18,9 @@ pub struct AppConfig {
     pub search: SearchConfig,
     #[serde(default)]
     pub map: MapConfig,
+    /// `[document]` — binary-document (PDF) parsing knobs.
+    #[serde(default)]
+    pub document: DocumentConfig,
     /// `[client]` — settings for the local CLI/MCP when it proxies to the
     /// hosted SaaS. Written by `crw setup` into the user-config file.
     #[serde(default)]
@@ -35,6 +38,73 @@ pub struct ClientConfig {
     /// API key for the hosted CRW API.
     #[serde(default)]
     pub api_key: Option<String>,
+}
+
+/// `[document]` section — controls PDF (and future binary-document) parsing.
+/// All knobs honor `CRW_DOCUMENT__*` env overrides.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct DocumentConfig {
+    /// Master switch for document parsing at runtime (independent of the
+    /// compile-time `pdf` cargo feature). When `false`, PDFs are left unparsed.
+    pub enabled: bool,
+    /// Cap on the number of pages converted per document. `0` = no limit.
+    pub max_pages: usize,
+    /// Best-effort extraction from scanned/image PDFs (no OCR; usually empty).
+    pub attempt_scanned: bool,
+    /// Maximum upload size in bytes for `POST /v2/parse`. Defaults to 50 MB,
+    /// matching the HTTP renderer's response cap.
+    pub max_upload_bytes: usize,
+    /// Maximum number of concurrent uploads being parsed at once — bounds peak
+    /// memory (each in-flight upload buffers up to `max_upload_bytes`).
+    pub upload_concurrency: usize,
+    /// Process-wide cap on concurrent PDF parses across ALL surfaces (URL
+    /// scrape, crawl, batch, upload). Bounds peak CPU + decompressed memory: a
+    /// malicious PDF can decompress far beyond its on-wire size, so this is the
+    /// primary memory-DoS guard. Independent of `upload_concurrency` (which
+    /// only bounds upload body buffering).
+    pub max_concurrent_parses: usize,
+    /// Wall-clock timeout (ms) for a single PDF parse. A parse exceeding this
+    /// returns a timeout error to the caller; protects against pathological
+    /// documents that spin the parser. `0` disables the timeout.
+    pub parse_timeout_ms: u64,
+    /// Decompression-bomb guard: maximum total DECOMPRESSED bytes a document's
+    /// FlateDecode streams may inflate to. Checked in bounded memory BEFORE the
+    /// parser runs, so a small file that explodes to many GB is rejected with
+    /// `pdf_too_large` having allocated only kilobytes. This is the primary
+    /// guard against OOM-crashing the host. `0` disables it. Default 100 MiB —
+    /// huge for text extraction (millions of words) yet tiny next to host RAM.
+    /// Raise only if you must parse image-heavy PDFs.
+    pub max_decompressed_bytes: usize,
+    /// Run each PDF parse in an isolated child PROCESS (Unix only) instead of
+    /// in-process. The child gets a hard OS memory ceiling (`RLIMIT_AS`) and CPU
+    /// limit, inherits no env/secrets, and is killed on timeout. A crash, OOM,
+    /// or even a hypothetical parser RCE is contained to the child — the main
+    /// server (scrape/crawl) keeps running. Costs ~1-3ms spawn overhead per
+    /// parse. Recommended for hosts that accept untrusted uploads. Default off.
+    pub sandbox: bool,
+    /// Hard address-space limit (bytes) for a sandbox child (`RLIMIT_AS`). The
+    /// child is aborted by the OS if it allocates beyond this — the ultimate
+    /// backstop against memory-DoS even if the decompression guard is bypassed.
+    /// Default 512 MiB.
+    pub sandbox_memory_bytes: u64,
+}
+
+impl Default for DocumentConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_pages: 0,
+            attempt_scanned: false,
+            max_upload_bytes: 52_428_800, // 50 MiB
+            upload_concurrency: 4,
+            max_concurrent_parses: 4,
+            parse_timeout_ms: 30_000,
+            max_decompressed_bytes: 104_857_600, // 100 MiB
+            sandbox: false,
+            sandbox_memory_bytes: 536_870_912, // 512 MiB
+        }
+    }
 }
 
 /// `[map]` section — currently only carries `[map.url_filter]`.

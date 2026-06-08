@@ -300,6 +300,7 @@ impl EngineSource {
             change_tracking: None,
             goal: None,
             judge_enabled: None,
+            parsers: None,
         }
     }
 }

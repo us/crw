@@ -18,6 +18,10 @@ enum Commands {
 
 #[tokio::main]
 async fn main() {
+    // If spawned as a PDF sandbox worker, handle it and exit BEFORE clap parses
+    // args (the worker sentinel is not a valid subcommand).
+    crw_crawl::pdf::run_sandbox_worker_if_invoked();
+
     let cli = Cli::parse();
 
     match cli.command {
@@ -49,6 +53,10 @@ async fn run_server() {
             std::process::exit(1);
         }
     };
+
+    // Install process-wide PDF-parse limits (concurrency cap, timeout, page
+    // cap) from [document] config before any request can trigger a parse.
+    crw_crawl::pdf::configure_limits(&config.document);
 
     let addr = format!("{}:{}", config.server.host, config.server.port);
     tracing::info!("Starting CRW on {addr}");

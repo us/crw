@@ -129,6 +129,16 @@ pub struct Metrics {
     pub judge_calls_total: IntCounterVec,
     /// LLM judge token usage, labeled by kind (`input` | `output`).
     pub judge_tokens_total: IntCounterVec,
+    // -------- Document (PDF) parsing --------
+    /// Document conversions, labeled by outcome (`ok` | `empty` | `error`).
+    pub document_conversions_total: IntCounterVec,
+    /// Wall-clock duration of one document conversion, labeled by format.
+    pub document_conversion_duration_seconds: HistogramVec,
+    /// Pages processed across document conversions, labeled by format.
+    pub document_pages_total: IntCounterVec,
+    /// Document classification outcomes, labeled by class
+    /// (`text` | `scanned` | `encrypted` | `corrupt`).
+    pub document_classification_total: IntCounterVec,
 }
 
 static METRICS: OnceLock<Metrics> = OnceLock::new();
@@ -443,6 +453,39 @@ impl Metrics {
             registry
         )
         .unwrap();
+        let document_conversions_total = register_int_counter_vec_with_registry!(
+            "crw_document_conversions_total",
+            "Document conversions by outcome (ok | empty | error)",
+            &["outcome"],
+            registry
+        )
+        .unwrap();
+        // Conversion latency: 5ms × 4^k → 5ms .. ~80s.
+        let doc_lat_buckets = exponential_buckets(0.005, 4.0, 9).unwrap();
+        let document_conversion_duration_seconds = register_histogram_vec_with_registry!(
+            histogram_opts!(
+                "crw_document_conversion_duration_seconds",
+                "Duration of one document conversion by format",
+                doc_lat_buckets
+            ),
+            &["format"],
+            registry
+        )
+        .unwrap();
+        let document_pages_total = register_int_counter_vec_with_registry!(
+            "crw_document_pages_total",
+            "Pages processed across document conversions by format",
+            &["format"],
+            registry
+        )
+        .unwrap();
+        let document_classification_total = register_int_counter_vec_with_registry!(
+            "crw_document_classification_total",
+            "Document classification outcomes by class (text | scanned | encrypted | corrupt)",
+            &["class"],
+            registry
+        )
+        .unwrap();
         Self {
             registry,
             render_route_decision_total,
@@ -483,6 +526,10 @@ impl Metrics {
             change_tracking_snapshot_bytes,
             judge_calls_total,
             judge_tokens_total,
+            document_conversions_total,
+            document_conversion_duration_seconds,
+            document_pages_total,
+            document_classification_total,
         }
     }
 }

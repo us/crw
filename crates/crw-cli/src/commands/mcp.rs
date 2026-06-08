@@ -267,6 +267,7 @@ pub async fn run(args: McpArgs) -> Result<(), CmdError> {
                     request: Default::default(),
                     search: Default::default(),
                     map: Default::default(),
+                    document: Default::default(),
                     client: Default::default(),
                 }
             });

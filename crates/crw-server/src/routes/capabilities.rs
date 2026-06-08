@@ -18,6 +18,29 @@ pub struct Capabilities {
     pub llm: LlmCapabilities,
     pub formats: FormatCapabilities,
     pub search: SearchCapabilities,
+    pub documents: DocumentCapabilities,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentCapabilities {
+    /// Document parser types this instance can apply. `["pdf"]` when PDF
+    /// support is compiled in and enabled; empty otherwise. The SaaS gates the
+    /// `parsers` option and the upload UI on this.
+    pub parsers: Vec<&'static str>,
+    /// File-upload (`POST /v2/parse`) availability + limits.
+    pub file_upload: FileUploadCapabilities,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileUploadCapabilities {
+    pub supported: bool,
+    pub endpoint: &'static str,
+    pub max_bytes: usize,
+    pub types: Vec<&'static str>,
+    /// pdf-inspector has no OCR — scanned/image PDFs yield empty/partial text.
+    pub ocr: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -89,6 +112,23 @@ pub async fn capabilities(State(state): State<AppState>) -> Json<Capabilities> {
         search: SearchCapabilities {
             answer: true,
             summarize_results: true,
+        },
+        documents: {
+            let pdf_on = crw_extract::pdf::PDF_SUPPORTED && state.config.document.enabled;
+            DocumentCapabilities {
+                parsers: if pdf_on { vec!["pdf"] } else { vec![] },
+                file_upload: FileUploadCapabilities {
+                    supported: pdf_on,
+                    endpoint: "/v2/parse",
+                    max_bytes: state.config.document.max_upload_bytes,
+                    types: if pdf_on {
+                        vec!["application/pdf"]
+                    } else {
+                        vec![]
+                    },
+                    ocr: false,
+                },
+            }
         },
     })
 }

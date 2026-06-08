@@ -87,6 +87,12 @@ pub struct ScrapeArgs {
 }
 
 pub async fn run(mut args: ScrapeArgs) -> Result<(), CmdError> {
+    // Local document short-circuit: when the positional arg is an existing file
+    // on disk (not a URL), parse it directly. Only PDF is supported.
+    if std::path::Path::new(&args.url).is_file() {
+        return run_local_file(&args).await;
+    }
+
     // Auto-prepend https:// if no scheme is provided
     if !args.url.contains("://") {
         args.url = format!("https://{}", args.url);
@@ -588,6 +594,143 @@ async fn run_inline_llm_setup()
     }))
 }
 
+/// Parse a local document file (PDF) directly, bypassing the network fetch.
+/// Supports markdown/json/text/links output plus `--summary`/`--extract` when a
+/// server-side LLM is configured (via `crw setup`).
+async fn run_local_file(args: &ScrapeArgs) -> Result<(), CmdError> {
+    let path = args.url.clone();
+    let bytes = match std::fs::read(&path) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("error: failed to read {path}: {e}");
+            return Err(CmdError::code_only(1));
+        }
+    };
+
+    let is_pdf = path.to_ascii_lowercase().ends_with(".pdf")
+        || bytes
+            .strip_prefix(&[0xEF, 0xBB, 0xBF])
+            .unwrap_or(&bytes)
+            .trim_ascii_start()
+            .starts_with(b"%PDF-");
+    if !is_pdf {
+        eprintln!("error: local file parsing currently supports only PDF files (got {path})");
+        return Err(CmdError::code_only(1));
+    }
+
+    let want_summary = args.summary;
+    let want_extract = args.extract.is_some();
+
+    // --extract schema (inline JSON or @path), mirroring the URL path.
+    let extract_schema: Option<serde_json::Value> = match args.extract.as_deref() {
+        Some(s) if s.starts_with('@') => match std::fs::read_to_string(&s[1..]) {
+            Ok(body) => serde_json::from_str(&body).ok(),
+            Err(e) => {
+                eprintln!("error: failed to read {}: {e}", &s[1..]);
+                return Err(CmdError::code_only(1));
+            }
+        },
+        Some(s) => match serde_json::from_str(s) {
+            Ok(v) => Some(v),
+            Err(e) => {
+                eprintln!("error: --extract is not valid JSON: {e}");
+                return Err(CmdError::code_only(1));
+            }
+        },
+        None => None,
+    };
+
+    let app_config = crw_core::config::AppConfig::load().unwrap_or_default();
+
+    let formats = if want_summary || want_extract {
+        let mut v = vec![OutputFormat::Markdown];
+        if want_summary {
+            v.push(OutputFormat::Summary);
+        }
+        if want_extract {
+            v.push(OutputFormat::Json);
+        }
+        v
+    } else {
+        match args.format {
+            Format::Markdown => vec![OutputFormat::Markdown],
+            Format::Json => vec![OutputFormat::Markdown],
+            Format::Html | Format::Rawhtml => vec![OutputFormat::Markdown],
+            Format::Text => vec![OutputFormat::PlainText],
+            Format::Links => vec![OutputFormat::Links],
+        }
+    };
+
+    let req = ScrapeRequest {
+        formats,
+        json_schema: extract_schema,
+        summary_prompt: args.prompt.clone(),
+        ..Default::default()
+    };
+
+    let source = crw_crawl::pdf::PdfSource {
+        source_url: format!("file://{path}"),
+        status_code: 200,
+        elapsed_ms: 0,
+        source_filename: std::path::Path::new(&path)
+            .file_name()
+            .map(|s| s.to_string_lossy().into_owned()),
+    };
+
+    let mut data = match crw_crawl::pdf::convert_pdf_bytes(bytes, &req, source).await {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("error: PDF conversion failed: {e}");
+            return Err(CmdError::code_only(1));
+        }
+    };
+
+    if (want_summary || want_extract)
+        && let Err(e) =
+            crw_crawl::pdf::apply_llm_formats(&mut data, &req, app_config.extraction.llm.as_ref())
+                .await
+    {
+        eprintln!("error: {e}");
+        eprintln!("hint: run `crw setup` to configure an LLM for --summary/--extract.");
+        return Err(CmdError::code_only(1));
+    }
+
+    for w in &data.warnings {
+        eprintln!("warning: {w}");
+    }
+
+    let content = if want_summary {
+        data.summary.unwrap_or_default()
+    } else if want_extract {
+        data.json
+            .as_ref()
+            .map(|v| serde_json::to_string_pretty(v).unwrap_or_default())
+            .unwrap_or_default()
+    } else {
+        match args.format {
+            Format::Markdown => data.markdown.unwrap_or_default(),
+            Format::Json => serde_json::to_string_pretty(&data).unwrap_or_default(),
+            Format::Html | Format::Rawhtml => {
+                eprintln!("warning: HTML output is unavailable for PDF; returning markdown");
+                data.markdown.unwrap_or_default()
+            }
+            Format::Text => data.plain_text.unwrap_or_default(),
+            Format::Links => data.links.unwrap_or_default().join("\n"),
+        }
+    };
+
+    match &args.output {
+        Some(p) => {
+            if let Err(e) = std::fs::write(p, &content) {
+                eprintln!("error: failed to write to {p}: {e}");
+                return Err(CmdError::code_only(1));
+            }
+        }
+        None => println!("{content}"),
+    }
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_request(
     url: String,
@@ -637,5 +780,6 @@ fn build_request(
         change_tracking: None,
         goal: None,
         judge_enabled: None,
+        parsers: None,
     }
 }

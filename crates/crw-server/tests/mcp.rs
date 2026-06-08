@@ -63,8 +63,8 @@ async fn mcp_tools_list_returns_all_tools() {
     let tools = json["result"]["tools"].as_array().unwrap();
     assert_eq!(
         tools.len(),
-        5,
-        "Should have 5 tools: scrape, crawl, check, map, search"
+        6,
+        "Should have 6 tools: scrape, crawl, check, map, search, parse_file"
     );
 
     let tool_names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
@@ -73,6 +73,7 @@ async fn mcp_tools_list_returns_all_tools() {
     assert!(tool_names.contains(&"crw_check_crawl_status"));
     assert!(tool_names.contains(&"crw_map"));
     assert!(tool_names.contains(&"crw_search"));
+    assert!(tool_names.contains(&"crw_parse_file"));
 }
 
 #[tokio::test]

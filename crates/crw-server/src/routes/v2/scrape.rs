@@ -19,7 +19,7 @@ use crate::error::AppError;
 use crate::state::{AppState, validate_renderer_pin};
 
 /// v2 `/v2/scrape` request. Lenient: unknown fields the SDK may send
-/// (`mobile`, `actions`, `parsers`, `blockAds`, `storeInCache`, `maxAge`,
+/// (`mobile`, `actions`, `blockAds`, `storeInCache`, `maxAge`,
 /// `origin`, `integration`, …) are ignored by serde — we must NOT
 /// `deny_unknown_fields` or a newer SDK build would 400.
 #[derive(Debug, Deserialize)]
@@ -63,6 +63,11 @@ pub struct V2ScrapeRequest {
     /// Optional explicit renderer pin (crw extension, tolerated alongside v2).
     #[serde(default)]
     pub renderer: Option<RequestedRenderer>,
+    /// Firecrawl `parsers` — document parsing directives. Accepts `["pdf"]` or
+    /// `[{"type":"pdf","maxPages":N}]`. Omitted = auto-parse PDFs; `[]` = leave
+    /// raw. See [`crw_core::types::ParserSpec`].
+    #[serde(default)]
+    pub parsers: Option<Vec<crw_core::types::ParserSpec>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -140,6 +145,7 @@ pub(crate) fn to_internal(
         base_url: v2.base_url,
         summary_prompt: v2.summary_prompt,
         renderer,
+        parsers: v2.parsers,
         ..Default::default()
     };
     Ok((req, decomposed, tier))

@@ -214,7 +214,7 @@ async fn run_crawl_inner(opts: CrawlOptions<'_>) {
         // the renderer's acquire when per_host_max_concurrent = 1.
 
         let page_deadline = crw_core::Deadline::from_request_ms(deadline_ms_per_page);
-        let fetch_result = match renderer
+        let mut fetch_result = match renderer
             .fetch(
                 &url,
                 &Default::default(),
@@ -246,35 +246,61 @@ async fn run_crawl_inner(opts: CrawlOptions<'_>) {
         }
 
         let warning = derive_target_warning(&fetch_result);
-        let mut data = match crw_extract::extract(crw_extract::ExtractOptions {
-            raw_html: &fetch_result.html,
-            source_url: &fetch_result.url,
-            status_code: fetch_result.status_code,
-            rendered_with: fetch_result.rendered_with.clone(),
-            elapsed_ms: fetch_result.elapsed_ms,
-            render_decision: fetch_result.render_decision.clone(),
-            credit_cost: fetch_result.credit_cost,
-            warnings: fetch_result.warnings.clone(),
-            formats: &req.formats,
-            only_main_content: req.only_main_content,
-            include_tags: &[],
-            exclude_tags: &[],
-            css_selector: None,
-            xpath: None,
-            chunk_strategy: None,
-            query: None,
-            filter_mode: None,
-            top_k: None,
-            domain_selectors: None,
-            captured_responses: &fetch_result.captured_responses,
-            llm_fallback: None,
-            debug: false,
-            debug_sink: None,
-        }) {
-            Ok(data) => data,
-            Err(err) => {
-                tracing::warn!(url, error = %err, "Crawl: extraction failed");
-                continue;
+        // PDF branch: convert document bytes to markdown instead of running the
+        // HTML pipeline (crawl auto-parses PDFs — there is no per-page parsers
+        // override on CrawlRequest). Mirrors `single.rs::scrape_url_inner`.
+        let mut data = if fetch_result.content_type.as_deref() == Some("application/pdf")
+            && fetch_result.raw_bytes.is_some()
+        {
+            let bytes = fetch_result.raw_bytes.take().unwrap();
+            let pdf_req = crw_core::types::ScrapeRequest {
+                formats: req.formats.clone(),
+                ..Default::default()
+            };
+            let source = crate::pdf::PdfSource {
+                source_url: fetch_result.url.clone(),
+                status_code: fetch_result.status_code,
+                elapsed_ms: fetch_result.elapsed_ms,
+                source_filename: None,
+            };
+            match crate::pdf::convert_pdf_bytes(bytes, &pdf_req, source).await {
+                Ok(data) => data,
+                Err(err) => {
+                    tracing::warn!(url, error = %err, "Crawl: PDF conversion failed");
+                    continue;
+                }
+            }
+        } else {
+            match crw_extract::extract(crw_extract::ExtractOptions {
+                raw_html: &fetch_result.html,
+                source_url: &fetch_result.url,
+                status_code: fetch_result.status_code,
+                rendered_with: fetch_result.rendered_with.clone(),
+                elapsed_ms: fetch_result.elapsed_ms,
+                render_decision: fetch_result.render_decision.clone(),
+                credit_cost: fetch_result.credit_cost,
+                warnings: fetch_result.warnings.clone(),
+                formats: &req.formats,
+                only_main_content: req.only_main_content,
+                include_tags: &[],
+                exclude_tags: &[],
+                css_selector: None,
+                xpath: None,
+                chunk_strategy: None,
+                query: None,
+                filter_mode: None,
+                top_k: None,
+                domain_selectors: None,
+                captured_responses: &fetch_result.captured_responses,
+                llm_fallback: None,
+                debug: false,
+                debug_sink: None,
+            }) {
+                Ok(data) => data,
+                Err(err) => {
+                    tracing::warn!(url, error = %err, "Crawl: extraction failed");
+                    continue;
+                }
             }
         };
         data.warning = warning;

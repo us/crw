@@ -39,6 +39,22 @@ services:
       - CRW_RENDERER__CHROME_POOL__SIZE=${CRW_RENDERER__CHROME_POOL__SIZE:-4}
     volumes:
       - ./config.docker.toml:/app/config.docker.toml:ro
+    # ── Host protection (defense-in-depth for untrusted PDF/scrape input) ──
+    # `mem_limit` is the hard ceiling: no matter what a malicious upload does,
+    # this container (and its sandboxed PDF-parse children, which share this
+    # cgroup) can never exceed it — the host stays safe. With config.docker.toml
+    # `[document] sandbox = true`, each parse runs in a child with its own
+    # RLIMIT_AS, so peak ≈ base + max_concurrent_parses × sandbox_memory.
+    mem_limit: 2g
+    memswap_limit: 2g          # no swap escape hatch — count swap against the cap
+    pids_limit: 512            # bound fork-bombs / runaway worker spawning
+    read_only: true            # immutable root FS; nothing the parser can drop survives
+    tmpfs:
+      - /tmp                   # the only writable scratch (sandbox children, if any)
+    cap_drop:
+      - ALL                    # engine needs no Linux capabilities
+    security_opt:
+      - no-new-privileges:true # a child can never gain privileges via setuid
 
   # Meta-search backend for `/v1/search`. Pinned to a dated tag (never `:latest`)
   # so upgrades are deliberate.

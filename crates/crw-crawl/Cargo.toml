@@ -28,6 +28,10 @@ flate2 = "1"
 phf = { workspace = true }
 publicsuffix = { workspace = true }
 
+[target.'cfg(unix)'.dependencies]
+# Sandbox child rlimits (RLIMIT_AS / RLIMIT_CPU) via pre_exec.
+libc = { workspace = true }
+
 [dev-dependencies]
 tokio = { workspace = true }
 wiremock = { workspace = true }

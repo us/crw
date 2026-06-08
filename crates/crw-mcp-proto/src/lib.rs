@@ -319,6 +319,39 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
         }
     }));
 
+    tools.push(json!({
+        "name": "crw_parse_file",
+        "description": "Parse an uploaded document (PDF) and return its content as markdown. Pass the file bytes base64-encoded in `contentBase64`. Use this for local PDFs that have no URL. Scanned/image-only PDFs have no text layer (no OCR) and return a warning with empty markdown.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "contentBase64": {
+                    "type": "string",
+                    "description": "Base64-encoded bytes of the PDF file"
+                },
+                "filename": {
+                    "type": "string",
+                    "description": "Original filename (optional; echoed in metadata.sourceFilename)"
+                },
+                "formats": {
+                    "type": "array",
+                    "items": { "type": "string", "enum": ["markdown", "plainText", "links", "json", "summary"] },
+                    "description": "Output formats (default: [\"markdown\"]). json/summary require a server LLM."
+                },
+                "jsonSchema": {
+                    "type": "object",
+                    "description": "JSON schema for LLM-based structured extraction (when formats includes json)"
+                },
+                "parsers": {
+                    "type": "array",
+                    "items": { "type": "string", "enum": ["pdf"] },
+                    "description": "Document parsers to apply (default: [\"pdf\"])"
+                }
+            },
+            "required": ["contentBase64"]
+        }
+    }));
+
     json!({ "tools": tools })
 }
 

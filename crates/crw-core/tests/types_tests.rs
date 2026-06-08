@@ -90,6 +90,8 @@ fn page_metadata_skip_serializing_none() {
         status_code: 200,
         rendered_with: None,
         elapsed_ms: 100,
+        page_count: None,
+        source_filename: None,
     };
 
     let json = serde_json::to_value(&meta).unwrap();
@@ -169,6 +171,8 @@ fn scrape_data_skip_serializing_none() {
             status_code: 200,
             rendered_with: None,
             elapsed_ms: 50,
+            page_count: None,
+            source_filename: None,
         },
         debug_extraction: None,
         content_type: None,
@@ -278,6 +282,8 @@ fn scrape_data_serializes_debug_extraction_as_camel_case() {
             status_code: 200,
             rendered_with: None,
             elapsed_ms: 0,
+            page_count: None,
+            source_filename: None,
         },
         debug_extraction: None,
         content_type: None,
@@ -371,4 +377,28 @@ fn change_tracking_result_diff_envelope_shape() {
     // round-trips back
     let back: ChangeTrackingResult = serde_json::from_value(v).unwrap();
     assert_eq!(back.status, ChangeStatus::Changed);
+}
+
+#[test]
+fn parsers_accepts_string_and_object_forms() {
+    use crw_core::types::ScrapeRequest;
+    // String form: parsers: ["pdf"]
+    let req: ScrapeRequest =
+        serde_json::from_str(r#"{"url":"https://x.com","parsers":["pdf"]}"#).unwrap();
+    let parsers = req.parsers.unwrap();
+    assert_eq!(parsers.len(), 1);
+    assert_eq!(parsers[0].parser_type, "pdf");
+    assert_eq!(parsers[0].max_pages, None);
+
+    // Object form: parsers: [{"type":"pdf","maxPages":3}]
+    let req2: ScrapeRequest =
+        serde_json::from_str(r#"{"url":"https://x.com","parsers":[{"type":"pdf","maxPages":3}]}"#)
+            .unwrap();
+    let p2 = req2.parsers.unwrap();
+    assert_eq!(p2[0].parser_type, "pdf");
+    assert_eq!(p2[0].max_pages, Some(3));
+
+    // Omitted → None (auto-parse default).
+    let req3: ScrapeRequest = serde_json::from_str(r#"{"url":"https://x.com"}"#).unwrap();
+    assert!(req3.parsers.is_none());
 }

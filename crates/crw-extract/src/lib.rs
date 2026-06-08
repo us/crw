@@ -19,6 +19,7 @@ pub mod dom_util;
 pub mod filter;
 pub mod judge;
 pub mod markdown;
+pub mod pdf;
 pub mod plaintext;
 pub mod quality;
 pub mod readability;
@@ -804,6 +805,8 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
             status_code,
             rendered_with,
             elapsed_ms,
+            page_count: None,
+            source_filename: None,
         },
         debug_extraction: None,
         // Populated post-extract by the caller (single.rs / crawl.rs) from

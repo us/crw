@@ -14,6 +14,8 @@ from typing import Any
 # exercise a JS-rendered site and a richer sitemap.
 EXAMPLE = "https://example.com"
 RICH = "https://firecrawl.dev"
+# A small, stable public PDF for exercising the `parsers` option end-to-end.
+PDF_URL = "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
 
 
 @dataclass(frozen=True)
@@ -22,6 +24,10 @@ class Case:
 
     kind: "sync" (POST returns the document) or "job" (POST returns an id, then
     poll `status_path_tmpl`.format(id=...) until status in terminal states).
+
+    upload_file: when set, the request is sent as multipart/form-data with a
+    `file` part (bytes of this path, relative to the repo root) and an `options`
+    part (JSON of `body`). Used for `POST /v2/parse`.
     """
 
     name: str
@@ -31,6 +37,7 @@ class Case:
     kind: str = "sync"
     status_path_tmpl: str | None = None
     tier: int = 1
+    upload_file: str | None = None
 
 
 # ── Scrape format matrix (the headline v1→v2 delta) ──
@@ -52,6 +59,25 @@ SCRAPE_CASES: list[Case] = [
          {"url": EXAMPLE, "formats": [
              "markdown", "links",
              {"type": "json", "schema": {"type": "object"}}]}),
+    # `parsers` option (PDF). String form, object form (+maxPages), and disable.
+    # `maxAge: 0` forces a fresh fetch so Firecrawl never serves from cache —
+    # keeps the golden deterministic (no `cachedAt`/`cacheState:hit` artifacts).
+    Case("scrape_pdf_parsers_string", "POST", "/v2/scrape",
+         {"url": PDF_URL, "formats": ["markdown"], "parsers": ["pdf"], "maxAge": 0}, tier=2),
+    Case("scrape_pdf_parsers_object", "POST", "/v2/scrape",
+         {"url": PDF_URL, "formats": ["markdown"],
+          "parsers": [{"type": "pdf", "maxPages": 5}], "maxAge": 0}, tier=2),
+    Case("scrape_pdf_parsers_disabled", "POST", "/v2/scrape",
+         {"url": PDF_URL, "formats": ["markdown"], "parsers": [], "maxAge": 0}, tier=2),
+    Case("scrape_pdf_default_autoparse", "POST", "/v2/scrape",
+         {"url": PDF_URL, "formats": ["markdown"], "maxAge": 0}, tier=2),
+]
+
+# ── /v2/parse (document upload). Multipart: file + options JSON. ──
+PARSE_CASES: list[Case] = [
+    Case("parse_pdf_markdown", "POST", "/v2/parse",
+         {"formats": ["markdown"]},
+         upload_file="crates/crw-extract/tests/fixtures/sample.pdf", tier=2),
 ]
 
 MAP_CASES: list[Case] = [
@@ -83,5 +109,11 @@ EXTRACT_CASES: list[Case] = [
 ]
 
 ALL_CASES: list[Case] = (
-    SCRAPE_CASES + MAP_CASES + SEARCH_CASES + CRAWL_CASES + BATCH_CASES + EXTRACT_CASES
+    SCRAPE_CASES
+    + PARSE_CASES
+    + MAP_CASES
+    + SEARCH_CASES
+    + CRAWL_CASES
+    + BATCH_CASES
+    + EXTRACT_CASES
 )

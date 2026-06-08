@@ -221,6 +221,54 @@ async fn proxy_call_tool(
                 .map_err(|e| format!("HTTP request failed: {e}"))?;
             parse_response(resp).await
         }
+        "crw_parse_file" => {
+            use base64::Engine;
+            let b64 = args
+                .get("contentBase64")
+                .and_then(|v| v.as_str())
+                .ok_or("missing required parameter: contentBase64")?;
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(b64.trim())
+                .map_err(|e| format!("invalid base64 in contentBase64: {e}"))?;
+            let filename = args
+                .get("filename")
+                .and_then(|v| v.as_str())
+                .unwrap_or("document.pdf")
+                .to_string();
+            // Forward the remaining fields (formats/jsonSchema/parsers/…) as the
+            // multipart `options` JSON.
+            let mut options = args.clone();
+            if let Some(obj) = options.as_object_mut() {
+                obj.remove("contentBase64");
+                obj.remove("filename");
+            }
+            let part = reqwest::multipart::Part::bytes(bytes)
+                .file_name(filename)
+                .mime_str("application/pdf")
+                .map_err(|e| format!("invalid part: {e}"))?;
+            let form = reqwest::multipart::Form::new()
+                .part("file", part)
+                .text("options", options.to_string());
+            // Multipart sets its own content-type/boundary — use auth-only headers.
+            let mut mp_headers = reqwest::header::HeaderMap::new();
+            if let Some(key) = api_key {
+                mp_headers.insert(
+                    "authorization",
+                    format!("Bearer {key}")
+                        .parse()
+                        .map_err(|e| format!("invalid api key: {e}"))?,
+                );
+            }
+            let resp = client
+                .post(format!("{base_url}/v2/parse"))
+                .headers(mp_headers)
+                .timeout(TIMEOUT_SCRAPE)
+                .multipart(form)
+                .send()
+                .await
+                .map_err(|e| format!("HTTP request failed: {e}"))?;
+            parse_response(resp).await
+        }
         _ => Err(format!("unknown tool: {tool_name}")),
     }
 }
@@ -317,6 +365,7 @@ async fn run() -> Result<(), CmdError> {
                     request: Default::default(),
                     search: Default::default(),
                     map: Default::default(),
+                    document: Default::default(),
                     client: Default::default(),
                 }
             });

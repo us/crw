@@ -58,8 +58,19 @@ pub struct V2Metadata {
     pub proxy_used: String,
     /// crw has no read-through cache yet — always "miss".
     pub cache_state: String,
+    /// Firecrawl-compat: whether the request was throttled by a concurrency
+    /// cap. A self-host engine doesn't concurrency-limit individual requests,
+    /// so this is always `false`.
+    pub concurrency_limited: bool,
     pub credits_used: u32,
     pub scrape_id: String,
+    /// Page count for paginated documents (PDF). Omitted for web pages.
+    /// Serialized as `numPages` to match Firecrawl.
+    #[serde(rename = "numPages", skip_serializing_if = "Option::is_none")]
+    pub page_count: Option<usize>,
+    /// Original filename for uploaded documents (via /v2/parse). Omitted otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_filename: Option<String>,
 }
 
 /// Map an engine `ScrapeData` to a v2 `Document`. `proxy_used` is the resolved
@@ -76,6 +87,7 @@ pub fn to_v2_document(data: ScrapeData, proxy_used: &str, scrape_id: String) -> 
         content_type: data.content_type.clone(),
         proxy_used: proxy_used.to_string(),
         cache_state: "miss".to_string(),
+        concurrency_limited: false,
         // Engine does not price requests (the SaaS layer bills); surface
         // whatever the engine attributed, defaulting to 1 like the live API.
         credits_used: if data.credit_cost == 0 {
@@ -84,6 +96,8 @@ pub fn to_v2_document(data: ScrapeData, proxy_used: &str, scrape_id: String) -> 
             data.credit_cost
         },
         scrape_id,
+        page_count: m.page_count,
+        source_filename: m.source_filename.clone(),
     };
     V2Document {
         markdown: data.markdown,
@@ -286,6 +300,8 @@ mod tests {
                 status_code: 200,
                 rendered_with: None,
                 elapsed_ms: 0,
+                page_count: None,
+                source_filename: None,
             },
             debug_extraction: None,
             content_type: Some("text/html".into()),

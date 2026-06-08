@@ -9,8 +9,22 @@ keywords.workspace = true
 categories.workspace = true
 description = "HTML extraction and markdown conversion engine for the CRW web scraper"
 
+[features]
+# PDF -> markdown conversion via the pure-Rust `pdf-inspector` (lopdf) crate.
+# Default-ON so the shipped server/CLI binaries parse PDFs out of the box.
+# Disable with `--no-default-features` for an ultra-minimal build; the PDF
+# adapter then compiles to a stub that returns `PdfError::Disabled`.
+default = ["pdf"]
+pdf = ["dep:pdf-inspector", "dep:lopdf", "dep:flate2"]
+
 [dependencies]
 crw-core = { workspace = true }
+pdf-inspector = { workspace = true, optional = true }
+# Used ONLY for the pre-parse decompression-bomb guard: structure-parse the PDF
+# and bounded-inflate each FlateDecode stream so a malicious file is rejected
+# before pdf-inspector allocates the full (huge) decompressed payload.
+lopdf = { version = "0.41", optional = true }
+flate2 = { version = "1", optional = true }
 lol_html = { workspace = true }
 scraper = { workspace = true }
 htmd = { workspace = true }

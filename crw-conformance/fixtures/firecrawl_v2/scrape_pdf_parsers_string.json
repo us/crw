@@ -1,0 +1,21 @@
+{
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": {
+      "markdown": "## Dummy PDF file",
+      "metadata": {
+        "scrapeId": "019ea479-84a1-7327-b962-68f25fa7609b",
+        "sourceURL": "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+        "url": "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+        "statusCode": 200,
+        "numPages": 1,
+        "contentType": "application/pdf",
+        "proxyUsed": "basic",
+        "indexId": "49df9fe0-de5f-4dda-8f7c-d2fa10631f7a",
+        "creditsUsed": 1,
+        "concurrencyLimited": false
+      }
+    }
+  }
+}

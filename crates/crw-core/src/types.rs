@@ -267,6 +267,84 @@ pub struct ScrapeRequest {
     /// orchestration decides auto-enable semantics.
     #[serde(default, alias = "judge_enabled")]
     pub judge_enabled: Option<bool>,
+    /// Firecrawl-compatible document parsers. Controls how non-HTML documents
+    /// (currently only PDF) are handled when a URL returns one.
+    /// - `None` (field omitted) → PDFs are auto-parsed to markdown (default,
+    ///   matches Firecrawl).
+    /// - `Some([])` → parsing disabled; the raw document is left unconverted.
+    /// - `Some([{type:"pdf"}])` → explicitly enable PDF parsing (optionally
+    ///   capped via `maxPages`).
+    #[serde(default)]
+    pub parsers: Option<Vec<ParserSpec>>,
+}
+
+/// A document parser directive (Firecrawl `parsers` entry). Accepts either the
+/// bare string form (`"pdf"`) or the object form (`{ "type": "pdf",
+/// "mode": "auto", "maxPages": 10 }`) on the wire; always serializes to the
+/// object form. Matches Firecrawl v2's `parsers` shape exactly.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ParserSpec {
+    /// Parser type. Only `"pdf"` is supported today.
+    #[serde(rename = "type")]
+    pub parser_type: String,
+    /// Parsing strategy (Firecrawl: `auto` | `fast` | `ocr`). fastCRW has no
+    /// OCR, so `ocr` degrades to text extraction with a warning, and `auto`
+    /// (text-first + OCR fallback in Firecrawl) is text-only here. Accepted for
+    /// wire-compatibility regardless. `None` ≈ `auto`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
+    /// Optional cap on the number of pages to parse.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_pages: Option<usize>,
+}
+
+impl ParserSpec {
+    /// Convenience constructor for the common PDF directive.
+    pub fn pdf() -> Self {
+        Self {
+            parser_type: "pdf".to_string(),
+            mode: None,
+            max_pages: None,
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ParserSpec {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Raw {
+            Str(String),
+            Obj {
+                #[serde(rename = "type")]
+                parser_type: String,
+                #[serde(default)]
+                mode: Option<String>,
+                #[serde(default, rename = "maxPages", alias = "max_pages")]
+                max_pages: Option<usize>,
+            },
+        }
+        Ok(match Raw::deserialize(deserializer)? {
+            Raw::Str(parser_type) => ParserSpec {
+                parser_type,
+                mode: None,
+                max_pages: None,
+            },
+            Raw::Obj {
+                parser_type,
+                mode,
+                max_pages,
+            } => ParserSpec {
+                parser_type,
+                mode,
+                max_pages,
+            },
+        })
+    }
 }
 
 fn default_formats() -> Vec<OutputFormat> {
@@ -314,6 +392,7 @@ impl Default for ScrapeRequest {
             change_tracking: None,
             goal: None,
             judge_enabled: None,
+            parsers: None,
         }
     }
 }
@@ -344,6 +423,15 @@ pub struct PageMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rendered_with: Option<String>,
     pub elapsed_ms: u64,
+    /// Number of pages, for paginated documents (PDF). `None` for web pages.
+    /// Drives per-page billing on document scrapes / uploads. Serialized as
+    /// `numPages` to match Firecrawl's metadata field name.
+    #[serde(default, rename = "numPages", skip_serializing_if = "Option::is_none")]
+    pub page_count: Option<usize>,
+    /// Original filename for documents uploaded via `/v2/parse`. `None` for
+    /// URL-sourced pages.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_filename: Option<String>,
 }
 
 /// Token-usage and best-effort cost for one LLM call.
