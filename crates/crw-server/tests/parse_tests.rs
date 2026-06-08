@@ -8,7 +8,7 @@ use crw_server::app::create_app;
 use crw_server::state::AppState;
 use serde_json::Value;
 
-const SAMPLE_PDF: &[u8] = include_bytes!("../../crw-extract/tests/fixtures/sample.pdf");
+const SAMPLE_PDF: &[u8] = include_bytes!("fixtures/sample.pdf");
 
 fn test_app() -> TestServer {
     let config: AppConfig = toml::from_str("").unwrap();

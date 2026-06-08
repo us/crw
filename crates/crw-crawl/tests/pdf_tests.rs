@@ -4,7 +4,7 @@
 use crw_core::types::{OutputFormat, ParserSpec, ScrapeRequest};
 use crw_crawl::pdf::{PdfSource, convert_pdf_bytes, convert_pdf_bytes_strict, pdf_parse_requested};
 
-const SAMPLE_PDF: &[u8] = include_bytes!("../../crw-extract/tests/fixtures/sample.pdf");
+const SAMPLE_PDF: &[u8] = include_bytes!("fixtures/sample.pdf");
 
 fn source() -> PdfSource {
     PdfSource {
