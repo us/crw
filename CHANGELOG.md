@@ -2,6 +2,23 @@
 
 All notable changes to CRW are documented here.
 
+## [0.14.0](https://github.com/us/crw/compare/v0.13.4...v0.14.0) (2026-06-08)
+
+
+### Features
+
+* **onboarding:** cloud-default messaging + api.fastcrw.com base URL ([4ccc92c](https://github.com/us/crw/commit/4ccc92c065027d900f0bd67e0273216bd76aa065))
+* **pdf:** PDF→markdown via pdf-inspector with Firecrawl-compatible parsers + /v2/parse ([196b153](https://github.com/us/crw/commit/196b153db011807a80a2b19155ef0605a3ca692b))
+* **search:** query-relevance rerank, list answers, multi-round latency guard ([ebafe83](https://github.com/us/crw/commit/ebafe8358283260df75a0d9629c59c8a1fcdad4a))
+
+
+### Bug Fixes
+
+* accept string env vars for auth.api_keys ([534f932](https://github.com/us/crw/commit/534f9320653c37aaba79e0db43ef9400b74b749b))
+* **pdf:** vendor test fixture into each crate (preflight: no cross-crate include) ([2c7bfe9](https://github.com/us/crw/commit/2c7bfe93bbd38a384e84dab6daa5ae0fd2e55c65))
+* **release:** scope out-of-crate include check to src/ only ([cd61fbf](https://github.com/us/crw/commit/cd61fbfd24046f6ef0a72e70e764189c39463fb6))
+* **release:** verify apt/homebrew by artifact, not flaky status-ack ([7a572fd](https://github.com/us/crw/commit/7a572fd6e5b39117d316377919387e9e7ec8ad3b))
+
 ## [0.13.4](https://github.com/us/crw/compare/v0.13.3...v0.13.4) (2026-06-07)
 
 
