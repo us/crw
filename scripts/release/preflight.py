@@ -275,12 +275,17 @@ def main() -> int:
     #     so an out-of-crate include compiles locally but breaks the publish
     #     verify build (this kept crw-server unpublishable: it embedded the
     #     workspace-root docs/openapi.json via ../../../../).
+    #     Only src/ matters: `cargo publish --verify` builds the lib + bins
+    #     (everything under src/), not tests/benches/examples, so an out-of-crate
+    #     include in a test file doesn't break the publish build (a cross-crate
+    #     test fixture is a legitimate dev-only pattern).
     inc_re = re.compile(r"include_(?:str|bytes)!\s*\(\s*\"([^\"]+)\"")
     for member in sorted(published):
         crate_dir = (Path("crates") / member).resolve()
-        if not crate_dir.is_dir():
+        src_dir = crate_dir / "src"
+        if not src_dir.is_dir():
             continue
-        for rs in sorted(crate_dir.rglob("*.rs")):
+        for rs in sorted(src_dir.rglob("*.rs")):
             for inc in inc_re.findall(rs.read_text()):
                 target = (rs.parent / inc).resolve()
                 try:
@@ -290,7 +295,7 @@ def main() -> int:
                         f"{rs.relative_to(crate_dir.parent.parent)}: include of "
                         f"'{inc}' reaches outside the crate — it won't be in the "
                         f"published .crate tarball; move the file inside "
-                        f"crates/{member}/."
+                        f"crates/{member}/src/."
                     )
 
     # 3d. Duplicated spec copies kept for publishability must not drift.
