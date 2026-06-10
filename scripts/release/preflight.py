@@ -200,6 +200,14 @@ def collect_version_surfaces(ws_version: str) -> list[tuple[str, str, str]]:
         d = json.loads(sj.read_text())
         rows.append((str(sj) + ":version", ws_version, d.get("version", "MISSING")))
 
+    # TypeScript SDK
+    ts = Path("sdks/typescript/package.json")
+    if ts.exists():
+        d = json.loads(ts.read_text())
+        rows.append((str(ts) + ":version", ws_version, d.get("version", "MISSING")))
+    else:
+        rows.append((str(ts) + ":version", ws_version, "MISSING FILE"))
+
     return rows
 
 

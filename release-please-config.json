@@ -145,6 +145,11 @@
           "type": "toml",
           "path": "sdks/python/pyproject.toml",
           "jsonpath": "$.project.version"
+        },
+        {
+          "type": "json",
+          "path": "sdks/typescript/package.json",
+          "jsonpath": "$.version"
         }
       ]
     }
