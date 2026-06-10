@@ -7,26 +7,55 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from crw.client import CrwClient
+from crw.client import CLOUD_API_URL, CrwClient
 from crw.exceptions import CrwApiError, CrwError, CrwTimeoutError
 
 
+@pytest.fixture(autouse=True)
+def _clean_crw_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Hermetic env: each test opts into local (CRW_LOCAL) or cloud explicitly."""
+    for key in ("CRW_LOCAL", "CRW_API_KEY", "CRW_API_URL", "CRW_BINARY"):
+        monkeypatch.delenv(key, raising=False)
+
+
+def _local_client(monkeypatch: pytest.MonkeyPatch) -> CrwClient:
+    """A zero-config local (subprocess) client — the CRW_LOCAL opt-in."""
+    monkeypatch.setenv("CRW_LOCAL", "1")
+    return CrwClient()
+
+
 # ---------------------------------------------------------------------------
-# Init mode detection
+# Init mode detection (cloud-first)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.unit
 class TestInit:
-    def test_init_subprocess_mode(self) -> None:
-        client = CrwClient()
-        assert client._api_url is None
-        assert client._api_key is None
+    def test_default_cloud_requires_key(self) -> None:
+        # Cloud-first: no key, no CRW_LOCAL → friendly onboarding nudge.
+        with pytest.raises(CrwError, match="500 free credits"):
+            CrwClient()
 
-    def test_init_http_mode(self) -> None:
-        client = CrwClient(api_url="https://fastcrw.com/api", api_key="fc-test")
-        assert client._api_url == "https://fastcrw.com/api"
+    def test_default_cloud_with_key(self) -> None:
+        client = CrwClient(api_key="fc-test")
+        assert client._api_url == CLOUD_API_URL
         assert client._api_key == "fc-test"
+
+    def test_local_opt_in_via_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("CRW_LOCAL", "1")
+        client = CrwClient()
+        assert client._api_url is None  # subprocess/local mode
+
+    def test_explicit_self_host_no_key(self) -> None:
+        # An explicit server URL does not require a key (self-host without auth).
+        client = CrwClient(api_url="http://localhost:3000")
+        assert client._api_url == "http://localhost:3000"
+
+    def test_key_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("CRW_API_KEY", "env-key")
+        client = CrwClient()
+        assert client._api_key == "env-key"
+        assert client._api_url == CLOUD_API_URL
 
 
 # ---------------------------------------------------------------------------
@@ -51,8 +80,8 @@ class TestScrape:
         assert body["formats"] == ["markdown", "html"]
         assert result == mock_response
 
-    def test_scrape_subprocess_calls_tool(self) -> None:
-        client = CrwClient()
+    def test_scrape_subprocess_calls_tool(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = _local_client(monkeypatch)
         mock_response = {"markdown": "# Hello"}
 
         with patch.object(client, "_tool_call", return_value=mock_response) as mock_tool:
@@ -84,7 +113,7 @@ class TestCrawl:
         }
 
         with (
-            patch.object(client, "_http_post", return_value=crawl_start_response) as mock_post,
+            patch.object(client, "_http_post", return_value=crawl_start_response),
             patch.object(
                 client, "_http_request", side_effect=[poll_in_progress, poll_completed]
             ) as mock_req,
@@ -150,10 +179,17 @@ class TestMap:
 
 @pytest.mark.unit
 class TestSearch:
-    def test_search_requires_api_url(self) -> None:
-        client = CrwClient()
-        with pytest.raises(CrwError, match="requires api_url"):
-            client.search("python web scraping")
+    def test_search_subprocess_uses_tool(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # search now works in local mode too (routes to the crw_search MCP
+        # tool); the engine itself returns a clear error if SearXNG is unset.
+        client = _local_client(monkeypatch)
+        mock_response = [{"url": "https://example.com", "title": "Example"}]
+        with patch.object(client, "_tool_call", return_value=mock_response) as mock_tool:
+            result = client.search("python web scraping", limit=3)
+        mock_tool.assert_called_once()
+        assert mock_tool.call_args[0][0] == "crw_search"
+        assert mock_tool.call_args[0][1]["query"] == "python web scraping"
+        assert result == mock_response
 
     def test_search_http_sends_query(self) -> None:
         client = CrwClient(api_url="https://fastcrw.com/api", api_key="fc-test")
@@ -178,8 +214,8 @@ class TestSearch:
 
 @pytest.mark.unit
 class TestLifecycle:
-    def test_close_terminates_process(self) -> None:
-        client = CrwClient()
+    def test_close_terminates_process(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = _local_client(monkeypatch)
         mock_proc = MagicMock()
         mock_proc.poll.return_value = None  # process is alive
         mock_proc.wait.return_value = 0
@@ -217,8 +253,8 @@ class TestErrors:
                 client.scrape("https://example.com")
             assert exc_info.value.status_code == 400
 
-    def test_jsonrpc_error_handling(self) -> None:
-        client = CrwClient()
+    def test_jsonrpc_error_handling(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = _local_client(monkeypatch)
         mock_proc = MagicMock()
         error_response = json.dumps({
             "jsonrpc": "2.0",
@@ -231,3 +267,126 @@ class TestErrors:
 
         with pytest.raises(CrwApiError, match="Invalid request"):
             client._jsonrpc("tools/call", {"name": "crw_scrape", "arguments": {}})
+
+
+# ---------------------------------------------------------------------------
+# Scrape — first-class engine params (renderJs / renderer / waitFor / jsonSchema)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestScrapeParams:
+    def test_first_class_params_mapped_to_camel_case(self) -> None:
+        client = CrwClient(api_url="https://fastcrw.com/api")
+        with patch.object(client, "_http_post", return_value={}) as mock_post:
+            client.scrape(
+                "https://example.com",
+                render_js=True,
+                renderer="chrome",
+                wait_for=1500,
+            )
+        body = mock_post.call_args[0][1]
+        assert body["renderJs"] is True
+        assert body["renderer"] == "chrome"
+        assert body["waitFor"] == 1500
+
+    def test_json_schema_adds_json_format(self) -> None:
+        client = CrwClient(api_url="https://fastcrw.com/api")
+        schema = {"type": "object", "properties": {"title": {"type": "string"}}}
+        with patch.object(client, "_http_post", return_value={}) as mock_post:
+            client.scrape("https://example.com", formats=["markdown"], json_schema=schema)
+        body = mock_post.call_args[0][1]
+        assert body["jsonSchema"] == schema
+        assert "json" in body["formats"] and "markdown" in body["formats"]
+
+
+# ---------------------------------------------------------------------------
+# parse_file (PDF / structured extraction) — both modes
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestParseFile:
+    def test_subprocess_base64_and_tool(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = _local_client(monkeypatch)
+        with patch.object(client, "_tool_call", return_value={"markdown": "ok"}) as mock_tool:
+            client.parse_file(content=b"%PDF-1.4 data", filename="doc.pdf", formats=["markdown"])
+        assert mock_tool.call_args[0][0] == "crw_parse_file"
+        args = mock_tool.call_args[0][1]
+        assert args["filename"] == "doc.pdf"
+        assert "contentBase64" in args and args["formats"] == ["markdown"]
+
+    def test_http_uses_multipart(self) -> None:
+        client = CrwClient(api_url="https://fastcrw.com/api")
+        with patch.object(client, "_http_multipart", return_value={"markdown": "ok"}) as mock_mp:
+            client.parse_file(content=b"%PDF-1.4 data", filename="doc.pdf", json_schema={"x": 1})
+        assert mock_mp.call_args[0][0] == "/v2/parse"
+        # body is multipart bytes containing the file and options parts
+        assert b"name=\"file\"" in mock_mp.call_args[0][1]
+        assert b"name=\"options\"" in mock_mp.call_args[0][1]
+
+    def test_requires_path_or_content(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = _local_client(monkeypatch)
+        with pytest.raises(CrwError, match="path= or content="):
+            client.parse_file()
+
+
+# ---------------------------------------------------------------------------
+# HTTP-only methods: extract / batch_scrape / capabilities / change_tracking
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestHttpOnlyMethods:
+    @pytest.mark.parametrize(
+        "call",
+        [
+            lambda c: c.extract(["https://example.com"], prompt="x"),
+            lambda c: c.batch_scrape(["https://example.com"]),
+            lambda c: c.capabilities(),
+            lambda c: c.change_tracking_diff({"markdown": "a"}),
+        ],
+    )
+    def test_guard_in_local_mode(self, call, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = _local_client(monkeypatch)
+        with pytest.raises(CrwError, match="requires HTTP mode"):
+            call(client)
+
+    def test_extract_polls_until_complete(self) -> None:
+        client = CrwClient(api_url="https://fastcrw.com/api")
+        start = {"success": True, "id": "job-1"}
+        processing = {"success": True, "status": "processing"}
+        done = {"success": True, "status": "completed", "data": {"title": "Hi"}}
+        with patch.object(client, "_http_request", side_effect=[start, processing, done]):
+            with patch("time.sleep"):
+                result = client.extract(["https://example.com"], schema={"x": 1})
+        assert result == {"title": "Hi"}
+
+    def test_batch_scrape_returns_pages(self) -> None:
+        client = CrwClient(api_url="https://fastcrw.com/api")
+        start = {"success": True, "id": "batch-1"}
+        done = {"status": "completed", "data": [{"markdown": "p1"}]}
+        with patch.object(client, "_http_request", side_effect=[start, done]):
+            with patch("time.sleep"):
+                pages = client.batch_scrape(["https://example.com"])
+        assert pages == [{"markdown": "p1"}]
+
+    def test_capabilities_unwrapped(self) -> None:
+        client = CrwClient(api_url="https://fastcrw.com/api")
+        caps = {"version": "0.14.0", "formats": {"supported": ["markdown"]}}
+        with patch.object(client, "_http_request", return_value=caps) as mock_req:
+            result = client.capabilities()
+        assert mock_req.call_args[0][:2] == ("GET", "/v1/capabilities")
+        assert result == caps
+
+    def test_change_tracking_diff_body(self) -> None:
+        client = CrwClient(api_url="https://fastcrw.com/api")
+        with patch.object(client, "_http_post", return_value={"diff": "..."}) as mock_post:
+            client.change_tracking_diff(
+                current={"markdown": "new"}, previous={"markdown": "old"}, modes=["gitDiff"]
+            )
+        assert mock_post.call_args[0][0] == "/v1/change-tracking/diff"
+        body = mock_post.call_args[0][1]
+        assert body["current"] == {"markdown": "new"}
+        assert body["previous"] == {"markdown": "old"}
+        assert body["modes"] == ["gitDiff"]

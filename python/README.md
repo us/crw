@@ -48,16 +48,26 @@ MCP client config (works with Cursor, Windsurf, Cline, Claude Desktop, etc.):
 
 ## SDK Usage
 
+CRW is **cloud-first**. By default the client uses the managed cloud
+(`api.fastcrw.com`) — [sign up for 500 free credits](https://fastcrw.com/dashboard)
+(no payment, no monthly reset; GitHub/Google, ~10s) and set `CRW_API_KEY`.
+To self-host the engine locally instead, set `CRW_LOCAL=1` (zero-config, no key).
+
 ```python
 from crw import CrwClient
 
-# Zero-config (downloads crw-mcp binary automatically):
+# Cloud (default) — reads CRW_API_KEY from the environment:
 client = CrwClient()
 result = client.scrape("https://example.com")
 print(result["markdown"])
 
-# Or connect to a remote server:
-client = CrwClient(api_url="https://fastcrw.com/api", api_key="fc-...")
+# ...or pass the key explicitly:
+client = CrwClient(api_key="fc-...")
+
+# Self-hosted server:
+client = CrwClient(api_url="http://localhost:3000")
+
+# Local zero-config engine (no server, no key): run with CRW_LOCAL=1 in the env.
 
 # Scrape with options:
 result = client.scrape("https://example.com", formats=["markdown", "links"])
@@ -73,14 +83,16 @@ urls = client.map("https://example.com")
 print(urls)
 ```
 
-### Search (Cloud Only)
+### Search
 
-Search requires a cloud API connection — it's not available in subprocess mode.
+Works in both modes. In subprocess mode the engine needs a SearXNG URL
+configured (`[search].searxng_url` or `CRW_SEARCH__SEARXNG_URL`); the managed
+cloud has one preconfigured.
 
 ```python
 from crw import CrwClient
 
-client = CrwClient(api_url="https://fastcrw.com/api", api_key="YOUR_KEY")
+client = CrwClient(api_key="YOUR_KEY")  # cloud (default)
 
 # Basic search
 results = client.search("web scraping tools 2026")
@@ -100,4 +112,62 @@ results = client.search(
 )
 ```
 
-> **Note:** Search is a cloud-only feature. Calling `search()` without `api_url` raises `CrwError`.
+> **Note:** If search isn't configured, the engine returns a clear `search_disabled` error.
+
+### Scrape options & structured (LLM) extraction
+
+```python
+# Force the renderer, wait for JS, pin a renderer tier:
+result = client.scrape("https://example.com", render_js=True, wait_for=1500, renderer="chrome")
+
+# Structured extraction with a JSON Schema (adds the `json` format automatically).
+# Requires an LLM provider configured on the engine.
+result = client.scrape(
+    "https://example.com",
+    json_schema={"type": "object", "properties": {"title": {"type": "string"}}},
+)
+print(result["json"])
+```
+
+### Parse a document (PDF → markdown / JSON)
+
+Works in both modes.
+
+```python
+# From a path:
+doc = client.parse_file("invoice.pdf", formats=["markdown"])
+print(doc["markdown"], doc["metadata"]["numPages"])
+
+# From bytes, with structured extraction:
+doc = client.parse_file(
+    content=pdf_bytes,
+    filename="invoice.pdf",
+    json_schema={"type": "object", "properties": {"total": {"type": "number"}}},
+)
+```
+
+### Extract, batch, capabilities, change-tracking (HTTP mode)
+
+These require `api_url` (a running server / cloud):
+
+```python
+client = CrwClient(api_key="YOUR_KEY")  # cloud (default)
+
+# Structured LLM extraction across URLs (async job, polled to completion):
+data = client.extract(
+    ["https://example.com"],
+    schema={"type": "object", "properties": {"title": {"type": "string"}}},
+)
+
+# Scrape many URLs in one async batch:
+pages = client.batch_scrape(["https://a.com", "https://b.com"], formats=["markdown"])
+
+# Feature-detect the server:
+caps = client.capabilities()
+
+# Diff a page against a prior snapshot (stateless):
+diff = client.change_tracking_diff(
+    current={"markdown": "new content"},
+    previous={"markdown": "old content"},
+)
+```

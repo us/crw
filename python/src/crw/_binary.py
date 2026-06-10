@@ -41,8 +41,16 @@ def _find_cached_latest() -> tuple[Path, str] | None:
     cache_root = Path(user_cache_dir("crw"))
     if not cache_root.is_dir():
         return None
+
+    def _version_key(name: str) -> tuple[int, ...]:
+        try:
+            return tuple(int(part) for part in name.lstrip("v").split("."))
+        except ValueError:
+            return (0,)
+
     versions = sorted(
         (d.name for d in cache_root.iterdir() if d.is_dir() and d.name.startswith("v")),
+        key=_version_key,
         reverse=True,
     )
     for v in versions:
