@@ -149,6 +149,28 @@ static TIER1_PATTERNS: Lazy<Vec<SignalPattern>> = Lazy::new(|| {
             AntibotSignal::NetworkSecurity,
             "Network security block",
         ),
+        // Google's rate-limit page ("Error 429 (Too Many Requests)!!1"). Google
+        // serves it with a real 429 over HTTP, but lightpanda/CDP renderers
+        // report the navigation as HTTP 200 with the error page as the body —
+        // so the `status == Some(429)` check below never fires and the page
+        // slips through as a successful render. Match the body so the failover
+        // loop escalates (lightpanda -> chrome -> chrome_proxy/residential).
+        (
+            Regex::new(r"(?i)you\s+have\s+sent\s+too\s+many\s+requests\s+to\s+us").unwrap(),
+            AntibotSignal::RateLimited,
+            "Google rate limit (sent too many requests)",
+        ),
+        (
+            Regex::new(r"(?i)Error\s+429\s*\(Too\s+Many\s+Requests").unwrap(),
+            AntibotSignal::RateLimited,
+            "Google rate limit (Error 429 page)",
+        ),
+        // Google's bot wall served with HTTP 200 (the /sorry reCAPTCHA page).
+        (
+            Regex::new(r"(?i)unusual\s+traffic\s+from\s+your\s+computer\s+network").unwrap(),
+            AntibotSignal::GenericBlock,
+            "Google bot wall (unusual traffic)",
+        ),
     ]
 });
 
@@ -536,6 +558,32 @@ mod tests {
     fn rate_limited_429() {
         let r = classify(Some(429), "<html><body>slow down</body></html>");
         assert_eq!(r.signal, AntibotSignal::RateLimited);
+    }
+
+    #[test]
+    fn google_429_page_served_with_200_is_blocked() {
+        // Real Google rate-limit page as returned by lightpanda/CDP: the HTTP
+        // status surfaces as 200 but the body is Google's 429 error page.
+        // Without body matching this slips through as a successful render and
+        // the failover loop never escalates to chrome_proxy.
+        let html = "<html lang=\"en\" dir=\"ltr\"><head><meta charset=\"utf-8\">\
+            <title>Error 429 (Too Many Requests)!!1</title></head><body>\
+            <main id=\"af-error-container\" role=\"main\"><a href=\"//www.google.com\">\
+            </a><p><b>429.</b> That\u{2019}s an error.</p><p>We're sorry, but you \
+            have sent too many requests to us recently. Please try again later. \
+            That\u{2019}s all we know.</p></main></body></html>";
+        let r = classify(Some(200), html);
+        assert_eq!(r.signal, AntibotSignal::RateLimited);
+    }
+
+    #[test]
+    fn google_unusual_traffic_bot_wall_is_blocked() {
+        let html = "<html><head><title>Sorry...</title></head><body>\
+            <p>Our systems have detected unusual traffic from your computer \
+            network. This page checks to see if it's really you sending the \
+            requests.</p></body></html>";
+        let r = classify(Some(200), html);
+        assert_eq!(r.signal, AntibotSignal::GenericBlock);
     }
 
     #[test]
