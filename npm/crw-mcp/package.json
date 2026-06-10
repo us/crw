@@ -21,6 +21,9 @@
   "bin": {
     "crw-mcp": "bin/crw-mcp.js"
   },
+  "engines": {
+    "node": ">=18"
+  },
   "files": [
     "bin/crw-mcp.js",
     "bin/init.js",
