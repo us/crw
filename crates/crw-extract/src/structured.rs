@@ -402,6 +402,21 @@ struct OpenAiFunctionCall {
     arguments: String,
 }
 
+/// Resolve the chat-completions endpoint for an OpenAI-compatible provider.
+///
+/// Idempotent: a `base_url` that already points at `…/chat/completions` is used
+/// verbatim; a bare base (or the provider default) gets `/v1/chat/completions`
+/// appended. This mirrors `llm::call_openai` so a configured base_url such as
+/// `https://api.deepseek.com/v1/chat/completions` is not doubled into
+/// `…/v1/chat/completions/v1/chat/completions` (which 404s).
+fn openai_chat_url(base_url: Option<&str>, default_base: &str) -> String {
+    match base_url {
+        Some(b) if b.contains("/chat/completions") => b.to_string(),
+        Some(b) => format!("{}/v1/chat/completions", b.trim_end_matches('/')),
+        None => format!("{}/v1/chat/completions", default_base.trim_end_matches('/')),
+    }
+}
+
 /// Call an OpenAI-compatible provider with a function-call forcing the given
 /// `schema`. `prompt` is the full user message; `tool_name`/`tool_desc` name
 /// the forced function. Shared by structured extraction and the judge.
@@ -416,9 +431,7 @@ pub(crate) async fn call_openai(
         "deepseek" => "https://api.deepseek.com",
         _ => "https://api.openai.com",
     };
-    let base_url = llm.base_url.as_deref().unwrap_or(default_base);
-
-    let url = format!("{base_url}/v1/chat/completions");
+    let url = openai_chat_url(llm.base_url.as_deref(), default_base);
 
     let body = OpenAiRequest {
         model: llm.model.clone(),
@@ -665,5 +678,37 @@ mod tests {
         // 99 'a's fit; emoji starts at byte 99 (4 bytes) — must NOT split.
         assert!(out.len() <= 100);
         assert!(out.is_char_boundary(out.len()));
+    }
+
+    #[test]
+    fn openai_url_appends_path_to_bare_base() {
+        assert_eq!(
+            openai_chat_url(Some("https://api.deepseek.com"), "https://api.openai.com"),
+            "https://api.deepseek.com/v1/chat/completions"
+        );
+    }
+
+    #[test]
+    fn openai_url_uses_full_endpoint_verbatim() {
+        // Regression: a base_url that already includes the path must NOT be
+        // doubled into `…/v1/chat/completions/v1/chat/completions` (→ 404).
+        let full = "https://api.deepseek.com/v1/chat/completions";
+        assert_eq!(openai_chat_url(Some(full), "https://api.openai.com"), full);
+    }
+
+    #[test]
+    fn openai_url_falls_back_to_default_base() {
+        assert_eq!(
+            openai_chat_url(None, "https://api.openai.com"),
+            "https://api.openai.com/v1/chat/completions"
+        );
+    }
+
+    #[test]
+    fn openai_url_trims_trailing_slash() {
+        assert_eq!(
+            openai_chat_url(Some("https://api.deepseek.com/"), "https://api.openai.com"),
+            "https://api.deepseek.com/v1/chat/completions"
+        );
     }
 }
