@@ -8,6 +8,31 @@ The source of truth is the repository root changelog. Do not edit this docs page
 
 All notable changes to CRW are documented here.
 
+## [0.15.0](https://github.com/us/crw/compare/v0.14.0...v0.15.0) (2026-06-10)
+
+
+### ⚠ BREAKING CHANGES
+
+* CrwClient() with no API key now targets the cloud and raises if unauthenticated, instead of running locally. Set CRW_LOCAL=1 for the previous zero-config local behavior.
+
+### Features
+
+* add TypeScript SDK (crw-sdk) ([1dd96f7](https://github.com/us/crw/commit/1dd96f7037933f933773ef92d97b68af9134906a))
+* cloud-first default + full client SDK parity ([21e819e](https://github.com/us/crw/commit/21e819ed8a863929bb67323c8b8c4b37ac5f712f))
+* fold langchain/crewai adapters into crw.integrations extras ([cd49120](https://github.com/us/crw/commit/cd49120f957d23e06899d4628388e1aa8cd11842))
+* **release:** publish crw-cli (and crw-browse) to crates.io ([b3d8004](https://github.com/us/crw/commit/b3d80046be72f1495985f6f21485c6fbdae4da7c))
+* **search:** accept native SearXNG categories as passthrough ([b3bcc5d](https://github.com/us/crw/commit/b3bcc5d439fb37f214b76b96e053053765714e39))
+
+
+### Bug Fixes
+
+* **antibot:** detect Google rate-limit/bot-wall pages served with HTTP 200 ([08bb46e](https://github.com/us/crw/commit/08bb46e5e41d9933e1c9603239938dbd500323fe))
+* **ci:** compile TS tests to JS so the SDK suite runs on Node 18/20 ([e1b7546](https://github.com/us/crw/commit/e1b75469af88cad612f93c64333508850864a981))
+* **extract:** avoid doubling chat/completions in structured base_url ([3816bb6](https://github.com/us/crw/commit/3816bb6713dc0932d0b06179f2e37927dba95dfb))
+* **map:** fold hyphen/underscore param spellings, add compare actions ([f34ae12](https://github.com/us/crw/commit/f34ae12844082db68d052b132c524eb5a4a4c9c1)), closes [#128](https://github.com/us/crw/issues/128)
+* **npm:** declare node&gt;=18 engines on crw-mcp packages ([3c953fe](https://github.com/us/crw/commit/3c953feaa3c01d18f0dc05f36be339cb68d31470))
+* **renderer:** reap CDP target + context on PoolGuard cancellation drop ([0eebadc](https://github.com/us/crw/commit/0eebadcb1a4360a0dad5b682301c181a0c328259))
+
 ## [0.14.0](https://github.com/us/crw/compare/v0.13.4...v0.14.0) (2026-06-08)
 
 
