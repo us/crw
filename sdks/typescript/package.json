@@ -1,6 +1,6 @@
 {
   "name": "crw-sdk",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "description": "TypeScript/JavaScript SDK for CRW — scrape, crawl, map, search, parse, and extract any website",
   "license": "MIT",
   "homepage": "https://github.com/us/crw",
@@ -8,7 +8,14 @@
     "type": "git",
     "url": "https://github.com/us/crw.git"
   },
-  "keywords": ["web-scraping", "crawler", "scraper", "ai-agent", "firecrawl", "mcp"],
+  "keywords": [
+    "web-scraping",
+    "crawler",
+    "scraper",
+    "ai-agent",
+    "firecrawl",
+    "mcp"
+  ],
   "type": "module",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
@@ -20,8 +27,12 @@
       "require": "./dist/cjs/index.js"
     }
   },
-  "files": ["dist"],
-  "engines": { "node": ">=18" },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.cjs.json && node scripts/postbuild.mjs",
     "test": "npm run build && tsc -p tsconfig.test.json && node --test dist-test/*.test.js",
