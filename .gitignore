@@ -5,8 +5,8 @@ PROGRESS.md
 bench/server-runs/
 bench/results.json
 **/__pycache__/
-python/.venv/
-python/uv.lock
+sdks/python/.venv/
+sdks/python/uv.lock
 .DS_Store
 node_modules/
 package-lock.json

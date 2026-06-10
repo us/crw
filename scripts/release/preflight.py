@@ -21,8 +21,8 @@ cut. Combines several guards that historically failed silently:
   5. Workspace version is consistent across all version surfaces:
      - Cargo.toml workspace.package.version
      - pyproject.toml project.version
-     - npm/crw-mcp/package.json version + every optionalDependencies pin
-     - npm/crw-mcp-*/package.json version (per platform)
+     - mcp/crw-mcp/package.json version + every optionalDependencies pin
+     - mcp/crw-mcp-*/package.json version (per platform)
      - server.json (if present) version
      (codex review v4 S3.)
 
@@ -136,26 +136,33 @@ def workspace_version() -> str:
 def collect_version_surfaces(ws_version: str) -> list[tuple[str, str, str]]:
     """Return [(surface_label, expected, actual)] for every version pin.
 
-    Includes optional surfaces (skipped silently if file missing).
+    Every version surface is required; a missing surface is reported as a
+    failing row (not skipped) so a stale path after a move fails preflight.
     """
     rows: list[tuple[str, str, str]] = []
 
     # pyproject.toml
-    py = Path("python/pyproject.toml")
+    py = Path("sdks/python/pyproject.toml")
     if py.exists():
         d = tomllib.loads(py.read_text())
         rows.append((str(py), ws_version, d.get("project", {}).get("version", "MISSING")))
+    else:
+        rows.append((str(py), ws_version, "MISSING FILE"))
 
-    # npm platform packages, discovered by globbing `npm/crw-mcp-*/package.json`
-    # (the main package `npm/crw-mcp` has no trailing `-` so it is excluded).
+    # npm platform packages, discovered by globbing `mcp/crw-mcp-*/package.json`
+    # (the main package `mcp/crw-mcp` has no trailing `-` so it is excluded).
     # Self-deriving: adding a platform needs NO edit here — the old hardcoded
     # 6-tuples meant a 7th platform was silently unchecked.
-    platform_pkgs = sorted(Path("npm").glob("crw-mcp-*/package.json"))
+    platform_pkgs = sorted(Path("mcp").glob("crw-mcp-*/package.json"))
+    if not platform_pkgs:
+        rows.append(("mcp/crw-mcp-*/package.json", ws_version, "MISSING (glob matched nothing)"))
     disk_platforms = {p.parent.name for p in platform_pkgs}
 
     # npm main package: version + every internal optionalDependencies pin, with
     # the platform key set read from the manifest itself.
-    npm_main = Path("npm/crw-mcp/package.json")
+    npm_main = Path("mcp/crw-mcp/package.json")
+    if not npm_main.exists():
+        rows.append((str(npm_main) + ":version", ws_version, "MISSING FILE"))
     opt_platforms: set[str] = set()
     if npm_main.exists():
         d = json.loads(npm_main.read_text())
@@ -180,7 +187,7 @@ def collect_version_surfaces(ws_version: str) -> list[tuple[str, str, str]]:
         for extra in sorted(opt_platforms - disk_platforms):
             rows.append((
                 f"{npm_main}:optionalDependencies.{extra}", "a platform package dir",
-                "MISSING (listed in optionalDependencies but no npm/<plat>/package.json)",
+                "MISSING (listed in optionalDependencies but no mcp/<plat>/package.json)",
             ))
 
     for pkg_json in platform_pkgs:

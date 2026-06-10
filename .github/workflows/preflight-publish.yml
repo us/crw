@@ -17,8 +17,9 @@ on:
       - "scripts/release/audit_release_please_config.py"
       - "scripts/release/test_guards.py"
       - "scripts/check-internal-dep-versions.sh"
-      - "npm/**/package.json"
-      - "python/pyproject.toml"
+      - "mcp/**/package.json"
+      - "sdks/python/pyproject.toml"
+      - "sdks/typescript/package.json"
       - "server.json"
   push:
     branches: [main]

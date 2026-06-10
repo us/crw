@@ -78,72 +78,72 @@
         },
         {
           "type": "json",
-          "path": "npm/crw-mcp/package.json",
+          "path": "mcp/crw-mcp/package.json",
           "jsonpath": "$.version"
         },
         {
           "type": "json",
-          "path": "npm/crw-mcp-darwin-x64/package.json",
+          "path": "mcp/crw-mcp-darwin-x64/package.json",
           "jsonpath": "$.version"
         },
         {
           "type": "json",
-          "path": "npm/crw-mcp-darwin-arm64/package.json",
+          "path": "mcp/crw-mcp-darwin-arm64/package.json",
           "jsonpath": "$.version"
         },
         {
           "type": "json",
-          "path": "npm/crw-mcp-linux-x64/package.json",
+          "path": "mcp/crw-mcp-linux-x64/package.json",
           "jsonpath": "$.version"
         },
         {
           "type": "json",
-          "path": "npm/crw-mcp-linux-arm64/package.json",
+          "path": "mcp/crw-mcp-linux-arm64/package.json",
           "jsonpath": "$.version"
         },
         {
           "type": "json",
-          "path": "npm/crw-mcp-win32-x64/package.json",
+          "path": "mcp/crw-mcp-win32-x64/package.json",
           "jsonpath": "$.version"
         },
         {
           "type": "json",
-          "path": "npm/crw-mcp-win32-arm64/package.json",
+          "path": "mcp/crw-mcp-win32-arm64/package.json",
           "jsonpath": "$.version"
         },
         {
           "type": "json",
-          "path": "npm/crw-mcp/package.json",
+          "path": "mcp/crw-mcp/package.json",
           "jsonpath": "$.optionalDependencies['crw-mcp-darwin-x64']"
         },
         {
           "type": "json",
-          "path": "npm/crw-mcp/package.json",
+          "path": "mcp/crw-mcp/package.json",
           "jsonpath": "$.optionalDependencies['crw-mcp-darwin-arm64']"
         },
         {
           "type": "json",
-          "path": "npm/crw-mcp/package.json",
+          "path": "mcp/crw-mcp/package.json",
           "jsonpath": "$.optionalDependencies['crw-mcp-linux-x64']"
         },
         {
           "type": "json",
-          "path": "npm/crw-mcp/package.json",
+          "path": "mcp/crw-mcp/package.json",
           "jsonpath": "$.optionalDependencies['crw-mcp-linux-arm64']"
         },
         {
           "type": "json",
-          "path": "npm/crw-mcp/package.json",
+          "path": "mcp/crw-mcp/package.json",
           "jsonpath": "$.optionalDependencies['crw-mcp-win32-x64']"
         },
         {
           "type": "json",
-          "path": "npm/crw-mcp/package.json",
+          "path": "mcp/crw-mcp/package.json",
           "jsonpath": "$.optionalDependencies['crw-mcp-win32-arm64']"
         },
         {
           "type": "toml",
-          "path": "python/pyproject.toml",
+          "path": "sdks/python/pyproject.toml",
           "jsonpath": "$.project.version"
         }
       ]

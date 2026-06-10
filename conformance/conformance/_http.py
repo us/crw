@@ -16,8 +16,8 @@ from .corpus import Case
 
 TERMINAL = {"completed", "failed", "cancelled"}
 
-# Repo root = three levels up from this file (conformance/_http.py →
-# crw-conformance → crw-opencore). Upload fixtures are resolved against it.
+# Repo root = three levels up from this file (conformance/conformance/_http.py
+# → conformance → crw-opencore). Upload fixtures are resolved against it.
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 

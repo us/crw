@@ -265,8 +265,8 @@ jobs:
         run: |
           set -euo pipefail
           pip install build twine
-          (cd python && python -m build)
-          twine upload --skip-existing python/dist/*
+          (cd sdks/python && python -m build)
+          twine upload --skip-existing sdks/python/dist/*
 
       - name: Verify
         shell: bash
@@ -329,7 +329,7 @@ jobs:
               delay=$((delay * 2))
             done
           }
-          for dir in npm/crw-mcp-*/; do
+          for dir in mcp/crw-mcp-*/; do
             pkg=$(basename "$dir")
             case "$pkg" in
               crw-mcp-darwin-x64)   asset="crw-mcp-darwin-x64.tar.gz" ;;
@@ -381,7 +381,7 @@ jobs:
           if [ "$current" = "$VERSION" ]; then
             echo "::notice::crw-mcp@${VERSION} already on npm"
           else
-            npm_publish_retry npm/crw-mcp
+            npm_publish_retry mcp/crw-mcp
           fi
 
       - name: Verify (existence + optionalDeps pin + install smoke)

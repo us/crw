@@ -12,7 +12,7 @@ Proves crw's `/v2/*` API is compatible with Firecrawl v2 along two axes:
 ## Run
 
 ```bash
-cd crw-conformance
+cd conformance
 
 # 1. Diff crw against the committed golden fixtures + run the SDK suite (CI gate)
 CRW_URL=http://localhost:3000 CRW_API_KEY=local ./run.sh all
