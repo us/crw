@@ -26,6 +26,8 @@ dependencies = ["platformdirs>=3.0"]
 
 [project.optional-dependencies]
 test = ["pytest>=7.0", "pytest-timeout>=2.0"]
+langchain = ["langchain-core>=0.3.0,<2.0.0"]
+crewai = ["crewai>=0.100.0"]
 
 [project.urls]
 Homepage = "https://github.com/us/crw"
