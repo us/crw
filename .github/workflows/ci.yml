@@ -54,9 +54,11 @@ jobs:
       - name: Guard regression tests
         run: python3 scripts/release/test_guards.py
 
-      - name: Build
-        run: cargo build --workspace --all-targets
-
+      # No standalone `cargo build --workspace --all-targets`: clippy above runs
+      # with `--all-targets -D warnings` (compile-checks every target, incl. the
+      # criterion bench + example) and `cargo test` builds & runs all test
+      # targets. A separate dev-profile build only recompiles the workspace for
+      # artifacts CI never runs. (Kept in release.yml as a pre-publish gate.)
       - name: Test
         run: cargo test --workspace
 
