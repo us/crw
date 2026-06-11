@@ -184,8 +184,10 @@ brew install us/crw/crw
 curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | CRW_BINARY=crw sh
 
 # APT (Debian/Ubuntu):
-curl -fsSL https://apt.fastcrw.com/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/crw.gpg
-echo "deb [signed-by=/usr/share/keyrings/crw.gpg] https://apt.fastcrw.com stable main" \
+# Key over HTTPS (tamper-proof); repo over HTTP — every package is GPG-signed
+# and verified via signed-by, the Debian-standard secure way to serve APT.
+curl -fsSL https://raw.githubusercontent.com/us/apt-crw/main/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/crw.gpg
+echo "deb [signed-by=/usr/share/keyrings/crw.gpg] http://apt.fastcrw.com stable main" \
   | sudo tee /etc/apt/sources.list.d/crw.list
 sudo apt update && sudo apt install crw
 
