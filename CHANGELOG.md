@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.15.1](https://github.com/us/crw/compare/v0.15.0...v0.15.1) (2026-06-11)
+
+
+### Bug Fixes
+
+* **ci:** poll npm in verify_npm_sdk + expose ./package.json export ([ed185dd](https://github.com/us/crw/commit/ed185dd3fd34313e5babf1c9b71e08faab3918c5))
+
 ## [0.15.0](https://github.com/us/crw/compare/v0.14.0...v0.15.0) (2026-06-10)
 
 
