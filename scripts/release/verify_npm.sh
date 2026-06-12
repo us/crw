@@ -20,10 +20,18 @@ source "$SCRIPT_DIR/lib.sh"
 v="${1:?version required}"
 fail=0
 
-# 1. Existence
+# 1. Existence — poll, since npm registry propagation can lag several seconds
+#    after publish (same race already fixed for the SDK in verify_npm_sdk.sh).
+#    `crw-mcp` is checked first and is the one that races; once it propagates,
+#    the optionalDeps read and install smoke below succeed too.
 for p in crw-mcp crw-mcp-darwin-x64 crw-mcp-darwin-arm64 \
          crw-mcp-linux-x64 crw-mcp-linux-arm64; do
-  actual=$(npm view "$p@$v" version 2>/dev/null || echo "MISSING")
+  actual="MISSING"
+  for _ in 1 2 3 4 5 6; do
+    actual=$(npm view "$p@$v" version 2>/dev/null || echo "MISSING")
+    [ "$actual" = "$v" ] && break
+    sleep 10
+  done
   if [ "$actual" = "$v" ]; then
     printf '✓ %s@%s\n' "$p" "$v"
   else
