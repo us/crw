@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.15.2](https://github.com/us/crw/compare/v0.15.1...v0.15.2) (2026-06-12)
+
+
+### Bug Fixes
+
+* **mcp:** npm launcher downloads binary when platform pkg missing ([4ae1aa6](https://github.com/us/crw/commit/4ae1aa684f93c4c6a36fe157ce013700c5a9e6ea))
+
 ## [0.15.1](https://github.com/us/crw/compare/v0.15.0...v0.15.1) (2026-06-11)
 
 
