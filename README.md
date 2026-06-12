@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/logo-animation.gif" alt="fastCRW" width="220" />
+</p>
+
 # fastCRW — Self-hosted, Rust-native web crawler & scraper for AI agents
 
 The open-source alternative to Firecrawl. One static binary, ~50 MB RAM idle,
@@ -419,6 +423,18 @@ on request — write to **hello@fastcrw.com**.
 - **LinkedIn:** [fastcrw](https://www.linkedin.com/company/fastcrw)
 - **Discord:** [discord.gg/kkFh2SC8](https://discord.gg/kkFh2SC8)
 - **MCP Registry:** [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io/?q=crw)
+
+---
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=us%2Fcrw&type=timeline&legend=bottom-right">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=us/crw&type=timeline&theme=dark&legend=bottom-right" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=us/crw&type=timeline&legend=bottom-right" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=us/crw&type=timeline&legend=bottom-right" />
+ </picture>
+</a>
 
 ---
 
