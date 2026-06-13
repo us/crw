@@ -229,3 +229,47 @@ pub async fn get_scrape_job(
          use POST /v2/scrape and read the response directly"
     ))))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn v2_scrape_accepts_snake_case_proxy_alias_and_threads_to_internal() {
+        // The managed layer injects snake_case proxy_list/proxy_rotation; the v2
+        // wire is camelCase, so the alias must accept both and to_internal must
+        // thread them into the engine ScrapeRequest (not drop via Default).
+        let body = serde_json::json!({
+            "url": "http://example.com",
+            "proxy_list": ["http://u:p@1.2.3.4:8080"],
+            "proxy_rotation": "round_robin",
+        });
+        let v2: V2ScrapeRequest = serde_json::from_value(body).unwrap();
+        assert_eq!(v2.proxy_list, vec!["http://u:p@1.2.3.4:8080"]);
+        assert_eq!(
+            v2.proxy_rotation,
+            Some(crw_core::proxy::ProxyRotation::RoundRobin)
+        );
+        let (req, _, _) = to_internal(v2).unwrap();
+        assert_eq!(req.proxy_list, vec!["http://u:p@1.2.3.4:8080"]);
+        assert_eq!(
+            req.proxy_rotation,
+            Some(crw_core::proxy::ProxyRotation::RoundRobin)
+        );
+    }
+
+    #[test]
+    fn v2_scrape_camelcase_proxy_list_also_works_and_mode_is_separate() {
+        let body = serde_json::json!({
+            "url": "http://example.com",
+            "proxyList": ["http://1.2.3.4:8080"],
+            "proxy": "stealth",
+        });
+        let v2: V2ScrapeRequest = serde_json::from_value(body).unwrap();
+        assert_eq!(v2.proxy_list, vec!["http://1.2.3.4:8080"]);
+        // `proxy` MODE is independent of the proxy_list BYOP URLs.
+        assert_eq!(v2.proxy, "stealth");
+        let (req, _, _) = to_internal(v2).unwrap();
+        assert_eq!(req.proxy_list.len(), 1);
+    }
+}
