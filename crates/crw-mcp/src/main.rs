@@ -92,9 +92,26 @@ impl Backend {
         matches!(self, Backend::Proxy { .. })
     }
 
+    /// Whether `crw_search` should be advertised. Proxy: yes (the remote decides).
+    /// Embedded: only if a SearXNG backend is configured, so a no-backend install
+    /// doesn't advertise a tool that only returns `search_disabled`.
+    fn search_available(&self) -> bool {
+        match self {
+            Backend::Proxy { .. } => true,
+            #[cfg(feature = "embedded")]
+            Backend::Embedded { state } => state.searxng.is_some(),
+        }
+    }
+
     async fn handle_request(&self, req: JsonRpcRequest) -> Option<JsonRpcResponse> {
         // Handle common protocol methods via shared logic.
-        match handle_protocol_method(SERVER_NAME, SERVER_VERSION, &req, self.is_proxy()) {
+        match handle_protocol_method(
+            SERVER_NAME,
+            SERVER_VERSION,
+            &req,
+            self.is_proxy(),
+            self.search_available(),
+        ) {
             ProtocolResult::Response(resp) => return Some(resp),
             ProtocolResult::Notification => return None,
             ProtocolResult::NotHandled => {}
@@ -109,9 +126,23 @@ impl Backend {
                     .get("name")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
+                // Unknown tool name → JSON-RPC -32602 (not an isError result).
+                if !crw_core::mcp::is_known_tool(tool_name) {
+                    return Some(JsonRpcResponse::error(
+                        id,
+                        -32602,
+                        format!("unknown tool: {tool_name}"),
+                    ));
+                }
+
                 let arguments = req.params.get("arguments").cloned().unwrap_or(json!({}));
 
-                let result = self.call_tool(tool_name, arguments).await;
+                // Bound the result at the MCP layer before it reaches context.
+                // Works for both embedded and proxy backends.
+                let result = self
+                    .call_tool(tool_name, arguments.clone())
+                    .await
+                    .map(|v| crw_core::mcp::apply_bounds(tool_name, &arguments, v));
                 Some(tool_result_response(id, tool_name, result))
             }
 
@@ -151,6 +182,11 @@ async fn proxy_call_tool(
     tool_name: &str,
     args: Value,
 ) -> Result<Value, String> {
+    // Strip MCP-only control args (maxLength, crw_map's limit) so a strict upstream
+    // doesn't reject unknown body fields; bounds are applied locally to the response
+    // by apply_bounds in the dispatch layer.
+    let args = crw_core::mcp::strip_mcp_only_args(tool_name, args);
+
     let mut headers = reqwest::header::HeaderMap::new();
     headers.insert("content-type", "application/json".parse().unwrap());
     if let Some(key) = api_key {
@@ -460,14 +496,14 @@ async fn run_stdio_loop(backend: Backend) {
             continue;
         }
 
-        tracing::debug!("← {trimmed}");
+        tracing::debug!("← {} bytes: {:.200}", trimmed.len(), trimmed);
 
         let req: JsonRpcRequest = match serde_json::from_str(trimmed) {
             Ok(r) => r,
             Err(e) => {
                 let err = JsonRpcResponse::error(Value::Null, -32700, format!("parse error: {e}"));
                 let out = serde_json::to_string(&err).unwrap();
-                tracing::debug!("→ {out}");
+                tracing::debug!("→ {} bytes: {:.200}", out.len(), out);
                 let _ = stdout.write_all(out.as_bytes()).await;
                 let _ = stdout.write_all(b"\n").await;
                 let _ = stdout.flush().await;
@@ -477,7 +513,7 @@ async fn run_stdio_loop(backend: Backend) {
 
         if let Some(resp) = backend.handle_request(req).await {
             let out = serde_json::to_string(&resp).unwrap();
-            tracing::debug!("→ {out}");
+            tracing::debug!("→ {} bytes: {:.200}", out.len(), out);
             let _ = stdout.write_all(out.as_bytes()).await;
             let _ = stdout.write_all(b"\n").await;
             let _ = stdout.flush().await;

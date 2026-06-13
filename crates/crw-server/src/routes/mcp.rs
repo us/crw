@@ -145,8 +145,15 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
 }
 
 pub async fn handle_request(state: &AppState, req: JsonRpcRequest) -> Option<JsonRpcResponse> {
-    // Handle common protocol methods via shared logic.
-    match handle_protocol_method(SERVER_NAME, SERVER_VERSION, &req, false) {
+    // Handle common protocol methods via shared logic. `crw_search` is advertised
+    // only when a SearXNG backend is configured.
+    match handle_protocol_method(
+        SERVER_NAME,
+        SERVER_VERSION,
+        &req,
+        false,
+        state.searxng.is_some(),
+    ) {
         ProtocolResult::Response(resp) => return Some(resp),
         ProtocolResult::Notification => return None,
         ProtocolResult::NotHandled => {}
@@ -161,9 +168,22 @@ pub async fn handle_request(state: &AppState, req: JsonRpcRequest) -> Option<Jso
                 .get("name")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
+            // Unknown tool name → JSON-RPC -32602 (not an isError execution result).
+            if !crw_core::mcp::is_known_tool(tool_name) {
+                return Some(JsonRpcResponse::error(
+                    id,
+                    -32602,
+                    format!("unknown tool: {tool_name}"),
+                ));
+            }
+
             let arguments = req.params.get("arguments").cloned().unwrap_or(json!({}));
 
-            let result = call_tool(state, tool_name, arguments).await;
+            // Bound the result at the MCP layer (driven by the call's own
+            // maxLength/limit args) before it reaches the model's context.
+            let result = call_tool(state, tool_name, arguments.clone())
+                .await
+                .map(|v| crw_core::mcp::apply_bounds(tool_name, &arguments, v));
             Some(tool_result_response(id, tool_name, result))
         }
 

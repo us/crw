@@ -16,6 +16,18 @@ fn test_app() -> TestServer {
     TestServer::new(app)
 }
 
+/// Like `test_app` but with a SearXNG backend configured, so `crw_search` is
+/// advertised in `tools/list` (the URL need not be reachable — advertisement only
+/// checks that a backend is configured). The bare `test_app` has no backend, so it
+/// correctly suppresses `crw_search` from `tools/list`.
+fn test_app_with_search() -> TestServer {
+    let config: AppConfig =
+        toml::from_str("[search]\nsearxng_url = \"http://localhost:8888\"").unwrap();
+    let state = AppState::new(config).expect("AppState::new failed");
+    let app = create_app(state);
+    TestServer::new(app)
+}
+
 fn mcp_request(
     method: &str,
     id: serde_json::Value,
@@ -52,7 +64,8 @@ async fn mcp_initialize_returns_capabilities() {
 
 #[tokio::test]
 async fn mcp_tools_list_returns_all_tools() {
-    let server = test_app();
+    // With a search backend configured, all 6 tools are advertised.
+    let server = test_app_with_search();
     let resp = server
         .post("/mcp")
         .content_type("application/json")
@@ -74,6 +87,44 @@ async fn mcp_tools_list_returns_all_tools() {
     assert!(tool_names.contains(&"crw_map"));
     assert!(tool_names.contains(&"crw_search"));
     assert!(tool_names.contains(&"crw_parse_file"));
+
+    // Every tool advertises annotations; crw_crawl is the only non-read-only one.
+    for t in tools {
+        assert!(
+            t["annotations"].is_object(),
+            "{} must advertise annotations",
+            t["name"]
+        );
+        assert!(
+            t["title"].is_string(),
+            "{} must advertise a title",
+            t["name"]
+        );
+    }
+    let crawl = tools.iter().find(|t| t["name"] == "crw_crawl").unwrap();
+    assert_eq!(crawl["annotations"]["readOnlyHint"], false);
+    assert_eq!(crawl["annotations"]["idempotentHint"], false);
+    let scrape = tools.iter().find(|t| t["name"] == "crw_scrape").unwrap();
+    assert_eq!(scrape["annotations"]["readOnlyHint"], true);
+}
+
+/// crw_search is suppressed from tools/list when no search backend is configured,
+/// so a no-backend install doesn't advertise a tool that only errors.
+#[tokio::test]
+async fn mcp_tools_list_hides_search_without_backend() {
+    let server = test_app();
+    let resp = server
+        .post("/mcp")
+        .content_type("application/json")
+        .json(&mcp_request("tools/list", json!(2), json!({})))
+        .await;
+    resp.assert_status_ok();
+    let json: serde_json::Value = resp.json();
+    let tools = json["result"]["tools"].as_array().unwrap();
+    let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
+    assert_eq!(tools.len(), 5, "crw_search hidden without a backend");
+    assert!(!names.contains(&"crw_search"));
+    assert!(names.contains(&"crw_scrape"));
 }
 
 #[tokio::test]
@@ -161,8 +212,9 @@ async fn mcp_tools_call_unknown_tool() {
         .await;
     resp.assert_status_ok();
     let json: serde_json::Value = resp.json();
-    let result = &json["result"];
-    assert_eq!(result["isError"], true);
+    // Unknown tool name → JSON-RPC -32602 protocol error (not an isError result).
+    assert_eq!(json["error"]["code"], -32602);
+    assert!(json.get("result").is_none() || json["result"].is_null());
 }
 
 #[tokio::test]
@@ -273,7 +325,7 @@ async fn mcp_missing_method_field() {
 /// flat-array shape.
 #[tokio::test]
 async fn mcp_t8_search_advertises_nested_output_schema() {
-    let server = test_app();
+    let server = test_app_with_search();
     let resp = server
         .post("/mcp")
         .content_type("application/json")

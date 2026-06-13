@@ -66,8 +66,24 @@ impl Backend {
         matches!(self, Backend::Proxy { .. })
     }
 
+    /// Whether `crw_search` should be advertised (proxy: yes; embedded: only with a
+    /// configured SearXNG backend).
+    fn search_available(&self) -> bool {
+        match self {
+            Backend::Proxy { .. } => true,
+            #[cfg(feature = "mcp-embedded")]
+            Backend::Embedded { state } => state.searxng.is_some(),
+        }
+    }
+
     async fn handle_request(&self, req: JsonRpcRequest) -> Option<JsonRpcResponse> {
-        match handle_protocol_method(SERVER_NAME, SERVER_VERSION, &req, self.is_proxy()) {
+        match handle_protocol_method(
+            SERVER_NAME,
+            SERVER_VERSION,
+            &req,
+            self.is_proxy(),
+            self.search_available(),
+        ) {
             ProtocolResult::Response(resp) => return Some(resp),
             ProtocolResult::Notification => return None,
             ProtocolResult::NotHandled => {}
@@ -81,9 +97,22 @@ impl Backend {
                     .get("name")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
+                // Unknown tool name → JSON-RPC -32602 (not an isError result).
+                if !crw_core::mcp::is_known_tool(tool_name) {
+                    return Some(JsonRpcResponse::error(
+                        id,
+                        -32602,
+                        format!("unknown tool: {tool_name}"),
+                    ));
+                }
+
                 let arguments = req.params.get("arguments").cloned().unwrap_or(json!({}));
 
-                let result = self.call_tool(tool_name, arguments).await;
+                // Bound the result at the MCP layer before it reaches context.
+                let result = self
+                    .call_tool(tool_name, arguments.clone())
+                    .await
+                    .map(|v| crw_core::mcp::apply_bounds(tool_name, &arguments, v));
                 Some(tool_result_response(id, tool_name, result))
             }
 
@@ -117,6 +146,10 @@ async fn proxy_call_tool(
     tool_name: &str,
     args: Value,
 ) -> Result<Value, String> {
+    // Strip MCP-only control args (maxLength, crw_map's limit) before forwarding;
+    // bounds are applied locally to the response by apply_bounds in the dispatch.
+    let args = crw_core::mcp::strip_mcp_only_args(tool_name, args);
+
     let mut headers = reqwest::header::HeaderMap::new();
     headers.insert("content-type", "application/json".parse().unwrap());
     if let Some(key) = api_key {
@@ -182,6 +215,54 @@ async fn proxy_call_tool(
                 .headers(headers)
                 .timeout(TIMEOUT_SEARCH)
                 .json(&args)
+                .send()
+                .await
+                .map_err(|e| format!("HTTP request failed: {e}"))?;
+            parse_response(resp).await
+        }
+        "crw_parse_file" => {
+            use base64::Engine;
+            let b64 = args
+                .get("contentBase64")
+                .and_then(|v| v.as_str())
+                .ok_or("missing required parameter: contentBase64")?;
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(b64.trim())
+                .map_err(|e| format!("invalid base64 in contentBase64: {e}"))?;
+            let filename = args
+                .get("filename")
+                .and_then(|v| v.as_str())
+                .unwrap_or("document.pdf")
+                .to_string();
+            // Forward the remaining fields (formats/jsonSchema/parsers/…) as the
+            // multipart `options` JSON.
+            let mut options = args.clone();
+            if let Some(obj) = options.as_object_mut() {
+                obj.remove("contentBase64");
+                obj.remove("filename");
+            }
+            let part = reqwest::multipart::Part::bytes(bytes)
+                .file_name(filename)
+                .mime_str("application/pdf")
+                .map_err(|e| format!("invalid part: {e}"))?;
+            let form = reqwest::multipart::Form::new()
+                .part("file", part)
+                .text("options", options.to_string());
+            // Multipart sets its own content-type/boundary — use auth-only headers.
+            let mut mp_headers = reqwest::header::HeaderMap::new();
+            if let Some(key) = api_key {
+                mp_headers.insert(
+                    "authorization",
+                    format!("Bearer {key}")
+                        .parse()
+                        .map_err(|e| format!("invalid api key: {e}"))?,
+                );
+            }
+            let resp = client
+                .post(format!("{base_url}/v2/parse"))
+                .headers(mp_headers)
+                .timeout(TIMEOUT_SCRAPE)
+                .multipart(form)
                 .send()
                 .await
                 .map_err(|e| format!("HTTP request failed: {e}"))?;
@@ -354,14 +435,14 @@ async fn run_stdio_loop(backend: Backend) {
             continue;
         }
 
-        tracing::debug!("← {trimmed}");
+        tracing::debug!("← {} bytes: {:.200}", trimmed.len(), trimmed);
 
         let req: JsonRpcRequest = match serde_json::from_str(trimmed) {
             Ok(r) => r,
             Err(e) => {
                 let err = JsonRpcResponse::error(Value::Null, -32700, format!("parse error: {e}"));
                 let out = serde_json::to_string(&err).unwrap();
-                tracing::debug!("→ {out}");
+                tracing::debug!("→ {} bytes: {:.200}", out.len(), out);
                 let _ = stdout.write_all(out.as_bytes()).await;
                 let _ = stdout.write_all(b"\n").await;
                 let _ = stdout.flush().await;
@@ -371,7 +452,7 @@ async fn run_stdio_loop(backend: Backend) {
 
         if let Some(resp) = backend.handle_request(req).await {
             let out = serde_json::to_string(&resp).unwrap();
-            tracing::debug!("→ {out}");
+            tracing::debug!("→ {} bytes: {:.200}", out.len(), out);
             let _ = stdout.write_all(out.as_bytes()).await;
             let _ = stdout.write_all(b"\n").await;
             let _ = stdout.flush().await;

@@ -148,3 +148,14 @@ crw-browse = { path = "crates/crw-browse", version = "0.15.2" }
 lto = true
 codegen-units = 1
 strip = true
+
+# Size-optimized profile for the lean proxy MCP binary. Inherits release (lto +
+# codegen-units=1 + strip) and adds `opt-level = "z"` to minimize size. Scoped to
+# its own profile so it does NOT slow the CPU-bound scraping engine in the normal
+# release build. NO `panic = "abort"` — crw-extract relies on `catch_unwind` to
+# survive malformed-PDF parser panics, which abort would turn into process crashes.
+# Build the lean binary with:
+#   cargo build --profile release-small --no-default-features -p crw-mcp
+[profile.release-small]
+inherits = "release"
+opt-level = "z"

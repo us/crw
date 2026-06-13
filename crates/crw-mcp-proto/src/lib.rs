@@ -69,45 +69,57 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
     let mut tools = vec![
         json!({
             "name": "crw_scrape",
-            "description": "Scrape a single URL and return its content as markdown, HTML, or links. Use this to extract content from any web page.",
+            "title": "Scrape URL",
+            "description": "Scrape one URL to markdown, HTML, or links.",
+            "annotations": {
+                "readOnlyHint": true,
+                "destructiveHint": false,
+                "idempotentHint": true,
+                "openWorldHint": true
+            },
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "url": {
                         "type": "string",
-                        "description": "The URL to scrape"
+                        "description": "URL to scrape"
                     },
                     "formats": {
                         "type": "array",
                         "items": { "type": "string", "enum": ["markdown", "html", "links"] },
-                        "description": "Output formats (default: [\"markdown\"])"
+                        "description": "Output formats (default [\"markdown\"])"
                     },
                     "onlyMainContent": {
                         "type": "boolean",
-                        "description": "Extract only the main content, removing nav/footer/etc (default: true)"
+                        "description": "Strip nav/footer; main content only (default true)"
                     },
                     "includeTags": {
                         "type": "array",
                         "items": { "type": "string" },
-                        "description": "CSS selectors to include (only content matching these selectors)"
+                        "description": "CSS selectors to include"
                     },
                     "excludeTags": {
                         "type": "array",
                         "items": { "type": "string" },
-                        "description": "CSS selectors to exclude from output"
+                        "description": "CSS selectors to exclude"
                     },
                     "renderJs": {
                         "type": "boolean",
-                        "description": "Render JavaScript before extracting (true = force JS, false = HTTP only, omit = auto-detect or use the server's render_js_default)"
+                        "description": "Force JS render (true), HTTP-only (false), omit = auto"
                     },
                     "waitFor": {
                         "type": "integer",
-                        "description": "Milliseconds to wait after JS rendering for late content/XHRs"
+                        "description": "Ms to wait after JS render for late content"
+                    },
+                    "maxLength": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Max chars per content field; 0 = unbounded (default ~15000)"
                     },
                     "renderer": {
                         "type": "string",
                         "enum": ["auto", "lightpanda", "chrome", "playwright"],
-                        "description": "Pin this request to a specific renderer. \"auto\" (default if omitted) uses the configured fallback chain. Other values hard-pin to a single renderer with no fallback. Pinning a non-auto value implies renderJs:true unless renderJs:false is set explicitly."
+                        "description": "Pin renderer; non-auto hard-pins and implies renderJs:true (default auto)"
                     }
                 },
                 "required": ["url"]
@@ -115,38 +127,47 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
         }),
         json!({
             "name": "crw_crawl",
-            "description": "Start an async crawl of a website. Returns a job ID that can be polled with crw_check_crawl_status.",
+            "title": "Crawl site",
+            "description": "Start an async site crawl; returns a job id to poll with crw_check_crawl_status.",
+            // Starting a crawl creates server-side job state (a side effect), so
+            // this is NOT read-only and NOT idempotent.
+            "annotations": {
+                "readOnlyHint": false,
+                "destructiveHint": false,
+                "idempotentHint": false,
+                "openWorldHint": true
+            },
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "url": {
                         "type": "string",
-                        "description": "The starting URL to crawl"
+                        "description": "Starting URL"
                     },
                     "maxDepth": {
                         "type": "integer",
-                        "description": "Maximum crawl depth (default: 2)"
+                        "description": "Max crawl depth (default 2)"
                     },
                     "maxPages": {
                         "type": "integer",
-                        "description": "Maximum number of pages to crawl (default: 10)"
+                        "description": "Max pages to crawl (default 10)"
                     },
                     "jsonSchema": {
                         "type": "object",
-                        "description": "JSON schema for LLM-based structured data extraction on each crawled page"
+                        "description": "JSON schema for LLM extraction per page"
                     },
                     "renderJs": {
                         "type": "boolean",
-                        "description": "Render JavaScript on every crawled page (true = force JS, false = HTTP only, omit = auto-detect or use the server's render_js_default)"
+                        "description": "Force JS render (true), HTTP-only (false), omit = auto"
                     },
                     "waitFor": {
                         "type": "integer",
-                        "description": "Milliseconds to wait after JS rendering on each page"
+                        "description": "Ms to wait after JS render per page"
                     },
                     "renderer": {
                         "type": "string",
                         "enum": ["auto", "lightpanda", "chrome", "playwright"],
-                        "description": "Pin every crawled page to a specific renderer. \"auto\" (default if omitted) uses the configured fallback chain. Other values hard-pin with no fallback. Pinning a non-auto value implies renderJs:true unless renderJs:false is set explicitly."
+                        "description": "Pin renderer; non-auto hard-pins and implies renderJs:true (default auto)"
                     }
                 },
                 "required": ["url"]
@@ -154,13 +175,25 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
         }),
         json!({
             "name": "crw_check_crawl_status",
-            "description": "Check the status of an async crawl job and retrieve results.",
+            "title": "Check crawl status",
+            "description": "Poll an async crawl job and retrieve its pages.",
+            "annotations": {
+                "readOnlyHint": true,
+                "destructiveHint": false,
+                "idempotentHint": true,
+                "openWorldHint": true
+            },
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "id": {
                         "type": "string",
-                        "description": "The crawl job ID returned by crw_crawl"
+                        "description": "Crawl job id from crw_crawl"
+                    },
+                    "maxLength": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Max chars per page content field; 0 = unbounded (default ~15000)"
                     }
                 },
                 "required": ["id"]
@@ -168,25 +201,37 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
         }),
         json!({
             "name": "crw_map",
-            "description": "Discover URLs on a website by crawling and/or reading its sitemap.",
+            "title": "Map site URLs",
+            "description": "Discover URLs on a site via sitemap and/or a short crawl. Returns a URL list only, no page content.",
+            "annotations": {
+                "readOnlyHint": true,
+                "destructiveHint": false,
+                "idempotentHint": true,
+                "openWorldHint": true
+            },
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "url": {
                         "type": "string",
-                        "description": "The URL to map"
+                        "description": "URL to map"
                     },
                     "maxDepth": {
                         "type": "integer",
-                        "description": "Maximum crawl depth for discovery (default: 2)"
+                        "description": "Max discovery depth (default 2)"
                     },
                     "useSitemap": {
                         "type": "boolean",
-                        "description": "Whether to use the site's sitemap.xml (default: true)"
+                        "description": "Use sitemap.xml (default true)"
                     },
                     "crawlFallback": {
                         "type": "boolean",
-                        "description": "If true (default), supplements sitemap discovery with a short BFS crawl when the sitemap returns enough URLs. Set false for sitemap-only mode (faster, may miss pages not in the sitemap)."
+                        "description": "Supplement sitemap with a short BFS crawl (default true; false = sitemap-only)"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Max URLs returned; 0 = unbounded (default 100)"
                     }
                 },
                 "required": ["url"]
@@ -202,44 +247,51 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
     let _ = proxy_mode;
     tools.push(json!({
         "name": "crw_search",
-        "description": "Search the web and return relevant results with titles, URLs, and descriptions/snippets. Backed by a SearXNG sidecar in embedded mode (no API key needed), or by the configured remote API in proxy mode (uses CRW_API_KEY).\n\nReturn shape: `{ \"success\": true, \"data\": { \"results\": [{ \"url\", \"title\", \"description\", \"snippet\", \"position\", \"score\" }, ...] } }`. When `sources` is set, `data.results` is instead an object grouped by source (`{ \"web\": [...], \"news\": [...], \"images\": [...] }`). The `snippet` field is an alias of `description` — both carry the same body text so downstream LLM pipelines that ask for either get a match.\n\nExample: `crw_search(query=\"renewable energy trends 2024\", limit=3)` returns the top 3 web results with title/url/snippet.\n\nErrors: returns `search_disabled` when no SearXNG backend is configured, or `target_unreachable` / `timeout` (naming the configured host) when the backend can't be reached.",
+        "title": "Web search",
+        "description": "Search the web (needs a configured search backend; embedded uses a local SearXNG sidecar). Returns results with url/title/description/snippet.",
+        "annotations": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": true
+        },
         "inputSchema": {
             "type": "object",
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "The search query"
+                    "description": "Search query"
                 },
                 "limit": {
                     "type": "integer",
-                    "description": "Maximum number of results to return (default: 5, max: 20)"
+                    "description": "Max results (default 5, max 20)"
                 },
                 "lang": {
                     "type": "string",
-                    "description": "Language code for results (e.g. \"en\", \"tr\")"
+                    "description": "Language code, e.g. \"en\", \"tr\""
                 },
                 "country": {
                     "type": "string",
-                    "description": "Country code for results (e.g. \"us\", \"tr\"). Hint to bias regional results; ignored if the underlying engine does not support it."
+                    "description": "Country code hint, e.g. \"us\", \"tr\""
                 },
                 "tbs": {
                     "type": "string",
                     "enum": ["qdr:h", "qdr:d", "qdr:w", "qdr:m", "qdr:y"],
-                    "description": "Time filter — restrict to results from the past hour/day/week/month/year"
+                    "description": "Time filter: past hour/day/week/month/year"
                 },
                 "sources": {
                     "type": "array",
                     "items": { "type": "string", "enum": ["web", "news", "images"] },
-                    "description": "If set, returns results grouped by source instead of a flat list"
+                    "description": "If set, group results by source instead of a flat list"
                 },
                 "categories": {
                     "type": "array",
                     "items": { "type": "string" },
-                    "description": "Bias the search towards a category. Curated values: `pdf` appends `filetype:pdf` to the query; `github`/`research` switch to topical engines. Any other value (e.g. `science`, `it`, `news`, `files`) is passed straight through to SearXNG's native `categories` routing."
+                    "description": "Category bias; e.g. \"pdf\", \"github\", \"research\", or a native SearXNG category"
                 },
                 "scrapeOptions": {
                     "type": "object",
-                    "description": "If set, each `web` result is scraped in-process and the requested formats are inlined into the response.",
+                    "description": "If set, scrape each web result and inline the requested formats",
                     "properties": {
                         "formats": {
                             "type": "array",
@@ -247,45 +299,23 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
                         },
                         "onlyMainContent": {
                             "type": "boolean",
-                            "description": "Strip nav/footer/ads before serializing (default: true)"
+                            "description": "Strip nav/footer/ads (default true)"
                         }
                     }
                 }
             },
             "required": ["query"]
         },
-        // Mirrors the real `SearchResponse = ApiResponse<SearchResponseData>`
-        // serializer in crw-core/src/types.rs. The Ok branch of
-        // `tool_result_response` is the only path that emits `structuredContent`,
-        // and `ApiResponse::ok` always sets `data: Some(..)` — so `data` is
-        // required and the error/error_code/warning siblings are never present
-        // on the validated value (they only appear on the err() path, which
-        // returns Err(String) and never reaches structuredContent).
-        //
-        // `data.results` is `#[serde(untagged)] enum SearchData` → a flat array
-        // (no `sources`) OR a grouped object (`web`/`news`/`images`). Hence the
-        // `oneOf`. Grouped `images` deserialize to `ImageResult` (carries
-        // `imageUrl`, NO `snippet`), so they are deliberately left unconstrained —
-        // constraining them with the text-result shape would falsely reject every
-        // real grouped-image response. No `additionalProperties: false` anywhere:
-        // SearchResult conditionally emits markdown/html/links/metadata/etc.
+        // Intentionally minimal: declares the stable top-level contract
+        // (`{success, data:{results}}`) that strict clients validate, while leaving
+        // `results` permissive — it is a `#[serde(untagged)]` enum that serializes
+        // either as a flat array OR a grouped `{web,news,images}` object, and items
+        // carry conditional fields (markdown/html/links/imageUrl/…). A rich schema
+        // here costs ~400 tok in every `tools/list` for little client benefit and
+        // risks falsely rejecting real responses, so we keep it skeletal. No
+        // `additionalProperties:false` anywhere (conditional fields).
         "outputSchema": {
             "type": "object",
-            "$defs": {
-                "searchResultItem": {
-                    "type": "object",
-                    "properties": {
-                        "url": { "type": "string" },
-                        "title": { "type": "string" },
-                        "description": { "type": "string", "description": "Body snippet for the result. `snippet` is an alias of this field." },
-                        "snippet": { "type": "string", "description": "Alias of `description`. Always populated." },
-                        "position": { "type": "integer" },
-                        "score": { "type": "number" },
-                        "category": { "type": "string" }
-                    },
-                    "required": ["url", "title", "description", "snippet", "position"]
-                }
-            },
             "properties": {
                 "success": { "type": "boolean" },
                 "data": {
@@ -293,27 +323,13 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
                     "properties": {
                         "results": {
                             "oneOf": [
-                                { "type": "array", "items": { "$ref": "#/$defs/searchResultItem" } },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "web": { "type": "array", "items": { "$ref": "#/$defs/searchResultItem" } },
-                                        "news": { "type": "array", "items": { "$ref": "#/$defs/searchResultItem" } },
-                                        "images": { "type": "array" }
-                                    }
-                                }
+                                { "type": "array", "items": { "type": "object" } },
+                                { "type": "object" }
                             ]
-                        },
-                        "answer": { "type": "string" },
-                        "citations": { "type": "array" },
-                        "llmUsage": { "type": "object" },
-                        "warnings": { "type": "array", "items": { "type": "string" } }
+                        }
                     },
                     "required": ["results"]
-                },
-                "error": { "type": "string" },
-                "error_code": { "type": "string" },
-                "warning": { "type": "string" }
+                }
             },
             "required": ["success", "data"]
         }
@@ -321,31 +337,44 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
 
     tools.push(json!({
         "name": "crw_parse_file",
-        "description": "Parse an uploaded document (PDF) and return its content as markdown. Pass the file bytes base64-encoded in `contentBase64`. Use this for local PDFs that have no URL. Scanned/image-only PDFs have no text layer (no OCR) and return a warning with empty markdown.",
+        "title": "Parse PDF",
+        "description": "Parse a local PDF (base64 in contentBase64) to markdown. No OCR: scanned PDFs return empty markdown with a warning.",
+        // openWorldHint:false — operates on provided bytes, not the open web.
+        "annotations": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        },
         "inputSchema": {
             "type": "object",
             "properties": {
                 "contentBase64": {
                     "type": "string",
-                    "description": "Base64-encoded bytes of the PDF file"
+                    "description": "Base64-encoded PDF bytes"
                 },
                 "filename": {
                     "type": "string",
-                    "description": "Original filename (optional; echoed in metadata.sourceFilename)"
+                    "description": "Original filename (optional)"
                 },
                 "formats": {
                     "type": "array",
                     "items": { "type": "string", "enum": ["markdown", "plainText", "links", "json", "summary"] },
-                    "description": "Output formats (default: [\"markdown\"]). json/summary require a server LLM."
+                    "description": "Output formats (default [\"markdown\"]); json/summary need a server LLM"
                 },
                 "jsonSchema": {
                     "type": "object",
-                    "description": "JSON schema for LLM-based structured extraction (when formats includes json)"
+                    "description": "JSON schema for LLM extraction (when formats has json)"
                 },
                 "parsers": {
                     "type": "array",
                     "items": { "type": "string", "enum": ["pdf"] },
-                    "description": "Document parsers to apply (default: [\"pdf\"])"
+                    "description": "Parsers to apply (default [\"pdf\"])"
+                },
+                "maxLength": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Max chars per content field; 0 = unbounded (default ~15000)"
                 }
             },
             "required": ["contentBase64"]
@@ -369,6 +398,17 @@ pub fn tool_output_schema(tool_name: &str) -> Option<Value> {
         .and_then(|t| t.get("outputSchema").cloned())
 }
 
+/// Whether `name` is one of the server's tool names. A genuinely unknown tool
+/// should be answered with a JSON-RPC `-32602` protocol error (clients degrade
+/// more gracefully than on an `isError` execution result). Checks the full set
+/// regardless of runtime availability (e.g. `crw_search` is a known name even when
+/// no search backend is configured — calling it then yields a clear runtime error).
+pub fn is_known_tool(name: &str) -> bool {
+    tool_definitions(false)["tools"]
+        .as_array()
+        .is_some_and(|tools| tools.iter().any(|t| t["name"] == name))
+}
+
 /// Result of handling a protocol method.
 pub enum ProtocolResult {
     /// Send this response back to the client.
@@ -380,11 +420,17 @@ pub enum ProtocolResult {
 }
 
 /// Handle common MCP protocol methods (initialize, tools/list, ping, notifications).
+///
+/// `search_available` controls whether `crw_search` is advertised in `tools/list`.
+/// Proxy callers pass `true` (the remote decides); embedded callers pass whether a
+/// search backend (SearXNG) is actually configured, so users who run `npx … crw`
+/// with no backend don't see a tool that only ever returns `search_disabled`.
 pub fn handle_protocol_method(
     server_name: &str,
     server_version: &str,
     req: &JsonRpcRequest,
     proxy_mode: bool,
+    search_available: bool,
 ) -> ProtocolResult {
     if req.jsonrpc != "2.0" {
         let id = req.id.clone().unwrap_or(Value::Null);
@@ -404,7 +450,9 @@ pub fn handle_protocol_method(
                 id,
                 json!({
                     "protocolVersion": PROTOCOL_VERSION,
-                    "capabilities": { "tools": {} },
+                    // The tool set is fixed for the lifetime of a session (it depends
+                    // only on startup config), so we never emit tools/list_changed.
+                    "capabilities": { "tools": { "listChanged": false } },
                     "serverInfo": {
                         "name": server_name,
                         "version": server_version
@@ -415,7 +463,13 @@ pub fn handle_protocol_method(
 
         "tools/list" => {
             let id = req.id.clone().unwrap_or(Value::Null);
-            ProtocolResult::Response(JsonRpcResponse::success(id, tool_definitions(proxy_mode)))
+            let mut defs = tool_definitions(proxy_mode);
+            if !search_available
+                && let Some(tools) = defs.get_mut("tools").and_then(Value::as_array_mut)
+            {
+                tools.retain(|t| t["name"] != "crw_search");
+            }
+            ProtocolResult::Response(JsonRpcResponse::success(id, defs))
         }
 
         "ping" => {
@@ -443,7 +497,9 @@ pub fn tool_result_response(
 ) -> JsonRpcResponse {
     match result {
         Ok(value) => {
-            let text = serde_json::to_string_pretty(&value).unwrap_or_default();
+            // Compact (not pretty) — pretty-printing adds ~30% whitespace, and this
+            // text block is injected verbatim into the agent's context.
+            let text = serde_json::to_string(&value).unwrap_or_default();
             let mut payload = json!({
                 "content": [{"type": "text", "text": text}]
             });
@@ -473,6 +529,192 @@ pub fn tool_result_response(
     }
 }
 
+// --- Output bounding (MCP-layer, context-footprint control) ---
+
+/// Default per-content-field char cap for scrape/parse/crawl-status results.
+/// ~15K chars ≈ ~3.5–4K tokens — well under the typical ~25K-token client cap.
+pub const DEFAULT_MAX_LENGTH: usize = 15_000;
+/// Default cap on the number of URLs `crw_map` returns to the model.
+pub const DEFAULT_MAP_LIMIT: usize = 100;
+
+/// Large string fields on a serialized `ScrapeData` (camelCase) worth truncating.
+const SCRAPE_TEXT_FIELDS: &[&str] = &["markdown", "html", "rawHtml", "plainText", "summary"];
+
+/// Resolve an MCP-only bound argument. Returns:
+/// - `Some(default)` when the arg is absent,
+/// - `None` (= unbounded) when the arg is explicitly `0`,
+/// - `Some(n)` for a positive value.
+fn resolve_bound(args: &Value, key: &str, default: usize) -> Option<usize> {
+    match args.get(key).and_then(Value::as_u64) {
+        None => Some(default),
+        Some(0) => None,
+        Some(n) => Some(n as usize),
+    }
+}
+
+/// Truncate a string to at most `max_chars` characters on a char boundary,
+/// appending a visible marker. Returns `None` if no truncation was needed.
+fn truncate_to_chars(s: &str, max_chars: usize) -> Option<String> {
+    // `nth(max_chars)` yields the (max_chars+1)-th char; its byte offset is where
+    // we cut to keep exactly `max_chars` chars. Absent → string is short enough.
+    s.char_indices()
+        .nth(max_chars)
+        .map(|(byte_idx, _)| format!("{}\n…[truncated by crw-mcp maxLength]", &s[..byte_idx]))
+}
+
+/// Truncate the known large text fields of one serialized `ScrapeData` object,
+/// tagging it with `truncated: true` if anything was cut. Non-recursive.
+fn truncate_scrape_obj(value: &mut Value, max: usize) {
+    let Some(obj) = value.as_object_mut() else {
+        return;
+    };
+    let mut any = false;
+    for field in SCRAPE_TEXT_FIELDS {
+        let cut = match obj.get(*field) {
+            Some(Value::String(s)) => truncate_to_chars(s, max),
+            _ => None,
+        };
+        if let Some(t) = cut {
+            obj.insert((*field).to_string(), Value::String(t));
+            any = true;
+        }
+    }
+    if any {
+        obj.insert("truncated".to_string(), Value::Bool(true));
+    }
+}
+
+/// The single `ScrapeData`-shaped object to truncate. The **embedded** backend
+/// returns the bare `ScrapeData` (fields at the top level); the **proxy** backend
+/// forwards the REST `ApiResponse<ScrapeData>` envelope (`{success, data:{…}}`).
+/// We unwrap the `data` envelope when present so both shapes are bounded identically.
+fn scrape_target_mut(value: &mut Value) -> Option<&mut Value> {
+    if value.get("data").is_some_and(Value::is_object) {
+        value.get_mut("data")
+    } else if value.is_object() {
+        Some(value)
+    } else {
+        None
+    }
+}
+
+/// Truncate the `links` list to `limit` with markers, wherever it lives: top-level
+/// (embedded `{success, links}`) or under the `data` envelope (proxy
+/// `ApiResponse<MapData>` = `{success, data:{links}}`).
+fn bound_map_links(value: &mut Value, limit: usize) {
+    let in_envelope = value.get("data").and_then(|d| d.get("links")).is_some();
+    let Some(container) = (if in_envelope {
+        value.get_mut("data")
+    } else {
+        Some(&mut *value)
+    }) else {
+        return;
+    };
+    let Some(total) = container
+        .get("links")
+        .and_then(Value::as_array)
+        .map(Vec::len)
+    else {
+        return;
+    };
+    if total <= limit {
+        return;
+    }
+    if let Some(obj) = container.as_object_mut() {
+        if let Some(Value::Array(links)) = obj.get_mut("links") {
+            links.truncate(limit);
+        }
+        obj.insert("totalDiscovered".to_string(), json!(total));
+        obj.insert("truncated".to_string(), Value::Bool(true));
+    }
+}
+
+/// Truncate any scrape content inlined into `crw_search` results (via
+/// `scrapeOptions`). `results` lives at `data.results` and is either a flat array
+/// of items or a grouped `{web,news,images}` object of arrays.
+fn bound_search_results(value: &mut Value, max: usize) {
+    let Some(results) = value.get_mut("data").and_then(|d| d.get_mut("results")) else {
+        return;
+    };
+    match results {
+        Value::Array(items) => {
+            for item in items.iter_mut() {
+                truncate_scrape_obj(item, max);
+            }
+        }
+        Value::Object(groups) => {
+            for arr in groups.values_mut() {
+                if let Some(items) = arr.as_array_mut() {
+                    for item in items.iter_mut() {
+                        truncate_scrape_obj(item, max);
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Bound a tool result's size at the MCP layer, driven by the call's own
+/// `maxLength`/`limit` arguments (see [`resolve_bound`] for the `0 = unbounded`
+/// opt-out). **Non-mutating** w.r.t. any stored state: it transforms an owned
+/// `Value` produced by the dispatch and returns a new one. Shared by the embedded,
+/// proxy, and CLI paths, and handles BOTH the bare (embedded) and `ApiResponse`-
+/// enveloped (proxy) result shapes so the two behave identically.
+pub fn apply_bounds(tool_name: &str, args: &Value, mut value: Value) -> Value {
+    match tool_name {
+        "crw_scrape" | "crw_parse_file" => {
+            if let Some(max) = resolve_bound(args, "maxLength", DEFAULT_MAX_LENGTH)
+                && let Some(target) = scrape_target_mut(&mut value)
+            {
+                truncate_scrape_obj(target, max);
+            }
+        }
+        "crw_check_crawl_status" => {
+            // CrawlState is returned bare (top-level `data` array) by both the
+            // embedded backend and the REST `GET /v1/crawl/{id}` endpoint.
+            if let Some(max) = resolve_bound(args, "maxLength", DEFAULT_MAX_LENGTH)
+                && let Some(pages) = value.get_mut("data").and_then(Value::as_array_mut)
+            {
+                for page in pages.iter_mut() {
+                    truncate_scrape_obj(page, max);
+                }
+            }
+        }
+        "crw_map" => {
+            if let Some(limit) = resolve_bound(args, "limit", DEFAULT_MAP_LIMIT) {
+                bound_map_links(&mut value, limit);
+            }
+        }
+        "crw_search" => {
+            if let Some(max) = resolve_bound(args, "maxLength", DEFAULT_MAX_LENGTH) {
+                bound_search_results(&mut value, max);
+            }
+        }
+        _ => {}
+    }
+    value
+}
+
+/// Remove MCP-only control args (`maxLength`, `crw_map`'s `limit`) before a proxy
+/// forwards the call to a REST endpoint that may reject unknown body fields. These
+/// are applied locally via [`apply_bounds`] on the response instead. Note
+/// `crw_search.limit` is a *real* backend param and is intentionally NOT stripped.
+pub fn strip_mcp_only_args(tool_name: &str, mut args: Value) -> Value {
+    if let Some(obj) = args.as_object_mut() {
+        match tool_name {
+            "crw_scrape" | "crw_parse_file" | "crw_check_crawl_status" => {
+                obj.remove("maxLength");
+            }
+            "crw_map" => {
+                obj.remove("limit");
+            }
+            _ => {}
+        }
+    }
+    args
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -484,6 +726,37 @@ mod tests {
             .iter()
             .find(|t| t["name"] == name)
             .unwrap_or_else(|| panic!("tool {name} not found"))
+    }
+
+    /// Token-budget regression gate for the `tools/list` payload. Every byte here
+    /// is injected into the agent's context on every turn, so this is the server's
+    /// single most important footprint metric.
+    ///
+    /// We estimate tokens as `ceil(bytes / 3)` — a deliberately *conservative*
+    /// (over-counting) heuristic: symbol-heavy JSON tokenizes at ~3–4 chars/token,
+    /// so if this estimate is under the ceiling the real (tiktoken/cl100k) count is
+    /// comfortably under too. A real tokenizer (`tiktoken-rs`) was considered but
+    /// rejected to keep this leaf crate dependency-free; the conservative estimate
+    /// is sufficient for a regression gate. Real cl100k count is ~25–30% lower.
+    ///
+    /// Baseline before the Phase 1 trim was 8233 bytes (~2744 est-tok). After the
+    /// Phase 1 trim + Phase 3 annotations/titles the full 6-tool list is ~6189 bytes
+    /// (~2063 est-tok ≈ ~1450 real cl100k tok). The ceiling is floor + ~11% so the
+    /// gate catches real bloat without churning on minor edits.
+    const TOOLS_LIST_TOKEN_CEILING: usize = 2300;
+
+    #[test]
+    fn tools_list_token_budget() {
+        let json = serde_json::to_string(&tool_definitions(false)).unwrap();
+        let est_tokens = json.len().div_ceil(3);
+        assert!(
+            est_tokens <= TOOLS_LIST_TOKEN_CEILING,
+            "tools/list footprint regressed: {} bytes ≈ {} est-tokens (ceiling {}). \
+             Trim descriptions/schemas before raising the ceiling.",
+            json.len(),
+            est_tokens,
+            TOOLS_LIST_TOKEN_CEILING
+        );
     }
 
     #[test]
@@ -772,5 +1045,284 @@ mod tests {
             ap.is_none() || ap.and_then(|v| v.as_bool()) != Some(false),
             "crw_search outputSchema must not set additionalProperties:false"
         );
+    }
+
+    // --- Output bounding (apply_bounds / strip_mcp_only_args) ---
+
+    fn long_md(chars: usize) -> String {
+        "x".repeat(chars)
+    }
+
+    /// B1 — crw_scrape truncates markdown past the default cap and tags `truncated`.
+    #[test]
+    fn b1_scrape_truncates_to_default_max_length() {
+        let value =
+            json!({ "markdown": long_md(DEFAULT_MAX_LENGTH + 500), "url": "https://e.com" });
+        let out = apply_bounds("crw_scrape", &json!({}), value);
+        let md = out["markdown"].as_str().unwrap();
+        assert!(
+            md.chars().count() <= DEFAULT_MAX_LENGTH + 40,
+            "truncated to ~cap + marker"
+        );
+        assert!(md.contains("[truncated"), "marker present");
+        assert_eq!(out["truncated"], json!(true));
+    }
+
+    /// B2 — short content is untouched and gets no `truncated` flag.
+    #[test]
+    fn b2_scrape_short_content_untouched() {
+        let value = json!({ "markdown": "hello", "url": "https://e.com" });
+        let out = apply_bounds("crw_scrape", &json!({}), value);
+        assert_eq!(out["markdown"], json!("hello"));
+        assert!(out.get("truncated").is_none());
+    }
+
+    /// B3 — explicit `maxLength: 0` opts out of bounding (unbounded).
+    #[test]
+    fn b3_scrape_max_length_zero_is_unbounded() {
+        let big = long_md(DEFAULT_MAX_LENGTH * 2);
+        let value = json!({ "markdown": big.clone() });
+        let out = apply_bounds("crw_scrape", &json!({ "maxLength": 0 }), value);
+        assert_eq!(
+            out["markdown"].as_str().unwrap().chars().count(),
+            big.chars().count()
+        );
+        assert!(out.get("truncated").is_none());
+    }
+
+    /// B4 — a custom `maxLength` is honored.
+    #[test]
+    fn b4_scrape_custom_max_length() {
+        let value = json!({ "markdown": long_md(100) });
+        let out = apply_bounds("crw_scrape", &json!({ "maxLength": 10 }), value);
+        let md = out["markdown"].as_str().unwrap();
+        assert!(md.starts_with(&"x".repeat(10)));
+        assert!(md.contains("[truncated"));
+    }
+
+    /// B5 — crw_map truncates the links list to the default limit with markers.
+    #[test]
+    fn b5_map_truncates_links_to_limit() {
+        let links: Vec<Value> = (0..250)
+            .map(|i| json!(format!("https://e.com/{i}")))
+            .collect();
+        let value = json!({ "success": true, "links": links });
+        let out = apply_bounds("crw_map", &json!({}), value);
+        assert_eq!(out["links"].as_array().unwrap().len(), DEFAULT_MAP_LIMIT);
+        assert_eq!(out["totalDiscovered"], json!(250));
+        assert_eq!(out["truncated"], json!(true));
+    }
+
+    /// B6 — crw_map `limit: 0` returns all links, no markers.
+    #[test]
+    fn b6_map_limit_zero_is_unbounded() {
+        let links: Vec<Value> = (0..250)
+            .map(|i| json!(format!("https://e.com/{i}")))
+            .collect();
+        let value = json!({ "links": links });
+        let out = apply_bounds("crw_map", &json!({ "limit": 0 }), value);
+        assert_eq!(out["links"].as_array().unwrap().len(), 250);
+        assert!(out.get("truncated").is_none());
+    }
+
+    /// B7 — crw_check_crawl_status truncates each page in `data`.
+    #[test]
+    fn b7_crawl_status_truncates_each_page() {
+        let value = json!({
+            "status": "completed",
+            "data": [
+                { "markdown": long_md(DEFAULT_MAX_LENGTH + 100), "url": "https://e.com/1" },
+                { "markdown": "short", "url": "https://e.com/2" }
+            ]
+        });
+        let out = apply_bounds("crw_check_crawl_status", &json!({}), value);
+        let pages = out["data"].as_array().unwrap();
+        assert_eq!(pages[0]["truncated"], json!(true));
+        assert!(
+            pages[0]["markdown"]
+                .as_str()
+                .unwrap()
+                .contains("[truncated")
+        );
+        assert!(pages[1].get("truncated").is_none());
+        assert_eq!(pages[1]["markdown"], json!("short"));
+    }
+
+    /// B8 — truncation cuts on a char boundary (no panic on multibyte input).
+    #[test]
+    fn b8_truncation_is_char_safe() {
+        let value = json!({ "markdown": "é".repeat(100) });
+        let out = apply_bounds("crw_scrape", &json!({ "maxLength": 10 }), value);
+        // Must not panic and must keep exactly 10 'é' chars before the marker.
+        assert!(
+            out["markdown"]
+                .as_str()
+                .unwrap()
+                .starts_with(&"é".repeat(10))
+        );
+    }
+
+    /// B9 — strip removes MCP-only args per tool, but keeps crw_search's real `limit`.
+    #[test]
+    fn b9_strip_mcp_only_args() {
+        let scrape = strip_mcp_only_args("crw_scrape", json!({ "url": "u", "maxLength": 100 }));
+        assert!(scrape.get("maxLength").is_none());
+        assert_eq!(scrape["url"], json!("u"));
+
+        let map = strip_mcp_only_args("crw_map", json!({ "url": "u", "limit": 50 }));
+        assert!(map.get("limit").is_none());
+
+        // crw_search.limit is a real backend param — must NOT be stripped.
+        let search = strip_mcp_only_args("crw_search", json!({ "query": "q", "limit": 5 }));
+        assert_eq!(search["limit"], json!(5));
+    }
+
+    /// B10 — unknown/other tools pass through apply_bounds unchanged.
+    #[test]
+    fn b10_unknown_tool_passthrough() {
+        let value = json!({ "anything": [1, 2, 3] });
+        let out = apply_bounds("crw_crawl", &json!({}), value.clone());
+        assert_eq!(out, value);
+    }
+
+    /// B11 — PROXY shape: crw_scrape `ApiResponse<ScrapeData>` envelope
+    /// (`{success, data:{markdown}}`) is truncated under `data`, not skipped.
+    #[test]
+    fn b11_scrape_proxy_envelope_is_bounded() {
+        let value = json!({
+            "success": true,
+            "data": { "markdown": long_md(DEFAULT_MAX_LENGTH + 500), "url": "https://e.com" }
+        });
+        let out = apply_bounds("crw_scrape", &json!({}), value);
+        let md = out["data"]["markdown"].as_str().unwrap();
+        assert!(
+            md.contains("[truncated"),
+            "proxy-enveloped scrape must be bounded"
+        );
+        assert_eq!(out["data"]["truncated"], json!(true));
+    }
+
+    /// B12 — PROXY shape: crw_map `ApiResponse<MapData>` envelope
+    /// (`{success, data:{links}}`) is truncated under `data`.
+    #[test]
+    fn b12_map_proxy_envelope_is_bounded() {
+        let links: Vec<Value> = (0..250)
+            .map(|i| json!(format!("https://e.com/{i}")))
+            .collect();
+        let value = json!({ "success": true, "data": { "links": links } });
+        let out = apply_bounds("crw_map", &json!({}), value);
+        assert_eq!(
+            out["data"]["links"].as_array().unwrap().len(),
+            DEFAULT_MAP_LIMIT
+        );
+        assert_eq!(out["data"]["totalDiscovered"], json!(250));
+        assert_eq!(out["data"]["truncated"], json!(true));
+    }
+
+    /// A1 — every tool advertises annotations + a title; crw_crawl is the only
+    /// non-read-only / non-idempotent tool; crw_parse_file is the only closed-world.
+    #[test]
+    fn a1_tools_advertise_annotations_and_title() {
+        let defs = tool_definitions(false);
+        for t in defs["tools"].as_array().unwrap() {
+            assert!(t["annotations"].is_object(), "{} annotations", t["name"]);
+            assert!(t["title"].is_string(), "{} title", t["name"]);
+            // destructiveHint is explicitly false everywhere (the JSON default is true).
+            assert_eq!(
+                t["annotations"]["destructiveHint"],
+                json!(false),
+                "{}",
+                t["name"]
+            );
+        }
+        let crawl = tool_by_name(&defs, "crw_crawl");
+        assert_eq!(crawl["annotations"]["readOnlyHint"], json!(false));
+        assert_eq!(crawl["annotations"]["idempotentHint"], json!(false));
+        let scrape = tool_by_name(&defs, "crw_scrape");
+        assert_eq!(scrape["annotations"]["readOnlyHint"], json!(true));
+        assert_eq!(scrape["annotations"]["openWorldHint"], json!(true));
+        let parse = tool_by_name(&defs, "crw_parse_file");
+        assert_eq!(parse["annotations"]["openWorldHint"], json!(false));
+    }
+
+    /// A2 — is_known_tool recognizes all 6 tool names, rejects others.
+    #[test]
+    fn a2_is_known_tool() {
+        for name in [
+            "crw_scrape",
+            "crw_crawl",
+            "crw_check_crawl_status",
+            "crw_map",
+            "crw_search",
+            "crw_parse_file",
+        ] {
+            assert!(is_known_tool(name), "{name} should be known");
+        }
+        assert!(!is_known_tool("nonexistent"));
+        assert!(!is_known_tool(""));
+    }
+
+    /// A3 — tools/list suppresses crw_search when no backend; includes it otherwise.
+    #[test]
+    fn a3_tools_list_conditional_search() {
+        fn list(search_available: bool) -> Vec<String> {
+            let req = JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: "tools/list".into(),
+                params: json!({}),
+            };
+            let ProtocolResult::Response(resp) =
+                handle_protocol_method("crw", "0", &req, false, search_available)
+            else {
+                panic!("expected response");
+            };
+            resp.result.unwrap()["tools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|t| t["name"].as_str().unwrap().to_string())
+                .collect()
+        }
+        let with = list(true);
+        assert!(with.contains(&"crw_search".to_string()));
+        assert_eq!(with.len(), 6);
+        let without = list(false);
+        assert!(!without.contains(&"crw_search".to_string()));
+        assert_eq!(without.len(), 5);
+    }
+
+    /// B13 — crw_search inlined scrape content (flat + grouped) is truncated.
+    #[test]
+    fn b13_search_inlined_content_is_bounded() {
+        // Flat results with inlined markdown.
+        let flat = json!({
+            "success": true,
+            "data": { "results": [
+                { "url": "https://e.com/1", "markdown": long_md(DEFAULT_MAX_LENGTH + 100) },
+                { "url": "https://e.com/2", "description": "no scrape content" }
+            ]}
+        });
+        let out = apply_bounds("crw_search", &json!({}), flat);
+        assert!(
+            out["data"]["results"][0]["markdown"]
+                .as_str()
+                .unwrap()
+                .contains("[truncated")
+        );
+        assert_eq!(out["data"]["results"][0]["truncated"], json!(true));
+        assert!(out["data"]["results"][1].get("truncated").is_none());
+
+        // Grouped results.
+        let grouped = json!({
+            "success": true,
+            "data": { "results": {
+                "web": [{ "url": "https://e.com/w", "html": long_md(DEFAULT_MAX_LENGTH + 100) }],
+                "news": [{ "url": "https://e.com/n", "description": "short" }]
+            }}
+        });
+        let out = apply_bounds("crw_search", &json!({}), grouped);
+        assert_eq!(out["data"]["results"]["web"][0]["truncated"], json!(true));
+        assert!(out["data"]["results"]["news"][0].get("truncated").is_none());
     }
 }

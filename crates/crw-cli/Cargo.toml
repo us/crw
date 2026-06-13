@@ -60,6 +60,8 @@ serde_json = { workspace = true }
 
 # HTTP client
 reqwest = { workspace = true }
+# Base64 decode for crw_parse_file proxy forwarding (multipart upload)
+base64 = { workspace = true }
 
 # Logging
 tracing = { workspace = true }

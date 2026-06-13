@@ -28,11 +28,14 @@ impl CmdError {
 /// stdin-EOF path don't double-run `kill_all_browsers()`.
 static TEARING_DOWN: AtomicBool = AtomicBool::new(false);
 
-/// Run `kill_all_browsers()` at most once across all callers.
+/// Run `kill_all_browsers()` at most once across all callers. In a proxy-only
+/// build (no `embedded` feature) there is no browser engine compiled in, so this
+/// is a cheap no-op guard with nothing to kill.
 fn teardown_once() {
     if TEARING_DOWN.swap(true, Ordering::SeqCst) {
         return;
     }
+    #[cfg(feature = "embedded")]
     crw_renderer::browser::kill_all_browsers();
 }
 
