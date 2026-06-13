@@ -404,15 +404,20 @@ struct OpenAiFunctionCall {
 
 /// Resolve the chat-completions endpoint for an OpenAI-compatible provider.
 ///
-/// Idempotent: a `base_url` that already points at `…/chat/completions` is used
-/// verbatim; a bare base (or the provider default) gets `/v1/chat/completions`
-/// appended. This mirrors `llm::call_openai` so a configured base_url such as
-/// `https://api.deepseek.com/v1/chat/completions` is not doubled into
-/// `…/v1/chat/completions/v1/chat/completions` (which 404s).
+/// Built identically to the summary path in `llm::call_openai`, so a single
+/// `base_url` works for both: a configured `base_url` carries the API-version
+/// segment (the OpenAI `/v1` convention) and we append only `/chat/completions`.
+/// A base already pointing at `…/chat/completions` is used verbatim. Only the
+/// provider default — a bare host with no `/v1` — gets the full
+/// `/v1/chat/completions` suffix.
+///
+/// This avoids the doubling bug where a `base_url` of `…/v1` became
+/// `…/v1/v1/chat/completions` (→ 405) on the structured path while the summary
+/// path correctly hit `…/v1/chat/completions`.
 fn openai_chat_url(base_url: Option<&str>, default_base: &str) -> String {
     match base_url {
         Some(b) if b.contains("/chat/completions") => b.to_string(),
-        Some(b) => format!("{}/v1/chat/completions", b.trim_end_matches('/')),
+        Some(b) => format!("{}/chat/completions", b.trim_end_matches('/')),
         None => format!("{}/v1/chat/completions", default_base.trim_end_matches('/')),
     }
 }
@@ -681,9 +686,27 @@ mod tests {
     }
 
     #[test]
-    fn openai_url_appends_path_to_bare_base() {
+    fn openai_url_base_ending_in_v1_is_not_doubled() {
+        // Regression for the structured-extraction doubling bug: a base_url
+        // ending in `/v1` (the OpenAI convention, exactly as the summary path
+        // in `llm::call_openai` treats it) must append only `/chat/completions`
+        // — never a second `/v1`. Otherwise structured extraction hits
+        // `…/v1/v1/chat/completions` (→ 405) while summary hits the right URL.
         assert_eq!(
-            openai_chat_url(Some("https://api.deepseek.com"), "https://api.openai.com"),
+            openai_chat_url(Some("http://gateway:8080/v1"), "https://api.openai.com"),
+            "http://gateway:8080/v1/chat/completions"
+        );
+    }
+
+    #[test]
+    fn openai_url_appends_path_to_base() {
+        // The base_url carries the API-version segment (`/v1`), matching the
+        // summary path: we only append `/chat/completions`.
+        assert_eq!(
+            openai_chat_url(
+                Some("https://api.deepseek.com/v1"),
+                "https://api.openai.com"
+            ),
             "https://api.deepseek.com/v1/chat/completions"
         );
     }
@@ -698,6 +721,8 @@ mod tests {
 
     #[test]
     fn openai_url_falls_back_to_default_base() {
+        // The default base is a bare host, so it still gets the full
+        // `/v1/chat/completions` suffix.
         assert_eq!(
             openai_chat_url(None, "https://api.openai.com"),
             "https://api.openai.com/v1/chat/completions"
@@ -707,7 +732,10 @@ mod tests {
     #[test]
     fn openai_url_trims_trailing_slash() {
         assert_eq!(
-            openai_chat_url(Some("https://api.deepseek.com/"), "https://api.openai.com"),
+            openai_chat_url(
+                Some("https://api.deepseek.com/v1/"),
+                "https://api.openai.com"
+            ),
             "https://api.deepseek.com/v1/chat/completions"
         );
     }
