@@ -58,7 +58,7 @@ Here's a CRW MCP configuration for Claude Desktop. One JSON block, and the agent
   "mcpServers": {
     "crw": {
       "command": "docker",
-      "args": ["run", "--rm", "-i", "ghcr.io/us/crw:latest", "mcp"]
+      "args": ["run", "--rm", "-i", "ghcr.io/us/crw:latest", "crw-mcp"]
     }
   }
 }

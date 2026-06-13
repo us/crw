@@ -10,8 +10,8 @@
 
 ## Short Answer
 
-- **Best all-in-one MCP scraper:** [CRW](https://fastcrw.com) — built-in MCP server with scrape, crawl, and map tools. Zero extra setup.
-- **Best for feature-rich scraping:** Firecrawl MCP — screenshots, PDFs, structured extraction via MCP.
+- **Best all-in-one MCP scraper:** [CRW](https://fastcrw.com) — built-in MCP server with scrape, crawl, map, search, and more. Zero extra setup.
+- **Best for feature-rich scraping:** Firecrawl MCP — screenshots and structured extraction via MCP.
 - **Best for browser automation:** Playwright MCP — full browser control for complex SPAs and interactions.
 - **Best for cloud browsers:** Browserbase MCP — managed headless browsers, no local Chrome needed.
 - **Best for simple fetches:** Fetch MCP — lightweight HTTP requests without browser overhead.
@@ -34,7 +34,7 @@ The key advantage over traditional API integration: **your agent discovers the s
 
 | MCP Server | Tools Provided | Markdown Output | JS Rendering | Self-Hostable | Setup Complexity |
 | --- | --- | --- | --- | --- | --- |
-| **CRW (built-in)** | scrape, crawl, map | ✅ Native | ✅ LightPanda | ✅ | ⭐ Easiest |
+| **CRW (built-in)** | scrape, crawl, map, search, parse_file, check_crawl_status | ✅ Native | ✅ LightPanda | ✅ | ⭐ Easiest |
 | Firecrawl MCP | scrape, crawl, map, extract | ✅ Native | ✅ Playwright | ✅ | ⭐⭐ Easy |
 | Playwright MCP | navigate, click, type, screenshot, etc. | ❌ HTML | ✅ Full browser | ✅ | ⭐⭐⭐ Moderate |
 | Browserbase MCP | navigate, interact, screenshot | ❌ HTML | ✅ Cloud browser | ❌ | ⭐⭐ Easy |
@@ -50,9 +50,12 @@ The key advantage over traditional API integration: **your agent discovers the s
 
 **Tools provided:**
 
-- `scrape` — extract content from a single URL as markdown, HTML, or structured JSON
-- `crawl` — crawl a site and return content from multiple pages
-- `map` — discover all URLs on a site without extracting content
+- `crw_scrape` — extract content from a single URL as markdown, HTML, or structured JSON
+- `crw_crawl` — crawl a site and return content from multiple pages
+- `crw_check_crawl_status` — check the status of an async crawl job
+- `crw_map` — discover all URLs on a site without extracting content
+- `crw_search` — search the web and return content from matching pages
+- `crw_parse_file` — parse files (including PDFs) and return content as markdown
 
 **MCP client configuration (Claude Desktop, Cursor, etc.):**
 
@@ -61,7 +64,7 @@ The key advantage over traditional API integration: **your agent discovers the s
   "mcpServers": {
     "crw": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "ghcr.io/us/crw:latest", "--mcp"],
+      "args": ["run", "-i", "--rm", "ghcr.io/us/crw:latest", "crw-mcp"],
       "env": {
         "CRW_API_KEY": "your-key"
       }
@@ -103,7 +106,7 @@ Or if using fastCRW cloud:
 
 CRW is listed on the official [MCP Registry](https://registry.modelcontextprotocol.io/?q=crw), making it discoverable from any MCP-compatible client.
 
-**Limitations:** No screenshot tool (yet). No PDF extraction tool. For complex SPAs that need full Playwright-level browser automation, you might supplement CRW with the Playwright MCP server.
+**Limitations:** No screenshot tool (yet). For complex SPAs that need full Playwright-level browser automation, you might supplement CRW with the Playwright MCP server.
 
 **Best for:** Any AI agent that needs web scraping as a core capability. The lowest-friction path to giving your agent live web access.
 
@@ -286,7 +289,7 @@ Yes — and many teams do. A common pattern is CRW for fast markdown scraping pl
   "mcpServers": {
     "crw": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "ghcr.io/us/crw:latest", "--mcp"]
+      "args": ["run", "-i", "--rm", "ghcr.io/us/crw:latest", "crw-mcp"]
     },
     "playwright": {
       "command": "npx",
@@ -333,13 +336,13 @@ Add this to your MCP client config and you're done:
   "mcpServers": {
     "crw": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "ghcr.io/us/crw:latest", "--mcp"]
+      "args": ["run", "-i", "--rm", "ghcr.io/us/crw:latest", "crw-mcp"]
     }
   }
 }
 ```
 
-Your agent immediately gets `scrape`, `crawl`, and `map` tools. No API keys needed for local use.
+Your agent immediately gets `scrape`, `crawl`, `map`, `search`, `parse_file`, and `crawl_status` tools. No API keys needed for local use.
 
 ### Managed path: fastCRW cloud MCP
 
@@ -374,7 +377,7 @@ Don't want to run Docker locally? Use [fastCRW](https://fastcrw.com) as the back
 
 ### What is the best MCP server for web scraping?
 
-For most AI agent use cases, fastCRW's built-in MCP server is the best starting point: zero extra setup, clean markdown output, low local-first latency, and scrape, crawl, and map tools out of the box. If you need screenshots or PDF parsing, Firecrawl MCP adds those capabilities. If you need full browser control, add Playwright MCP alongside fastCRW.
+For most AI agent use cases, fastCRW's built-in MCP server is the best starting point: zero extra setup, clean markdown output, low local-first latency, and scrape, crawl, map, search, and PDF-parse tools out of the box. If you need screenshots, Firecrawl MCP adds that capability. If you need full browser control, add Playwright MCP alongside fastCRW.
 
 ### Can I use MCP servers with Claude, GPT, or other LLMs?
 
@@ -382,7 +385,7 @@ Yes. MCP is an open standard supported by Claude Desktop, Cursor, Windsurf, and 
 
 ### Which tools does the fastCRW MCP server expose?
 
-The crw-mcp server exposes five tools: scrape, search, crawl, map, and crawl-status. There is no separate extract tool — structured JSON extraction runs through the scrape tool's json format with a schema. Register it in Claude Code with: claude mcp add fastcrw -- npx -y crw-mcp.
+The crw-mcp server exposes six tools: scrape, search, crawl, check_crawl_status, map, and parse_file. There is no separate extract tool — structured JSON extraction runs through the scrape tool's json format with a schema. Register it in Claude Code with: claude mcp add fastcrw -- npx -y crw-mcp.
 
 ### What's the difference between Playwright MCP and fastCRW MCP?
 

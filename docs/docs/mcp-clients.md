@@ -19,23 +19,30 @@ Use one of these three patterns:
 
 | Pattern | Best when | Copy-paste shape |
 |---|---|---|
-| Embedded local | You want zero server setup and local scrape/map/crawl tools | `command: npx`, `args: ["crw-mcp"]` |
-| fastcrw.com cloud | You want hosted infrastructure and `crw_search` | same as local plus `CRW_API_URL` and `CRW_API_KEY` |
+| Embedded local | You want zero server setup and local scrape/crawl/map/parse tools | `command: npx`, `args: ["crw-mcp"]` |
+| fastcrw.com cloud | You want hosted infrastructure and always-on `crw_search` | same as local plus `CRW_API_URL` and `CRW_API_KEY` |
 | HTTP transport | Your host supports HTTP MCP and you already run `crw-server` | point the client at `http://localhost:3000/mcp` |
 | Browser automation | You need a real, stateful browser (click, nav, tree) | `command: crw-browse` (separate MCP server — self-hosted) |
 
 ## What tools you get
 
-Embedded local mode (`crw-mcp`) exposes:
+Embedded local mode (`crw-mcp`) exposes up to 6 tools:
 
 - `crw_scrape`
 - `crw_crawl`
 - `crw_check_crawl_status`
 - `crw_map`
+- `crw_parse_file` — parse a local PDF (base64) to markdown, no OCR (always present)
+- `crw_search` — only advertised when a SearXNG backend is configured; hidden otherwise
 
-fastcrw.com cloud mode exposes all of the above plus:
+fastcrw.com cloud mode exposes all 6 tools:
 
-- `crw_search`
+- `crw_scrape`
+- `crw_crawl`
+- `crw_check_crawl_status`
+- `crw_map`
+- `crw_parse_file`
+- `crw_search` — always available (managed search backend)
 
 Browser automation mode (`crw-browse`, separate server — v0.4.0+) exposes:
 
@@ -43,7 +50,7 @@ Browser automation mode (`crw-browse`, separate server — v0.4.0+) exposes:
 - `tree` — accessibility snapshot of the current page
 
 :::tip
-If you only remember one rule, remember this one: local embedded mode is the easiest setup, and fastcrw.com cloud mode is the easiest way to add web search.
+If you only remember one rule, remember this one: local embedded mode is the easiest setup (up to 6 tools, with `crw_search` appearing automatically when SearXNG is configured), and fastcrw.com cloud mode is the easiest way to get all 6 tools including always-on web search.
 :::
 
 ## Claude Code
@@ -219,7 +226,7 @@ Edit `~/.codeium/windsurf/mcp_config.json`.
 ```
 
 :::note
-Windsurf has a total MCP tool limit. CRW stays lightweight: local mode exposes 4 tools, cloud mode exposes 5.
+Windsurf has a total MCP tool limit. CRW stays lightweight: local embedded mode exposes up to 6 tools (`crw_search` is hidden unless a SearXNG backend is configured), and cloud mode always exposes all 6 tools.
 :::
 
 ## Cline

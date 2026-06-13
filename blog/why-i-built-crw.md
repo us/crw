@@ -153,7 +153,7 @@ The Model Context Protocol (MCP) was announced while CRW was in development. I'd
 
 Before MCP, using CRW from an AI agent required HTTP plumbing: your agent code made fetch calls, parsed JSON, injected content into the prompt. That's not hard, but it's boilerplate that every agent has to reimplement. The agent has to know about headers, error codes, response shapes.
 
-With MCP, the agent sees three tools: `scrape`, `crawl`, `map`. It calls them with parameters. It gets back content. The transport layer is invisible. Claude Desktop, Cursor, and any other MCP-compatible AI client can use CRW without the user writing a single line of API integration code.
+With MCP, the agent sees CRW's tools — `scrape`, `crawl`, `map`, `search`, and more. It calls them with parameters. It gets back content. The transport layer is invisible. Claude Desktop, Cursor, and any other MCP-compatible AI client can use CRW without the user writing a single line of API integration code.
 
 What I didn't anticipate was how this changes the *population* of people who can use the tool. Shipping an MCP server means researchers, writers, and analysts who use Claude but don't write API integrations can get live web data in their AI workflows. That's a different audience than "developers building RAG pipelines" — and it's a much larger one.
 

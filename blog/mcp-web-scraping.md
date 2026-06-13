@@ -64,11 +64,14 @@ The AI client receives the `text` content and injects it into the model's contex
 
 ## What Tools Does CRW's MCP Server Expose?
 
-Three tools:
+Six tools:
 
 - **crw_scrape** — Fetches a single URL and returns clean markdown (and optionally HTML, links, or structured JSON)
 - **crw_crawl** — Crawls a site up to a page limit, returning markdown for each discovered page
+- **crw_check_crawl_status** — Checks the status of an async crawl job
 - **crw_map** — Returns all URLs found on a site, useful for site discovery without full content extraction
+- **crw_search** — Searches the web and returns content from matching pages
+- **crw_parse_file** — Parses a file (including PDFs) and returns its content as markdown
 
 These map directly to CRW's REST endpoints, so the behavior is identical whether you call over HTTP or through MCP. The tool descriptions and parameter schemas are written to help the AI understand when to use each one — for example, the `crw_map` tool description explains that it's faster than `crw_crawl` for URL discovery.
 
@@ -76,16 +79,15 @@ These map directly to CRW's REST endpoints, so the behavior is identical whether
 
 There are two different ways to use CRW over MCP, and the distinction matters:
 
-### Option A: Local Binary (`crw mcp`)
+### Option A: Local Binary (`crw-mcp`)
 
-If you self-host CRW, the `crw mcp` subcommand starts the MCP server backed by your local CRW instance. The binary handles all scraping directly — no API key required, no network calls to external services. Your config points at the local binary:
+If you self-host CRW, the `crw-mcp` binary starts the MCP server backed by your local CRW instance. The binary handles all scraping directly — no API key required, no network calls to external services. Your config points at the local binary:
 
 ```
 {
   "mcpServers": {
     "crw": {
-      "command": "crw",
-      "args": ["mcp"]
+      "command": "crw-mcp"
     }
   }
 }
@@ -113,14 +115,14 @@ The `crw-mcp` npm package is a thin MCP wrapper that proxies tool calls to the f
 
 This is the right choice when you want better success rates on bot-protected sites, don't want to manage a local binary, or are using CRW from a machine that can't run Docker (some locked-down corporate environments).
 
-The tool interface is identical between both options — the same three tools with the same parameters. Switching between them is a config-file change.
+The tool interface is identical between both options — the same six tools with the same parameters. Switching between them is a config-file change.
 
 ## Option 1: Connect to Claude Desktop
 
-First, make sure you have the CRW binary installed. You can download it from the [GitHub releases page](https://github.com/us/crw/releases) or install via Cargo:
+First, make sure you have the CRW MCP binary installed. Install it via npm:
 
 ```
-cargo install crw
+npm install -g crw-mcp
 ```
 
 Then add this to your Claude Desktop config file (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS, `%APPDATA%\Claude\claude_desktop_config.json` on Windows):
@@ -129,14 +131,13 @@ Then add this to your Claude Desktop config file (`~/Library/Application Support
 {
   "mcpServers": {
     "crw": {
-      "command": "crw",
-      "args": ["mcp"]
+      "command": "crw-mcp"
     }
   }
 }
 ```
 
-Restart Claude Desktop. In the tool menu you should now see `crw` as an available server with the `crw_scrape`, `crw_crawl`, and `crw_map` tools.
+Restart Claude Desktop. In the tool menu you should now see `crw` as an available server with tools including `crw_scrape`, `crw_crawl`, `crw_map`, `crw_search`, `crw_check_crawl_status`, and `crw_parse_file`.
 
 Now you can tell Claude: *"Scrape https://docs.example.com/api and summarize the authentication section."* Claude will call `scrape`, get the markdown, and answer based on the actual page content — not its training data cutoff.
 
@@ -147,12 +148,11 @@ In Cursor's settings, navigate to **MCP Servers** and add:
 ```
 {
   "name": "crw",
-  "command": "crw",
-  "args": ["mcp"]
+  "command": "crw-mcp"
 }
 ```
 
-Once enabled, Cursor's AI can use `scrape`, `crawl`, and `map` when responding to your prompts. This is particularly useful for coding tasks — "scrape the API docs for this library and show me how to authenticate" becomes a real-time web lookup rather than a retrieval from the model's training data.
+Once enabled, Cursor's AI can use `scrape`, `crawl`, `map`, and other CRW tools when responding to your prompts. This is particularly useful for coding tasks — "scrape the API docs for this library and show me how to authenticate" becomes a real-time web lookup rather than a retrieval from the model's training data.
 
 A common pattern in Cursor is using `map` first to discover what documentation pages exist, then selectively `scrape`-ing only the relevant ones rather than crawling everything.
 
@@ -165,7 +165,7 @@ If you prefer not to install the binary directly, run CRW as a Docker container 
   "mcpServers": {
     "crw": {
       "command": "docker",
-      "args": ["run", "--rm", "-i", "ghcr.io/us/crw:latest", "mcp"]
+      "args": ["run", "--rm", "-i", "ghcr.io/us/crw:latest", "crw-mcp"]
     }
   }
 }
@@ -181,8 +181,7 @@ If you're building your own AI agent and want to call CRW's MCP tools programmat
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 const transport = new StdioClientTransport({
-  command: "crw",
-  args: ["mcp"],
+  command: "crw-mcp",
 });
 
 const client = new Client({ name: "my-agent", version: "1.0.0" }, {});
@@ -218,8 +217,7 @@ from mcp.client.stdio import stdio_client
 
 async def main():
     server_params = StdioServerParameters(
-        command="crw",
-        args=["mcp"],
+        command="crw-mcp",
     )
     async with stdio_client(server_params) as (read, write):
         async with ClientSession(read, write) as session:
@@ -361,7 +359,7 @@ Both interfaces expose the same underlying CRW functionality. The choice depends
 
 ### Binary Not Found
 
-If your MCP client says the server failed to start, the most common cause is the `crw` binary not being on the `PATH`. MCP clients start the command in a clean shell environment that may not have your user PATH.
+If your MCP client says the server failed to start, the most common cause is the `crw-mcp` binary not being on the `PATH`. MCP clients start the command in a clean shell environment that may not have your user PATH.
 
 Fix: use the full path to the binary:
 
@@ -369,14 +367,13 @@ Fix: use the full path to the binary:
 {
   "mcpServers": {
     "crw": {
-      "command": "/usr/local/bin/crw",
-      "args": ["mcp"]
+      "command": "/usr/local/bin/crw-mcp"
     }
   }
 }
 ```
 
-Find the full path with: `which crw`
+Find the full path with: `which crw-mcp`
 
 ### JSON Config Errors
 
@@ -390,10 +387,10 @@ If the command prints the JSON, the syntax is valid. If it prints an error, find
 
 ### Permission Issues on macOS
 
-On macOS, you may need to grant the MCP client permission to run the `crw` binary. If you see a "cannot be opened because the developer cannot be verified" dialog, run:
+On macOS, you may need to grant the MCP client permission to run the `crw-mcp` binary. If you see a "cannot be opened because the developer cannot be verified" dialog, run:
 
 ```
-xattr -d com.apple.quarantine /usr/local/bin/crw
+xattr -d com.apple.quarantine /usr/local/bin/crw-mcp
 ```
 
 ### Docker Transport Not Working
@@ -401,16 +398,16 @@ xattr -d com.apple.quarantine /usr/local/bin/crw
 When using the Docker transport, ensure Docker Desktop is running before launching Claude Desktop or Cursor. The MCP client starts Docker as a subprocess — if Docker isn't running, the server will fail to start with a cryptic error. Test manually first:
 
 ```
-docker run --rm -i ghcr.io/us/crw:latest mcp
+docker run --rm -i ghcr.io/us/crw:latest crw-mcp
 # Should start without error and wait for stdin input
 ```
 
 ### Debugging MCP Exchanges
 
-To see the raw JSON-RPC messages exchanged, run `crw mcp` with verbose logging:
+To see the raw JSON-RPC messages exchanged, run `crw-mcp` with verbose logging:
 
 ```
-CRW_LOG=debug crw mcp
+CRW_LOG=debug crw-mcp
 ```
 
 This prints each incoming request and outgoing response to stderr, which most MCP clients log to a debug console.
@@ -430,10 +427,10 @@ Without MCP, you'd need to write API call boilerplate, handle authentication, pa
 
 ### Self-Host for Free
 
-Install the CRW binary and configure your MCP client in minutes:
+Install the CRW MCP binary and configure your MCP client in minutes:
 
 ```
-cargo install crw
+npm install -g crw-mcp
 # Then add to your claude_desktop_config.json
 ```
 
@@ -479,20 +476,20 @@ Claude Desktop and Claude's API with tool use support MCP natively. Cursor suppo
 
 ### Does CRW's MCP server require an API key?
 
-The self-hosted binary (`crw mcp`) does not require an API key by default — it scrapes directly without any authentication. If you set `CRW_API_KEY` on your CRW server, the MCP server will use it automatically. The `crw-mcp` npm package requires a fastCRW API key set as the `FASTCRW_API_KEY` environment variable.
+The self-hosted binary (`crw-mcp`) does not require an API key by default — it scrapes directly without any authentication. If you set `CRW_API_KEY` on your CRW server, the MCP server will use it automatically. The `crw-mcp` npm package requires a fastCRW API key set as the `FASTCRW_API_KEY` environment variable.
 
 ### What tools does CRW expose via MCP?
 
-Three tools: **scrape** (fetch a single URL and return markdown, HTML, or links), **crawl** (crawl a site up to a page limit, returning markdown for each page), and **map** (return all URLs found on a site without fetching full content). These correspond directly to the `/v1/scrape`, `/v1/crawl`, and `/v1/map` REST endpoints.
+Six tools: **crw_scrape** (fetch a single URL and return markdown, HTML, or links), **crw_crawl** (crawl a site up to a page limit, returning markdown for each page), **crw_check_crawl_status** (check an async crawl job), **crw_map** (return all URLs found on a site without fetching full content), **crw_search** (search the web and return content from matching pages), and **crw_parse_file** (parse files including PDFs to markdown). These correspond directly to CRW's REST endpoints.
 
 ### How do I debug MCP connection issues?
 
-Start with the JSON config file syntax — use `python3 -m json.tool` to validate it. Then check that the binary path is correct and accessible. Run `crw mcp` manually in your terminal to verify it starts without error. For deeper debugging, set `CRW_LOG=debug` to see the raw JSON-RPC exchanges. Claude Desktop logs MCP errors to `~/Library/Logs/Claude/` on macOS.
+Start with the JSON config file syntax — use `python3 -m json.tool` to validate it. Then check that the binary path is correct and accessible. Run `crw-mcp` manually in your terminal to verify it starts without error. For deeper debugging, set `CRW_LOG=debug` to see the raw JSON-RPC exchanges. Claude Desktop logs MCP errors to `~/Library/Logs/Claude/` on macOS.
 
 ### Can I use CRW's MCP server with my own AI agent?
 
-Yes — use the [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk) or [Python SDK](https://github.com/modelcontextprotocol/python-sdk) to connect to `crw mcp` as a subprocess. Your agent code starts the `crw` process, connects via stdio transport, and calls tools using the standard MCP client API. See the programmatic client example above for working code.
+Yes — use the [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk) or [Python SDK](https://github.com/modelcontextprotocol/python-sdk) to connect to `crw-mcp` as a subprocess. Your agent code starts the `crw-mcp` process, connects via stdio transport, and calls tools using the standard MCP client API. See the programmatic client example above for working code.
 
 ### Is there a rate limit on the self-hosted MCP server?
 
-The self-hosted `crw mcp` has no built-in rate limiting — it's limited only by your server's network and CPU capacity. If you're running CRW on a shared server, you can add rate limiting via the `CRW_RATE_LIMIT` environment variable or via a reverse proxy like Nginx. fastCRW's cloud MCP applies per-plan rate limits.
+The self-hosted `crw-mcp` has no built-in rate limiting — it's limited only by your server's network and CPU capacity. If you're running CRW on a shared server, you can add rate limiting via the `CRW_RATE_LIMIT` environment variable or via a reverse proxy like Nginx. fastCRW's cloud MCP applies per-plan rate limits.

@@ -74,7 +74,7 @@ If you're using [Claude Code, Cursor, Windsurf, or Codex](/blog/best-mcp-servers
 npx -y crw-mcp
 ```
 
-This registers three tools with your agent:
+This registers CRW's MCP tools with your agent — the most useful for search workflows:
 
 | Tool | Description | Use Case |
 | --- | --- | --- |

@@ -133,11 +133,14 @@ Crawl state is held in memory (not persisted). This means a CRW restart abandons
 
 ## MCP Server
 
-The MCP (Model Context Protocol) server reuses CRW's scraping engine directly. It exposes three tools:
+The MCP (Model Context Protocol) server reuses CRW's scraping engine directly. It exposes six tools:
 
-- `scrape` — delegates to the scrape handler
-- `crawl` — starts an async crawl job and returns its id; the caller polls the crawl-status tool until the job completes (the same async model as the HTTP `/v1/crawl` endpoint)
-- `map` — returns the URL map for a site
+- `crw_scrape` — delegates to the scrape handler
+- `crw_crawl` — starts an async crawl job and returns its id; the caller polls `crw_check_crawl_status` until the job completes (the same async model as the HTTP `/v1/crawl` endpoint)
+- `crw_check_crawl_status` — polls a crawl job and returns its pages
+- `crw_map` — returns the URL map for a site
+- `crw_search` — web search (always in proxy mode; in embedded mode only with a SearXNG backend)
+- `crw_parse_file` — parses a local PDF to markdown
 
 MCP uses stdio transport (JSON-RPC over stdin/stdout), making it suitable for process-spawning clients like Claude Desktop. The server shares the same Tokio runtime as the HTTP API, so both can run simultaneously if needed.
 

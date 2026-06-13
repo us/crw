@@ -233,7 +233,7 @@ For AI agents that need to scrape on demand during their reasoning:
   "mcpServers": {
     "crw": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "ghcr.io/us/crw:latest", "--mcp"]
+      "args": ["run", "-i", "--rm", "ghcr.io/us/crw:latest", "crw-mcp"]
     }
   }
 }

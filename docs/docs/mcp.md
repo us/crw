@@ -1,6 +1,6 @@
 # MCP Server for AI Agents
 
-CRW includes a built-in MCP (Model Context Protocol) server that gives any MCP-compatible AI assistant — Claude Code, Claude Desktop, Cursor, Windsurf, Cline, Continue.dev, OpenAI Codex CLI — 4 web scraping tools. Turn any AI coding agent into a web scraper with a single command.
+CRW includes a built-in MCP (Model Context Protocol) server that gives any MCP-compatible AI assistant — Claude Code, Claude Desktop, Cursor, Windsurf, Cline, Continue.dev, OpenAI Codex CLI — 6 web scraping tools. Turn any AI coding agent into a web scraper with a single command.
 
 > Also available on the [MCP Registry](https://registry.modelcontextprotocol.io/?q=crw)
 
@@ -10,8 +10,8 @@ CRW includes a built-in MCP (Model Context Protocol) server that gives any MCP-c
 
 | Mode | When | Tools | Description |
 |------|------|-------|-------------|
-| **Embedded** (default) | No `--api-url` / `CRW_API_URL` set | scrape, crawl, map | Self-contained. No server needed. The scraping engine runs inside the MCP process. |
-| **Proxy / Server** | `--api-url` / `CRW_API_URL` set | scrape, crawl, map + **search** | Forwards tool calls to a remote CRW server — the [fastcrw.com](https://fastcrw.com) cloud **or your own self-hosted server**. `crw_search` works whenever that server has SearXNG configured (the Docker stack enables it by default). |
+| **Embedded** (default) | No `--api-url` / `CRW_API_URL` set | scrape, crawl, map, parse_file + **search** (when SearXNG configured) | Self-contained. No server needed. The scraping engine runs inside the MCP process. `crw_search` is advertised only when a SearXNG backend is configured (e.g. the Docker compose sidecar). |
+| **Proxy / Server** | `--api-url` / `CRW_API_URL` set | scrape, crawl, map, parse_file, search | Forwards tool calls to a remote CRW server — the [fastcrw.com](https://fastcrw.com) cloud **or your own self-hosted server**. `crw_search` is always advertised in proxy mode; it works whenever the server has SearXNG configured (the Docker stack enables it by default). |
 
 ## Where to use what
 
@@ -139,8 +139,10 @@ claude mcp add --transport http crw http://localhost:3000/mcp
 Build a slim proxy-only binary:
 
 ```bash
-cargo build -p crw-mcp --no-default-features --release
+cargo build --profile release-small --no-default-features -p crw-mcp
 ```
+
+This yields a ~4.2 MB binary (vs ~17 MB for the default embedded build) because the `embedded` feature gates the headless-browser engine (`crw-renderer`) and `crw-server`.
 
 ## Available Tools
 
@@ -150,7 +152,10 @@ cargo build -p crw-mcp --no-default-features --release
 | `crw_crawl` | Start async crawl → returns job ID | `POST /v1/crawl` | All modes |
 | `crw_check_crawl_status` | Poll crawl status and get results | `GET /v1/crawl/:id` | All modes |
 | `crw_map` | Discover all URLs on a site | `POST /v1/map` | All modes |
-| `crw_search` | Search the web → titles, URLs, descriptions | `POST /v1/search` | **Server with SearXNG** (cloud or self-hosted) |
+| `crw_search` | Search the web → titles, URLs, descriptions | `POST /v1/search` | Always in proxy mode; embedded only when a SearXNG backend is configured |
+| `crw_parse_file` | Parse a local PDF (base64) → markdown | `POST /v1/parse` | All modes |
+
+> **Output bounding:** Tool results are bounded by default to keep agent context small. Content fields (markdown/html/etc.) are truncated to ~15 000 chars; `crw_map` returns at most 100 URLs. Truncated responses include `truncated: true` and `totalDiscovered` markers. Pass `maxLength: 0` (scrape / check_status / parse_file) or `limit: 0` (map) to opt out.
 
 ## Browser Automation (`crw-browse`)
 
@@ -209,6 +214,10 @@ For cloud mode and file-based configs, continue in [MCP Client Setup](#mcp-clien
 | `onlyMainContent` | boolean | no | Strip nav/footer (default: true) |
 | `includeTags` | string[] | no | CSS selectors to keep |
 | `excludeTags` | string[] | no | CSS selectors to remove |
+| `renderJs` | boolean | no | Enable JS rendering via a CDP browser |
+| `waitFor` | integer | no | ms to wait after page load |
+| `renderer` | string | no | Renderer to use (e.g. `"lightpanda"`) |
+| `maxLength` | integer | no | Max chars for content fields; `0` = unlimited (default: ~15 000) |
 
 ### crw_crawl
 
@@ -217,12 +226,17 @@ For cloud mode and file-based configs, continue in [MCP Client Setup](#mcp-clien
 | `url` | string | **yes** | Starting URL |
 | `maxDepth` | integer | no | Max crawl depth (default: 2) |
 | `maxPages` | integer | no | Max pages (default: 10) |
+| `jsonSchema` | object | no | JSON schema for structured extraction |
+| `renderJs` | boolean | no | Enable JS rendering via a CDP browser |
+| `waitFor` | integer | no | ms to wait after page load |
+| `renderer` | string | no | Renderer to use (e.g. `"lightpanda"`) |
 
 ### crw_check_crawl_status
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `id` | string | **yes** | Job ID from `crw_crawl` |
+| `maxLength` | integer | no | Max chars for content fields; `0` = unlimited (default: ~15 000) |
 
 ### crw_map
 
@@ -231,10 +245,12 @@ For cloud mode and file-based configs, continue in [MCP Client Setup](#mcp-clien
 | `url` | string | **yes** | URL to map |
 | `maxDepth` | integer | no | Discovery depth (default: 2) |
 | `useSitemap` | boolean | no | Read sitemap.xml (default: true) |
+| `crawlFallback` | boolean | no | Fall back to a short crawl if sitemap is absent (default: true) |
+| `limit` | integer | no | Max URLs returned; `0` = unlimited (default: 100) |
 
-### crw_search (server-backed)
+### crw_search
 
-Available when connected to a CRW **server** that has SearXNG configured — the [fastcrw.com](https://fastcrw.com) cloud, or your own self-hosted server (the Docker stack enables it by default; see [Docker → Search (SearXNG)](/docker)). Point the MCP at it with `--api-url` / `CRW_API_URL`. It is *not* available from the standalone embedded MCP binary, which has no search backend.
+In **proxy mode** `crw_search` is always advertised. In **embedded mode** it is advertised only when a SearXNG backend is configured (e.g. via the Docker compose sidecar — see [Docker → Search (SearXNG)](/docker)). With no backend configured, the tool is hidden from `tools/list`.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -242,7 +258,23 @@ Available when connected to a CRW **server** that has SearXNG configured — the
 | `limit` | integer | no | Max results (default: 5) |
 | `lang` | string | no | Language code (e.g. `"en"`, `"tr"`) |
 | `country` | string | no | Country code (e.g. `"us"`, `"tr"`) |
+| `tbs` | string | no | Time-based filter (e.g. `"qdr:d"` for past day) |
+| `sources` | string[] | no | Restrict results to specific sources |
+| `categories` | string[] | no | SearXNG categories (e.g. `["general","news"]`) |
 | `scrapeOptions` | object | no | Scrape each result page (e.g. `{"formats": ["markdown"]}`) |
+
+### crw_parse_file
+
+Parse a local PDF supplied as a base64-encoded string. No OCR — works on text-layer PDFs.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `contentBase64` | string | **yes** | Base64-encoded PDF content |
+| `filename` | string | no | Original filename (used for format hints) |
+| `formats` | string[] | no | Output formats (e.g. `["markdown"]`) |
+| `jsonSchema` | object | no | JSON schema for structured extraction |
+| `parsers` | string[] | no | Parser hints to use |
+| `maxLength` | integer | no | Max chars for content fields; `0` = unlimited (default: ~15 000) |
 
 ## Example Agent Tool Flow
 

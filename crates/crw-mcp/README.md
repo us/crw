@@ -7,7 +7,7 @@ MCP (Model Context Protocol) server for the [CRW](https://github.com/us/crw) web
 
 ## Overview
 
-`crw-mcp` is a self-contained MCP server that gives any MCP-compatible AI client (Claude Code, Claude Desktop, Cursor, Windsurf, Cline, Continue.dev, OpenAI Codex CLI) 4 web scraping tools. No external server needed — just add and go.
+`crw-mcp` is a self-contained MCP server that gives any MCP-compatible AI client (Claude Code, Claude Desktop, Cursor, Windsurf, Cline, Continue.dev, OpenAI Codex CLI) 6 web scraping tools. No external server needed — just add and go.
 
 **Two modes:**
 
@@ -16,14 +16,18 @@ MCP (Model Context Protocol) server for the [CRW](https://github.com/us/crw) web
 | **Embedded** (default) | No `--api-url` set | Self-contained, zero setup |
 | **Proxy** | `--api-url` provided | Forwards to remote CRW server |
 
-**4 MCP tools:**
+**6 MCP tools:**
 
 | Tool | Description |
 |------|-------------|
-| `crw_scrape` | Scrape a single URL → markdown, HTML, JSON, links |
+| `crw_scrape` | Scrape a single URL → markdown, HTML, links |
 | `crw_crawl` | Start an async BFS crawl (returns job ID) |
 | `crw_check_crawl_status` | Poll crawl job status and retrieve results |
 | `crw_map` | Discover all URLs on a website |
+| `crw_search` | Search the web (needs a configured search backend; always available in proxy mode, available in embedded mode only when a SearXNG backend is configured) |
+| `crw_parse_file` | Parse a local PDF (base64) to markdown |
+
+> **Output bounding:** By default, content fields are truncated to ~15 000 chars and `crw_map` returns at most 100 URLs to keep agent context small. Pass `maxLength: 0` (scrape / check_status / parse_file) or `limit: 0` (map) to opt out.
 
 ## Installation
 
@@ -97,8 +101,10 @@ CRW_CRAWLER__USER_AGENT="MyBot/1.0"
 Build a slim proxy-only binary without the embedded engine:
 
 ```bash
-cargo build -p crw-mcp --no-default-features --release
+cargo build --profile release-small --no-default-features -p crw-mcp
 ```
+
+This yields a ~4.2 MB binary (vs ~17 MB for the default embedded build) because the `embedded` feature gates the headless-browser engine (`crw-renderer`) and `crw-server`.
 
 ## Setup by Client
 

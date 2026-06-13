@@ -60,11 +60,16 @@ cargo build --release --bin crw-server
 # REST API server (with CDP/JS rendering)
 cargo build --release --bin crw-server --features crw-server/cdp
 
-# MCP stdio binary
+# MCP stdio binary (full embedded — ~17 MB, includes headless browser engine)
 cargo build --release --bin crw-mcp
+
+# MCP stdio binary — lean browser-free proxy (~4.2 MB, no embedded browser)
+cargo build --profile release-small --no-default-features -p crw-mcp
 ```
 
-Binaries are placed in `target/release/`.
+Binaries are placed in `target/release/` (or `target/release-small/` for the lean build).
+
+The lean build (`--no-default-features`) omits the `embedded` cargo feature that gates the headless browser engine. Use it when you want a minimal proxy-only binary that forwards requests to a remote CRW server or fastcrw.com.
 
 ## Docker
 

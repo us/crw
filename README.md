@@ -180,8 +180,14 @@ self-hosted instance and ship to managed without code changes.
 npx crw-mcp                              # zero install (npm)
 pip install crw                          # Python SDK (auto-downloads binary)
 brew install us/crw/crw-mcp              # Homebrew
-cargo install crw-mcp                    # Cargo
+cargo install crw-mcp                    # Cargo (full embedded, ~17 MB)
 docker run -i ghcr.io/us/crw crw-mcp     # Docker
+```
+
+**Lean browser-free proxy build** (~4.2 MB, no headless browser engine — proxy/cloud mode only):
+
+```bash
+cargo build --profile release-small --no-default-features -p crw-mcp
 ```
 
 ### CLI (`crw`) — scrape URLs from your terminal

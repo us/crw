@@ -250,7 +250,7 @@ For teams building AI agents that need web access, the MCP (Model Context Protoc
   "mcpServers": {
     "crw": {
       "command": "docker",
-      "args": ["run", "--rm", "-i", "ghcr.io/us/crw:latest", "mcp"]
+      "args": ["run", "--rm", "-i", "ghcr.io/us/crw:latest", "crw-mcp"]
     }
   }
 }

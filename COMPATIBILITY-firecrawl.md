@@ -116,7 +116,7 @@ This is a **capability matrix**, not an API-shape compatibility matrix (which th
 
 | | Firecrawl | fastCRW |
 |---|---|---|
-| MCP server bundled | ✅ (`firecrawl-mcp-server`) | ✅ (built-in `crw-mcp` crate; `crw_search`, `crw_scrape`, `crw_crawl`, `crw_map`, `crw_check_crawl_status` tools) |
+| MCP server bundled | ✅ (`firecrawl-mcp-server`) | ✅ (built-in `crw-mcp` crate; `crw_scrape`, `crw_crawl`, `crw_check_crawl_status`, `crw_map`, `crw_search`, `crw_parse_file` tools) |
 
 **Surface match:** both products ship MCP. Tool names differ (Firecrawl uses `firecrawl_*`, fastCRW uses `crw_*`); semantic mapping is straightforward.
 

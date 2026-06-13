@@ -36,19 +36,22 @@ This installs the CRW skill and MCP server to all detected AI agents (Claude Cod
 
 ## MCP Tools
 
+> **Output bounds:** By default, content is truncated to ~15 000 chars (`crw_scrape`, `crw_check_crawl_status`, `crw_parse_file`) and `crw_map` returns ≤ 100 URLs. Truncated results carry a `truncated: true` marker (`crw_map` also adds `totalDiscovered`). Pass `maxLength: 0` or `limit: 0` to opt out of bounding.
+
 ### crw_scrape
 
 Scrape a single URL and return clean content.
 
 Parameters:
 - `url` (required) — The URL to scrape
-- `formats` — Output formats: `markdown` (default), `html`, `rawHtml`, `plainText`, `links`, `json`
+- `formats` — Output formats: `markdown` (default), `html`, `links`
 - `onlyMainContent` — Strip navs/footers/sidebars. Default: `true`
+- `includeTags` — Only include content matching these CSS selectors (e.g. `["article", "main"]`)
+- `excludeTags` — Exclude content matching these CSS selectors (e.g. `["nav", "footer"]`)
 - `renderJs` — Force JavaScript rendering. Default: auto-detect (null)
-- `cssSelector` — Extract only elements matching this CSS selector
-- `xpath` — Extract only elements matching this XPath
-- `includeTags` — Only include these HTML tags (e.g. `["article", "main"]`)
-- `excludeTags` — Remove these HTML tags (e.g. `["nav", "footer"]`)
+- `waitFor` — Milliseconds to wait after page load before capturing
+- `renderer` — Renderer override (e.g. `"playwright"`)
+- `maxLength` — Truncate output to this many chars. `0` = unbounded. Default: ~15 000
 
 ### crw_crawl
 
@@ -56,8 +59,12 @@ Start an async BFS crawl from a URL. Returns a job ID — poll with `crw_check_c
 
 Parameters:
 - `url` (required) — Starting URL
-- `maxDepth` — Maximum link depth. Default: `2`, max: `10`
-- `limit` — Maximum pages to crawl. Default: `10`, max: `1000`
+- `maxDepth` — Maximum link depth. Default: `2`
+- `maxPages` — Maximum pages to crawl
+- `jsonSchema` — JSON schema for structured extraction per page
+- `renderJs` — Force JavaScript rendering
+- `waitFor` — Milliseconds to wait after page load before capturing
+- `renderer` — Renderer override
 
 Returns: `{ "id": "job-uuid" }` — use this ID with crw_check_crawl_status.
 
@@ -67,18 +74,22 @@ Poll an async crawl job for results.
 
 Parameters:
 - `id` (required) — The crawl job ID from `crw_crawl`
+- `maxLength` — Truncate each page's content fields to this many chars. `0` = unbounded. Default: ~15 000
 
 Returns: `{ "status": "pending|running|completed|failed", "data": [...] }`
 
 ### crw_search
 
-Search the web and return relevant results with titles, URLs, and descriptions.
+Search the web and return relevant results with titles, URLs, and descriptions. Always available in proxy/cloud mode; in embedded mode only when a SearXNG backend is configured.
 
 Parameters:
 - `query` (required) — The search query
 - `limit` — Maximum number of results to return. Default: `5`
 - `lang` — Language code for results (e.g. `"en"`, `"tr"`)
 - `country` — Country code for results (e.g. `"us"`, `"tr"`)
+- `tbs` — Time filter: `qdr:h|qdr:d|qdr:w|qdr:m|qdr:y` (past hour/day/week/month/year)
+- `sources` — If set, group results by source: `web`, `news`, `images`
+- `categories` — Bias toward a category (e.g. `"pdf"`, `"github"`, `"research"`, or a native SearXNG category)
 - `scrapeOptions` — Options for scraping each result page (e.g. `{"formats": ["markdown"]}`)
 
 ### crw_map
@@ -89,8 +100,22 @@ Parameters:
 - `url` (required) — The URL to map
 - `maxDepth` — Discovery depth. Default: `2`
 - `useSitemap` — Check sitemap.xml. Default: `true`
+- `crawlFallback` — Supplement sitemap discovery with a short BFS crawl. Default: `true` (`false` = sitemap-only)
+- `limit` — Maximum URLs to return. `0` = unbounded. Default: `100`
 
-Returns: `{ "links": ["url1", "url2", ...] }` — up to 5000 URLs.
+Returns: `{ "links": ["url1", "url2", ...] }`
+
+### crw_parse_file
+
+Parse a local file (PDF) into markdown or structured output without fetching from the web.
+
+Parameters:
+- `contentBase64` (required) — Base64-encoded file contents
+- `filename` — Original filename (optional, e.g. `"report.pdf"`)
+- `formats` — Output formats: `markdown` (default), `plainText`, `links`, `json`, `summary` (json/summary need a server LLM)
+- `jsonSchema` — JSON schema for LLM extraction (when `formats` includes `json`)
+- `parsers` — Document parsers to apply. Default: `["pdf"]`
+- `maxLength` — Truncate output to this many chars. `0` = unbounded. Default: ~15 000
 
 ## Common Patterns
 
@@ -103,7 +128,7 @@ crw_scrape(url="https://example.com", formats=["markdown"])
 First discover URLs, then crawl:
 ```
 crw_map(url="https://docs.example.com")  → get URL list
-crw_crawl(url="https://docs.example.com", limit=50)  → extract all content
+crw_crawl(url="https://docs.example.com", maxPages=50)  → extract all content
 crw_check_crawl_status(id="...")  → poll until completed
 ```
 
