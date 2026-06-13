@@ -221,12 +221,7 @@ pub(crate) async fn call_anthropic(
     tool_name: &str,
     tool_desc: &str,
 ) -> CrwResult<(serde_json::Value, Option<LlmUsage>)> {
-    let base_url = llm
-        .base_url
-        .as_deref()
-        .unwrap_or("https://api.anthropic.com");
-
-    let url = format!("{base_url}/v1/messages");
+    let url = anthropic_messages_url(llm.base_url.as_deref(), "https://api.anthropic.com");
 
     let body = AnthropicRequest {
         model: llm.model.clone(),
@@ -404,12 +399,14 @@ struct OpenAiFunctionCall {
 
 /// Resolve the chat-completions endpoint for an OpenAI-compatible provider.
 ///
-/// Built identically to the summary path in `llm::call_openai`, so a single
-/// `base_url` works for both: a configured `base_url` carries the API-version
-/// segment (the OpenAI `/v1` convention) and we append only `/chat/completions`.
-/// A base already pointing at `…/chat/completions` is used verbatim. Only the
-/// provider default — a bare host with no `/v1` — gets the full
-/// `/v1/chat/completions` suffix.
+/// For a user-supplied `base_url` this matches the summary path in
+/// `llm::call_openai`, so a single value works for both: the `base_url` carries
+/// the API-version segment (the OpenAI `/v1` convention) and we append only
+/// `/chat/completions`; a base already pointing at `…/chat/completions` is used
+/// verbatim. The `None` branch intentionally diverges from the summary path:
+/// here we honour the per-provider `default_base` (e.g. DeepSeek), whereas the
+/// summary path hardcodes the OpenAI default — both append `/v1/chat/completions`
+/// to a bare host.
 ///
 /// This avoids the doubling bug where a `base_url` of `…/v1` became
 /// `…/v1/v1/chat/completions` (→ 405) on the structured path while the summary
@@ -419,6 +416,33 @@ fn openai_chat_url(base_url: Option<&str>, default_base: &str) -> String {
         Some(b) if b.contains("/chat/completions") => b.to_string(),
         Some(b) => format!("{}/chat/completions", b.trim_end_matches('/')),
         None => format!("{}/v1/chat/completions", default_base.trim_end_matches('/')),
+    }
+}
+
+/// Resolve the messages endpoint for an Anthropic-compatible provider.
+///
+/// The same bug class as `openai_chat_url`: the Anthropic **summary** path
+/// (`llm::call_anthropic`) consumes `base_url` verbatim (its default is the full
+/// `…/v1/messages`), so a bare host that works here would 404 there. To let a
+/// single full `…/v1/messages` endpoint satisfy both paths, this is idempotent:
+/// a base already ending in `/v1/messages` is used verbatim; one ending in `/v1`
+/// gets `/messages`; a bare host (or `None`) gets the full `/v1/messages` suffix.
+/// We treat a base as already-complete only when `/v1/messages` is its true
+/// suffix (`ends_with`, after trimming a trailing slash) rather than merely
+/// present (`contains`), so a path that happens to embed `/v1/messages`
+/// mid-string is not mistaken for a finished endpoint.
+fn anthropic_messages_url(base_url: Option<&str>, default_base: &str) -> String {
+    let b = match base_url {
+        Some(b) => b,
+        None => return format!("{}/v1/messages", default_base.trim_end_matches('/')),
+    };
+    let trimmed = b.trim_end_matches('/');
+    if trimmed.ends_with("/v1/messages") {
+        trimmed.to_string()
+    } else if trimmed.ends_with("/v1") {
+        format!("{trimmed}/messages")
+    } else {
+        format!("{trimmed}/v1/messages")
     }
 }
 
@@ -737,6 +761,60 @@ mod tests {
                 "https://api.openai.com"
             ),
             "https://api.deepseek.com/v1/chat/completions"
+        );
+    }
+
+    #[test]
+    fn anthropic_url_bare_host_gets_full_suffix() {
+        // No user base_url: the bare default gets the full `/v1/messages` suffix.
+        assert_eq!(
+            anthropic_messages_url(None, "https://api.anthropic.com"),
+            "https://api.anthropic.com/v1/messages"
+        );
+        // A bare-host base_url behaves the same.
+        assert_eq!(
+            anthropic_messages_url(Some("https://proxy.internal"), "https://api.anthropic.com"),
+            "https://proxy.internal/v1/messages"
+        );
+    }
+
+    #[test]
+    fn anthropic_url_base_ending_in_v1_is_not_doubled() {
+        // Same bug class as the OpenAI path: a base ending in `/v1` must get only
+        // `/messages` appended — never a second `/v1`.
+        assert_eq!(
+            anthropic_messages_url(
+                Some("https://proxy.internal/v1"),
+                "https://api.anthropic.com"
+            ),
+            "https://proxy.internal/v1/messages"
+        );
+        assert_eq!(
+            anthropic_messages_url(
+                Some("https://proxy.internal/v1/"),
+                "https://api.anthropic.com"
+            ),
+            "https://proxy.internal/v1/messages"
+        );
+    }
+
+    #[test]
+    fn anthropic_url_full_endpoint_is_verbatim() {
+        // A full `…/v1/messages` endpoint — the value that also satisfies the
+        // summary path (which uses base_url verbatim) — is used as-is, not doubled.
+        assert_eq!(
+            anthropic_messages_url(
+                Some("https://proxy.internal/v1/messages"),
+                "https://api.anthropic.com"
+            ),
+            "https://proxy.internal/v1/messages"
+        );
+        assert_eq!(
+            anthropic_messages_url(
+                Some("https://proxy.internal/v1/messages/"),
+                "https://api.anthropic.com"
+            ),
+            "https://proxy.internal/v1/messages"
         );
     }
 }
