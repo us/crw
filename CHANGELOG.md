@@ -2,6 +2,27 @@
 
 All notable changes to CRW are documented here.
 
+## [0.16.0](https://github.com/us/crw/compare/v0.15.2...v0.16.0) (2026-06-14)
+
+
+### Features
+
+* **mcp:** optimize MCP server for context, weight, and conformance ([aac7999](https://github.com/us/crw/commit/aac7999b9379fd8b6ef818ce37f78634416f79c1))
+* **proxy:** add proxy list + rotation primitives and HTTP-path rotation ([776e9fb](https://github.com/us/crw/commit/776e9fbad4ee509ec5201020772169d151e0587f))
+* **proxy:** rotate the JS/Chrome (CDP) path per request ([422ac09](https://github.com/us/crw/commit/422ac09c1f4dc2549a54e1079cec18330ccf0ea0))
+* **proxy:** v2 BYOP plumbing + honest docs + verification harness ([0983ba3](https://github.com/us/crw/commit/0983ba38ad1537b21ecfdc658bdda7a79c0b5437))
+
+
+### Bug Fixes
+
+* **extract:** stop doubling /v1 in structured-extraction chat URL ([d8b8ebc](https://github.com/us/crw/commit/d8b8ebc887eca97ca75ae1eb1893429bc547e80e))
+* **extract:** unify Anthropic structured URL, stop /v1/messages doubling ([90ce3dd](https://github.com/us/crw/commit/90ce3dd5479060eee0a3319e78d3d7653984e53c))
+* **proxy:** accept snake_case proxy_list alias on v1 ScrapeRequest/CrawlRequest ([a8e7b71](https://github.com/us/crw/commit/a8e7b71d891355912dbfc1ad23a1d0e6f6bfd865))
+* **proxy:** CLI crawl/map --proxy reaches the JS/CDP tier (round-4 review) ([6ee7175](https://github.com/us/crw/commit/6ee71755ce656b6ff32e4c1f4847e35655854035))
+* **proxy:** resolve review findings (IP-leak/correctness hardening) ([72e0486](https://github.com/us/crw/commit/72e048683eceba19b676a4bca2c8186ad762d3e1))
+* **proxy:** route /map discovery through the rotator (round-2 review) ([5ee06cf](https://github.com/us/crw/commit/5ee06cfb7e0c7e910a0ce0590597a277c6f49332))
+* **proxy:** route crawl robots/sitemap egress through the rotator ([4835e7d](https://github.com/us/crw/commit/4835e7dc02263350ae7bbcf591a353258e308032))
+
 ## [0.15.2](https://github.com/us/crw/compare/v0.15.1...v0.15.2) (2026-06-12)
 
 
