@@ -34,7 +34,7 @@ export default {
     {
       label: "Self-Host",
       href: "/self-hosting",
-      match: ["self-hosting", "docker", "configuration", "self-hosting-hardening", "js-rendering"],
+      match: ["self-hosting", "docker", "configuration", "self-hosting-hardening", "js-rendering", "proxies"],
     },
     {
       label: "Reference",
@@ -96,6 +96,7 @@ export default {
         { title: "Configuration", slug: "configuration", icon: "settings" },
         { title: "Hardening", slug: "self-hosting-hardening", icon: "alert" },
         { title: "JS Rendering", slug: "js-rendering", icon: "zap" },
+        { title: "Proxies", slug: "proxies", icon: "shield" },
       ],
     },
     {
