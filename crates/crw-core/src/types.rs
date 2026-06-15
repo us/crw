@@ -116,6 +116,10 @@ pub enum RequestedRenderer {
     #[serde(rename = "chrome_proxy")]
     ChromeProxy,
     Playwright,
+    /// Opt-in Camoufox stealth tier. `rename_all = "lowercase"` already yields
+    /// `"camoufox"`, matching the internal renderer name and
+    /// `RendererKind::Camoufox`.
+    Camoufox,
 }
 
 impl RequestedRenderer {
@@ -128,6 +132,7 @@ impl RequestedRenderer {
             RequestedRenderer::Chrome => Some("chrome"),
             RequestedRenderer::ChromeProxy => Some("chrome_proxy"),
             RequestedRenderer::Playwright => Some("playwright"),
+            RequestedRenderer::Camoufox => Some("camoufox"),
         }
     }
 }
@@ -780,10 +785,24 @@ mod tests {
             ("\"lightpanda\"", RequestedRenderer::Lightpanda),
             ("\"chrome\"", RequestedRenderer::Chrome),
             ("\"playwright\"", RequestedRenderer::Playwright),
+            ("\"camoufox\"", RequestedRenderer::Camoufox),
         ] {
             let parsed: RequestedRenderer = serde_json::from_str(s).unwrap();
             assert_eq!(parsed, expected, "input {s} should parse to {expected:?}");
         }
+    }
+
+    #[test]
+    fn requested_renderer_camoufox_round_trip() {
+        let parsed: RequestedRenderer = serde_json::from_str("\"camoufox\"").unwrap();
+        assert_eq!(parsed, RequestedRenderer::Camoufox);
+        let json = serde_json::to_string(&RequestedRenderer::Camoufox).unwrap();
+        assert_eq!(json, "\"camoufox\"");
+        assert_eq!(
+            resolve_pinned_renderer(Some(RequestedRenderer::Camoufox)),
+            Some("camoufox")
+        );
+        assert_eq!(RendererKind::Camoufox.as_str(), "camoufox");
     }
 
     #[test]
@@ -1338,6 +1357,11 @@ pub enum RendererKind {
     Chrome,
     #[serde(rename = "chrome_proxy")]
     ChromeProxy,
+    /// Opt-in Camoufox stealth tier (REST). `rename_all = "lowercase"` yields
+    /// `"camoufox"`. Unconditional (not feature-gated) like every other kind —
+    /// the variant is inert in lean builds since no camoufox renderer is ever
+    /// constructed there.
+    Camoufox,
 }
 
 impl RendererKind {
@@ -1347,6 +1371,7 @@ impl RendererKind {
             RendererKind::Lightpanda => "lightpanda",
             RendererKind::Chrome => "chrome",
             RendererKind::ChromeProxy => "chrome_proxy",
+            RendererKind::Camoufox => "camoufox",
         }
     }
 }

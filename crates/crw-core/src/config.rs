@@ -179,6 +179,16 @@ pub const CDP_TIER_OVERHEAD_MS: u64 = 28_000;
 /// `types.rs::ScrapeRequest::wait_for`.
 pub const MAX_WAIT_FOR_MS: u64 = 60_000;
 
+/// Default Camoufox REST per-request budget (ms). Covers the full REST
+/// round-trip (create tab → evaluate `outerHTML` → destroy session) plus
+/// Camoufox's anti-bot navigation. 60s mirrors the established camofox-browser
+/// client navigate budget. Used by [`RendererConfig::camoufox_timeout`].
+///
+/// There is intentionally no `CAMOUFOX_*_OVERHEAD_MS` analogue to
+/// [`CDP_TIER_OVERHEAD_MS`]: Camoufox is a single REST tier, not a CDP tier,
+/// and must never be charged CDP overhead.
+pub const CAMOUFOX_DEFAULT_TIMEOUT_MS: u64 = 60_000;
+
 /// Configuration for the `/v1/search` endpoint and its SearXNG backend.
 ///
 /// When `searxng_url` is unset the endpoint returns HTTP 503 with
@@ -491,6 +501,11 @@ pub enum RendererMode {
     Lightpanda,
     Chrome,
     Playwright,
+    /// Opt-in Camoufox stealth tier (REST, not CDP). Pinning `mode = "camoufox"`
+    /// uses only this tier. See [`CamoufoxEndpoint`]. Requires the `camoufox`
+    /// build feature; a build without it rejects this mode at renderer
+    /// construction time.
+    Camoufox,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -545,6 +560,17 @@ pub struct RendererConfig {
     /// fallback tier needs more headroom than direct Chrome.
     #[serde(default)]
     pub chrome_proxy_timeout_ms: Option<u64>,
+    /// Opt-in Camoufox stealth REST endpoint. See [`CamoufoxEndpoint`].
+    /// `None` = not configured (default). Orthogonal to the CDP tiers: a
+    /// configured endpoint with the default `include_in_auto = false` does NOT
+    /// change the existing auto ladder — it is reachable only via an explicit
+    /// per-request `renderer = "camoufox"` pin or `mode = "camoufox"`.
+    #[serde(default)]
+    pub camoufox: Option<CamoufoxEndpoint>,
+    /// Per-request Camoufox REST budget override (ms). Falls back to
+    /// [`CAMOUFOX_DEFAULT_TIMEOUT_MS`] when unset.
+    #[serde(default)]
+    pub camoufox_timeout_ms: Option<u64>,
     /// Enable Chrome resource interception (`Fetch.enable` blocking of media,
     /// fonts, trackers). Default `false`; flipped after the CDP-fake suite
     /// validates pump + cleanup behaviour. See plan Phase 2.
@@ -772,6 +798,8 @@ impl Default for RendererConfig {
             chrome: None,
             chrome_proxy: None,
             chrome_proxy_timeout_ms: None,
+            camoufox: None,
+            camoufox_timeout_ms: None,
             chrome_intercept_resources: false,
             chrome_intercept_stylesheets: false,
             chrome_host_intercept_disable: Vec::new(),
@@ -814,6 +842,52 @@ impl RendererConfig {
     pub fn chrome_proxy_timeout(&self) -> u64 {
         self.chrome_proxy_timeout_ms
             .unwrap_or_else(|| self.chrome_timeout().saturating_add(15_000))
+    }
+    pub fn camoufox_timeout(&self) -> u64 {
+        self.camoufox_timeout_ms
+            .unwrap_or(CAMOUFOX_DEFAULT_TIMEOUT_MS)
+    }
+
+    /// True when the Camoufox REST tier participates in the *auto* ladder for
+    /// the current mode — i.e. it would be tried for a non-pinned request.
+    /// Distinct from merely "configured": a configured endpoint with
+    /// `include_in_auto = false` returns `false` here unless `mode == Camoufox`.
+    ///
+    /// | mode                              | result                          |
+    /// |-----------------------------------|---------------------------------|
+    /// | `None`                            | `false` (no renderers at all)   |
+    /// | `Camoufox`                        | `true` when configured (pinned) |
+    /// | `Auto` + `include_in_auto = true` | `true`                          |
+    /// | `Auto` + `include_in_auto = false`| `false` (opt-in default)        |
+    /// | `Lightpanda`/`Chrome`/`Playwright`| `false`                         |
+    ///
+    /// This method is intentionally NOT `#[cfg(feature = "camoufox")]`: callers
+    /// in the deadline math (`min_deadline_for_full_ladder_ms`,
+    /// `effective_deadline_ms`) reference it unconditionally. The leading
+    /// `cfg!(feature = "camoufox")` runtime check (compiled to a constant and
+    /// dead-code-eliminated by LLVM in the lean build) makes it always return
+    /// `false` without the feature, so HTTP-only builds stay byte-identical.
+    /// Do not remove that early return thinking it is redundant — it is what
+    /// keeps `RendererMode::Camoufox` (an unconditional enum variant) inert in
+    /// lean builds.
+    pub fn camoufox_in_ladder(&self) -> bool {
+        if !cfg!(feature = "camoufox") || matches!(self.mode, RendererMode::None) {
+            return false;
+        }
+        // Mirror the construction filter in `FallbackRenderer::new`, which only
+        // builds the tier when `base_url` is non-empty. Without this guard a
+        // degenerate config (blank `base_url` + `include_in_auto = true`) would
+        // claim ladder membership for a tier that is never constructed, leaking
+        // a phantom +camoufox_timeout into the deadline budget.
+        let configured = |c: &CamoufoxEndpoint| !c.base_url.trim().is_empty();
+        match self.mode {
+            RendererMode::Camoufox => self.camoufox.as_ref().is_some_and(configured),
+            RendererMode::Auto => self
+                .camoufox
+                .as_ref()
+                .is_some_and(|c| c.include_in_auto && configured(c)),
+            _ => false,
+        }
     }
 
     /// Compose the DataImpulse-style proxy credentials for a single request.
@@ -885,6 +959,16 @@ impl RendererConfig {
             sum = sum.saturating_add(self.http_timeout());
         }
 
+        // Camoufox REST contribution. Added BEFORE the cdp early-return below so
+        // an HTTP-only + camoufox-enabled build still extends the deadline.
+        // Camoufox is a single REST tier: it is never counted in
+        // `cdp_tier_count` and never charged `CDP_TIER_OVERHEAD_MS`.
+        // `camoufox_in_ladder()` is always `false` in the lean build, so this
+        // line is inert there.
+        if self.camoufox_in_ladder() {
+            sum = sum.saturating_add(self.camoufox_timeout());
+        }
+
         // CDP tiers only contribute when the binary was built with the `cdp`
         // feature; otherwise no JS renderer is constructable at runtime and
         // including their budgets would over-extend the deadline.
@@ -915,6 +999,26 @@ fn default_pool_size() -> usize {
 #[derive(Debug, Clone, Deserialize)]
 pub struct CdpEndpoint {
     pub ws_url: String,
+}
+
+/// Opt-in Camoufox stealth renderer endpoint (REST, not CDP). When present it
+/// is selectable via `mode = "camoufox"` or a per-request `renderer =
+/// "camoufox"` pin, and additionally joins the Auto ladder ONLY when
+/// `include_in_auto = true`. A configured endpoint with the default
+/// `include_in_auto = false` does NOT change the existing auto ladder.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct CamoufoxEndpoint {
+    /// Base URL of the camofox-browser REST server, e.g. `http://localhost:9377`.
+    pub base_url: String,
+    /// Optional bearer token sent as `Authorization: Bearer <key>`. Empty string
+    /// (the default) means no auth header is added.
+    #[serde(default)]
+    pub api_key: String,
+    /// Whether this tier joins the Auto fallback ladder. Default `false`:
+    /// configured-but-not-in-auto, reachable only via an explicit pin or
+    /// `mode = "camoufox"`.
+    #[serde(default)]
+    pub include_in_auto: bool,
 }
 
 /// Stealth mode configuration for evading bot detection.
@@ -1344,7 +1448,13 @@ impl AppConfig {
         // extra fetch/challenge/stability overhead). Skip the extension when
         // no CDP tiers are configured so HTTP-only users keep the strict
         // operator-configured default.
-        if self.renderer.cdp_tier_count() == 0 {
+        //
+        // The opt-in Camoufox REST tier also warrants the extension when it is
+        // in the ladder (e.g. a camoufox-only, no-CDP deployment) — otherwise
+        // its 60s budget would be clamped to the strict default and starved.
+        // `camoufox_in_ladder()` is always `false` in the lean build, so
+        // HTTP-only deployments keep byte-identical behaviour here.
+        if self.renderer.cdp_tier_count() == 0 && !self.renderer.camoufox_in_ladder() {
             return default_ms;
         }
         let ladder_min = self.renderer.min_deadline_for_full_ladder_ms();
@@ -1428,6 +1538,9 @@ mod tests {
             "CRW_RENDERER__FORCE_JS",
             "CRW_RENDERER__RENDER_JS_DEFAULT",
             "CRW_RENDERER__LIGHTPANDA__WS_URL",
+            "CRW_RENDERER__CAMOUFOX__BASE_URL",
+            "CRW_RENDERER__CAMOUFOX__API_KEY",
+            "CRW_RENDERER__CAMOUFOX__INCLUDE_IN_AUTO",
             "CRW_SERVER__PORT",
         ] {
             unsafe { std::env::remove_var(k) };
@@ -1446,6 +1559,7 @@ mod tests {
             ("mode = \"lightpanda\"", RendererMode::Lightpanda),
             ("mode = \"chrome\"", RendererMode::Chrome),
             ("mode = \"playwright\"", RendererMode::Playwright),
+            ("mode = \"camoufox\"", RendererMode::Camoufox),
         ];
         for (toml_str, expected) in cases {
             let w: Wrap = toml::from_str(toml_str).unwrap();
@@ -1469,6 +1583,123 @@ mod tests {
         let cfg = RendererConfig::default();
         assert_eq!(cfg.mode, RendererMode::Auto);
         assert_eq!(cfg.render_js_default, None);
+    }
+
+    #[cfg(feature = "camoufox")]
+    #[test]
+    fn camoufox_in_ladder_semantics() {
+        let ep = || CamoufoxEndpoint {
+            base_url: "http://localhost:9377".into(),
+            api_key: String::new(),
+            include_in_auto: false,
+        };
+        // (1) configured + Auto + include_in_auto=false -> NOT in auto ladder.
+        let c = RendererConfig {
+            mode: RendererMode::Auto,
+            camoufox: Some(ep()),
+            ..Default::default()
+        };
+        assert!(
+            !c.camoufox_in_ladder(),
+            "opt-in default must stay out of auto"
+        );
+        // (2) Auto + include_in_auto=true -> in ladder.
+        let c = RendererConfig {
+            mode: RendererMode::Auto,
+            camoufox: Some(CamoufoxEndpoint {
+                include_in_auto: true,
+                ..ep()
+            }),
+            ..Default::default()
+        };
+        assert!(c.camoufox_in_ladder());
+        // (3) mode=Camoufox pin + include_in_auto=false -> in ladder (pinned).
+        let c = RendererConfig {
+            mode: RendererMode::Camoufox,
+            camoufox: Some(ep()),
+            ..Default::default()
+        };
+        assert!(c.camoufox_in_ladder());
+        // (4) mode=None -> never.
+        let c = RendererConfig {
+            mode: RendererMode::None,
+            camoufox: Some(ep()),
+            ..Default::default()
+        };
+        assert!(!c.camoufox_in_ladder());
+        // (5) other CDP-pinned modes -> never.
+        let c = RendererConfig {
+            mode: RendererMode::Chrome,
+            camoufox: Some(CamoufoxEndpoint {
+                include_in_auto: true,
+                ..ep()
+            }),
+            ..Default::default()
+        };
+        assert!(!c.camoufox_in_ladder());
+        // (6) blank base_url must NOT count as in-ladder even with the flag set
+        // (mirrors the construction filter — no phantom deadline extension).
+        let c = RendererConfig {
+            mode: RendererMode::Auto,
+            camoufox: Some(CamoufoxEndpoint {
+                base_url: "   ".into(),
+                include_in_auto: true,
+                ..ep()
+            }),
+            ..Default::default()
+        };
+        assert!(!c.camoufox_in_ladder());
+        // (7) blank base_url + mode=camoufox pin -> also not in ladder.
+        let c = RendererConfig {
+            mode: RendererMode::Camoufox,
+            camoufox: Some(CamoufoxEndpoint {
+                base_url: String::new(),
+                ..ep()
+            }),
+            ..Default::default()
+        };
+        assert!(!c.camoufox_in_ladder());
+    }
+
+    #[cfg(not(feature = "camoufox"))]
+    #[test]
+    fn camoufox_in_ladder_always_false_without_feature() {
+        // Without the feature the tier can never join the ladder, even if a
+        // (deserialized) endpoint is present and mode is pinned to camoufox.
+        let c = RendererConfig {
+            mode: RendererMode::Camoufox,
+            camoufox: Some(CamoufoxEndpoint {
+                base_url: "http://localhost:9377".into(),
+                api_key: String::new(),
+                include_in_auto: true,
+            }),
+            ..Default::default()
+        };
+        assert!(!c.camoufox_in_ladder());
+    }
+
+    #[cfg(feature = "camoufox")]
+    #[test]
+    fn camoufox_only_no_cdp_deadline_not_starved() {
+        // A camoufox-only deployment (no CDP tiers) with auto-extend on must
+        // get a deadline of at least http_timeout + camoufox_timeout, never
+        // clamped to the strict default.
+        let mut app = AppConfig::default();
+        app.request.auto_extend_deadline_for_ladder = true;
+        app.renderer.mode = RendererMode::Auto;
+        app.renderer.camoufox = Some(CamoufoxEndpoint {
+            base_url: "http://localhost:9377".into(),
+            api_key: String::new(),
+            include_in_auto: true,
+        });
+        let d = app.effective_deadline_ms(None, None);
+        let floor = app.renderer.http_timeout() + app.renderer.camoufox_timeout();
+        assert!(
+            d >= floor,
+            "camoufox-only deadline {d} starved below {floor}"
+        );
+        // cdp_tier_count must remain 0 — camoufox is REST, never a CDP tier.
+        assert_eq!(app.renderer.cdp_tier_count(), 0);
     }
 
     #[test]

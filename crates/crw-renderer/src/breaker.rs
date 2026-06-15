@@ -494,7 +494,7 @@ const REGISTRY_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 #[derive(Clone)]
 pub struct BreakerRegistry {
     config: BreakerConfig,
-    global: Arc<[(RendererKind, Arc<CircuitBreaker>); 4]>,
+    global: Arc<[(RendererKind, Arc<CircuitBreaker>); 5]>,
     host: Cache<(String, RendererKind), Arc<CircuitBreaker>>,
 }
 
@@ -509,6 +509,13 @@ impl BreakerRegistry {
             (RendererKind::Chrome, Arc::new(CircuitBreaker::new(config))),
             (
                 RendererKind::ChromeProxy,
+                Arc::new(CircuitBreaker::new(config)),
+            ),
+            // Unconditional (like every other kind). Harmless dead capacity in
+            // lean builds — gating the fixed-size array on a feature would
+            // complicate its type for no behavioural gain.
+            (
+                RendererKind::Camoufox,
                 Arc::new(CircuitBreaker::new(config)),
             ),
         ]);
@@ -537,7 +544,7 @@ impl BreakerRegistry {
                 return Arc::clone(breaker);
             }
         }
-        unreachable!("RendererKind is closed: Http | Lightpanda | Chrome | ChromeProxy")
+        unreachable!("RendererKind is closed: Http | Lightpanda | Chrome | ChromeProxy | Camoufox")
     }
 
     pub async fn host_for(&self, host: &str, renderer: RendererKind) -> Arc<CircuitBreaker> {
@@ -1082,7 +1089,14 @@ mod tests {
     #[test]
     fn registry_has_breaker_for_chrome_proxy() {
         let reg = BreakerRegistry::with_defaults();
-        // Must not panic: global_for iterates a fixed 4-element array now.
+        // Must not panic: global_for iterates a fixed 5-element array now.
         let _ = reg.global_for(RendererKind::ChromeProxy);
+    }
+
+    #[test]
+    fn registry_has_breaker_for_camoufox() {
+        let reg = BreakerRegistry::with_defaults();
+        // Must not panic: the camoufox kind is a registered (5th) global tier.
+        let _ = reg.global_for(RendererKind::Camoufox);
     }
 }

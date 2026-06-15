@@ -25,6 +25,12 @@ mcp-embedded = ["dep:crw-server"]
 # Enable browse subcommand (browser automation MCP)
 browse = ["dep:crw-browse", "dep:rmcp", "dep:anyhow"]
 
+# Opt-in Camoufox stealth renderer tier (REST). Default OFF so the shipped
+# `crw` binary stays lean. Build with `--features camoufox` to enable. Forwards
+# to crw-renderer/camoufox and, when the embedded server is present, to
+# crw-server/camoufox.
+camoufox = ["crw-renderer/camoufox", "crw-server?/camoufox"]
+
 [dependencies]
 # Core crates
 crw-core = { workspace = true }

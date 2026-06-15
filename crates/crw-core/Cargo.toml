@@ -17,6 +17,12 @@ description = "Core types, config, and error handling for the CRW web scraper"
 # CDP-less builds keep their strict `deadline_ms_default`. The workspace
 # binary enables this transitively via `crw-renderer/cdp`.
 cdp = []
+# Opt-in Camoufox stealth renderer tier (REST, not CDP). When the downstream
+# binary is built without this feature the tier is never constructable and the
+# config-level `camoufox_in_ladder()` predicate always returns false, so the
+# auto ladder and deadline math stay byte-identical to a lean build. The
+# workspace binary enables this transitively via `crw-renderer/camoufox`.
+camoufox = []
 
 [dependencies]
 crw-mcp-proto = { workspace = true }

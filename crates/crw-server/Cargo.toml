@@ -12,6 +12,9 @@ description = "Firecrawl-compatible API server for the CRW web scraper"
 [features]
 default = []
 cdp = ["crw-renderer/cdp"]
+# Opt-in Camoufox stealth renderer tier (REST). Default OFF — the lean build is
+# byte-identical. Forwards to crw-renderer/camoufox (→ crw-core/camoufox).
+camoufox = ["crw-renderer/camoufox"]
 test-utils = []
 # Optional self-host monitor mode. Default OFF. Activating it links the
 # `crw-monitor` crate (and only then its SQLite/HMAC stack). The open-core

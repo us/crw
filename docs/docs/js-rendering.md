@@ -19,6 +19,7 @@ pool_size = 4
 | `lightpanda` | Always use LightPanda for JS rendering |
 | `playwright` | Always use Playwright for JS rendering |
 | `chrome` | Always use Chrome for JS rendering |
+| `camoufox` | Opt-in stealth tier (REST). Requires `--features camoufox` + a configured `[renderer.camoufox]` endpoint |
 | `none` | HTTP only, never render JS |
 
 ## Per-request control
@@ -77,6 +78,7 @@ When `mode = "auto"` and you have multiple renderers configured (e.g., LightPand
 | `chrome` | Hard-pin to Chrome — no fallback |
 | `chrome_proxy` | Hard-pin to residential-proxy Chrome tier — no fallback |
 | `playwright` | Hard-pin to Playwright — no fallback |
+| `camoufox` | Hard-pin to the opt-in Camoufox stealth tier (REST) — no fallback. Requires a build with `--features camoufox` and a configured `[renderer.camoufox]` endpoint |
 
 ### Pinned implies JS
 

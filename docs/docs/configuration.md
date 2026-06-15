@@ -20,7 +20,7 @@ request_timeout_secs = 120
 rate_limit_rps = 10              # Max requests/second (global). 0 = unlimited.
 
 [renderer]
-mode = "auto"               # auto | lightpanda | playwright | chrome | none
+mode = "auto"               # auto | lightpanda | playwright | chrome | camoufox | none
 page_timeout_ms = 30000
 pool_size = 4
 # render_js_default = true  # alias: force_js = true
@@ -202,6 +202,7 @@ Use the `CRW_` prefix with `__` as a nesting separator:
 | `lightpanda` | Always use LightPanda via CDP |
 | `playwright` | Always use Playwright via CDP |
 | `chrome` | Always use Chrome via CDP |
+| `camoufox` | Opt-in Camoufox stealth tier (REST). Requires `--features camoufox` + a `[renderer.camoufox]` endpoint |
 | `none` | HTTP only, no JS rendering |
 
 The server `mode` controls **availability** of renderers in the pool. Per-request `renderer` selects from what's available — see [JS rendering](#js-rendering). A request that pins an unavailable renderer returns HTTP 400 with the configured pool listed.

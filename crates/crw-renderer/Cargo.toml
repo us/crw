@@ -13,6 +13,11 @@ description = "HTTP and CDP browser rendering engine for the CRW web scraper"
 default = []
 cdp = ["tokio-tungstenite", "crw-core/cdp"]
 auto-browser = ["dep:dirs"]
+# Opt-in Camoufox stealth renderer tier (REST, not CDP). Gates the `camoufox`
+# module and its construction in `FallbackRenderer::new`. Default off so the
+# lean build is byte-identical. Forwards to `crw-core/camoufox` for the
+# config-level predicate and deadline math.
+camoufox = ["crw-core/camoufox"]
 
 [dependencies]
 crw-core = { workspace = true }
@@ -41,3 +46,4 @@ axum = { workspace = true }
 tokio = { workspace = true }
 flate2 = "1"
 brotli = "8"
+wiremock = { workspace = true }

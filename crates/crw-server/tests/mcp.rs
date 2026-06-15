@@ -261,8 +261,8 @@ async fn mcp_crw_scrape_advertises_renderer_in_tools_list() {
     let renderer = &scrape["inputSchema"]["properties"]["renderer"];
     assert_eq!(renderer["type"], "string");
     let enum_vals = renderer["enum"].as_array().expect("renderer.enum");
-    assert_eq!(enum_vals.len(), 4);
-    for v in ["auto", "lightpanda", "chrome", "playwright"] {
+    assert_eq!(enum_vals.len(), 5);
+    for v in ["auto", "lightpanda", "chrome", "playwright", "camoufox"] {
         assert!(
             enum_vals.iter().any(|e| e == v),
             "renderer enum missing {v}"

@@ -19,7 +19,7 @@ rate_limit_rps = 10              # Max requests/second (global). 0 = unlimited.
 #   is small. Set to false to enforce a strict SLO regardless of tier sizing.
 
 [renderer]
-mode = "auto"                     # auto | lightpanda | playwright | chrome | none
+mode = "auto"                     # auto | lightpanda | playwright | chrome | camoufox | none
 page_timeout_ms = 30000
 pool_size = 4
 # render_js_default = true        # alias: force_js = true
@@ -45,6 +45,21 @@ ws_url = "ws://127.0.0.1:9222/"
 
 # [renderer.playwright]
 # ws_url = "ws://playwright:9222"
+
+# Opt-in Camoufox stealth tier (REST, not CDP). Requires a build with
+# `--features camoufox` AND a running camofox-browser server. Covers
+# fingerprint / bot-challenge blocks (e.g. Cloudflare 403) the CDP tiers miss.
+#
+# Opt-in semantics: a configured endpoint does NOT join the default `auto`
+# ladder. Reach it by one of:
+#   - per-request   renderer = "camoufox"   (always works once configured)
+#   - config        mode = "camoufox"       (pins every request to it)
+#   - include_in_auto = true                (joins the auto failover chain)
+# [renderer.camoufox]
+# base_url = "http://127.0.0.1:9377"
+# api_key = ""                 # optional bearer token if the sidecar is protected
+# include_in_auto = false      # default: stay out of the auto ladder
+# camoufox_timeout_ms = 60000  # optional per-request REST budget override
 
 [crawler]
 max_concurrency = 10

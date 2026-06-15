@@ -118,8 +118,8 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
                     },
                     "renderer": {
                         "type": "string",
-                        "enum": ["auto", "lightpanda", "chrome", "playwright"],
-                        "description": "Pin renderer; non-auto hard-pins and implies renderJs:true (default auto)"
+                        "enum": ["auto", "lightpanda", "chrome", "playwright", "camoufox"],
+                        "description": "Pin renderer; non-auto hard-pins and implies renderJs:true (default auto). 'camoufox' requires the server's opt-in camoufox tier to be configured."
                     }
                 },
                 "required": ["url"]
@@ -166,8 +166,8 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
                     },
                     "renderer": {
                         "type": "string",
-                        "enum": ["auto", "lightpanda", "chrome", "playwright"],
-                        "description": "Pin renderer; non-auto hard-pins and implies renderJs:true (default auto)"
+                        "enum": ["auto", "lightpanda", "chrome", "playwright", "camoufox"],
+                        "description": "Pin renderer; non-auto hard-pins and implies renderJs:true (default auto). 'camoufox' requires the server's opt-in camoufox tier to be configured."
                     }
                 },
                 "required": ["url"]
@@ -820,6 +820,7 @@ mod tests {
                 json!("lightpanda"),
                 json!("chrome"),
                 json!("playwright"),
+                json!("camoufox"),
             ]
         );
     }
@@ -843,11 +844,12 @@ mod tests {
         let enum_vals = props["renderer"]["enum"]
             .as_array()
             .expect("renderer.enum must be an array");
-        assert_eq!(enum_vals.len(), 4);
+        assert_eq!(enum_vals.len(), 5);
         assert!(enum_vals.iter().any(|v| v == "chrome"));
         assert!(enum_vals.iter().any(|v| v == "lightpanda"));
         assert!(enum_vals.iter().any(|v| v == "auto"));
         assert!(enum_vals.iter().any(|v| v == "playwright"));
+        assert!(enum_vals.iter().any(|v| v == "camoufox"));
     }
 
     #[test]

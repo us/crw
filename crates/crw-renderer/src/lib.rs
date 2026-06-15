@@ -39,6 +39,8 @@ pub mod breaker;
 pub mod browser;
 #[cfg(feature = "cdp")]
 pub mod browser_pool;
+#[cfg(feature = "camoufox")]
+pub mod camoufox;
 #[cfg(feature = "cdp")]
 pub mod cdp;
 #[cfg(feature = "cdp")]
@@ -93,6 +95,7 @@ fn renderer_kind_for(name: &str) -> Option<RendererKind> {
         "lightpanda" => Some(RendererKind::Lightpanda),
         "chrome" => Some(RendererKind::Chrome),
         "chrome_proxy" => Some(RendererKind::ChromeProxy),
+        "camoufox" => Some(RendererKind::Camoufox),
         _ => None,
     }
 }
@@ -140,6 +143,14 @@ fn tier_timeouts_from(
         RendererKind::ChromeProxy,
         std::time::Duration::from_millis(config.chrome_proxy_timeout()),
     );
+    // Unconditional: `camoufox_timeout()` exists regardless of feature. The map
+    // entry is consulted only when a camoufox renderer is actually in the pool,
+    // so an unused entry in lean builds is harmless and keeps this function
+    // feature-free.
+    m.insert(
+        RendererKind::Camoufox,
+        std::time::Duration::from_millis(config.camoufox_timeout()),
+    );
     m
 }
 
@@ -153,6 +164,12 @@ fn credit_for(kind: RendererKind) -> u32 {
         // Engine-internal cost only. SaaS billing reads request-body
         // `renderer` string and still charges 1 credit per scrape regardless.
         RendererKind::ChromeProxy => 2,
+        // Camoufox stealth: a full real-browser render (≈Chrome=2) plus the
+        // REST create-tab/evaluate/destroy-session round-trip and anti-bot
+        // warm-up, ≈1.5× Chrome rounded up. Engine-internal cost only (the same
+        // SaaS-billing note as ChromeProxy applies). Revisit to 2 if operational
+        // metrics show parity with Chrome.
+        RendererKind::Camoufox => 3,
     }
 }
 
@@ -241,6 +258,12 @@ pub struct FallbackRenderer {
     /// `None` when the pool is disabled or the chrome tier isn't configured.
     #[cfg(feature = "cdp")]
     chrome_pool: Option<Arc<browser_pool::BrowserContextPool<cdp_conn::CdpConnection>>>,
+    /// Whether the (constructed) camoufox tier participates in the auto ladder
+    /// for this instance's mode. Drives the non-pinned pool filter in
+    /// `fetch_with_js`: when false, a configured camoufox renderer is reachable
+    /// only by an explicit `renderer = "camoufox"` pin, never the auto chain.
+    #[cfg(feature = "camoufox")]
+    camoufox_in_auto: bool,
 }
 
 impl std::fmt::Debug for FallbackRenderer {
@@ -297,6 +320,19 @@ impl FallbackRenderer {
             )));
         }
 
+        // Camoufox is REST, not CDP — it requires the `camoufox` feature
+        // independently of `cdp`. Separate top-level guard (never nested in the
+        // cdp block above) so a camoufox-less build rejects the pin cleanly.
+        #[cfg(not(feature = "camoufox"))]
+        if matches!(config.mode, RendererMode::Camoufox) {
+            return Err(CrwError::ConfigError(
+                "renderer.mode = \"camoufox\" requires the 'camoufox' feature, but this build \
+                 was compiled without it. Rebuild with --features camoufox or set mode = \
+                 \"auto\"/\"none\"."
+                    .into(),
+            ));
+        }
+
         #[allow(unused_mut)]
         let mut js_renderers: Vec<Arc<dyn PageFetcher>> = Vec::new();
 
@@ -324,6 +360,10 @@ impl FallbackRenderer {
                 proxy_client_cache: std::sync::Mutex::new(std::collections::HashMap::new()),
                 #[cfg(feature = "cdp")]
                 chrome_pool: None,
+                // mode=none constructs no renderers, so camoufox is never in
+                // the (empty) ladder.
+                #[cfg(feature = "camoufox")]
+                camoufox_in_auto: false,
             });
         }
 
@@ -488,6 +528,39 @@ impl FallbackRenderer {
             }
         }
 
+        // Camoufox REST tier — a TOP-LEVEL block, NOT nested in the cdp guard
+        // above (camoufox is REST, not CDP). The renderer is constructed
+        // whenever an endpoint is configured, so an explicit per-request
+        // `renderer = "camoufox"` pin can always reach it. Whether it
+        // participates in the *auto* (non-pinned) chain is decided at request
+        // time in `fetch_with_js` via `camoufox_in_auto` — a configured
+        // endpoint with `include_in_auto = false` stays out of the auto ladder.
+        #[cfg(feature = "camoufox")]
+        {
+            if let Some(cf) = config
+                .camoufox
+                .as_ref()
+                .filter(|c| !c.base_url.trim().is_empty())
+            {
+                js_renderers.push(Arc::new(camoufox::CamoufoxRenderer::new(
+                    "camoufox",
+                    &cf.base_url,
+                    &cf.api_key,
+                    config.camoufox_timeout(),
+                )) as Arc<dyn PageFetcher>);
+                tracing::info!(
+                    base_url = %cf.base_url,
+                    include_in_auto = cf.include_in_auto,
+                    "camoufox tier enabled"
+                );
+            } else if matches!(config.mode, RendererMode::Camoufox) {
+                return Err(CrwError::ConfigError(
+                    "renderer.mode = \"camoufox\" but [renderer.camoufox] base_url is not configured"
+                        .into(),
+                ));
+            }
+        }
+
         // Spawn the process-wide CDP telemetry sampler. Idempotent —
         // OnceLock guarantees a single task across all FallbackRenderer
         // instances. No-op on the `mode = none` early-return path above.
@@ -518,6 +591,11 @@ impl FallbackRenderer {
             proxy_client_cache: std::sync::Mutex::new(std::collections::HashMap::new()),
             #[cfg(feature = "cdp")]
             chrome_pool,
+            // Single source of truth for the opt-in policy: true only when
+            // mode=camoufox (pinned) or mode=auto + include_in_auto. A
+            // configured-but-not-opted-in endpoint stays out of the auto chain.
+            #[cfg(feature = "camoufox")]
+            camoufox_in_auto: config.camoufox_in_ladder(),
         })
     }
 
@@ -919,13 +997,32 @@ impl FallbackRenderer {
 
         // Filter the JS pool down to a hard-pinned renderer when one was named.
         // "auto" or `None` means "use the configured chain".
+        //
+        // A pinned request (`Some(name)` where name != "auto") is matched by
+        // exact name and BYPASSES the camoufox auto-exclusion — an explicit
+        // `renderer = "camoufox"` pin always reaches the (constructed) tier even
+        // when `include_in_auto = false`. The exclusion applies ONLY to the
+        // non-pinned auto chain.
         let mut renderers: Vec<&Arc<dyn PageFetcher>> = match requested_renderer {
             Some(name) if name != "auto" => self
                 .js_renderers
                 .iter()
                 .filter(|r| r.name() == name)
                 .collect(),
-            _ => self.js_renderers.iter().collect(),
+            _ => {
+                #[cfg(feature = "camoufox")]
+                {
+                    let in_auto = self.camoufox_in_auto;
+                    self.js_renderers
+                        .iter()
+                        .filter(|r| in_auto || r.name() != "camoufox")
+                        .collect()
+                }
+                #[cfg(not(feature = "camoufox"))]
+                {
+                    self.js_renderers.iter().collect()
+                }
+            }
         };
 
         // LightPanda has no upstream-proxy support: when a proxy is active for
@@ -1532,6 +1629,8 @@ fn html_body_text_len(html: &str) -> usize {
 mod tests {
     use super::*;
     use crate::breaker::BreakerConfig;
+    #[cfg(feature = "camoufox")]
+    use crw_core::config::CamoufoxEndpoint;
     #[cfg(feature = "cdp")]
     use crw_core::config::CdpEndpoint;
     use std::time::Duration;
@@ -1668,6 +1767,79 @@ mod tests {
             FallbackRenderer::new(&cfg, "crw-test", None, &StealthConfig::default()).unwrap_err();
         let msg = err.to_string().to_lowercase();
         assert!(msg.contains("cdp"), "expected cdp in error: {msg}");
+    }
+
+    #[cfg(feature = "camoufox")]
+    fn camoufox_cfg(mode: RendererMode, include_in_auto: bool) -> RendererConfig {
+        RendererConfig {
+            mode,
+            camoufox: Some(CamoufoxEndpoint {
+                base_url: "http://127.0.0.1:9377".into(),
+                api_key: String::new(),
+                include_in_auto,
+            }),
+            ..Default::default()
+        }
+    }
+
+    /// Opt-in default: a configured endpoint is CONSTRUCTED (so an explicit
+    /// `renderer = "camoufox"` pin can reach it) but does NOT join the auto
+    /// ladder when `include_in_auto = false`.
+    #[cfg(feature = "camoufox")]
+    #[test]
+    fn camoufox_constructed_for_pin_but_excluded_from_auto() {
+        let cfg = camoufox_cfg(RendererMode::Auto, false);
+        let r = FallbackRenderer::new(&cfg, "crw-test", None, &StealthConfig::default()).unwrap();
+        assert!(
+            r.js_renderer_names().contains(&"camoufox"),
+            "configured camoufox must be constructed for pin-reachability"
+        );
+        assert!(
+            !r.camoufox_in_auto,
+            "include_in_auto=false must keep camoufox out of the auto ladder"
+        );
+    }
+
+    #[cfg(feature = "camoufox")]
+    #[test]
+    fn camoufox_joins_auto_when_include_in_auto_true() {
+        let cfg = camoufox_cfg(RendererMode::Auto, true);
+        let r = FallbackRenderer::new(&cfg, "crw-test", None, &StealthConfig::default()).unwrap();
+        assert!(r.js_renderer_names().contains(&"camoufox"));
+        assert!(r.camoufox_in_auto);
+    }
+
+    /// `mode = "camoufox"` pins to ONLY camoufox, and must mark it in-auto so a
+    /// non-pinned request is not left with zero renderers.
+    #[cfg(feature = "camoufox")]
+    #[test]
+    fn camoufox_pinned_mode_uses_only_camoufox() {
+        let cfg = camoufox_cfg(RendererMode::Camoufox, false);
+        let r = FallbackRenderer::new(&cfg, "crw-test", None, &StealthConfig::default()).unwrap();
+        assert_eq!(r.js_renderer_names(), vec!["camoufox"]);
+        assert!(r.camoufox_in_auto);
+    }
+
+    #[cfg(feature = "camoufox")]
+    #[test]
+    fn camoufox_pinned_mode_without_base_url_errors() {
+        let cfg = RendererConfig {
+            mode: RendererMode::Camoufox,
+            camoufox: Some(CamoufoxEndpoint::default()), // empty base_url
+            ..Default::default()
+        };
+        let err =
+            FallbackRenderer::new(&cfg, "crw-test", None, &StealthConfig::default()).unwrap_err();
+        assert!(err.to_string().to_lowercase().contains("camoufox"));
+    }
+
+    #[cfg(feature = "camoufox")]
+    #[test]
+    fn camoufox_absent_when_not_configured() {
+        let cfg = base_cfg(RendererMode::Auto);
+        let r = FallbackRenderer::new(&cfg, "crw-test", None, &StealthConfig::default()).unwrap();
+        assert!(!r.js_renderer_names().contains(&"camoufox"));
+        assert!(!r.camoufox_in_auto);
     }
 
     #[test]
