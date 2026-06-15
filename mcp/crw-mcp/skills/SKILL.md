@@ -32,7 +32,7 @@ This installs the CRW skill and MCP server to all detected AI agents (Claude Cod
 ## Authentication
 
 - **Embedded mode** (default): No key needed — the MCP server runs a self-contained scraper in ~6 MB RAM. No server required.
-- **Cloud mode** (fastcrw.com): Set `CRW_API_KEY=crw_live_...` and `CRW_API_URL=https://fastcrw.com/api`. Get a free key at https://fastcrw.com with 500 credits/month.
+- **Cloud mode** (fastcrw.com): Set `CRW_API_KEY=crw_live_...` and `CRW_API_URL=https://api.fastcrw.com`. Get a free key at https://fastcrw.com with 500 one-time lifetime credits (never resets, not monthly).
 
 ## MCP Tools
 
@@ -76,7 +76,9 @@ Parameters:
 - `id` (required) — The crawl job ID from `crw_crawl`
 - `maxLength` — Truncate each page's content fields to this many chars. `0` = unbounded. Default: ~15 000
 
-Returns: `{ "status": "pending|running|completed|failed", "data": [...] }`
+Returns: `{ "status": "scraping|completed|failed", "data": [...] }`
+
+> **Browser Automation:** Full interactive browser control (JavaScript rendering, click, fill, etc.) requires the separate **crw-browse** MCP server binary (`command: crw-browse`). It exposes its own tools (`goto`, `tree`, and others) and is not part of this MCP server. Do not call `crw_browse` here — it is not a tool in crw-mcp and will return a JSON-RPC -32602 "Unknown tool" error.
 
 ### crw_search
 
@@ -86,7 +88,6 @@ Parameters:
 - `query` (required) — The search query
 - `limit` — Maximum number of results to return. Default: `5`
 - `lang` — Language code for results (e.g. `"en"`, `"tr"`)
-- `country` — Country code for results (e.g. `"us"`, `"tr"`)
 - `tbs` — Time filter: `qdr:h|qdr:d|qdr:w|qdr:m|qdr:y` (past hour/day/week/month/year)
 - `sources` — If set, group results by source: `web`, `news`, `images`
 - `categories` — Bias toward a category (e.g. `"pdf"`, `"github"`, `"research"`, or a native SearXNG category)
@@ -137,6 +138,18 @@ crw_check_crawl_status(id="...")  → poll until completed
 crw_search(query="your search query", limit=5)
 ```
 
+**Search from the CLI (one-shot LLM-ready output):**
+
+When the `crw` binary is available, prefer the native field projection
+over piping through `jq` — it's one call instead of two:
+
+```bash
+crw search "renewable energy 2024" --json --fields title,url,snippet --limit 3
+```
+
+Available fields: `title`, `url`, `description`, `snippet`, `position`,
+`score`, `category`. `--json` is shorthand for `--format json`.
+
 ## Common Edge Cases
 
 - **JavaScript-heavy sites**: Set `renderJs: true` if the page is blank or returns a loading skeleton
@@ -146,7 +159,7 @@ crw_search(query="your search query", limit=5)
 
 ## Links
 
-- Cloud API: https://fastcrw.com — 500 free credits/month
+- Cloud API: https://fastcrw.com — 500 one-time lifetime free credits (never resets, not monthly)
 - Docs: https://docs.fastcrw.com
 - GitHub: https://github.com/us/crw
 - Firecrawl-compatible: same REST endpoints at `/v1/scrape`, `/v1/crawl`, `/v1/map`, `/v1/search`
