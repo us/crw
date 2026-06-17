@@ -23,6 +23,9 @@ Built in Rust because every millisecond of agent latency compounds.
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg" alt="License"></a>
   <a href="https://github.com/us/crw/stargazers"><img src="https://img.shields.io/github/stars/us/crw?style=social" alt="GitHub Stars"></a>
   <a href="https://fastcrw.com"><img src="https://img.shields.io/badge/Managed%20Cloud-fastcrw.com-blueviolet" alt="fastcrw.com"></a>
+</p>
+
+<p align="center">
   <a href="https://crates.io/crates/crw-server"><img src="https://img.shields.io/crates/d/crw-server.svg?label=crates.io%20downloads" alt="crates.io downloads"></a>
   <a href="https://www.npmjs.com/package/crw-sdk"><img src="https://img.shields.io/npm/dm/crw-sdk.svg?label=npm%20sdk" alt="npm sdk downloads"></a>
   <a href="https://www.npmjs.com/package/crw-mcp"><img src="https://img.shields.io/npm/dm/crw-mcp.svg?label=npm%20mcp" alt="npm mcp downloads"></a>
