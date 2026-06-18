@@ -197,6 +197,8 @@ docker run -p 3000:3000 ghcr.io/us/crw:latest
 docker compose up
 ```
 
+还有一个**可选的 [Camoufox](https://github.com/daijro/camoufox) 隐身渲染层**（REST 边车，需手动启用），用于绕过 CDP 渲染器无法通过的指纹 / 反爬封锁——默认关闭，除非显式开启，否则绝不会进入 `auto` 链。需使用 `--features camoufox` 构建；详见 [JS 渲染 → Camoufox](https://docs.fastcrw.com/#js-渲染)。
+
 **抓取网页：**
 
 ```bash

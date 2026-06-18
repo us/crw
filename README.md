@@ -232,6 +232,12 @@ docker compose -f docker-compose.yml \
   -f docker-compose.stealth.yml --profile stealth up -d      # browserless stealth tier
 ```
 
+There's also an **optional [Camoufox](https://github.com/daijro/camoufox)
+stealth tier** (REST sidecar, opt-in) for fingerprint-blocked targets the CDP
+renderers can't pass — off by default and never touches the `auto` chain unless
+you turn it on. Build with `--features camoufox`; see [JS rendering →
+Camoufox](https://docs.fastcrw.com/#js-rendering).
+
 See the [self-hosting guide](https://docs.fastcrw.com/#self-hosting) for
 production hardening, auth, reverse proxy, and resource tuning.
 

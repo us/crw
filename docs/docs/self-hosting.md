@@ -48,6 +48,29 @@ Three deployment paths cover most self-hosted use cases. Choose based on how muc
 4. add auth, TLS, and edge controls before broader access
 5. add JS rendering only when targets actually need it
 
+## Optional: Camoufox stealth sidecar
+
+For targets that block the CDP renderers on fingerprint / bot-challenge grounds
+(e.g. a Cloudflare `403`), you can run an optional [Camoufox](https://github.com/daijro/camoufox)
+stealth tier. It is a REST sidecar — separate from the CDP browsers — and is
+**off by default**: it requires a `--features camoufox` build and never joins
+the `auto` chain unless you opt in.
+
+```bash
+# 1. run the camofox-browser sidecar (default port 9377)
+docker run -p 9377:9377 -e CAMOFOX_PORT=9377 jo-inc/camofox-browser
+
+# 2. point CRW at it (config.toml)
+#    [renderer.camoufox]
+#    base_url = "http://127.0.0.1:9377"
+#    # include_in_auto = true   # optional: add as the last auto-failover tier
+```
+
+Reach it per request with `"renderer": "camoufox"`, pin every request with
+`mode = "camoufox"`, or set `include_in_auto = true`. It is a heavier
+(Firefox-class) render than the CDP tiers, so enable it only for the requests
+that need it. Full details: [JS rendering → Camoufox](#js-rendering).
+
 ## When Self-Hosting Is The Right Choice
 
 Choose self-hosting when you want:
