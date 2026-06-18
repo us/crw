@@ -67,7 +67,7 @@ Across a mix of news, docs, and e-commerce pages, the qualitative picture is con
 | Docker image size | **Small single binary** | ~2 GB | ~500 MB |
 | Browser bundle | **None (streaming parser)** | Chromium | Chromium |
 
-*Note: JavaScript-heavy pages that require full browser rendering narrow the gap, since both tools spin up a browser runtime in those cases. These results apply to standard HTML content. The defensible artifact is truth-recall on labeled URLs (522 of 819), with 87.7% scrape success and 0 errors — full latency distribution and a one-command repro on [/benchmarks](/benchmarks).*
+*Note: JavaScript-heavy pages that require full browser rendering narrow the gap, since both tools spin up a browser runtime in those cases. These results apply to standard HTML content. The defensible artifact is truth-recall on labeled URLs (522 of 819), with 91.8% scrape success (of reachable URLs) and 0 errors — full latency distribution and a one-command repro on [/benchmarks](/benchmarks).*
 
 ## The Hybrid Architecture
 

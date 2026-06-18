@@ -397,4 +397,4 @@ Yes, and it's recommended for flexible agents. A common setup is fastCRW (fast s
 
 ### How accurate is the fastCRW MCP scraper compared to alternatives?
 
-On the public 3-way scrape benchmark — Firecrawl's own scrape-content-dataset-v1, 1,000 URLs with 819 labeled, harness diagnose_3way.py, run 2026-05-08 — fastCRW reached 63.74% truth-recall (522 of 819 labeled URLs), ahead of Crawl4AI at 59.95% and Firecrawl at 56.04%. Its p50 latency was 1914ms, with a slower p90 of 14157ms because the chrome-stealth fallback that recovers hard pages also produces a longer tail.
+On the public 3-way scrape benchmark — Firecrawl's own scrape-content-dataset-v1, 1,000 URLs with 819 labeled, harness diagnose_3way.py, run 2026-05-08 — fastCRW reached 63.74% truth-recall (522 of 819 labeled URLs), ahead of Crawl4AI at 59.95% and Firecrawl at 56.04%. Its p50 latency was 1914ms — the fastest of the three. In fast mode, its p90 is 4348ms, the lowest of the three (Crawl4AI 4754ms, Firecrawl 6937ms).

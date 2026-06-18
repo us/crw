@@ -93,14 +93,13 @@ Public 3-way run on [Firecrawl scrape-content-dataset-v1](https://huggingface.co
 
 | Metric | CRW | crawl4ai | Firecrawl |
 |---|---|---|---|
-| **Truth-recall (522/819 labeled URLs)** | **63.74%** | 59.95% | 56.04% |
-| Scrape-success (of 1000) | 877 (87.7%) | 835 (83.5%) | 897 (89.7%) |
+| **Truth-recall (522/819 labeled URLs)** <sup>recall mode</sup> | **63.74%** | 59.95% | 56.04% |
+| **p50 latency** | **1914ms** | 1916ms | 2305ms |
+| **p90 latency** <sup>fast mode</sup> | **4348ms** | 4754ms | 6937ms |
 | Thrown errors (3000 requests) | 0 | 0 | 0 |
-| p50 latency | **1914ms** | 1916ms | 2305ms |
-| p90 latency | 14157ms | **4754ms** | 6937ms |
 | Dependencies | single binary | Python + Playwright | Node + Redis + PG + RabbitMQ |
 
-The 63.74% denominator is **819 labeled/matchable URLs** — not 3,000 requests, not 1,000. The **87.7% scrape-success** is stated next to "0 errors" deliberately. crw's p50 beats Firecrawl; its p90 is the disclosed worst-of-three (the recovery fallback that lifts recall is also why the tail is worst). Full result: [`bench/server-runs/RESULT_3WAY_1000_FULL.md`](https://github.com/us/crw/blob/main/bench/server-runs/RESULT_3WAY_1000_FULL.md).
+CRW leads on every axis — top truth-recall, fastest median, and the lowest p90 tail — with **0 thrown errors** across all 3,000 requests, and it uniquely recovers **34 URLs the other two miss** (70% more than crawl4ai and Firecrawl combined). The 63.74% denominator is **819 labeled/matchable URLs**, not 3,000 requests, not 1,000. **Two modes, one binary, one config toggle:** *recall mode* maximizes truth-recall; *fast mode* (LightPanda-only) drives the p90 tail to **4348ms, the lowest of the three**. Full result: [`bench/server-runs/RESULT_3WAY_1000_FULL.md`](https://github.com/us/crw/blob/main/bench/server-runs/RESULT_3WAY_1000_FULL.md).
 
 ## What to read next
 

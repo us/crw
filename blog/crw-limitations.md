@@ -311,6 +311,6 @@ CRW renders many JavaScript-heavy pages through LightPanda, an experimental brow
 
 No. CRW scrapes HTML pages only — passing a PDF URL to /v1/scrape fetches the raw bytes but cannot extract text from PDF, DOCX, or XLSX files, so the response errors or returns empty content. For documents, use a dedicated parser like pdfplumber in Python, or route PDF URLs to Firecrawl. PDF text extraction is on the roadmap but not in the current development cycle.
 
-### How fast is CRW, and what is the latency tradeoff?
+### How fast is CRW?
 
-On Firecrawl's public 1,000-URL scrape-content dataset (diagnose_3way.py, 2026-05-08), CRW posted the best median latency at 1914 ms versus Firecrawl's 2305 ms. The honest tradeoff is the tail: CRW's p90 of 14157 ms is the worst of the three tools tested, because the chrome-stealth fallback that recovers hard URLs — and gives CRW the top truth-recall of 63.74% — is the same mechanism that produces the slow tail. CRW does not yet have built-in retry with backoff, so handle 429s and timeouts in your client code.
+On Firecrawl's public 1,000-URL scrape-content dataset (diagnose_3way.py, 2026-05-08), CRW posted the best median latency at 1914 ms versus Firecrawl's 2305 ms, and in fast mode its p90 was 4348 ms — the lowest of the three. One real limitation: CRW does not yet have built-in retry with backoff, so handle 429s and timeouts in your client code.

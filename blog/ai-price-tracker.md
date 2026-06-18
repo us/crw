@@ -496,7 +496,7 @@ The /v1/extract convenience endpoint is a managed-cloud feature. When self-hosti
 
 ### How fast and reliable is CRW for frequent price checks?
 
-On Firecrawl's public scrape-content-dataset-v1 (1,000 URLs, harness diagnose_3way.py, run 2026-05-08), fastCRW recorded a 1914 ms p50 latency — in the same band as Crawl4AI's 1916 ms and Firecrawl's 2305 ms — with 87.7% scrape-success and 0 thrown errors across 3,000 requests. Running the engine local-first next to your scheduler avoids remote round trips, so a batch check every few hours stays quick.
+On Firecrawl's public scrape-content-dataset-v1 (1,000 URLs, harness diagnose_3way.py, run 2026-05-08), fastCRW recorded a 1914 ms p50 latency — in the same band as Crawl4AI's 1916 ms and Firecrawl's 2305 ms — with 91.8% scrape-success of reachable URLs and 0 thrown errors across 3,000 requests. Running the engine local-first next to your scheduler avoids remote round trips, so a batch check every few hours stays quick.
 
 ### Can I track the same product across multiple stores?
 

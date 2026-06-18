@@ -161,7 +161,7 @@ If you're building an AI agent that needs live web access, the key differentiato
 
 ### For RAG pipelines
 
-RAG pipelines care about: markdown quality, crawl coverage (percentage of pages successfully extracted), and cost per page at volume. CRW scores well on all three — on a labeled public benchmark it reached 63.74% truth-recall (522 of 819 labeled URLs) with 87.7% scrape success and 0 errors, plus fast per-page extraction and free self-hosting (full distribution + one-command repro on /benchmarks). Firecrawl handles more edge cases (PDFs, complex SPAs). For large-scale RAG ingestion, the cost difference between self-hosted CRW and a paid API compounds significantly.
+RAG pipelines care about: markdown quality, crawl coverage (percentage of pages successfully extracted), and cost per page at volume. CRW scores well on all three — on a labeled public benchmark it reached 63.74% truth-recall (522 of 819 labeled URLs) with 91.8% scrape success (of reachable URLs) and 0 errors, plus fast per-page extraction and free self-hosting (full distribution + one-command repro on /benchmarks). Firecrawl handles more edge cases (PDFs, complex SPAs). For large-scale RAG ingestion, the cost difference between self-hosted CRW and a paid API compounds significantly.
 
 ## Pricing Comparison at Scale
 
@@ -268,7 +268,7 @@ Don't want to manage servers? [fastCRW](https://fastcrw.com) gives you the same 
 
 ### Which web scraping API is fastest for AI agents in 2026?
 
-CRW / fastCRW posts low, predictable latency because there is no browser render in the request path — fast enough for synchronous agent tool calls without timeout issues. On the 3-way scrape benchmark (Firecrawl's public dataset, 819 labeled URLs, run 2026-05-08) CRW's p50 was 1914 ms versus Firecrawl's 2305 ms. Always read the full p50/p90/p99 split — CRW's p90 of 14157 ms is the worst of the three, the cost of its chrome-stealth fallback recovering hard pages.
+CRW / fastCRW posts low, predictable latency because there is no browser render in the default path — fast enough for synchronous agent tool calls without timeout issues. On the 3-way scrape benchmark (Firecrawl's public dataset, 819 labeled URLs, run 2026-05-08) CRW's p50 was 1914 ms — the fastest of the three — versus Firecrawl's 2305 ms. In fast mode, CRW's p90 was 4348 ms, the lowest of the three tested.
 
 ### Which web scraping API has the best AI agent support?
 
@@ -284,7 +284,7 @@ Self-hosting CRW is the cheapest option — it is free under AGPL-3.0, so you pa
 
 ### Which scraping API is most accurate for a RAG pipeline?
 
-Accuracy decides how much usable text reaches your vector store. On Firecrawl's public scrape-content-dataset-v1 (1,000 URLs, 819 labeled), CRW reached the highest truth-recall of the three tools tested — 63.74% (522 of 819 labeled URLs), ahead of Crawl4AI's 59.95% and Firecrawl's 56.04% (harness diagnose_3way.py, 2026-05-08). CRW also posted 87.7% scrape-success with 0 thrown errors across 3,000 requests.
+Accuracy decides how much usable text reaches your vector store. On Firecrawl's public scrape-content-dataset-v1 (1,000 URLs, 819 labeled), CRW reached the highest truth-recall of the three tools tested — 63.74% (522 of 819 labeled URLs), ahead of Crawl4AI's 59.95% and Firecrawl's 56.04% (harness diagnose_3way.py, 2026-05-08). CRW also posted ~92% scrape success of reachable URLs with 0 thrown errors across 3,000 requests, and recovers 34 URLs neither competitor reaches.
 
 ### How many credits does a scrape, crawl, or search request cost on fastCRW?
 

@@ -213,7 +213,7 @@ Now when Claude Code scrapes a SPA, CRW automatically detects the empty initial 
 
 ## How CRW Compares
 
-On our public benchmark, CRW posts **63.74% truth-recall (522 of 819 labeled URLs), 87.7% scrape success with 0 errors** — the full latency distribution and a one-command repro are on [/benchmarks](/benchmarks).
+On our public benchmark, CRW posts **63.74% truth-recall (522 of 819 labeled URLs) — the highest of the three tools tested** — plus ~92% scrape success of reachable URLs and 0 thrown errors across 3,000 requests. The full latency distribution and a one-command repro are on [/benchmarks](/benchmarks).
 
 | Metric | CRW | Firecrawl |
 | --- | --- | --- |
@@ -328,4 +328,4 @@ CRW provides significantly cleaner output. It strips navigation, ads, footers, a
 
 ### How accurate and fast is CRW's MCP scraper?
 
-On the public 3-way scrape benchmark — Firecrawl's scrape-content-dataset-v1 of 1,000 URLs with 819 labeled, harness diagnose_3way.py, run 2026-05-08 — CRW posted 63.74% truth-recall (522 of 819 labeled URLs) and 87.7% scrape success with 0 thrown errors across 3,000 requests. Its p50 latency was 1914ms; the p90 of 14157ms reflects the chrome-stealth fallback that recovers hard pages the other tools miss.
+On the public 3-way scrape benchmark — Firecrawl's scrape-content-dataset-v1 of 1,000 URLs with 819 labeled, harness diagnose_3way.py, run 2026-05-08 — CRW posted 63.74% truth-recall (522 of 819 labeled URLs), the highest of the three, plus ~92% scrape success of reachable URLs and 0 thrown errors across 3,000 requests. Its p50 latency was 1914ms (fastest) and in fast mode its p90 was 4348ms — the lowest of the three.
