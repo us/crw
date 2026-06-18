@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "crw": {
+      "command": "npx",
+      "args": ["-y", "crw-mcp"]
+    }
+  }
+}

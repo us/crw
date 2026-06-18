@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "crw",
+  "metadata": {
+    "description": "fastCRW agent skills — scrape, crawl, map, search, parse, extract, and change-track the web with the open-source Firecrawl alternative."
+  },
+  "owner": {
+    "name": "us"
+  },
+  "plugins": [
+    {
+      "name": "crw",
+      "source": "./",
+      "category": "developer-tools"
+    }
+  ]
+}

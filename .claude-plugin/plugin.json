@@ -1,0 +1,39 @@
+{
+  "name": "crw",
+  "displayName": "fastCRW",
+  "description": "Scrape, crawl, map, search, parse, extract, and change-track the web with fastCRW — the open-source, self-hostable Firecrawl alternative. Single Rust binary, ~6 MB RAM, Firecrawl-compatible /v1 + /v2 API, bundled SearXNG search.",
+  "version": "0.3.0",
+  "author": {
+    "name": "us",
+    "url": "https://github.com/us"
+  },
+  "homepage": "https://fastcrw.com",
+  "repository": "https://github.com/us/crw",
+  "license": "AGPL-3.0",
+  "keywords": [
+    "scrape",
+    "crawl",
+    "map",
+    "search",
+    "extract",
+    "web-data",
+    "firecrawl",
+    "searxng",
+    "rag",
+    "mcp"
+  ],
+  "skills": [
+    "./skills/crw",
+    "./skills/crw-scrape",
+    "./skills/crw-search",
+    "./skills/crw-map",
+    "./skills/crw-crawl",
+    "./skills/crw-parse",
+    "./skills/crw-extract",
+    "./skills/crw-watch",
+    "./skills/crw-dynamic-search",
+    "./skills/crw-best-practices",
+    "./skills/crw-migrate",
+    "./skills/crw-self-host"
+  ]
+}

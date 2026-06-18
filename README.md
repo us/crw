@@ -165,6 +165,33 @@ Continue.dev) live under [docs.fastcrw.com/mcp-clients/](https://docs.fastcrw.co
 
 ---
 
+## Agent Skills
+
+Beyond raw MCP tools, fastCRW ships a set of [agent skills](https://www.skills.sh) —
+reusable instruction packs that teach AI coding agents *when* and *how* to scrape,
+crawl, map, search, parse, extract, and change-track the web. Install into any
+agent (Claude Code, Codex, Cursor, OpenCode, Gemini CLI, Windsurf + more) with one
+command:
+
+```bash
+npx skills add us/crw                 # all 12 skills, into every detected agent
+npx skills add us/crw@crw-scrape      # just one
+npx skills add -g us/crw              # global (user-level)
+```
+
+| Tier | Skills |
+|------|--------|
+| **Core / verb ladder** | `crw` (hub) · `crw-search` · `crw-scrape` · `crw-map` · `crw-crawl` · `crw-parse` · `crw-extract` · `crw-watch` |
+| **Quality / meta** | `crw-dynamic-search` (context-isolating filter — the biggest token-saver) · `crw-best-practices` |
+| **Migration / ops** | `crw-migrate` (one-line Firecrawl `base_url` swap) · `crw-self-host` |
+
+The skills drive the `crw` CLI, the `crw-mcp` tools, or the REST API — pick whatever
+surface you have. No API key needed for self-hosted search (SearXNG). Full catalog
+and per-skill docs: [`skills/`](./skills/). Also packaged as a plugin marketplace
+for Claude Code, Codex, and Cursor (`.claude-plugin/`, `.codex-plugin/`, `.cursor-plugin/`).
+
+---
+
 ## Self-host vs Managed
 
 | | **Self-host (free)** | **Managed — `api.fastcrw.com`** |
