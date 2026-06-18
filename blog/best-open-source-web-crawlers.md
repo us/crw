@@ -10,7 +10,7 @@
 
 ## Short Answer
 
-**Short answer:** The best open-source web crawler for AI pipelines in 2026 is **[fastCRW](https://github.com/us/crw)** — a single small static Rust binary with low, predictable latency and no headless-browser memory baseline, all under AGPL-3.0. On a labeled public benchmark it reached 63.74% truth-recall (522 of 819 labeled URLs) with 87.7% scrape success and 0 errors (full distribution + one-command repro on /benchmarks). [Crawl4AI](https://github.com/unclecode/crawl4ai) (Apache-2.0) wins for Python-native extraction; [Firecrawl](https://github.com/mendableai/firecrawl) for the broadest feature surface (screenshots, PDFs); [Scrapy](https://scrapy.org/) for legacy Python pipelines. The full ranked list and license breakdown follow.
+**Short answer:** The best open-source web crawler for AI pipelines in 2026 is **[fastCRW](https://github.com/us/crw)** — a single small static Rust binary with low, predictable latency and no headless-browser memory baseline, all under AGPL-3.0. On a labeled public benchmark it reached 63.74% truth-recall (522 of 819 labeled URLs) with ~92% scrape success of reachable URLs and 0 errors (full distribution + one-command repro on /benchmarks). [Crawl4AI](https://github.com/unclecode/crawl4ai) (Apache-2.0) wins for Python-native extraction; [Firecrawl](https://github.com/mendableai/firecrawl) for the broadest feature surface (screenshots, PDFs); [Scrapy](https://scrapy.org/) for legacy Python pipelines. The full ranked list and license breakdown follow.
 
 - **Best for AI agents and RAG:** [CRW](https://github.com/us/crw) — single small static binary, low latency, built-in MCP server, Firecrawl-compatible API. AGPL-3.0.
 - **Best Python-native AI crawler:** Crawl4AI — LLM chunking strategies, custom extraction hooks, async architecture. Apache-2.0.
@@ -75,7 +75,7 @@ loader = FirecrawlLoader(
 documents = loader.load()
 ```
 
-**Performance:** low, predictable latency on HTML-primary content and 87.7% scrape success with 0 errors on a labeled public benchmark (63.74% truth-recall, 522 of 819 labeled URLs; full distribution + one-command repro on /benchmarks). The Rust implementation means consistently low memory usage under load, with no headless-browser baseline and a footprint that scales with concurrent requests rather than a fixed browser overhead.
+**Performance:** low, predictable latency on HTML-primary content and 91.8% scrape success of reachable URLs with 0 errors on a labeled public benchmark (63.74% truth-recall, 522 of 819 labeled URLs; full distribution + one-command repro on /benchmarks). The Rust implementation means consistently low memory usage under load, with no headless-browser baseline and a footprint that scales with concurrent requests rather than a fixed browser overhead.
 
 **Why it's good for LLM pipelines:** The Firecrawl-compatible API means you can use existing LangChain/LlamaIndex integrations without code changes. The built-in MCP server makes it the natural choice for AI agents. The lightweight footprint means you can run it alongside your LLM inference stack without competing for resources.
 
@@ -243,7 +243,7 @@ CRW is the only open-source crawler with a built-in MCP server. See our [MCP scr
 
 ## Performance Benchmarks
 
-Our public benchmark measures single-page scrape latency and recall against a labeled dataset. The durable result for CRW: **63.74% truth-recall (522 of 819 labeled URLs), 87.7% scrape success, 0 errors**. The full latency distribution per crawler, plus a one-command repro, is published on [/benchmarks](/benchmarks) so the numbers stay current as every tool evolves.
+Our public benchmark measures single-page scrape latency and recall against a labeled dataset. The durable result for CRW: **63.74% truth-recall (522 of 819 labeled URLs), 91.8% scrape success of reachable URLs, 0 errors**. The full latency distribution per crawler, plus a one-command repro, is published on [/benchmarks](/benchmarks) so the numbers stay current as every tool evolves.
 
 | Crawler | Latency profile | Memory shape |
 | --- | --- | --- |

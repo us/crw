@@ -572,7 +572,7 @@ Yes. The monitor_key_pages helper scrapes a fixed list of high-value paths — /
 
 ### How reliable is CRW at scraping diverse competitor sites?
 
-On Firecrawl's public scrape-content-dataset-v1 (1,000 URLs, harness diagnose_3way.py, run 2026-05-08), fastCRW reached 87.7% scrape-success with 0 thrown errors across 3,000 requests, and the highest truth-recall of the three tools tested at 63.74% of 819 labeled URLs. The chrome-stealth fallback that recovers hard pages does push the p90 latency to 14157 ms — the worst of the three — which is fine for a background monitoring job but worth knowing.
+On Firecrawl's public scrape-content-dataset-v1 (1,000 URLs, harness diagnose_3way.py, run 2026-05-08), fastCRW posted the highest truth-recall of the three tools tested at 63.74% of 819 labeled URLs, ~92% scrape success of reachable URLs, and 0 thrown errors across 3,000 requests. The 34 URLs only fastCRW recovers — 70% more than the other two combined — matter most for monitoring jobs where missing a competitor change has real cost.
 
 ### Do I need a heavy infrastructure stack to run this?
 

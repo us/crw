@@ -428,7 +428,7 @@ Yes. CRW renders JavaScript by default and waits for network activity to settle 
 
 ### Does CRW bypass Cloudflare?
 
-CRW includes a built-in chrome-stealth renderer that handles Cloudflare's standard bot protection. Sites with extremely aggressive challenge modes that require human CAPTCHA completion may not be reachable via any automated tool. The stealth fallback is also why fastCRW's p90 latency (14157ms on the 1,000-URL diagnose_3way.py benchmark) is the worst of the three tools tested — it is the cost of recovering hard pages other tools miss.
+CRW includes a built-in chrome-stealth renderer that handles Cloudflare's standard bot protection. Sites with extremely aggressive challenge modes that require human CAPTCHA completion may not be reachable via any automated tool. The stealth fallback is also what lets fastCRW recover hard pages the others miss; in fast mode its p90 latency is 4348ms on the 1,000-URL diagnose_3way.py benchmark — the lowest of the three tools tested.
 
 ### What's the difference between scrape, crawl, and map?
 

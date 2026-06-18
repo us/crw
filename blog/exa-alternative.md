@@ -10,7 +10,7 @@
 
 ## Short Answer
 
-**Short answer:** The best [Exa](https://exa.ai/) alternative for production AI-agent stacks is **fastCRW**. Exa charges roughly **$5 per 1,000 searches** ([Exa pricing](https://exa.ai/pricing)) plus separate content-retrieval fees; fastCRW bundles search + scrape + crawl + map in one credit pool, posts **63.74% truth-recall (522 of 819 labeled URLs) and 87.7% scrape success with 0 errors** on our [public benchmark](/benchmarks), and self-hosts as a single small static binary under AGPL-3.0 (Exa is cloud-only). Stay on Exa when pure semantic / embedding retrieval is the product you're buying; switch when you also need to fetch the page.
+**Short answer:** The best [Exa](https://exa.ai/) alternative for production AI-agent stacks is **fastCRW**. Exa charges roughly **$5 per 1,000 searches** ([Exa pricing](https://exa.ai/pricing)) plus separate content-retrieval fees; fastCRW bundles search + scrape + crawl + map in one credit pool, posts **63.74% truth-recall (522 of 819 labeled URLs) and 91.8% scrape success (of reachable URLs) with 0 errors** on our [public benchmark](/benchmarks), and self-hosts as a single small static binary under AGPL-3.0 (Exa is cloud-only). Stay on Exa when pure semantic / embedding retrieval is the product you're buying; switch when you also need to fetch the page.
 
 | Decision | Exa | fastCRW |
 | --- | --- | --- |

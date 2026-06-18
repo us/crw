@@ -48,7 +48,7 @@ Puppeteer is simpler than Playwright: it targets Chromium only, has a JavaScript
 
 ## What Is CRW?
 
-CRW is an open-source web scraping API written in Rust. Instead of running a browser, it uses **lol-html** — Cloudflare's streaming HTML rewriter — to parse pages directly at the HTTP level. This means no Chromium, no browser process, no GPU memory. The result is dramatically lower resource usage (no headless-browser memory baseline) and lower, more predictable latency because there is no browser render in the request path. On a labeled public benchmark, CRW reached 63.74% truth-recall (522 of 819 labeled URLs) with 87.7% scrape success and 0 errors (full distribution + one-command repro on /benchmarks).
+CRW is an open-source web scraping API written in Rust. Instead of running a browser, it uses **lol-html** — Cloudflare's streaming HTML rewriter — to parse pages directly at the HTTP level. This means no Chromium, no browser process, no GPU memory. The result is dramatically lower resource usage (no headless-browser memory baseline) and lower, more predictable latency because there is no browser render in the request path. On a labeled public benchmark, CRW reached 63.74% truth-recall (522 of 819 labeled URLs) with 91.8% scrape success (of reachable URLs) and 0 errors (full distribution + one-command repro on /benchmarks).
 
 CRW exposes a Firecrawl-compatible REST API, so it works with existing Firecrawl SDKs and integrations. It outputs clean markdown, supports structured JSON extraction via LLM schemas, and includes a built-in MCP server for AI agent integration. For pages that genuinely require JavaScript execution, CRW falls back to LightPanda — a lightweight headless browser that avoids Chromium's overhead.
 

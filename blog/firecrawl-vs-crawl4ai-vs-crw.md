@@ -1,6 +1,6 @@
 # Firecrawl vs Crawl4AI vs fastCRW: The Honest Benchmark (2026)
 
-> The Honest Benchmark (2026): Firecrawl vs Crawl4AI vs fastCRW on a labeled public dataset — 63.74% truth-recall on Firecrawl's public 1,000-URL dataset (diagnose_3way.py, 2026-05-08), 87.7% scrape success, 0 errors. Pricing, self-hosting, and MCP support compared — pick the right scraper for your AI agent stack. Reproducible script at /benchmarks.
+> The Honest Benchmark (2026): Firecrawl vs Crawl4AI vs fastCRW on a labeled public dataset — 63.74% truth-recall on Firecrawl's public 1,000-URL dataset (diagnose_3way.py, 2026-05-08), 91.8% scrape success (of reachable URLs), 0 errors. Pricing, self-hosting, and MCP support compared — pick the right scraper for your AI agent stack. Reproducible script at /benchmarks.
 
 **Published:** 2026-03-02  
 **Updated:** 2026-05-27  
@@ -10,7 +10,7 @@
 
 ## Short Answer
 
-**Short answer:** On Firecrawl's public 1,000-URL scrape-content dataset (819 labeled), fastCRW reached **63.74% truth-recall (`diagnose_3way.py`, 2026-05-08)** with **87.7% scrape success and 0 errors**, as a single small static binary with no headless-browser memory baseline — while browser-render-first stacks (Firecrawl, Crawl4AI) carry a heavy idle footprint and higher tail latency. fastCRW is the right pick when you need lightweight self-hosting and Firecrawl-API compatibility; pick Firecrawl for screenshots and PDFs, Crawl4AI for Python-native extraction. Full latency distribution and the reproducible `diagnose_3way.py` script live on [/benchmarks](/benchmarks).
+**Short answer:** On Firecrawl's public 1,000-URL scrape-content dataset (819 labeled), fastCRW reached **63.74% truth-recall (`diagnose_3way.py`, 2026-05-08)** with **91.8% scrape success (of reachable URLs) and 0 errors**, as a single small static binary with no headless-browser memory baseline — while browser-render-first stacks (Firecrawl, Crawl4AI) carry a heavy idle footprint and higher tail latency. fastCRW is the right pick when you need lightweight self-hosting and Firecrawl-API compatibility; pick Firecrawl for screenshots and PDFs, Crawl4AI for Python-native extraction. Full latency distribution and the reproducible `diagnose_3way.py` script live on [/benchmarks](/benchmarks).
 
 ## What Each Tool Is Built For
 
@@ -45,7 +45,7 @@ The hosted version of CRW is [fastCRW](https://fastcrw.com) — same API, same p
 | Core language | Rust | Node.js | Python |
 | Interface style | REST service | REST service | Python library + optional REST |
 | Latency profile (HTML-primary) | **Lower latency, no browser in path** | Browser-render-first | Browser-render-first |
-| Public benchmark | **63.74% truth-recall (522/819), 87.7% success, 0 errors** | see /benchmarks | see /benchmarks |
+| Public benchmark | **63.74% truth-recall (522/819), 91.8% scrape success (of reachable URLs), 0 errors** | see /benchmarks | see /benchmarks |
 | Idle memory baseline | **No headless-browser baseline** | Large (Chromium heap) | Large (Chromium heap) |
 | Footprint | **Single small static binary** | Multi-service (~500 MB image) | ~2 GB image |
 | Self-host ease | ⭐⭐⭐⭐⭐ (1 command) | ⭐⭐⭐ (compose, Redis) | ⭐⭐ (Python env, browser) |
@@ -637,7 +637,7 @@ For most AI-focused scraping workloads in 2026, the simplest starting point is C
 
 ### How does fastCRW's latency compare to Firecrawl and Crawl4AI?
 
-On a labeled public dataset, fastCRW reached 63.74% truth-recall (522 of 819 labeled URLs) with 87.7% scrape success and 0 errors. It is lower-latency than the Python and Node-plus-browser stacks on HTML-primary content because it is a persistent Rust binary with no headless browser in the request path. The full latency distribution and a one-command repro are on /benchmarks.
+On a labeled public dataset, fastCRW reached 63.74% truth-recall (522 of 819 labeled URLs) with 91.8% scrape success (of reachable URLs) and 0 errors. It is lower-latency than the Python and Node-plus-browser stacks on HTML-primary content because it is a persistent Rust binary with no headless browser in the request path. The full latency distribution and a one-command repro are on /benchmarks.
 
 ### Is fastCRW API-compatible with Firecrawl?
 

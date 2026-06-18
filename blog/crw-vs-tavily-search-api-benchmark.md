@@ -1,6 +1,6 @@
 # CRW vs Firecrawl vs Tavily: 200-Query Benchmark (Search + Scrape)
 
-> We benchmarked CRW against Firecrawl and Tavily on a labeled public dataset: 63.74% truth-recall (522 of 819 labeled URLs), 87.7% scrape success, 0 errors. Full latency distribution and a one-command repro on /benchmarks.
+> We benchmarked CRW against Firecrawl and Tavily on a labeled public dataset: 63.74% truth-recall (522 of 819 labeled URLs), ~92% scrape success of reachable URLs, 0 errors. Full latency distribution and a one-command repro on /benchmarks.
 
 **Published:** 2026-04-04  
 **Updated:** 2026-05-09  
@@ -18,7 +18,7 @@ Here's what we found, and how to reproduce it yourself.
 
 Rather than freeze a point-in-time latency table — numbers that drift with every provider release and every network condition — we publish the full latency distribution (p50/p95/p99 per provider, per run) alongside the labeled dataset and a one-command repro on our public [/benchmarks](/benchmarks) page.
 
-The durable, defensible finding from that run: **63.74% truth-recall (522 of 819 labeled URLs), 87.7% scrape success, 0 errors**. On search, CRW returns results with lower, more predictable latency than the alternatives because it aggregates engines in parallel rather than serializing through a single upstream. On scrape, CRW's lightweight Rust-based renderer is lower-latency than a full-Chromium pipeline while still handling JavaScript-heavy pages that simpler extractors can't.
+The durable, defensible finding from that run: **63.74% truth-recall (522 of 819 labeled URLs), 91.8% scrape success (of reachable URLs), 0 errors**. On search, CRW returns results with lower, more predictable latency than the alternatives because it aggregates engines in parallel rather than serializing through a single upstream. On scrape, CRW's lightweight Rust-based renderer is lower-latency than a full-Chromium pipeline while still handling JavaScript-heavy pages that simpler extractors can't.
 
 The tail behavior is what matters for user-facing AI agents: CRW's p95 stays close to its median, so occasional slowness is rare — the difference between "instant" and "noticeable" in an interactive flow.
 

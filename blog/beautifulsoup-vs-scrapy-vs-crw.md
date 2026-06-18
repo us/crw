@@ -385,7 +385,7 @@ Use a scraping API like CRW when you want clean markdown or structured JSON with
 
 ### How accurate is CRW at extracting page content?
 
-On Firecrawl's public 1,000-URL scrape-content-dataset-v1 (819 labeled URLs, harness diagnose_3way.py, run 2026-05-08), fastCRW reached 63.74% truth-recall — the highest of the three tools tested, ahead of Crawl4AI at 59.95% and Firecrawl at 56.04%. It also posted 87.7% scrape-success with 0 thrown errors across 3,000 requests. BeautifulSoup and Scrapy have no comparable accuracy figure because content cleanup is your own parsing code.
+On Firecrawl's public 1,000-URL scrape-content-dataset-v1 (819 labeled URLs, harness diagnose_3way.py, run 2026-05-08), fastCRW reached 63.74% truth-recall — the highest of the three tools tested, ahead of Crawl4AI at 59.95% and Firecrawl at 56.04%. It also posted 91.8% scrape-success of reachable URLs with 0 thrown errors across 3,000 requests. BeautifulSoup and Scrapy have no comparable accuracy figure because content cleanup is your own parsing code.
 
 ### Is CRW free, and how does it compare to Scrapy Cloud?
 

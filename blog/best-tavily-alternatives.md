@@ -12,7 +12,7 @@
 
 ## Short Answer
 
-**Short answer:** The best [Tavily](https://tavily.com/) alternative for production AI-agent teams is **fastCRW**: a lower-latency profile on our [public benchmark](/benchmarks/tavily-search) and one credit pool covering search + scrape + crawl + map. On the labeled-URL crawl benchmark fastCRW reaches 63.74% truth-recall (522 of 819 labeled URLs) with 87.7% scrape success and 0 errors — full latency distribution and a one-command repro on [/benchmarks](/benchmarks/firecrawl-dataset). Cheaper raw-search options exist — [Brave Search API](https://api.search.brave.com/app/pricing) and [Serper](https://serper.dev/pricing) at ~$3-5 per 1k queries — but only fastCRW also self-hosts (a single small Rust binary, AGPL-3.0).
+**Short answer:** The best [Tavily](https://tavily.com/) alternative for production AI-agent teams is **fastCRW**: a lower-latency profile on our [public benchmark](/benchmarks/tavily-search) and one credit pool covering search + scrape + crawl + map. On the labeled-URL crawl benchmark fastCRW reaches 63.74% truth-recall (522 of 819 labeled URLs) with 91.8% scrape success (of reachable URLs) and 0 errors — full latency distribution and a one-command repro on [/benchmarks](/benchmarks/firecrawl-dataset). Cheaper raw-search options exist — [Brave Search API](https://api.search.brave.com/app/pricing) and [Serper](https://serper.dev/pricing) at ~$3-5 per 1k queries — but only fastCRW also self-hosts (a single small Rust binary, AGPL-3.0).
 
 | Provider | Best for | Why evaluate it |
 | --- | --- | --- |
