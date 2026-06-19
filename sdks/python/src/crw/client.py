@@ -8,6 +8,7 @@ import os
 import subprocess
 import time
 from typing import Any
+from urllib.parse import quote, urlencode
 
 from crw._binary import ensure_binary
 from crw.exceptions import CrwApiError, CrwError, CrwTimeoutError
@@ -295,6 +296,63 @@ class CrwClient:
         if self._api_url:
             return self._http_post("/v1/search", args)
         return self._tool_call("crw_search", args)
+
+    # --- Firecrawl-compatible Research API (cloud only) ---------------------
+
+    def _research_get(self, path: str, params: dict) -> dict:
+        if not self._api_url:
+            raise CrwError("research API requires cloud mode (set api_key)")
+        clean = {k: v for k, v in params.items() if v is not None}
+        qs = urlencode(clean)
+        return self._http_request("GET", f"{path}?{qs}" if qs else path, check_success=False)
+
+    def search_papers(
+        self,
+        query: str,
+        *,
+        k: int | None = None,
+        authors: str | None = None,
+        categories: str | None = None,
+        from_: str | None = None,
+        to: str | None = None,
+    ) -> dict:
+        """Ranked paper search over `/v2/search/research/papers`."""
+        return self._research_get(
+            "/v2/search/research/papers",
+            {
+                "query": query,
+                "k": k,
+                "authors": authors,
+                "categories": categories,
+                "from": from_,
+                "to": to,
+            },
+        )
+
+    def get_paper(self, paper_id: str, *, query: str | None = None, k: int | None = None) -> dict:
+        """Inspect metadata, or (with `query`) read top passages for a paper."""
+        return self._research_get(
+            f"/v2/search/research/papers/{quote(paper_id, safe='')}",
+            {"query": query, "k": k},
+        )
+
+    def related_papers(
+        self,
+        paper_id: str,
+        intent: str,
+        *,
+        mode: str | None = None,
+        k: int | None = None,
+    ) -> dict:
+        """Citation-graph expansion (mode=similar|citers|references)."""
+        return self._research_get(
+            f"/v2/search/research/papers/{quote(paper_id, safe='')}/similar",
+            {"intent": intent, "mode": mode, "k": k},
+        )
+
+    def search_github(self, query: str, *, k: int | None = None) -> dict:
+        """GitHub history/README search over `/v2/search/research/github`."""
+        return self._research_get("/v2/search/research/github", {"query": query, "k": k})
 
     def parse_file(
         self,
