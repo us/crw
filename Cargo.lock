@@ -1026,6 +1026,7 @@ dependencies = [
  "crw-core",
  "futures",
  "moka",
+ "regex",
  "reqwest 0.13.2",
  "serde",
  "serde_json",

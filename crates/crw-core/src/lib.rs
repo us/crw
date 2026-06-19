@@ -22,6 +22,7 @@ pub mod error;
 pub mod mcp;
 pub mod metrics;
 pub mod proxy;
+pub mod research_types;
 pub mod types;
 pub mod url_safety;
 
