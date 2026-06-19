@@ -21,6 +21,9 @@ import type {
   ScrapeResult,
   SearchOptions,
   SearchResult,
+  ResearchSearchOptions,
+  ResearchReadOptions,
+  ResearchSimilarOptions,
 } from "./types.js";
 
 // CRW is cloud-first: with no explicit apiUrl and no CRW_LOCAL opt-in, the client
@@ -132,6 +135,35 @@ export class CrwClient {
     Object.assign(args, rest);
     if (this.apiUrl) return this.httpPost("/v1/search", args) as Promise<SearchResult>;
     return this.localTransport().toolCall("crw_search", args) as Promise<SearchResult>;
+  }
+
+  /**
+   * Firecrawl-compatible Research API (cloud only). Mirrors the Firecrawl
+   * research SDK surface over `/v2/search/research/*`. Each method GETs the
+   * hosted endpoint and returns its `{ success, ... }` payload verbatim.
+   */
+  get research() {
+    const get = (path: string, params: Record<string, unknown>) => {
+      if (this.apiUrl === null)
+        throw new CrwError("research API requires cloud mode (set apiKey/apiUrl)");
+      const qs = Object.entries(params)
+        .filter(([, v]) => v !== undefined && v !== null)
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+        .join("&");
+      return this.httpRequest("GET", qs ? `${path}?${qs}` : path, undefined, {
+        checkSuccess: false,
+      });
+    };
+    return {
+      searchPapers: (query: string, opts: ResearchSearchOptions = {}): Promise<Json> =>
+        get("/v2/search/research/papers", { query, ...opts }),
+      getPaper: (id: string, opts: ResearchReadOptions = {}): Promise<Json> =>
+        get(`/v2/search/research/papers/${encodeURIComponent(id)}`, { ...opts }),
+      similarPapers: (id: string, opts: ResearchSimilarOptions): Promise<Json> =>
+        get(`/v2/search/research/papers/${encodeURIComponent(id)}/similar`, { ...opts }),
+      searchGithub: (query: string, opts: { k?: number } = {}): Promise<Json> =>
+        get("/v2/search/research/github", { query, ...opts }),
+    };
   }
 
   /**

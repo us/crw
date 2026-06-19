@@ -95,3 +95,27 @@ export type ExtractResult = Json;
 export type BatchResult = Json[];
 export type Capabilities = Json;
 export type DiffResult = Json;
+
+/** Firecrawl-compatible Research API options (cloud only). */
+export interface ResearchSearchOptions {
+  k?: number;
+  authors?: string;
+  categories?: string;
+  from?: string;
+  to?: string;
+}
+
+export interface ResearchReadOptions {
+  /** When set, returns top passages answering this question instead of metadata. */
+  query?: string;
+  k?: number;
+}
+
+export interface ResearchSimilarOptions {
+  /** Required by Firecrawl: natural-language ranking intent. */
+  intent: string;
+  mode?: "similar" | "citers" | "references";
+  k?: number;
+  rerank?: boolean;
+  anchor?: string[];
+}
