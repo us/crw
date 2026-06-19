@@ -480,17 +480,77 @@ pub async fn search_papers_pools(
     vec![oa, ss, snip_hits]
 }
 
-/// `GET /papers/{id}` metadata. Accepts a `W…` work id or an `arxiv:`/`doi:`
-/// primaryId. Resolves via OpenAlex.
-pub async fn inspect(keys: &ResearchKeys<'_>, id: &str) -> Option<ResearchPaperMeta> {
-    let filter = if let Some(a) = id.strip_prefix("arxiv:") {
-        format!("filter=doi:10.48550/arxiv.{}", norm_arxiv(a))
-    } else if let Some(d) = id.strip_prefix("doi:") {
+/// Is `id` an arXiv-form id (`arxiv:X`, `arXiv:X`, or a bare `NNNN.NNNNN`)?
+/// Returns the bare normalized arXiv id if so.
+fn as_arxiv_id(id: &str) -> Option<String> {
+    if id.starts_with('W') || id.starts_with("doi:") {
+        return None;
+    }
+    let stripped = id
+        .strip_prefix("arxiv:")
+        .or_else(|| id.strip_prefix("arXiv:"))
+        .unwrap_or(id);
+    if arxiv_re().is_match(stripped) {
+        Some(norm_arxiv(stripped))
+    } else {
+        None
+    }
+}
+
+/// SS `/paper/arXiv:<id>` → metadata. SS is keyed directly by arXiv id, so it
+/// resolves reliably where OpenAlex's `10.48550/arxiv.<id>` DOI lookup misses
+/// (published papers carry their venue DOI in OpenAlex, not the arXiv one).
+async fn ss_inspect(keys: &ResearchKeys<'_>, arxiv: &str) -> Option<ResearchPaperMeta> {
+    let url = format!(
+        "https://api.semanticscholar.org/graph/v1/paper/arXiv:{arxiv}?fields=title,abstract,authors,externalIds,publicationDate,fieldsOfStudy"
+    );
+    let v = get_json(&url, keys.s2_key).await?;
+    let title = v.get("title")?.as_str()?.to_string();
+    let mut ids: HashMap<String, Vec<String>> = HashMap::new();
+    ids.insert("arxiv".into(), vec![arxiv.to_string()]);
+    if let Some(d) = v
+        .get("externalIds")
+        .and_then(|e| e.get("DOI"))
+        .and_then(|x| x.as_str())
+    {
+        ids.insert("doi".into(), vec![d.to_string()]);
+    }
+    let authors = v.get("authors").and_then(|a| a.as_array()).map(|arr| {
+        arr.iter()
+            .filter_map(|x| x.get("name")?.as_str().map(String::from))
+            .collect::<Vec<_>>()
+    });
+    let categories = v
+        .get("fieldsOfStudy")
+        .and_then(|f| f.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|x| x.as_str().map(String::from))
+                .collect::<Vec<_>>()
+        });
+    let date = v
+        .get("publicationDate")
+        .and_then(|x| x.as_str())
+        .map(String::from);
+    Some(ResearchPaperMeta {
+        paper_id: format!("arxiv:{arxiv}"),
+        ids: Some(ids),
+        title,
+        abstract_: v.get("abstract").and_then(|x| x.as_str()).map(String::from),
+        authors,
+        categories,
+        created_date: date.clone(),
+        update_date: date,
+    })
+}
+
+/// OpenAlex inspect for work ids / DOIs / arXiv-preprint-only papers.
+async fn openalex_inspect(keys: &ResearchKeys<'_>, id: &str) -> Option<ResearchPaperMeta> {
+    let filter = if let Some(d) = id.strip_prefix("doi:") {
         format!("filter=doi:{d}")
     } else if id.starts_with('W') {
         format!("filter=openalex_id:{id}")
     } else {
-        // bare arxiv id
         format!("filter=doi:10.48550/arxiv.{}", norm_arxiv(id))
     };
     let url = format!(
@@ -531,6 +591,17 @@ pub async fn inspect(keys: &ResearchKeys<'_>, id: &str) -> Option<ResearchPaperM
         created_date: date.clone(),
         update_date: date,
     })
+}
+
+/// `GET /papers/{id}` metadata. arXiv ids resolve via Semantic Scholar (keyed by
+/// arXiv); work ids / DOIs via OpenAlex. SS failure falls back to OpenAlex.
+pub async fn inspect(keys: &ResearchKeys<'_>, id: &str) -> Option<ResearchPaperMeta> {
+    if let Some(arxiv) = as_arxiv_id(id)
+        && let Some(m) = ss_inspect(keys, &arxiv).await
+    {
+        return Some(m);
+    }
+    openalex_inspect(keys, id).await
 }
 
 /// One SS paper object (`{externalIds, title}`) → a thin [`PaperHit`] (arXiv only).
@@ -654,6 +725,42 @@ mod tests {
         assert_eq!(r.primary_id, "arxiv:1706.03762");
         assert_eq!(r.paper_id, "W123");
         assert_eq!(r.ids["arxiv"][0], "1706.03762");
+    }
+
+    /// Live end-to-end smoke test against real OpenAlex + Semantic Scholar.
+    /// Ignored by default (network). Run with keys in env:
+    ///   OPENALEX_KEY=.. S2_KEY=.. cargo test -p crw-search live_smoke -- --ignored --nocapture
+    #[tokio::test]
+    #[ignore]
+    async fn live_smoke() {
+        let oa = std::env::var("OPENALEX_KEY").ok();
+        let s2 = std::env::var("S2_KEY").ok();
+        let keys = ResearchKeys {
+            openalex_key: oa.as_deref(),
+            openalex_mailto: Some("team@fastcrw.com"),
+            s2_key: s2.as_deref(),
+        };
+        // inspect a famous paper
+        let meta = inspect(&keys, "arxiv:1706.03762").await.expect("inspect");
+        println!("inspect title: {}", meta.title);
+        assert!(meta.title.to_lowercase().contains("attention"));
+        assert!(meta.authors.as_ref().is_some_and(|a| !a.is_empty()));
+
+        // search merges OpenAlex + SS
+        let pools = search_papers_pools(
+            &keys,
+            "flash attention efficient transformers",
+            20,
+            &SearchFilters::default(),
+        )
+        .await;
+        let results = merge_rank(pools, 20);
+        println!("search returned {} papers", results.len());
+        assert!(!results.is_empty(), "search returned nothing");
+
+        // citation graph (references of the transformer paper)
+        let refs = related(&keys, "1706.03762", Mode::References, 20).await;
+        println!("references: {}", refs.len());
     }
 
     #[test]
