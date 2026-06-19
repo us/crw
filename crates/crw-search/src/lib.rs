@@ -14,6 +14,7 @@
 pub mod client;
 pub mod params;
 pub mod rerank;
+pub mod research;
 pub mod structured;
 pub mod transform;
 pub mod wikidata;

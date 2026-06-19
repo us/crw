@@ -204,6 +204,19 @@ pub struct SearchConfig {
     /// `None` (the default) disables the endpoint with a clear error.
     #[serde(default)]
     pub searxng_url: Option<String>,
+    /// OpenAlex API key for the `/v1/search/research/*` endpoints (CC0 data,
+    /// commercial use OK). `None` falls back to the keyless polite pool.
+    #[serde(default)]
+    pub openalex_api_key: Option<String>,
+    /// Contact email for OpenAlex's "polite pool" (`mailto=`), recommended for
+    /// higher rate limits. `None` omits it.
+    #[serde(default)]
+    pub openalex_mailto: Option<String>,
+    /// Semantic Scholar API key (`x-api-key`) for the research endpoints'
+    /// full-text snippet + citation-graph boosters. `None` uses the shared
+    /// (1 RPS) unauthenticated tier.
+    #[serde(default)]
+    pub s2_api_key: Option<String>,
     /// End-to-end timeout for the SearXNG call in milliseconds.
     #[serde(default = "default_search_timeout_ms")]
     pub timeout_ms: u64,
@@ -355,6 +368,9 @@ impl Default for SearchConfig {
         Self {
             enabled: true,
             searxng_url: None,
+            openalex_api_key: None,
+            openalex_mailto: None,
+            s2_api_key: None,
             timeout_ms: default_search_timeout_ms(),
             default_limit: default_search_limit(),
             max_limit: default_search_max_limit(),

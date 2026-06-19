@@ -40,4 +40,20 @@ pub fn router() -> Router<AppState> {
             "/v1/change-tracking/diff",
             post(routes::change_tracking::diff).fallback(method_not_allowed),
         )
+        .route(
+            "/v1/search/research/papers",
+            get(routes::research::search_papers).fallback(method_not_allowed),
+        )
+        .route(
+            "/v1/search/research/papers/{id}",
+            get(routes::research::get_paper).fallback(method_not_allowed),
+        )
+        .route(
+            "/v1/search/research/papers/{id}/similar",
+            get(routes::research::similar).fallback(method_not_allowed),
+        )
+        .route(
+            "/v1/search/research/github",
+            get(routes::research::github).fallback(method_not_allowed),
+        )
 }

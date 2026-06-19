@@ -7,6 +7,7 @@ pub mod map;
 pub mod mcp;
 pub mod metrics;
 pub mod openapi;
+pub mod research;
 pub mod scrape;
 pub mod search;
 pub mod v1;
