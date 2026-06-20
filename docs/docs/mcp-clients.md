@@ -1,7 +1,7 @@
 <div class="page-intro">
   <div class="page-kicker">Integrations</div>
   <h1>MCP Client Setup</h1>
-  <p class="page-subtitle">Add CRW to Claude Code, Codex, Cursor, Windsurf, Cline, Continue, and similar MCP hosts. This page is the copy-paste setup reference for both local embedded mode and fastcrw.com cloud mode.</p>
+  <p class="page-subtitle">Add CRW to Claude Code, Codex, Cursor, Windsurf, Cline, Continue, osaurus, and similar MCP hosts. This page is the copy-paste setup reference for both local embedded mode and fastcrw.com cloud mode.</p>
   <div class="page-capabilities">
     <div class="page-capability"><strong>Best for:</strong> host-by-host setup</div>
     <div class="page-capability"><strong>Local mode:</strong> <code>npx crw-mcp</code></div>
@@ -344,6 +344,77 @@ Useful commands:
 
 - `gemini mcp list`
 - `gemini mcp remove crw`
+
+## osaurus
+
+[osaurus](https://github.com/osaurus-ai/osaurus) is a native macOS agent harness. It does not use the standard `mcpServers` shape — it stores remote MCP servers in its own config and adds them as **Remote MCP Providers**.
+
+### Add it from the UI (recommended)
+
+Open Management (`⌘⇧M`) → **Providers** → **MCP Providers** → **Add MCP Provider**, then set:
+
+| Field | Value |
+|---|---|
+| Name | `crw` |
+| Transport | `stdio` |
+| Execution host | `host` |
+| Command | `npx` |
+| Args | `crw-mcp` |
+
+`crw_*` tools then appear in chat namespaced as `crw_scrape`, `crw_crawl`, `crw_map`, `crw_parse_file` (and `crw_search` when SearXNG is configured).
+
+### Or edit the config file
+
+Edit `~/.osaurus/providers/mcp.json` (the root is an object with a `providers` array):
+
+```json
+{
+  "providers": [
+    {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "name": "crw",
+      "url": "",
+      "enabled": true,
+      "transport": "stdio",
+      "executionHost": "host",
+      "command": "npx",
+      "args": ["crw-mcp"],
+      "env": {},
+      "authType": "none"
+    }
+  ]
+}
+```
+
+:::note
+`id` must be a valid UUID. Set `executionHost` to `host`, not `sandbox`: embedded `crw-mcp` auto-downloads and spawns LightPanda under `~/.crw` and needs the macOS host (the sandbox VM has no `npx`, network, or `~/.crw`).
+:::
+
+### fastcrw.com cloud
+
+Add `CRW_API_URL` and your `CRW_API_KEY` as environment variables. Add `CRW_API_KEY` through the UI so osaurus stores it in the Keychain (listed under `secretEnvKeys`), rather than committing it to the JSON file:
+
+```json
+{
+  "providers": [
+    {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "name": "crw",
+      "url": "",
+      "enabled": true,
+      "transport": "stdio",
+      "executionHost": "host",
+      "command": "npx",
+      "args": ["crw-mcp"],
+      "env": { "CRW_API_URL": "https://api.fastcrw.com" },
+      "secretEnvKeys": ["CRW_API_KEY"],
+      "authType": "none"
+    }
+  ]
+}
+```
+
+Cloud mode exposes `crw_search` (always-on managed search backend); local embedded mode shows it only when you configure SearXNG.
 
 ## Any MCP client
 

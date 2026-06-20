@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MCP Client Setup — CRW Docs</title>
-  <meta name="description" content="Add CRW to Claude Code, Codex, Cursor, Windsurf, Cline, Continue, and similar MCP hosts. This page is the copy-paste setup reference for both local embedded mode and fastcrw.com cloud mode.">
+  <meta name="description" content="Add CRW to Claude Code, Codex, Cursor, Windsurf, Cline, Continue, osaurus, and similar MCP hosts. This page is the copy-paste setup reference for both local embedded mode and fastcrw.com cloud mode.">
   <meta name="keywords" content="web scraper, web crawler, firecrawl alternative, crawl4ai alternative, self-hosted scraper, rust web scraper, mcp server, ai web scraping, rag pipeline, llm extraction, open source crawler, headless browser scraper">
   <link rel="canonical" href="https://docs.fastcrw.com/mcp-clients">
   <link rel="icon" href="/favicon.png?v=2" type="image/png">
@@ -15,13 +15,13 @@
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://docs.fastcrw.com/mcp-clients">
   <meta property="og:title" content="MCP Client Setup — CRW | Web Scraper in Rust">
-  <meta property="og:description" content="Add CRW to Claude Code, Codex, Cursor, Windsurf, Cline, Continue, and similar MCP hosts. This page is the copy-paste setup reference for both local embedded mode and fastcrw.com cloud mode.">
+  <meta property="og:description" content="Add CRW to Claude Code, Codex, Cursor, Windsurf, Cline, Continue, osaurus, and similar MCP hosts. This page is the copy-paste setup reference for both local embedded mode and fastcrw.com cloud mode.">
   <meta property="og:site_name" content="CRW">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="MCP Client Setup — CRW Docs">
-  <meta name="twitter:description" content="Add CRW to Claude Code, Codex, Cursor, Windsurf, Cline, Continue, and similar MCP hosts. This page is the copy-paste setup reference for both local embedded mode and fastcrw.com cloud mode.">
+  <meta name="twitter:description" content="Add CRW to Claude Code, Codex, Cursor, Windsurf, Cline, Continue, osaurus, and similar MCP hosts. This page is the copy-paste setup reference for both local embedded mode and fastcrw.com cloud mode.">
 
   <!-- Structured Data (JSON-LD) -->
   <script type="application/ld+json">
@@ -285,7 +285,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
       <article id="article" role="main"><div class="page-intro">
   <div class="page-kicker">Integrations</div>
   <h1 id="mcp-client-setup">MCP Client Setup</h1>
-  <p class="page-subtitle">Add CRW to Claude Code, Codex, Cursor, Windsurf, Cline, Continue, and similar MCP hosts. This page is the copy-paste setup reference for both local embedded mode and fastcrw.com cloud mode.</p>
+  <p class="page-subtitle">Add CRW to Claude Code, Codex, Cursor, Windsurf, Cline, Continue, osaurus, and similar MCP hosts. This page is the copy-paste setup reference for both local embedded mode and fastcrw.com cloud mode.</p>
   <div class="page-capabilities">
     <div class="page-capability"><strong>Best for:</strong> host-by-host setup</div>
     <div class="page-capability"><strong>Local mode:</strong> <code>npx crw-mcp</code></div>
@@ -570,6 +570,77 @@ CRW_API_KEY = &quot;YOUR_API_KEY&quot;</code></pre>
 <li><code>gemini mcp list</code></li>
 <li><code>gemini mcp remove crw</code></li>
 </ul>
+<h2 id="osaurus">osaurus</h2>
+<p><a href="https://github.com/osaurus-ai/osaurus">osaurus</a> is a native macOS agent harness. It does not use the standard <code>mcpServers</code> shape — it stores remote MCP servers in its own config and adds them as <strong>Remote MCP Providers</strong>.</p>
+<h3 id="add-it-from-the-ui-recommended">Add it from the UI (recommended)</h3>
+<p>Open Management (<code>⌘⇧M</code>) → <strong>Providers</strong> → <strong>MCP Providers</strong> → <strong>Add MCP Provider</strong>, then set:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Name</td>
+<td><code>crw</code></td>
+</tr>
+<tr>
+<td>Transport</td>
+<td><code>stdio</code></td>
+</tr>
+<tr>
+<td>Execution host</td>
+<td><code>host</code></td>
+</tr>
+<tr>
+<td>Command</td>
+<td><code>npx</code></td>
+</tr>
+<tr>
+<td>Args</td>
+<td><code>crw-mcp</code></td>
+</tr>
+</tbody></table>
+<p><code>crw_*</code> tools then appear in chat namespaced as <code>crw_scrape</code>, <code>crw_crawl</code>, <code>crw_map</code>, <code>crw_parse_file</code> (and <code>crw_search</code> when SearXNG is configured).</p>
+<h3 id="or-edit-the-config-file">Or edit the config file</h3>
+<p>Edit <code>~/.osaurus/providers/mcp.json</code> (the root is an object with a <code>providers</code> array):</p>
+<pre data-lang="json"><code class="language-json">{
+  &quot;providers&quot;: [
+    {
+      &quot;id&quot;: &quot;11111111-1111-1111-1111-111111111111&quot;,
+      &quot;name&quot;: &quot;crw&quot;,
+      &quot;url&quot;: &quot;&quot;,
+      &quot;enabled&quot;: true,
+      &quot;transport&quot;: &quot;stdio&quot;,
+      &quot;executionHost&quot;: &quot;host&quot;,
+      &quot;command&quot;: &quot;npx&quot;,
+      &quot;args&quot;: [&quot;crw-mcp&quot;],
+      &quot;env&quot;: {},
+      &quot;authType&quot;: &quot;none&quot;
+    }
+  ]
+}</code></pre>
+<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">`id` must be a valid UUID. Set `executionHost` to `host`, not `sandbox`: embedded `crw-mcp` auto-downloads and spawns LightPanda under `~/.crw` and needs the macOS host (the sandbox VM has no `npx`, network, or `~/.crw`).</div></div><h3 id="fastcrwcom-cloud-8">fastcrw.com cloud</h3>
+<p>Add <code>CRW_API_URL</code> and your <code>CRW_API_KEY</code> as environment variables. Add <code>CRW_API_KEY</code> through the UI so osaurus stores it in the Keychain (listed under <code>secretEnvKeys</code>), rather than committing it to the JSON file:</p>
+<pre data-lang="json"><code class="language-json">{
+  &quot;providers&quot;: [
+    {
+      &quot;id&quot;: &quot;11111111-1111-1111-1111-111111111111&quot;,
+      &quot;name&quot;: &quot;crw&quot;,
+      &quot;url&quot;: &quot;&quot;,
+      &quot;enabled&quot;: true,
+      &quot;transport&quot;: &quot;stdio&quot;,
+      &quot;executionHost&quot;: &quot;host&quot;,
+      &quot;command&quot;: &quot;npx&quot;,
+      &quot;args&quot;: [&quot;crw-mcp&quot;],
+      &quot;env&quot;: { &quot;CRW_API_URL&quot;: &quot;https://api.fastcrw.com&quot; },
+      &quot;secretEnvKeys&quot;: [&quot;CRW_API_KEY&quot;],
+      &quot;authType&quot;: &quot;none&quot;
+    }
+  ]
+}</code></pre>
+<p>Cloud mode exposes <code>crw_search</code> (always-on managed search backend); local embedded mode shows it only when you configure SearXNG.</p>
 <h2 id="any-mcp-client">Any MCP client</h2>
 <p>If your client accepts the standard JSON <code>mcpServers</code> shape, start here:</p>
 <h3 id="local-embedded-8">Local embedded</h3>
@@ -581,7 +652,7 @@ CRW_API_KEY = &quot;YOUR_API_KEY&quot;</code></pre>
     }
   }
 }</code></pre>
-<h3 id="fastcrwcom-cloud-8">fastcrw.com cloud</h3>
+<h3 id="fastcrwcom-cloud-9">fastcrw.com cloud</h3>
 <pre data-lang="json"><code class="language-json">{
   &quot;mcpServers&quot;: {
     &quot;crw&quot;: {
