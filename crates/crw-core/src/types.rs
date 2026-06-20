@@ -17,6 +17,7 @@ pub enum OutputFormat {
     Json,
     Summary,
     ChangeTracking,
+    Screenshot,
 }
 
 impl OutputFormat {
@@ -36,6 +37,11 @@ impl OutputFormat {
             "json" | "extract" | "llm-extract" => Ok(OutputFormat::Json),
             "summary" => Ok(OutputFormat::Summary),
             "changeTracking" | "change-tracking" => Ok(OutputFormat::ChangeTracking),
+            // `screenshot@fullPage` parses to the same fieldless variant; the
+            // `fullPage` bit is carried out-of-band via
+            // `ScrapeRequest.screenshot_full_page` (v2 extracts it in
+            // `routes/v2/formats.rs`; v1 always treats it as false — see D7).
+            "screenshot" | "screenshot@fullPage" => Ok(OutputFormat::Screenshot),
             other => Err(format!(
                 "Unknown format '{other}'. Valid formats: markdown, html, rawHtml, plainText, links, json, summary, changeTracking \
                  (aliases: extract, llm-extract, change-tracking). Use formats: [\"json\"] with jsonSchema for structured extraction."
@@ -291,6 +297,13 @@ pub struct ScrapeRequest {
     ///   capped via `maxPages`).
     #[serde(default)]
     pub parsers: Option<Vec<ParserSpec>>,
+    /// Whether a requested `screenshot` format should capture the full page
+    /// (`screenshot@fullPage` / `{type:"screenshot", fullPage:true}`) instead of
+    /// just the viewport. Carried out-of-band rather than on the (`Copy`/`Hash`)
+    /// `OutputFormat` enum so `formats.contains(&Screenshot)` stays cheap. v1
+    /// always leaves this false (see D7); v2 sets it in `routes/v2/formats.rs`.
+    #[serde(default, alias = "screenshot_full_page")]
+    pub screenshot_full_page: bool,
 }
 
 /// A document parser directive (Firecrawl `parsers` entry). Accepts either the
@@ -410,6 +423,7 @@ impl Default for ScrapeRequest {
             goal: None,
             judge_enabled: None,
             parsers: None,
+            screenshot_full_page: false,
         }
     }
 }
@@ -572,6 +586,11 @@ pub struct ScrapeData {
     /// the orchestration layer ran the judge).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub change_tracking: Option<ChangeTrackingResult>,
+    /// Page screenshot as a `data:image/png;base64,<...>` URL; populated only
+    /// when `formats` includes `"screenshot"`. The `data:` prefix is wrapped
+    /// once in `single.rs` (`FetchResult.screenshot` stays raw base64).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub screenshot: Option<String>,
 }
 
 /// Per-request extraction debug trace. One entry per extract() call
@@ -1506,6 +1525,11 @@ pub struct FetchResult {
     /// renderer ran with network capture enabled. Used by extraction as a
     /// fallback content source when DOM-based extraction is low quality.
     pub captured_responses: Vec<CapturedNetworkResponse>,
+    /// Raw base64 PNG captured via CDP `Page.captureScreenshot` when the
+    /// request asked for the `screenshot` format. `None` for the HTTP /
+    /// camoufox / lightpanda paths (they never capture). The `data:` URL
+    /// prefix is added in `single.rs`, not here.
+    pub screenshot: Option<String>,
 }
 
 /// A single XHR/fetch response captured via CDP Network domain.

@@ -33,6 +33,10 @@ pub struct V2Document {
     pub summary: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub change_tracking: Option<ChangeTrackingResult>,
+    /// Page screenshot as a `data:image/png;base64,<...>` URL (Firecrawl-compat
+    /// `screenshot` field). Present only when the `screenshot` format was asked.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub screenshot: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub warning: Option<String>,
     pub metadata: V2Metadata,
@@ -107,6 +111,7 @@ pub fn to_v2_document(data: ScrapeData, proxy_used: &str, scrape_id: String) -> 
         json: data.json,
         summary: data.summary,
         change_tracking: data.change_tracking,
+        screenshot: data.screenshot,
         warning: data.warning,
         metadata,
     }
@@ -306,6 +311,7 @@ mod tests {
             debug_extraction: None,
             content_type: Some("text/html".into()),
             change_tracking: None,
+            screenshot: None,
         }
     }
 

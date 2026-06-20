@@ -303,6 +303,7 @@ impl EngineSource {
             goal: None,
             judge_enabled: None,
             parsers: None,
+            screenshot_full_page: false,
         }
     }
 }

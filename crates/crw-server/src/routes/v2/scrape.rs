@@ -144,6 +144,7 @@ pub(crate) fn to_internal(
         headers: v2.headers,
         json_schema: decomposed.json_schema.clone(),
         change_tracking: decomposed.change_tracking.clone(),
+        screenshot_full_page: decomposed.screenshot_full_page,
         country,
         deadline_ms: v2.timeout,
         llm_api_key: v2.llm_api_key,

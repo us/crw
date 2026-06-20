@@ -59,12 +59,16 @@ pub struct DecomposedFormats {
     pub json_schema: Option<Value>,
     /// `ScrapeRequest.change_tracking` (from a `{"type":"changeTracking",...}` entry).
     pub change_tracking: Option<ChangeTrackingOptions>,
-    /// A `screenshot` format was requested. crw does not yet capture screenshots
-    /// (Tier-3), so this is recorded for the response `warning` rather than
-    /// silently dropped — the request still succeeds with the other formats.
+    /// A `screenshot` format was requested. The format is now produced via CDP
+    /// `Page.captureScreenshot`; this flag is retained for callers that want to
+    /// branch on it (e.g. credit pricing).
     pub screenshot_requested: bool,
+    /// Whether the requested screenshot should be full-page (`screenshot@fullPage`
+    /// or `{type:"screenshot", fullPage:true}`) rather than viewport-only.
+    /// Copied into `ScrapeRequest.screenshot_full_page` by `to_internal`.
+    pub screenshot_full_page: bool,
     /// v2-only formats crw cannot yet produce (`images`, `attributes`,
-    /// `branding`, `audio`, `query`, `screenshot`). Surfaced as a warning.
+    /// `branding`, `audio`, `query`). Surfaced as a warning.
     pub unsupported: Vec<String>,
 }
 
@@ -110,13 +114,25 @@ fn handle_token(
     screenshot_seen: &mut bool,
 ) -> Result<(), String> {
     match ty {
-        "screenshot" => {
+        "screenshot" | "screenshot@fullPage" => {
             if *screenshot_seen {
                 return Err("only one screenshot format allowed per request".to_string());
             }
             *screenshot_seen = true;
             out.screenshot_requested = true;
-            out.unsupported.push("screenshot".to_string());
+            // fullPage from the string suffix (`screenshot@fullPage`) or the
+            // object's `fullPage` key. `quality` / `viewport` keys are
+            // accepted-and-ignored for drop-in compatibility (D6).
+            // ponytail: quality + custom viewport deferred to v2 follow-up.
+            let full_page = ty == "screenshot@fullPage"
+                || obj
+                    .and_then(|m| m.get("fullPage"))
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+            out.screenshot_full_page = full_page;
+            if !out.formats.contains(&OutputFormat::Screenshot) {
+                out.formats.push(OutputFormat::Screenshot);
+            }
             Ok(())
         }
         "images" | "attributes" | "branding" | "audio" | "query" => {
@@ -251,13 +267,56 @@ mod tests {
     #[test]
     fn unsupported_formats_collected_not_fatal() {
         let d = decompose(&specs(
-            json!(["markdown", {"type": "images"}, {"type": "screenshot"}]),
+            json!(["markdown", {"type": "images"}, {"type": "audio"}]),
         ))
         .unwrap();
         assert!(d.formats.contains(&OutputFormat::Markdown));
         assert!(d.unsupported.contains(&"images".to_string()));
-        assert!(d.unsupported.contains(&"screenshot".to_string()));
+        assert!(d.unsupported.contains(&"audio".to_string()));
         assert!(unsupported_warning(&d.unsupported).is_some());
+    }
+
+    #[test]
+    fn screenshot_string_parses() {
+        let d = decompose(&specs(json!(["screenshot"]))).unwrap();
+        assert!(d.formats.contains(&OutputFormat::Screenshot));
+        assert!(!d.screenshot_full_page);
+        assert!(d.screenshot_requested);
+        // not surfaced as unsupported anymore — it's produced.
+        assert!(!d.unsupported.contains(&"screenshot".to_string()));
+    }
+
+    #[test]
+    fn screenshot_full_page_string_sets_flag() {
+        let d = decompose(&specs(json!(["screenshot@fullPage"]))).unwrap();
+        assert!(d.formats.contains(&OutputFormat::Screenshot));
+        assert!(d.screenshot_full_page);
+    }
+
+    #[test]
+    fn screenshot_object_full_page_sets_flag() {
+        let d = decompose(&specs(json!([{"type": "screenshot", "fullPage": true}]))).unwrap();
+        assert!(d.formats.contains(&OutputFormat::Screenshot));
+        assert!(d.screenshot_full_page);
+    }
+
+    #[test]
+    fn screenshot_object_ignores_quality_and_viewport() {
+        // Forgiving over erroring (D6): unknown sub-keys are accepted, not 400'd.
+        let d = decompose(&specs(json!([
+            {"type": "screenshot", "fullPage": false, "quality": 80,
+             "viewport": {"width": 1280, "height": 720}}
+        ])))
+        .unwrap();
+        assert!(d.formats.contains(&OutputFormat::Screenshot));
+        assert!(!d.screenshot_full_page);
+    }
+
+    #[test]
+    fn screenshot_only_does_not_force_markdown() {
+        let d = decompose(&specs(json!(["screenshot"]))).unwrap();
+        assert_eq!(d.formats, vec![OutputFormat::Screenshot]);
+        assert!(!d.formats.contains(&OutputFormat::Markdown));
     }
 
     #[test]

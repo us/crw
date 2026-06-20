@@ -555,6 +555,8 @@ fn build_scrape_data(
         debug_extraction: None,
         content_type: Some("application/pdf".to_string()),
         change_tracking: None,
+        // PDFs are never screenshotted (binary doc path).
+        screenshot: None,
     }
 }
 

@@ -128,7 +128,16 @@ pub async fn scrape(
         } else {
             crw_extract::antibot::AntibotResult::none()
         };
-        if typed.signal.is_blocked() || warning_blocked {
+        // A successful screenshot is real content even when no text was requested
+        // (screenshot-only scrape has empty markdown by design). It may ONLY
+        // suppress the generic near-empty `StructuralFailure` heuristic — never a
+        // positive vendor block (Cloudflare/Datadome/GenericBlock/…), which is a
+        // real block that must still fail (and drive anti_bot credit refunds)
+        // even when we captured a screenshot of the challenge page.
+        let suppressed_by_screenshot = data.screenshot.is_some()
+            && !warning_blocked
+            && typed.signal == crw_extract::antibot::AntibotSignal::StructuralFailure;
+        if (typed.signal.is_blocked() || warning_blocked) && !suppressed_by_screenshot {
             let error_msg = if typed.signal.is_blocked() {
                 format!(
                     "Blocked by anti-bot ({}): {}",

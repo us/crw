@@ -86,6 +86,39 @@ tokio::task_local! {
     pub static REQUEST_PROXY: Option<Arc<crw_core::ProxyEntry>>;
 }
 
+/// Per-request screenshot capture parameters. Carried via a task-local rather
+/// than the `PageFetcher::fetch` signature (mirrors [`REQUEST_PROXY`]) so the
+/// trait + its ~30 call sites stay untouched. `Some` ⇒ capture a PNG via CDP
+/// `Page.captureScreenshot` after the wait window; `None` ⇒ no screenshot.
+#[derive(Debug, Clone, Copy)]
+pub struct ScreenshotReq {
+    /// Capture the full scrollable page (`captureBeyondViewport`) vs. just the
+    /// current viewport.
+    pub full_page: bool,
+}
+
+tokio::task_local! {
+    /// Resolved screenshot request for the current scrape. Set by the
+    /// scrape/crawl entry point ([`crw_crawl::single::scrape_url`]) when
+    /// `formats` contains `Screenshot`; read in `cdp.rs` to drive
+    /// `Page.captureScreenshot` and in [`FallbackRenderer::fetch`] to force the
+    /// vanilla-Chrome CDP path. `None` = no screenshot → existing behaviour.
+    pub static REQUEST_SCREENSHOT: Option<ScreenshotReq>;
+}
+
+/// Whether a screenshot was requested for the current task (reads the
+/// [`REQUEST_SCREENSHOT`] task-local). `false` when unset / outside a scope.
+pub fn screenshot_requested() -> bool {
+    REQUEST_SCREENSHOT
+        .try_with(|s| s.is_some())
+        .unwrap_or(false)
+}
+
+/// The resolved screenshot params for the current task, if any.
+pub fn current_screenshot_req() -> Option<ScreenshotReq> {
+    REQUEST_SCREENSHOT.try_with(|s| *s).ok().flatten()
+}
+
 /// Map a renderer's name string to the closed `RendererKind` enum.
 /// Returns `None` for unknown names (e.g. "playwright" — treated as a
 /// JS renderer but not tracked in metrics/preferences).
@@ -778,7 +811,15 @@ impl FallbackRenderer {
             None
         };
 
-        let effective = resolve_render_js(render_js, self.render_js_default);
+        let mut effective = resolve_render_js(render_js, self.render_js_default);
+        // A screenshot is captured via CDP — it can only happen on the JS/CDP
+        // path. Force `render_js = Some(true)` so the `Some(false)` / auto
+        // (`None`) branches below don't return an HTTP-only result that never
+        // reaches `fetch_with_js` (where the capture occurs). The HTTP-only,
+        // camoufox and lightpanda renderers are also filtered out downstream.
+        if effective != Some(true) && screenshot_requested() {
+            effective = Some(true);
+        }
         tracing::debug!(
             url,
             request_render_js = ?render_js,
@@ -805,11 +846,25 @@ impl FallbackRenderer {
                     .fetch(url, headers, None, deadline)
                     .await?;
                 if http_result.content_type.as_deref() == Some("application/pdf") {
+                    // A PDF has no rendered DOM to capture. A screenshot request
+                    // on a PDF returns the parsed document with no `screenshot`
+                    // field (ponytail: honest null — PDFs genuinely can't be
+                    // screenshotted; not worth a warning the PDF parse path drops).
                     stamp_http_decision(&mut http_result, requested_renderer);
                     return Ok(http_result);
                 }
 
                 if self.js_renderers.is_empty() {
+                    // A screenshot needs CDP — there is no HTTP fallback that can
+                    // satisfy it. Fail closed rather than return a 200 with a null
+                    // screenshot the caller explicitly asked for.
+                    if screenshot_requested() {
+                        return Err(CrwError::RendererError(
+                            "a screenshot was requested but no JS renderer is available; \
+                             configure a chrome/chrome_proxy tier"
+                                .into(),
+                        ));
+                    }
                     tracing::warn!(
                         url,
                         "JS rendering requested but no renderer available — falling back to HTTP"
@@ -1039,6 +1094,25 @@ impl FallbackRenderer {
                     "a proxy is required for this request but the only available JS \
                      renderer (lightpanda) cannot route through a proxy; configure a \
                      chrome/chrome_proxy tier to use proxies with JS rendering"
+                        .into(),
+                ));
+            }
+        }
+
+        // Screenshot capture is CDP `Page.captureScreenshot` on vanilla Chrome.
+        // LightPanda's CdpRenderer returns a ~30-byte stub and Camoufox is an
+        // HTTP sidecar that doesn't speak CDP — neither can capture. Drop both
+        // and fail CLOSED if that empties the chain, rather than returning a
+        // screenshot-less result the caller asked for (mirrors the proxy retain
+        // above). Applies even to a hard pin: pinning camoufox/lightpanda +
+        // requesting a screenshot is unsatisfiable.
+        if screenshot_requested() {
+            renderers.retain(|r| r.name() != "lightpanda" && r.name() != "camoufox");
+            if renderers.is_empty() {
+                return Err(CrwError::RendererError(
+                    "a screenshot was requested but no CDP-capable Chrome renderer is \
+                     available; lightpanda and camoufox cannot capture screenshots — \
+                     configure a chrome/chrome_proxy tier"
                         .into(),
                 ));
             }
@@ -1896,6 +1970,7 @@ mod tests {
                 truncated: false,
                 deadline_exceeded: false,
                 captured_responses: Vec::new(),
+                screenshot: None,
             })
         }
 

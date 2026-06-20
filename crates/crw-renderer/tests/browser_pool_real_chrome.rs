@@ -493,3 +493,115 @@ async fn t7_permit_accounting_under_shutdown() {
 
     assert_eq!(pool.inflight(), 0);
 }
+
+// ---------------------------------------------------------------------------
+// SS — screenshot capture smoke: `Page.captureScreenshot` returns a PNG.
+//
+// Mirrors the engine's capture path in `cdp.rs::post_navigate_phase`
+// (format:"png", captureBeyondViewport, fromSurface) reading the raw base64
+// `data` field. Chrome-gated like the rest of this file. A PNG's 8-byte magic
+// header (`\x89PNG\r\n\x1a\n`) base64-encodes to the constant prefix
+// `iVBORw0KGgo`, so we can assert it without pulling a base64 dep.
+// ---------------------------------------------------------------------------
+#[tokio::test]
+#[ignore]
+async fn ss_capture_screenshot_returns_png() {
+    let Some(base) = require_real_chrome() else {
+        return;
+    };
+    let ws = resolve_ws(&base).await;
+    let pool = build_pool(ws, 1);
+
+    let guard = pool.acquire().await.expect("acquire");
+    let create = guard
+        .conn
+        .send_recv(
+            "Target.createTarget",
+            json!({ "url": "about:blank", "browserContextId": guard.ctx_id }),
+            None,
+            CDP_TIMEOUT,
+        )
+        .await
+        .expect("createTarget");
+    let target_id = create
+        .get("targetId")
+        .and_then(|v| v.as_str())
+        .expect("targetId")
+        .to_string();
+    guard.record_target(target_id.clone());
+
+    let attach = guard
+        .conn
+        .send_recv(
+            "Target.attachToTarget",
+            json!({ "targetId": target_id, "flatten": true }),
+            None,
+            CDP_TIMEOUT,
+        )
+        .await
+        .expect("attachToTarget");
+    let sid = attach
+        .get("sessionId")
+        .and_then(|v| v.as_str())
+        .expect("sessionId")
+        .to_string();
+
+    guard
+        .conn
+        .send_recv("Page.enable", json!({}), Some(&sid), CDP_TIMEOUT)
+        .await
+        .expect("Page.enable");
+    let events_rx = guard.conn.subscribe();
+    guard
+        .conn
+        .send_recv(
+            "Page.navigate",
+            json!({ "url": "https://example.com/" }),
+            Some(&sid),
+            CDP_TIMEOUT,
+        )
+        .await
+        .expect("Page.navigate");
+
+    let mut rx = events_rx;
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            panic!("loadEventFired timeout");
+        }
+        match tokio::time::timeout(remaining, rx.recv()).await {
+            Err(_) => panic!("loadEventFired timeout"),
+            Ok(Err(_)) => continue,
+            Ok(Ok(ev)) => {
+                if ev.method == "Page.loadEventFired" && ev.session_id.as_deref() == Some(&sid) {
+                    break;
+                }
+            }
+        }
+    }
+
+    let resp = guard
+        .conn
+        .send_recv(
+            "Page.captureScreenshot",
+            json!({ "format": "png", "captureBeyondViewport": false, "fromSurface": true }),
+            Some(&sid),
+            CDP_TIMEOUT,
+        )
+        .await
+        .expect("Page.captureScreenshot");
+    let b64 = resp
+        .get("data")
+        .and_then(|v| v.as_str())
+        .expect("captureScreenshot returned `data`");
+    assert!(!b64.is_empty(), "screenshot base64 must be non-empty");
+    assert!(
+        b64.starts_with("iVBORw0KGgo"),
+        "screenshot must be a PNG (base64 PNG magic prefix), got {:?}",
+        &b64[..b64.len().min(16)]
+    );
+
+    guard.release().await.expect("release");
+    pool.shutdown(Duration::from_secs(5)).await;
+}

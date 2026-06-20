@@ -810,9 +810,10 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
         },
         debug_extraction: None,
         // Populated post-extract by the caller (single.rs / crawl.rs) from
-        // FetchResult.content_type; change_tracking is computed there too.
+        // FetchResult.content_type; change_tracking + screenshot are set there too.
         content_type: None,
         change_tracking: None,
+        screenshot: None,
     })
 }
 

@@ -1339,7 +1339,7 @@ impl CdpRenderer {
             tracing::warn!(error = %e, "pool: release returned error (slot recycled as Dead)");
         }
 
-        let (html, status_code, truncated, final_href, captured_responses, _tid) = res?;
+        let (html, status_code, truncated, final_href, captured_responses, screenshot, _tid) = res?;
 
         if html.is_empty() {
             return Err(CrwError::RendererError(
@@ -1377,6 +1377,7 @@ impl CdpRenderer {
             truncated,
             deadline_exceeded: deadline.remaining().is_zero(),
             captured_responses,
+            screenshot,
         })
     }
 
@@ -1488,7 +1489,15 @@ impl CdpRenderer {
 
         conn.close().await;
 
-        let (html, status_code, truncated, final_href, captured_responses, _tid_ignored) = result?;
+        let (
+            html,
+            status_code,
+            truncated,
+            final_href,
+            captured_responses,
+            screenshot,
+            _tid_ignored,
+        ) = result?;
 
         if html.is_empty() {
             return Err(CrwError::RendererError(
@@ -1528,6 +1537,7 @@ impl CdpRenderer {
             truncated,
             deadline_exceeded: deadline.remaining().is_zero(),
             captured_responses,
+            screenshot,
         })
     }
 
@@ -1840,6 +1850,7 @@ impl CdpRenderer {
         bool,
         Option<String>,
         Vec<CapturedNetworkResponse>,
+        Option<String>,
         String,
     )> {
         // 1. Create a blank target so navigation events can be observed reliably.
@@ -2014,8 +2025,9 @@ impl CdpRenderer {
             // we attempt a partial-DOM snapshot and return `truncated = true`;
             // `single.rs` decides success on md length.
             let phase = self.post_navigate_phase(conn, &session_id, url, wait_for_ms, &net_tracker);
-            let (html, truncated) = match tokio::time::timeout(nav_budget, phase).await {
-                Ok(Ok(html)) => (html, false),
+            let (html, screenshot, truncated) = match tokio::time::timeout(nav_budget, phase).await
+            {
+                Ok(Ok((html, screenshot))) => (html, screenshot, false),
                 Ok(Err(err)) => return Err(err),
                 Err(_) => {
                     tracing::info!(
@@ -2038,10 +2050,11 @@ impl CdpRenderer {
                         .chrome_budget_truncated_total
                         .with_label_values(&[if html.is_empty() { "empty" } else { "ok" }])
                         .inc();
-                    (html, true)
+                    // Best-effort: no screenshot when the budget elapsed.
+                    (html, None, true)
                 }
             };
-            Ok::<_, CrwError>((html, status_code, truncated))
+            Ok::<_, CrwError>((html, status_code, truncated, screenshot))
         };
 
         // Always-on XHR/fetch capture. Cheap when no JSON XHRs fire (events
@@ -2150,7 +2163,7 @@ impl CdpRenderer {
         // it via the recorded target_id; legacy fetch_with_ws closes after
         // fetch_inner returns via its Cell-captured id).
 
-        let (html, status_code, truncated) = outcome?;
+        let (html, status_code, truncated, screenshot) = outcome?;
 
         if html.is_empty() && truncated {
             return Err(CrwError::Timeout(nav_budget.as_millis() as u64));
@@ -2170,6 +2183,7 @@ impl CdpRenderer {
             truncated,
             final_href,
             captured_drained,
+            screenshot,
             target_id,
         ))
     }
@@ -2184,7 +2198,7 @@ impl CdpRenderer {
         url: &str,
         wait_for_ms: Option<u64>,
         net: &NetworkActivityTracker,
-    ) -> CrwResult<String> {
+    ) -> CrwResult<(String, Option<String>)> {
         // 2.5. Best-effort consent / CMP dismissal. Cookie banners can both
         // hide content behind an overlay and inflate `body.innerText` past
         // the SPA-readiness threshold prematurely (the banner copy alone
@@ -2297,7 +2311,39 @@ impl CdpRenderer {
             }
         }
 
-        Ok(html)
+        // 6. Screenshot capture (CDP `Page.captureScreenshot`). Runs after the
+        // full wait/scroll/reveal window so the PNG reflects the final rendered
+        // DOM. Only when a screenshot was requested via the task-local. Keeps
+        // the raw base64 (no decode); `single.rs` wraps the `data:` prefix.
+        // Capture failure is non-fatal — the page content still returns.
+        let screenshot = if let Some(req) = crate::current_screenshot_req() {
+            match conn
+                .send_recv(
+                    "Page.captureScreenshot",
+                    serde_json::json!({
+                        "format": "png",
+                        "captureBeyondViewport": req.full_page,
+                        "fromSurface": true,
+                    }),
+                    Some(session_id),
+                    self.page_timeout,
+                )
+                .await
+            {
+                Ok(resp) => resp
+                    .get("data")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string),
+                Err(e) => {
+                    tracing::warn!(url, "Page.captureScreenshot failed: {e}");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        Ok((html, screenshot))
     }
 }
 

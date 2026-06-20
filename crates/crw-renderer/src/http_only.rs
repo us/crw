@@ -310,6 +310,8 @@ impl PageFetcher for HttpFetcher {
             truncated: false,
             deadline_exceeded: false,
             captured_responses: Vec::new(),
+            // HTTP-only path never renders or captures a screenshot.
+            screenshot: None,
         })
     }
 

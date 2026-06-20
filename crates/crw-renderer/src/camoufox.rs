@@ -307,6 +307,8 @@ impl PageFetcher for CamoufoxRenderer {
             truncated: false,
             deadline_exceeded: deadline.remaining().is_zero(),
             captured_responses: Vec::new(),
+            // Camoufox is an HTTP sidecar (no CDP) — it never captures.
+            screenshot: None,
         })
     }
 
