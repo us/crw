@@ -2095,7 +2095,11 @@ mod tests {
 
         // (3) whitespace-only -> None.
         unsafe { std::env::set_var("CRW_CRAWLER__PROXY", "   ") };
-        assert_eq!(load(), None, "whitespace proxy env should normalize to None");
+        assert_eq!(
+            load(),
+            None,
+            "whitespace proxy env should normalize to None"
+        );
 
         // (4) a real value -> Some (trimmed).
         unsafe { std::env::set_var("CRW_CRAWLER__PROXY", "  http://proxy:8080  ") };
