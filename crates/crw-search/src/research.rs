@@ -27,9 +27,12 @@ use tokio::sync::Semaphore;
 
 const UA: &str = "crw-opencore/0.x (https://fastcrw.com; contact@fastcrw.com) reqwest";
 const TIMEOUT: Duration = Duration::from_secs(20);
-const MAX_CONCURRENCY: usize = 4;
+const MAX_CONCURRENCY: usize = 8;
 const CACHE_TTL: Duration = Duration::from_secs(24 * 3600);
-const CACHE_CAP: u64 = 20_000;
+// Entries hold full OpenAlex/SS JSON responses (~10-50KB each). 20k entries
+// could pin 200MB-1GB and OOM-restart crw-api under research load; 3k keeps the
+// cache useful while bounding it to ~50-150MB. ponytail: cap, not a byte-weigher.
+const CACHE_CAP: u64 = 3_000;
 
 /// Per-call credentials, borrowed from the route's `AppConfig`.
 #[derive(Clone, Copy, Default)]
