@@ -10,6 +10,7 @@
   <url><loc>https://docs.fastcrw.com/installation</loc><priority>0.9</priority><changefreq>monthly</changefreq><lastmod>2026-06-20</lastmod></url>
   <url><loc>https://docs.fastcrw.com/scraping</loc><priority>0.85</priority><changefreq>monthly</changefreq><lastmod>2026-06-20</lastmod></url>
   <url><loc>https://docs.fastcrw.com/search</loc><priority>0.85</priority><changefreq>monthly</changefreq><lastmod>2026-06-20</lastmod></url>
+  <url><loc>https://docs.fastcrw.com/research-api</loc><priority>0.85</priority><changefreq>monthly</changefreq><lastmod>2026-06-20</lastmod></url>
   <url><loc>https://docs.fastcrw.com/map</loc><priority>0.8</priority><changefreq>monthly</changefreq><lastmod>2026-06-20</lastmod></url>
   <url><loc>https://docs.fastcrw.com/crawling</loc><priority>0.8</priority><changefreq>monthly</changefreq><lastmod>2026-06-20</lastmod></url>
   <url><loc>https://docs.fastcrw.com/extract</loc><priority>0.8</priority><changefreq>monthly</changefreq><lastmod>2026-06-20</lastmod></url>
