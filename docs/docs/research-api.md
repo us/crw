@@ -101,6 +101,12 @@ pulling a paper's self-references for "compare-against" questions — lives in t
 **research skill** over these endpoints, the same way Firecrawl splits its
 Research Index endpoints from its research skill.
 
+Install it into your agent (Claude Code, Cursor, Codex, Gemini CLI, …):
+
+```bash
+npx skills add us/crw@crw-research
+```
+
 ## Notes and limits
 
 - **Live, no index.** Recall comes from merging our own SearXNG search (web +
