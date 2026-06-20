@@ -73,6 +73,7 @@ export default {
       children: [
         { title: "Scrape", slug: "scraping", icon: "code" },
         { title: "Search", slug: "search", icon: "search" },
+        { title: "Research API", slug: "research-api", icon: "book-open" },
       ],
     },
     {
