@@ -295,19 +295,17 @@ gateway that rotates IPs for you).</li>
 </ol>
 <h2 id="quick-start-self-host">Quick start (self-host)</h2>
 <p>Add a pool to your <code>config.toml</code> under <code>[crawler]</code>:</p>
-<pre><code class="language-toml">[crawler]
+<pre data-lang="toml"><code class="language-toml">[crawler]
 # Rotate across your own proxies, one per request.
 proxy_list = [
   &quot;http://user:pass@proxy-a.example:8080&quot;,
   &quot;http://user:pass@proxy-b.example:8080&quot;,
   &quot;socks5://user:pass@proxy-c.example:1080&quot;,
 ]
-proxy_rotation = &quot;sticky_per_host&quot;   # default
-</code></pre>
+proxy_rotation = &quot;sticky_per_host&quot;   # default</code></pre>
 <p>Or via environment variables (handy for Docker):</p>
-<pre><code class="language-bash">CRW_CRAWLER__PROXY_LIST=&quot;http://user:pass@a:8080,http://user:pass@b:8080&quot;
-CRW_CRAWLER__PROXY_ROTATION=&quot;sticky_per_host&quot;
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">CRW_CRAWLER__PROXY_LIST=&quot;http://user:pass@a:8080,http://user:pass@b:8080&quot;
+CRW_CRAWLER__PROXY_ROTATION=&quot;sticky_per_host&quot;</code></pre>
 <p><code>CRW_CRAWLER__PROXY_LIST</code> accepts a comma-separated list, a JSON array string, or
 a TOML array in the config file.</p>
 <p>That&#39;s it — every scrape/crawl/map now egresses through the pool.</p>
@@ -340,34 +338,31 @@ a TOML array in the config file.</p>
 <h2 id="per-request-bring-your-own-proxy">Per-request (bring your own proxy)</h2>
 <p>Any scrape/crawl request can carry its own pool, which <strong>takes precedence</strong> over
 the server config. Supported on <code>/v1</code> and <code>/v2</code> (camelCase or snake_case):</p>
-<pre><code class="language-bash">curl -X POST https://your-host/v1/scrape \
+<pre data-lang="bash"><code class="language-bash">curl -X POST https://your-host/v1/scrape \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
+  -d '{
     &quot;url&quot;: &quot;https://example.com&quot;,
     &quot;proxy_list&quot;: [
       &quot;http://user:pass@a.example:8080&quot;,
       &quot;http://user:pass@b.example:8080&quot;
     ],
     &quot;proxy_rotation&quot;: &quot;round_robin&quot;
-  }&#39;
-</code></pre>
-<pre><code class="language-python">from firecrawl import FirecrawlApp
+  }'</code></pre>
+<pre data-lang="python"><code class="language-python">from firecrawl import FirecrawlApp
 app = FirecrawlApp(api_url=&quot;https://your-host&quot;)
 app.scrape_url(&quot;https://example.com&quot;, params={
     &quot;proxyList&quot;: [&quot;http://a:8080&quot;, &quot;http://b:8080&quot;],
     &quot;proxyRotation&quot;: &quot;sticky_per_host&quot;,
-})
-</code></pre>
+})</code></pre>
 <p>Precedence: <strong>per-request <code>proxy_list</code> › per-request <code>proxy</code> › config <code>proxy_list</code>
 › config <code>proxy</code> › none.</strong></p>
 <h2 id="single-proxy">Single proxy</h2>
 <p>If you only have one endpoint (e.g. a provider&#39;s rotating-gateway URL that rotates
 IPs on their side), use the single <code>proxy</code> field:</p>
-<pre><code class="language-toml">[crawler]
+<pre data-lang="toml"><code class="language-toml">[crawler]
 # Most residential providers give you ONE gateway URL that auto-rotates per request.
 proxy = &quot;http://user:pass@gate.smartproxy.com:7000&quot;
-# proxy = &quot;socks5://user:pass@proxy:1080&quot;
-</code></pre>
+# proxy = &quot;socks5://user:pass@proxy:1080&quot;</code></pre>
 <h2 id="coverage">Coverage</h2>
 <table>
 <thead>
@@ -429,9 +424,8 @@ Proxied requests carry a small credit surcharge (bandwidth cost). See
 <h2 id="verify-it-works">Verify it works</h2>
 <p>A ready-made end-to-end check (two local logging proxies + assertions for HTTP
 rotation, JS-path egress, and leak-safety) ships with the repo:</p>
-<pre><code class="language-bash">./scripts/verify-proxy-rotation.sh
-WITH_CHROME=1 ./scripts/verify-proxy-rotation.sh   # also exercises the JS path
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">./scripts/verify-proxy-rotation.sh
+WITH_CHROME=1 ./scripts/verify-proxy-rotation.sh   # also exercises the JS path</code></pre>
 </article>
     </main>
 

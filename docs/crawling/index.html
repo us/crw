@@ -305,10 +305,9 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
   </div>
 </div><h2 id="crawling-a-site-with-crw">Crawling a site with CRW</h2>
 <h3 id="v1crawl">/v1/crawl</h3>
-<pre><code class="language-http">POST /v1/crawl
+<pre data-lang="http"><code class="language-http">POST /v1/crawl
 GET /v1/crawl/{id}
-DELETE /v1/crawl/{id}
-</code></pre>
+DELETE /v1/crawl/{id}</code></pre>
 <p>Authentication:</p>
 <ul>
 <li>Hosted: send <code>Authorization: Bearer YOUR_API_KEY</code></li>
@@ -318,17 +317,16 @@ DELETE /v1/crawl/{id}
 <p>CRW crawl is also plain HTTP. You start the job with one request and check its status with another.</p>
 <h3 id="basic-usage">Basic usage</h3>
 <p>Start with this request:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;url&quot;: &quot;https://docs.example.com&quot;,
   &quot;maxDepth&quot;: 1,
   &quot;maxPages&quot;: 5,
   &quot;formats&quot;: [&quot;markdown&quot;],
   &quot;onlyMainContent&quot;: true
-}
-</code></pre>
-<p>:::tabs
-::tab{title=&quot;Python&quot;}</p>
-<pre><code class="language-python">import requests
+}</code></pre>
+<div class="code-tabs">
+      <div class="code-tabs-header"><button class="code-tab active" data-tab="0">Python</button><button class="code-tab" data-tab="1">Node.js</button><button class="code-tab" data-tab="2">cURL</button></div>
+      <div class="code-tab-panel active" data-panel="0"><pre data-lang="python"><code class="language-python">import requests
 import time
 
 start = requests.post(
@@ -349,10 +347,7 @@ status = requests.get(
     headers={&quot;Authorization&quot;: &quot;Bearer YOUR_API_KEY&quot;},
 )
 
-print(status.json()[&quot;status&quot;])
-</code></pre>
-<p>::tab{title=&quot;Node.js&quot;}</p>
-<pre><code class="language-javascript">const start = await fetch(&quot;https://api.fastcrw.com/v1/crawl&quot;, {
+print(status.json()[&quot;status&quot;])</code></pre></div><div class="code-tab-panel" data-panel="1"><pre data-lang="javascript"><code class="language-javascript">const start = await fetch(&quot;https://api.fastcrw.com/v1/crawl&quot;, {
   method: &quot;POST&quot;,
   headers: {
     &quot;Authorization&quot;: &quot;Bearer YOUR_API_KEY&quot;,
@@ -373,36 +368,29 @@ const status = await fetch(`https://api.fastcrw.com/v1/crawl/${id}`, {
   headers: { &quot;Authorization&quot;: &quot;Bearer YOUR_API_KEY&quot; }
 });
 
-console.log((await status.json()).status);
-</code></pre>
-<p>::tab{title=&quot;cURL&quot;}</p>
-<pre><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/crawl \
+console.log((await status.json()).status);</code></pre></div><div class="code-tab-panel" data-panel="2"><pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/crawl \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
+  -d '{
     &quot;url&quot;: &quot;https://docs.example.com&quot;,
     &quot;maxDepth&quot;: 1,
     &quot;maxPages&quot;: 5,
     &quot;formats&quot;: [&quot;markdown&quot;]
-  }&#39;
-</code></pre>
-<p>:::</p>
-<h3 id="response">Response</h3>
+  }'</code></pre></div>
+    </div><h3 id="response">Response</h3>
 <p>Start response:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;id&quot;: &quot;550e8400-e29b-41d4-a716-446655440000&quot;
-}
-</code></pre>
+}</code></pre>
 <p>Poll response:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;status&quot;: &quot;scraping&quot;,
   &quot;total&quot;: 5,
   &quot;completed&quot;: 2,
   &quot;data&quot;: []
-}
-</code></pre>
+}</code></pre>
 <h2 id="parameters">Parameters</h2>
 <table>
 <thead>
@@ -496,11 +484,10 @@ console.log((await status.json()).status);
 <p>If you need to debug one problematic page, go back to <a href="/scraping">Scrape</a> and validate that page in isolation first.</p>
 <h2 id="checking-job-status">Checking job status</h2>
 <p>Poll the crawl ID until you reach <code>completed</code> or <code>failed</code>:</p>
-<pre><code class="language-bash">curl -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
-  https://api.fastcrw.com/v1/crawl/CRAWL_ID
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">curl -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
+  https://api.fastcrw.com/v1/crawl/CRAWL_ID</code></pre>
 <p>Status response shape:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;status&quot;: &quot;scraping | completed | failed&quot;,
   &quot;total&quot;: 12,
@@ -514,12 +501,10 @@ console.log((await status.json()).status);
     }
   ],
   &quot;error&quot;: &quot;optional error&quot;
-}
-</code></pre>
+}</code></pre>
 <h2 id="cancellation-and-limits">Cancellation and limits</h2>
 <p>Cancel a running job with:</p>
-<pre><code class="language-http">DELETE /v1/crawl/{id}
-</code></pre>
+<pre data-lang="http"><code class="language-http">DELETE /v1/crawl/{id}</code></pre>
 <p>CRW crawl stays within the same origin and should be treated as a bounded, respectful site job, not an open-ended spider.</p>
 <h2 id="common-production-patterns">Common production patterns</h2>
 <ul>

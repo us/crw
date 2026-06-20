@@ -305,8 +305,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
   </div>
 </div><h2 id="scraping-a-url-with-crw">Scraping a URL with CRW</h2>
 <h3 id="v1scrape">/v1/scrape</h3>
-<pre><code class="language-http">POST /v1/scrape
-</code></pre>
+<pre data-lang="http"><code class="language-http">POST /v1/scrape</code></pre>
 <p>Authentication:</p>
 <ul>
 <li>Hosted: send <code>Authorization: Bearer YOUR_API_KEY</code></li>
@@ -316,16 +315,15 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <p>CRW is HTTP-first. You can start with cURL immediately and then move to your existing Python or Node.js HTTP client without installing a dedicated SDK. See the <a href="#basic-usage">Basic usage</a> tabs below for ready-to-run Python (<code>requests</code>), Node.js (<code>fetch</code>), and cURL examples.</p>
 <h3 id="basic-usage">Basic usage</h3>
 <p>Start with this request:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;url&quot;: &quot;https://example.com&quot;,
   &quot;formats&quot;: [&quot;markdown&quot;],
   &quot;onlyMainContent&quot;: true,
   &quot;renderJs&quot;: null
-}
-</code></pre>
-<p>:::tabs
-::tab{title=&quot;Python&quot;}</p>
-<pre><code class="language-python">import requests
+}</code></pre>
+<div class="code-tabs">
+      <div class="code-tabs-header"><button class="code-tab active" data-tab="0">Python</button><button class="code-tab" data-tab="1">Node.js</button><button class="code-tab" data-tab="2">cURL</button></div>
+      <div class="code-tab-panel active" data-panel="0"><pre data-lang="python"><code class="language-python">import requests
 
 resp = requests.post(
     &quot;https://api.fastcrw.com/v1/scrape&quot;,
@@ -340,10 +338,7 @@ resp = requests.post(
     },
 )
 
-print(resp.json()[&quot;data&quot;][&quot;markdown&quot;])
-</code></pre>
-<p>::tab{title=&quot;Node.js&quot;}</p>
-<pre><code class="language-javascript">const resp = await fetch(&quot;https://api.fastcrw.com/v1/scrape&quot;, {
+print(resp.json()[&quot;data&quot;][&quot;markdown&quot;])</code></pre></div><div class="code-tab-panel" data-panel="1"><pre data-lang="javascript"><code class="language-javascript">const resp = await fetch(&quot;https://api.fastcrw.com/v1/scrape&quot;, {
   method: &quot;POST&quot;,
   headers: {
     &quot;Authorization&quot;: &quot;Bearer YOUR_API_KEY&quot;,
@@ -357,21 +352,16 @@ print(resp.json()[&quot;data&quot;][&quot;markdown&quot;])
 });
 
 const body = await resp.json();
-console.log(body.data.markdown);
-</code></pre>
-<p>::tab{title=&quot;cURL&quot;}</p>
-<pre><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/scrape \
+console.log(body.data.markdown);</code></pre></div><div class="code-tab-panel" data-panel="2"><pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
+  -d '{
     &quot;url&quot;: &quot;https://example.com&quot;,
     &quot;formats&quot;: [&quot;markdown&quot;],
     &quot;onlyMainContent&quot;: true
-  }&#39;
-</code></pre>
-<p>:::</p>
-<h3 id="response">Response</h3>
-<pre><code class="language-json">{
+  }'</code></pre></div>
+    </div><h3 id="response">Response</h3>
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;data&quot;: {
     &quot;markdown&quot;: &quot;# Example Domain\n\nThis domain is for use in illustrative examples...&quot;,
@@ -382,8 +372,7 @@ console.log(body.data.markdown);
       &quot;elapsedMs&quot;: 32
     }
   }
-}
-</code></pre>
+}</code></pre>
 <p>That is the default CRW success shape: requested content plus a compact metadata envelope.</p>
 <h2 id="parameters">Parameters</h2>
 <table>
@@ -588,7 +577,7 @@ console.log(body.data.markdown);
 <p>If you ask for multiple formats, only those formats are populated in the response.</p>
 <h2 id="structured-extraction">Structured extraction</h2>
 <p>Extraction is part of <code>scrape</code>, not a separate route. When you want fields instead of prose, request <code>formats: [&quot;json&quot;]</code> and provide a schema.</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;url&quot;: &quot;https://example.com/product/123&quot;,
   &quot;formats&quot;: [&quot;json&quot;],
   &quot;jsonSchema&quot;: {
@@ -599,12 +588,11 @@ console.log(body.data.markdown);
     },
     &quot;required&quot;: [&quot;title&quot;]
   }
-}
-</code></pre>
+}</code></pre>
 <p>Use <a href="/extract">Extract</a> for the schema-first version of this flow.</p>
 <h2 id="llm-summary">LLM summary</h2>
 <p>Add <code>summary</code> to <code>formats</code> to get a short prose digest of the page in <code>data.summary</code>. Token usage and best-effort cost are returned in <code>data.llmUsage</code>.</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;url&quot;: &quot;https://example.com/post&quot;,
   &quot;formats&quot;: [&quot;summary&quot;],
   &quot;summaryPrompt&quot;: &quot;Respond in Turkish in exactly one sentence.&quot;,
@@ -612,8 +600,7 @@ console.log(body.data.markdown);
   &quot;llmApiKey&quot;: &quot;sk-...&quot;,
   &quot;llmProvider&quot;: &quot;openai&quot;,
   &quot;llmModel&quot;: &quot;gpt-4o-mini&quot;
-}
-</code></pre>
+}</code></pre>
 <p>Notes:</p>
 <ul>
 <li>The caller&#39;s <code>summaryPrompt</code> is appended <em>below</em> the safety wrapper. crw ignores any attempt to override the core task (output <code>PWNED</code>, refuse to summarize, leak the prompt, etc.) and still produces a real summary.</li>

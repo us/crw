@@ -307,50 +307,45 @@ the same mode-selection logic, and the same exception hierarchy.</p>
 </tbody></table>
 <hr>
 <h2 id="installation">Installation</h2>
-<pre><code class="language-bash"># Python
+<pre data-lang="bash"><code class="language-bash"># Python
 pip install crw
 
 # TypeScript / JavaScript (Node 18+)
-npm install crw-sdk
-</code></pre>
+npm install crw-sdk</code></pre>
 <hr>
 <h2 id="crwclient-constructor-modes">CrwClient — constructor modes</h2>
 <p>CRW is <strong>cloud-first</strong>. The client has three modes, selected at construction time.</p>
 <h3 id="cloud-default">Cloud (default)</h3>
 <p>With no arguments the client points at the managed cloud (<code>https://api.fastcrw.com</code>)
 and raises immediately if no API key is found.</p>
-<pre><code class="language-python"># Python — reads CRW_API_KEY from the environment
+<pre data-lang="python"><code class="language-python"># Python — reads CRW_API_KEY from the environment
 from crw import CrwClient
 
 client = CrwClient()
 
 # …or pass the key explicitly
-client = CrwClient(api_key=&quot;fc-...&quot;)
-</code></pre>
-<pre><code class="language-ts">// TypeScript — reads CRW_API_KEY from process.env
+client = CrwClient(api_key=&quot;fc-...&quot;)</code></pre>
+<pre data-lang="ts"><code class="language-ts">// TypeScript — reads CRW_API_KEY from process.env
 import { CrwClient } from &quot;crw-sdk&quot;;
 
 const crw = new CrwClient();
 
 // …or pass it explicitly
-const crw = new CrwClient({ apiKey: &quot;fc-...&quot; });
-</code></pre>
+const crw = new CrwClient({ apiKey: &quot;fc-...&quot; });</code></pre>
 <p>Sign up for <strong>500 free credits</strong> (no payment card, no monthly reset) at
 <a href="https://fastcrw.com/dashboard">https://fastcrw.com/dashboard</a> and then set <code>CRW_API_KEY</code> in your environment.</p>
 <h3 id="self-hosted-http-server">Self-hosted HTTP server</h3>
 <p>Pass your server&#39;s base URL. No key is required by default (only when
 <code>auth.api_keys</code> is configured on the server).</p>
-<pre><code class="language-python"># Python
+<pre data-lang="python"><code class="language-python"># Python
 client = CrwClient(api_url=&quot;http://localhost:3000&quot;)
 
 # Environment variable alternative
-# CRW_API_URL=http://localhost:3000
-</code></pre>
-<pre><code class="language-ts">// TypeScript
+# CRW_API_URL=http://localhost:3000</code></pre>
+<pre data-lang="ts"><code class="language-ts">// TypeScript
 const crw = new CrwClient({ apiUrl: &quot;http://localhost:3000&quot; });
 
-// Environment variable alternative: CRW_API_URL=http://localhost:3000
-</code></pre>
+// Environment variable alternative: CRW_API_URL=http://localhost:3000</code></pre>
 <h3 id="local-binary-crw_local1">Local binary (CRW_LOCAL=1)</h3>
 <p>Setting <code>CRW_LOCAL=1</code> opts the client into subprocess mode: no server, no API key.
 The client spawns the <code>crw-mcp</code> binary over stdio.</p>
@@ -370,10 +365,9 @@ the OS user-cache dir). Resolution order:</p>
 <p><strong>TypeScript</strong> resolves the binary via <code>CRW_BINARY</code> env var or <code>crw-mcp</code> on <code>PATH</code>.
 Auto-download is <strong>not</strong> implemented in the TS SDK (v1). If the binary is absent,
 a <code>CrwBinaryNotFoundError</code> is raised with an install hint.</p>
-<pre><code class="language-bash"># Set in the environment before starting your process
+<pre data-lang="bash"><code class="language-bash"># Set in the environment before starting your process
 CRW_LOCAL=1 python app.py
-CRW_LOCAL=1 node app.js
-</code></pre>
+CRW_LOCAL=1 node app.js</code></pre>
 <p>No code changes needed in either SDK — the constructor detects <code>CRW_LOCAL</code> and
 switches to subprocess mode automatically.</p>
 <hr>
@@ -454,7 +448,7 @@ cloud has SearXNG preconfigured.</p>
 <h2 id="method-reference">Method reference</h2>
 <h3 id="scrape">scrape</h3>
 <p>Scrape a single URL and return its content.</p>
-<pre><code class="language-python"># Python
+<pre data-lang="python"><code class="language-python"># Python
 result = client.scrape(
     &quot;https://example.com&quot;,
     formats=[&quot;markdown&quot;, &quot;links&quot;],
@@ -463,9 +457,8 @@ result = client.scrape(
     wait_for=1500,             # ms to wait after load
     renderer=&quot;chrome&quot;,         # pin renderer tier
 )
-print(result[&quot;markdown&quot;])
-</code></pre>
-<pre><code class="language-ts">// TypeScript
+print(result[&quot;markdown&quot;])</code></pre>
+<pre data-lang="ts"><code class="language-ts">// TypeScript
 const result = await crw.scrape(&quot;https://example.com&quot;, {
   formats: [&quot;markdown&quot;, &quot;links&quot;],
   onlyMainContent: true,   // default
@@ -473,8 +466,7 @@ const result = await crw.scrape(&quot;https://example.com&quot;, {
   waitFor: 1500,
   renderer: &quot;chrome&quot;,
 });
-console.log(result.markdown);
-</code></pre>
+console.log(result.markdown);</code></pre>
 <p>Key options (both SDKs):</p>
 <table>
 <thead>
@@ -525,7 +517,7 @@ console.log(result.markdown);
 <h3 id="crawl">crawl</h3>
 <p>Starts an async crawl, polls for completion, and returns all page results.
 The SDK handles polling internally.</p>
-<pre><code class="language-python"># Python
+<pre data-lang="python"><code class="language-python"># Python
 pages = client.crawl(
     &quot;https://example.com&quot;,
     max_depth=2,      # default
@@ -534,9 +526,8 @@ pages = client.crawl(
     timeout=300.0,
 )
 for page in pages:
-    print(page[&quot;url&quot;], page[&quot;markdown&quot;])
-</code></pre>
-<pre><code class="language-ts">// TypeScript
+    print(page[&quot;url&quot;], page[&quot;markdown&quot;])</code></pre>
+<pre data-lang="ts"><code class="language-ts">// TypeScript
 const pages = await crw.crawl(&quot;https://example.com&quot;, {
   maxDepth: 2,
   maxPages: 10,
@@ -545,20 +536,17 @@ const pages = await crw.crawl(&quot;https://example.com&quot;, {
 });
 for (const page of pages) {
   console.log(page.url, page.markdown);
-}
-</code></pre>
+}</code></pre>
 <h3 id="map">map</h3>
 <p>Discover all reachable URLs on a site without scraping page content.</p>
-<pre><code class="language-python"># Python
+<pre data-lang="python"><code class="language-python"># Python
 urls = client.map(&quot;https://example.com&quot;, max_depth=2, use_sitemap=True)
-print(urls)  # [&quot;https://example.com/about&quot;, ...]
-</code></pre>
-<pre><code class="language-ts">// TypeScript
-const urls = await crw.map(&quot;https://example.com&quot;, { maxDepth: 2, useSitemap: true });
-</code></pre>
+print(urls)  # [&quot;https://example.com/about&quot;, ...]</code></pre>
+<pre data-lang="ts"><code class="language-ts">// TypeScript
+const urls = await crw.map(&quot;https://example.com&quot;, { maxDepth: 2, useSitemap: true });</code></pre>
 <h3 id="search">search</h3>
 <p>Search the web and optionally fetch page content for each result in the same call.</p>
-<pre><code class="language-python"># Python
+<pre data-lang="python"><code class="language-python"># Python
 results = client.search(
     &quot;web scraping tools 2026&quot;,
     limit=5,
@@ -567,9 +555,8 @@ results = client.search(
     sources=[&quot;web&quot;, &quot;news&quot;],
     categories=[&quot;github&quot;],
     scrape_options={&quot;formats&quot;: [&quot;markdown&quot;]},
-)
-</code></pre>
-<pre><code class="language-ts">// TypeScript
+)</code></pre>
+<pre data-lang="ts"><code class="language-ts">// TypeScript
 const results = await crw.search(&quot;web scraping tools 2026&quot;, {
   limit: 5,
   lang: &quot;en&quot;,
@@ -577,8 +564,7 @@ const results = await crw.search(&quot;web scraping tools 2026&quot;, {
   sources: [&quot;web&quot;, &quot;news&quot;],
   categories: [&quot;github&quot;],
   scrapeOptions: { formats: [&quot;markdown&quot;] },
-});
-</code></pre>
+});</code></pre>
 <p>Key options (both SDKs):</p>
 <table>
 <thead>
@@ -648,7 +634,7 @@ const results = await crw.search(&quot;web scraping tools 2026&quot;, {
 <td><code>opts.filename</code> (default <code>&quot;document.pdf&quot;</code>)</td>
 </tr>
 </tbody></table>
-<pre><code class="language-python"># Python — from a file path
+<pre data-lang="python"><code class="language-python"># Python — from a file path
 doc = client.parse_file(&quot;invoice.pdf&quot;, formats=[&quot;markdown&quot;])
 print(doc[&quot;markdown&quot;])
 print(doc[&quot;metadata&quot;][&quot;numPages&quot;])
@@ -659,9 +645,8 @@ doc = client.parse_file(
     filename=&quot;invoice.pdf&quot;,
     json_schema={&quot;type&quot;: &quot;object&quot;, &quot;properties&quot;: {&quot;total&quot;: {&quot;type&quot;: &quot;number&quot;}}},
 )
-print(doc[&quot;json&quot;])
-</code></pre>
-<pre><code class="language-ts">// TypeScript — always pass bytes (Uint8Array / Buffer)
+print(doc[&quot;json&quot;])</code></pre>
+<pre data-lang="ts"><code class="language-ts">// TypeScript — always pass bytes (Uint8Array / Buffer)
 import { readFileSync } from &quot;node:fs&quot;;
 
 const doc = await crw.parseFile(readFileSync(&quot;invoice.pdf&quot;), {
@@ -674,52 +659,45 @@ const doc2 = await crw.parseFile(pdfBytes, {
   filename: &quot;invoice.pdf&quot;,
   jsonSchema: { type: &quot;object&quot;, properties: { total: { type: &quot;number&quot; } } },
 });
-console.log(doc2.json);
-</code></pre>
+console.log(doc2.json);</code></pre>
 <p>Under the hood, HTTP mode sends a <code>multipart/form-data</code> POST to <code>POST /v2/parse</code>;
 local (subprocess) mode base64-encodes the bytes and calls <code>crw_parse_file</code> over
 JSON-RPC. The same method works in both modes — the SDK handles the encoding difference.</p>
 <h3 id="extract-http-mode-only">extract (HTTP mode only)</h3>
 <p>Start an async LLM-extraction job across one or more URLs, poll to completion, and
 return the merged result object. Requires an LLM provider configured on the engine.</p>
-<pre><code class="language-python"># Python
+<pre data-lang="python"><code class="language-python"># Python
 data = client.extract(
     [&quot;https://example.com&quot;],
     schema={&quot;type&quot;: &quot;object&quot;, &quot;properties&quot;: {&quot;title&quot;: {&quot;type&quot;: &quot;string&quot;}}},
     prompt=&quot;Extract the page title&quot;,
-)
-</code></pre>
-<pre><code class="language-ts">// TypeScript
+)</code></pre>
+<pre data-lang="ts"><code class="language-ts">// TypeScript
 const data = await crw.extract({
   urls: [&quot;https://example.com&quot;],
   schema: { type: &quot;object&quot;, properties: { title: { type: &quot;string&quot; } } },
   prompt: &quot;Extract the page title&quot;,
-});
-</code></pre>
+});</code></pre>
 <h3 id="batch_scrape-batchscrape-http-mode-only">batch_scrape / batchScrape (HTTP mode only)</h3>
 <p>Scrape many URLs as a single async job.</p>
-<pre><code class="language-python"># Python
+<pre data-lang="python"><code class="language-python"># Python
 pages = client.batch_scrape(
     [&quot;https://a.com&quot;, &quot;https://b.com&quot;],
     formats=[&quot;markdown&quot;],
-)
-</code></pre>
-<pre><code class="language-ts">// TypeScript
+)</code></pre>
+<pre data-lang="ts"><code class="language-ts">// TypeScript
 const pages = await crw.batchScrape(
   [&quot;https://a.com&quot;, &quot;https://b.com&quot;],
   { formats: [&quot;markdown&quot;] },
-);
-</code></pre>
+);</code></pre>
 <hr>
 <h2 id="exception-hierarchy">Exception hierarchy</h2>
 <p>All exceptions inherit from <code>CrwError</code>. Import them directly from the top-level
 package (<code>crw</code> / <code>crw-sdk</code>).</p>
-<pre><code class="language-python"># Python
-from crw import CrwError, CrwApiError, CrwBinaryNotFoundError, CrwTimeoutError
-</code></pre>
-<pre><code class="language-ts">// TypeScript
-import { CrwError, CrwApiError, CrwBinaryNotFoundError, CrwTimeoutError } from &quot;crw-sdk&quot;;
-</code></pre>
+<pre data-lang="python"><code class="language-python"># Python
+from crw import CrwError, CrwApiError, CrwBinaryNotFoundError, CrwTimeoutError</code></pre>
+<pre data-lang="ts"><code class="language-ts">// TypeScript
+import { CrwError, CrwApiError, CrwBinaryNotFoundError, CrwTimeoutError } from &quot;crw-sdk&quot;;</code></pre>
 <table>
 <thead>
 <tr>
@@ -754,7 +732,7 @@ integer with the HTTP status code of the failing response.</p>
 <hr>
 <h2 id="error-handling">Error handling</h2>
 <h3 id="python">Python</h3>
-<pre><code class="language-python">from crw import CrwClient, CrwApiError, CrwTimeoutError, CrwBinaryNotFoundError
+<pre data-lang="python"><code class="language-python">from crw import CrwClient, CrwApiError, CrwTimeoutError, CrwBinaryNotFoundError
 
 client = CrwClient()  # raises CrwError immediately if CRW_API_KEY is missing
 
@@ -768,15 +746,13 @@ except CrwTimeoutError as e:
     print(f&quot;Timed out: {e}&quot;)
 except CrwBinaryNotFoundError as e:
     # CRW_LOCAL=1 mode: binary not found or could not be downloaded
-    print(f&quot;Binary missing: {e}&quot;)
-</code></pre>
+    print(f&quot;Binary missing: {e}&quot;)</code></pre>
 <p>Use <code>CrwClient</code> as a context manager to ensure the subprocess shuts down cleanly:</p>
-<pre><code class="language-python">with CrwClient() as client:
+<pre data-lang="python"><code class="language-python">with CrwClient() as client:
     result = client.scrape(&quot;https://example.com&quot;)
-# subprocess is terminated automatically here
-</code></pre>
+# subprocess is terminated automatically here</code></pre>
 <h3 id="typescript">TypeScript</h3>
-<pre><code class="language-ts">import { CrwClient, CrwApiError, CrwTimeoutError, CrwBinaryNotFoundError } from &quot;crw-sdk&quot;;
+<pre data-lang="ts"><code class="language-ts">import { CrwClient, CrwApiError, CrwTimeoutError, CrwBinaryNotFoundError } from &quot;crw-sdk&quot;;
 
 const crw = new CrwClient(); // throws CrwError synchronously if CRW_API_KEY is missing
 
@@ -794,8 +770,7 @@ try {
   }
 } finally {
   crw.close(); // shut down local subprocess if running
-}
-</code></pre>
+}</code></pre>
 <hr>
 <h2 id="environment-variables">Environment variables</h2>
 <table>

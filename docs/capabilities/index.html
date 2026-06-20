@@ -285,12 +285,11 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
       <article id="article" role="main"><h1 id="capabilities">Capabilities</h1>
 <p><code>GET /v1/capabilities</code> returns a JSON snapshot of what the running instance supports. Clients and agents can call it on startup to adapt their behavior — instead of guessing what a self-hosted deployment has configured, ask.</p>
 <h2 id="request">Request</h2>
-<pre><code class="language-http">GET https://api.fastcrw.com/v1/capabilities
-Authorization: Bearer YOUR_API_KEY
-</code></pre>
+<pre data-lang="http"><code class="language-http">GET https://api.fastcrw.com/v1/capabilities
+Authorization: Bearer YOUR_API_KEY</code></pre>
 <p>No request body. No query parameters.</p>
 <h2 id="response-shape">Response Shape</h2>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;version&quot;: &quot;0.16.0&quot;,
   &quot;llm&quot;: {
     &quot;providers&quot;: [&quot;anthropic&quot;, &quot;openai&quot;, &quot;deepseek&quot;, &quot;openai-compatible&quot;, &quot;azure&quot;],
@@ -319,8 +318,7 @@ Authorization: Bearer YOUR_API_KEY
       &quot;ocr&quot;: false
     }
   }
-}
-</code></pre>
+}</code></pre>
 <p>All keys use camelCase.</p>
 <h2 id="fields">Fields</h2>
 <h3 id="version"><code>version</code></h3>
@@ -400,10 +398,7 @@ Authorization: Bearer YOUR_API_KEY
 <td>Whether per-result summaries are available on the search endpoint.</td>
 </tr>
 </tbody></table>
-<p>:::note
-The <code>search</code> object does not expose whether a SearXNG backend is reachable. A live search configuration check happens at request time — if SearXNG is missing, the <code>/v1/search</code> endpoint returns HTTP 503 with <code>error_code: &quot;search_disabled&quot;</code>.
-:::</p>
-<h3 id="documents"><code>documents</code></h3>
+<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">The `search` object does not expose whether a SearXNG backend is reachable. A live search configuration check happens at request time — if SearXNG is missing, the `/v1/search` endpoint returns HTTP 503 with `error_code: "search_disabled"`.</div></div><h3 id="documents"><code>documents</code></h3>
 <table>
 <thead>
 <tr>
@@ -461,7 +456,7 @@ The <code>search</code> object does not expose whether a SearXNG backend is reac
 <li>decide whether to offer file-upload UI or API paths (check <code>documents.fileUpload.supported</code>)</li>
 <li>confirm whether <code>changeTracking</code> is available before using monitor scrapes (check <code>formats.supported</code> contains <code>&quot;changeTracking&quot;</code>)</li>
 </ul>
-<pre><code class="language-python">import httpx
+<pre data-lang="python"><code class="language-python">import httpx
 
 caps = httpx.get(
     &quot;https://api.fastcrw.com/v1/capabilities&quot;,
@@ -473,8 +468,7 @@ if caps[&quot;llm&quot;][&quot;serverKeyConfigured&quot;]:
 else:
     llm_key_in_body = &quot;sk-...&quot;      # caller must supply BYOK
 
-pdf_ok = caps[&quot;documents&quot;][&quot;fileUpload&quot;][&quot;supported&quot;]
-</code></pre>
+pdf_ok = caps[&quot;documents&quot;][&quot;fileUpload&quot;][&quot;supported&quot;]</code></pre>
 <h3 id="self-hosted-instances">Self-Hosted Instances</h3>
 <p>Self-hosted deployments differ from the hosted API in several ways a caller cannot predict without checking:</p>
 <ul>

@@ -286,16 +286,14 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <p>Extract a full product catalog — name, price, SKU, availability, image URL — from
 any e-commerce category page into a clean JSON list.</p>
 <p><strong>Pipeline:</strong></p>
-<pre><code>category page  →  map product URLs  →  batch scrape with jsonSchema  →  aggregate JSON list
-</code></pre>
+<pre><code>category page  →  map product URLs  →  batch scrape with jsonSchema  →  aggregate JSON list</code></pre>
 <p><strong>Target site used in this recipe:</strong> <code>https://books.toscrape.com/catalogue/category/books/mystery_3/</code>
 — a public scraping sandbox with no auth, real pagination, and consistent product structure.</p>
 <p><strong>Prerequisites:</strong></p>
-<pre><code class="language-bash">pip install crw
+<pre data-lang="bash"><code class="language-bash">pip install crw
 export CRW_API_KEY=&quot;crw-...&quot;
 # Also requires an LLM provider configured on the engine (or pass llmApiKey per request).
-# The managed cloud (api.fastcrw.com) has one preconfigured.
-</code></pre>
+# The managed cloud (api.fastcrw.com) has one preconfigured.</code></pre>
 <hr>
 <h2 id="how-extraction-works">How extraction works</h2>
 <p>Structured extraction in CRW is a scrape mode, not a separate route.
@@ -307,17 +305,16 @@ LLM with your schema, and returns validated JSON in <code>data.json</code>.</p>
   &quot;url&quot;: &quot;...&quot;,
   &quot;formats&quot;: [&quot;json&quot;],
   &quot;jsonSchema&quot;: { &lt;your JSON Schema&gt; }
-}
-</code></pre>
+}</code></pre>
 <p>The <code>jsonSchema</code> field uses standard JSON Schema (<code>type</code>, <code>properties</code>, <code>required</code>,
 <code>items</code>). You do not need to name every field on the page — only the ones you want back.</p>
 <hr>
 <h2 id="step-1-map-the-category-page-to-product-urls">Step 1: Map the category page to product URLs</h2>
 <p>Use <code>/v1/map</code> to collect all product URLs from the category page before scraping
 any of them. This is faster and cheaper than crawling blind.</p>
-<p>:::tabs
-::tab{title=&quot;Python&quot;}</p>
-<pre><code class="language-python">import os
+<div class="code-tabs">
+      <div class="code-tabs-header"><button class="code-tab active" data-tab="0">Python</button><button class="code-tab" data-tab="1">cURL</button></div>
+      <div class="code-tab-panel active" data-panel="0"><pre data-lang="python"><code class="language-python">import os
 from crw import CrwClient
 
 client = CrwClient(api_key=os.environ[&quot;CRW_API_KEY&quot;])
@@ -325,7 +322,7 @@ client = CrwClient(api_key=os.environ[&quot;CRW_API_KEY&quot;])
 # Discover all URLs linked from the category page
 all_urls = client.map(
     &quot;https://books.toscrape.com/catalogue/category/books/mystery_3/&quot;,
-    max_depth=1,        # stay on this category; don&#39;t follow the whole site
+    max_depth=1,        # stay on this category; don't follow the whole site
     use_sitemap=False,  # no sitemap for this sandbox — BFS only
 )
 
@@ -335,38 +332,32 @@ product_urls = [
     if &quot;/catalogue/&quot; in u and &quot;/category/&quot; not in u
 ]
 print(f&quot;Found {len(product_urls)} product URLs&quot;)
-# Found 18 product URLs
-</code></pre>
-<p>::</p>
-<p>::tab{title=&quot;cURL&quot;}</p>
-<pre><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v1/map \
+# Found 18 product URLs</code></pre><p>::</div><div class="code-tab-panel" data-panel="1"><pre data-lang="bash"><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v1/map \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
+  -d '{
     &quot;url&quot;: &quot;https://books.toscrape.com/catalogue/category/books/mystery_3/&quot;,
     &quot;maxDepth&quot;: 1,
     &quot;useSitemap&quot;: false
-  }&#39; | python3 -c &quot;
+  }' | python3 -c &quot;
 import sys, json
 data = json.load(sys.stdin)
-urls = [u for u in data.get(&#39;links&#39;, []) if &#39;/catalogue/&#39; in u and &#39;/category/&#39; not in u]
-print(f&#39;Found {len(urls)} product URLs&#39;)
+urls = [u for u in data.get('links', []) if '/catalogue/' in u and '/category/' not in u]
+print(f'Found {len(urls)} product URLs')
 for u in urls[:3]:
-    print(&#39; &#39;, u)
-&quot;
-</code></pre>
-<p>::
-:::</p>
+    print(' ', u)
+&quot;</code></pre></p>
+<p>::</div>
+    </div></p>
 <p><strong>Expected <code>/v1/map</code> response shape:</strong></p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;links&quot;: [
     &quot;https://books.toscrape.com/catalogue/sharp-objects_997/index.html&quot;,
     &quot;https://books.toscrape.com/catalogue/in-a-dark-dark-wood_963/index.html&quot;,
     &quot;https://books.toscrape.com/catalogue/the-past-never-ends_942/index.html&quot;
   ]
-}
-</code></pre>
+}</code></pre>
 <blockquote>
 <p>The Python SDK&#39;s <code>client.map()</code> returns the <code>links</code> list directly, not the full envelope.</p>
 </blockquote>
@@ -374,34 +365,33 @@ for u in urls[:3]:
 <h2 id="step-2-define-the-product-schema">Step 2: Define the product schema</h2>
 <p>Design the smallest schema that captures what you need.
 Start with required fields only; add optional fields once the required ones are stable.</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;type&quot;: &quot;object&quot;,
   &quot;properties&quot;: {
     &quot;title&quot;:        { &quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Full product name&quot; },
-    &quot;price&quot;:        { &quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Price as displayed, e.g. &#39;£12.99&#39;&quot; },
-    &quot;availability&quot;: { &quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Stock status, e.g. &#39;In stock&#39;&quot; },
-    &quot;rating&quot;:       { &quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Star rating word, e.g. &#39;Three&#39;&quot; },
+    &quot;price&quot;:        { &quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Price as displayed, e.g. '£12.99'&quot; },
+    &quot;availability&quot;: { &quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Stock status, e.g. 'In stock'&quot; },
+    &quot;rating&quot;:       { &quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Star rating word, e.g. 'Three'&quot; },
     &quot;description&quot;:  { &quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;First paragraph of product description&quot; },
     &quot;image_url&quot;:    { &quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Absolute URL of the main product image&quot; }
   },
   &quot;required&quot;: [&quot;title&quot;, &quot;price&quot;, &quot;availability&quot;]
-}
-</code></pre>
+}</code></pre>
 <p>Keep <code>description</code> hints concise — they help the LLM find the right value without
 inflating the prompt significantly.</p>
 <hr>
 <h2 id="step-3-scrape-each-product-url-with-structured-extraction">Step 3: Scrape each product URL with structured extraction</h2>
 <h3 id="single-product-verify-schema-first">Single product (verify schema first)</h3>
 <p>Before running at scale, verify the schema works on one URL.</p>
-<p>:::tabs
-::tab{title=&quot;Python&quot;}</p>
-<pre><code class="language-python">PRODUCT_SCHEMA = {
+<div class="code-tabs">
+      <div class="code-tabs-header"><button class="code-tab active" data-tab="0">Python</button><button class="code-tab" data-tab="1">cURL</button></div>
+      <div class="code-tab-panel active" data-panel="0"><pre data-lang="python"><code class="language-python">PRODUCT_SCHEMA = {
     &quot;type&quot;: &quot;object&quot;,
     &quot;properties&quot;: {
         &quot;title&quot;:        {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Full product name&quot;},
-        &quot;price&quot;:        {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Price as displayed, e.g. &#39;£12.99&#39;&quot;},
-        &quot;availability&quot;: {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Stock status, e.g. &#39;In stock&#39;&quot;},
-        &quot;rating&quot;:       {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Star rating word, e.g. &#39;Three&#39;&quot;},
+        &quot;price&quot;:        {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Price as displayed, e.g. '£12.99'&quot;},
+        &quot;availability&quot;: {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Stock status, e.g. 'In stock'&quot;},
+        &quot;rating&quot;:       {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Star rating word, e.g. 'Three'&quot;},
         &quot;description&quot;:  {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;First paragraph of product description&quot;},
         &quot;image_url&quot;:    {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Absolute URL of the main product image&quot;},
     },
@@ -415,15 +405,11 @@ result = client.scrape(
 )
 
 print(result[&quot;json&quot;])
-# {&#39;title&#39;: &#39;Sharp Objects&#39;, &#39;price&#39;: &#39;£47.82&#39;, &#39;availability&#39;: &#39;In stock&#39;,
-#  &#39;rating&#39;: &#39;Four&#39;, &#39;description&#39;: &quot;WICKED above her hipbone...&quot;}
-</code></pre>
-<p>::</p>
-<p>::tab{title=&quot;cURL&quot;}</p>
-<pre><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v1/scrape \
+# {'title': 'Sharp Objects', 'price': '£47.82', 'availability': 'In stock',
+#  'rating': 'Four', 'description': &quot;WICKED above her hipbone...&quot;}</code></pre><p>::</div><div class="code-tab-panel" data-panel="1"><pre data-lang="bash"><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
+  -d '{
     &quot;url&quot;: &quot;https://books.toscrape.com/catalogue/sharp-objects_997/index.html&quot;,
     &quot;formats&quot;: [&quot;json&quot;],
     &quot;jsonSchema&quot;: {
@@ -438,12 +424,11 @@ print(result[&quot;json&quot;])
       },
       &quot;required&quot;: [&quot;title&quot;, &quot;price&quot;, &quot;availability&quot;]
     }
-  }&#39;
-</code></pre>
-<p>::
-:::</p>
+  }'</code></pre></p>
+<p>::</div>
+    </div></p>
 <p><strong>Expected single-product response:</strong></p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;data&quot;: {
     &quot;json&quot;: {
@@ -451,7 +436,7 @@ print(result[&quot;json&quot;])
       &quot;price&quot;: &quot;£47.82&quot;,
       &quot;availability&quot;: &quot;In stock&quot;,
       &quot;rating&quot;: &quot;Four&quot;,
-      &quot;description&quot;: &quot;WICKED above her hipbone, GIRL across her heart. Words are like a road map to reporter Camille Preaker&#39;s troubled past.&quot;,
+      &quot;description&quot;: &quot;WICKED above her hipbone, GIRL across her heart. Words are like a road map to reporter Camille Preaker's troubled past.&quot;,
       &quot;image_url&quot;: &quot;https://books.toscrape.com/media/cache/32/51/3251cf3a3412f53f339e42cac2134093.jpg&quot;
     },
     &quot;metadata&quot;: {
@@ -461,8 +446,7 @@ print(result[&quot;json&quot;])
       &quot;elapsedMs&quot;: 1240
     }
   }
-}
-</code></pre>
+}</code></pre>
 <p>The structured data lands in <code>data.json</code>. <code>data.metadata.sourceURL</code> is the canonical
 link to attach to each product record.</p>
 <hr>
@@ -478,9 +462,9 @@ a schema is to <strong>embed it inside the <code>formats</code> array</strong> u
 <code>{&quot;type&quot;: &quot;json&quot;, &quot;schema&quot;: {...}}</code>. The engine&#39;s <code>decompose()</code> logic lifts the
 <code>schema</code> from that object and feeds it to the LLM extractor.</p>
 </blockquote>
-<p>:::tabs
-::tab{title=&quot;Python&quot;}</p>
-<pre><code class="language-python">import json, os
+<div class="code-tabs">
+      <div class="code-tabs-header"><button class="code-tab active" data-tab="0">Python</button><button class="code-tab" data-tab="1">cURL — start job</button><button class="code-tab" data-tab="2">cURL — poll and collect</button></div>
+      <div class="code-tab-panel active" data-panel="0"><pre data-lang="python"><code class="language-python">import json, os
 from crw import CrwClient
 
 client = CrwClient(api_key=os.environ[&quot;CRW_API_KEY&quot;])
@@ -489,9 +473,9 @@ PRODUCT_SCHEMA = {
     &quot;type&quot;: &quot;object&quot;,
     &quot;properties&quot;: {
         &quot;title&quot;:        {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Full product name&quot;},
-        &quot;price&quot;:        {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Price as displayed, e.g. &#39;£12.99&#39;&quot;},
-        &quot;availability&quot;: {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Stock status, e.g. &#39;In stock&#39;&quot;},
-        &quot;rating&quot;:       {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Star rating word, e.g. &#39;Three&#39;&quot;},
+        &quot;price&quot;:        {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Price as displayed, e.g. '£12.99'&quot;},
+        &quot;availability&quot;: {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Stock status, e.g. 'In stock'&quot;},
+        &quot;rating&quot;:       {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Star rating word, e.g. 'Three'&quot;},
         &quot;description&quot;:  {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;First paragraph of product description&quot;},
         &quot;image_url&quot;:    {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Absolute URL of the main product image&quot;},
     },
@@ -532,17 +516,13 @@ for page in pages:
     catalog.append(product)
 
 print(f&quot;Extracted {len(catalog)} products&quot;)
-print(json.dumps(catalog[:2], indent=2, ensure_ascii=False))
-</code></pre>
-<p>::</p>
-<p>::tab{title=&quot;cURL — start job&quot;}</p>
-<pre><code class="language-bash"># Step 4a: start the batch scrape job
+print(json.dumps(catalog[:2], indent=2, ensure_ascii=False))</code></pre><p>::</div><div class="code-tab-panel" data-panel="1"><pre data-lang="bash"><code class="language-bash"># Step 4a: start the batch scrape job
 # Schema goes inside the formats array as {&quot;type&quot;:&quot;json&quot;,&quot;schema&quot;:{...}},
 # NOT as a top-level &quot;jsonSchema&quot; field (which is silently ignored by the server).
 curl -s -X POST https://api.fastcrw.com/v2/batch/scrape \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
+  -d '{
     &quot;urls&quot;: [
       &quot;https://books.toscrape.com/catalogue/sharp-objects_997/index.html&quot;,
       &quot;https://books.toscrape.com/catalogue/in-a-dark-dark-wood_963/index.html&quot;,
@@ -566,12 +546,9 @@ curl -s -X POST https://api.fastcrw.com/v2/batch/scrape \
       }
     ],
     &quot;onlyMainContent&quot;: true
-  }&#39;
-# { &quot;success&quot;: true, &quot;id&quot;: &quot;7c9e6679-7425-40de-944b-e07fc1f90ae7&quot;, ... }
-</code></pre>
-<p>::</p>
-<p>::tab{title=&quot;cURL — poll and collect&quot;}</p>
-<pre><code class="language-bash"># Step 4b: poll until status == &quot;completed&quot;
+  }'
+# { &quot;success&quot;: true, &quot;id&quot;: &quot;7c9e6679-7425-40de-944b-e07fc1f90ae7&quot;, ... }</code></pre></p>
+<p>::</div><div class="code-tab-panel" data-panel="2"><pre data-lang="bash"><code class="language-bash"># Step 4b: poll until status == &quot;completed&quot;
 JOB_ID=&quot;7c9e6679-7425-40de-944b-e07fc1f90ae7&quot;
 
 curl -s &quot;https://api.fastcrw.com/v2/batch/scrape/$JOB_ID&quot; \
@@ -579,25 +556,24 @@ curl -s &quot;https://api.fastcrw.com/v2/batch/scrape/$JOB_ID&quot; \
   | python3 -c &quot;
 import sys, json
 body = json.load(sys.stdin)
-print(&#39;status:&#39;, body.get(&#39;status&#39;))
-for page in body.get(&#39;data&#39;, []):
-    product = page.get(&#39;json&#39;, {})
-    url = page.get(&#39;metadata&#39;, {}).get(&#39;sourceURL&#39;, &#39;&#39;)
+print('status:', body.get('status'))
+for page in body.get('data', []):
+    product = page.get('json', {})
+    url = page.get('metadata', {}).get('sourceURL', '')
     if product:
-        print(product.get(&#39;title&#39;), &#39;|&#39;, product.get(&#39;price&#39;), &#39;|&#39;, url)
-&quot;
-</code></pre>
-<p>::
-:::</p>
+        print(product.get('title'), '|', product.get('price'), '|', url)
+&quot;</code></pre></p>
+<p>::</div>
+    </div></p>
 <hr>
 <h2 id="sample-aggregated-result">Sample aggregated result</h2>
-<pre><code class="language-json">[
+<pre data-lang="json"><code class="language-json">[
   {
     &quot;title&quot;: &quot;Sharp Objects&quot;,
     &quot;price&quot;: &quot;£47.82&quot;,
     &quot;availability&quot;: &quot;In stock&quot;,
     &quot;rating&quot;: &quot;Four&quot;,
-    &quot;description&quot;: &quot;WICKED above her hipbone, GIRL across her heart. Words are like a road map to reporter Camille Preaker&#39;s troubled past.&quot;,
+    &quot;description&quot;: &quot;WICKED above her hipbone, GIRL across her heart. Words are like a road map to reporter Camille Preaker's troubled past.&quot;,
     &quot;image_url&quot;: &quot;https://books.toscrape.com/media/cache/32/51/3251cf3a3412f53f339e42cac2134093.jpg&quot;,
     &quot;source_url&quot;: &quot;https://books.toscrape.com/catalogue/sharp-objects_997/index.html&quot;
   },
@@ -619,11 +595,10 @@ for page in body.get(&#39;data&#39;, []):
     &quot;image_url&quot;: &quot;https://books.toscrape.com/media/cache/09/a3/09a3aef48557576e1a85ba7efea8ecb1.jpg&quot;,
     &quot;source_url&quot;: &quot;https://books.toscrape.com/catalogue/the-past-never-ends_942/index.html&quot;
   }
-]
-</code></pre>
+]</code></pre>
 <hr>
 <h2 id="complete-script">Complete script</h2>
-<pre><code class="language-python">&quot;&quot;&quot;
+<pre data-lang="python"><code class="language-python">&quot;&quot;&quot;
 recipe_product_catalog.py — extract a product catalog with fastCRW.
 
 Run:
@@ -643,9 +618,9 @@ PRODUCT_SCHEMA = {
     &quot;type&quot;: &quot;object&quot;,
     &quot;properties&quot;: {
         &quot;title&quot;:        {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Full product name&quot;},
-        &quot;price&quot;:        {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Price as displayed, e.g. &#39;£12.99&#39;&quot;},
-        &quot;availability&quot;: {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Stock status, e.g. &#39;In stock&#39;&quot;},
-        &quot;rating&quot;:       {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Star rating word, e.g. &#39;Three&#39;&quot;},
+        &quot;price&quot;:        {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Price as displayed, e.g. '£12.99'&quot;},
+        &quot;availability&quot;: {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Stock status, e.g. 'In stock'&quot;},
+        &quot;rating&quot;:       {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Star rating word, e.g. 'Three'&quot;},
         &quot;description&quot;:  {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;First paragraph of product description&quot;},
         &quot;image_url&quot;:    {&quot;type&quot;: &quot;string&quot;,  &quot;description&quot;: &quot;Absolute URL of the main product image&quot;},
     },
@@ -685,8 +660,7 @@ print(f&quot;Extracted {len(catalog)} / {len(product_urls)} products successfull
 with open(&quot;catalog.json&quot;, &quot;w&quot;, encoding=&quot;utf-8&quot;) as f:
     json.dump(catalog, f, indent=2, ensure_ascii=False)
 
-print(&quot;Saved catalog.json&quot;)
-</code></pre>
+print(&quot;Saved catalog.json&quot;)</code></pre>
 <hr>
 <h2 id="key-parameters">Key parameters</h2>
 <table>

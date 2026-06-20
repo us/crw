@@ -286,10 +286,9 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <p>CRW integrates with popular AI agent frameworks and workflow tools. Since CRW exposes a Firecrawl-compatible REST API, it also works as a drop-in replacement anywhere Firecrawl is used.</p>
 <h2 id="crewai">CrewAI</h2>
 <p>CrewAI support is bundled as an <strong>extra</strong> in the <code>crw</code> Python package — no separate package needed.</p>
-<pre><code class="language-bash">pip install &quot;crw[crewai]&quot;
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">pip install &quot;crw[crewai]&quot;</code></pre>
 <p>Four ready-to-use tools — no custom <code>BaseTool</code> subclasses needed:</p>
-<pre><code class="language-python">from crewai import Agent, Task, Crew
+<pre data-lang="python"><code class="language-python">from crewai import Agent, Task, Crew
 from crw.integrations.crewai import (
     CrwScrapeWebsiteTool,
     CrwCrawlWebsiteTool,
@@ -323,13 +322,11 @@ task = Task(
 )
 
 crew = Crew(agents=[researcher], tasks=[task])
-result = crew.kickoff()
-</code></pre>
+result = crew.kickoff()</code></pre>
 <h2 id="langchain">LangChain</h2>
 <p>LangChain support is bundled as an <strong>extra</strong> in the <code>crw</code> Python package — no separate package needed.</p>
-<pre><code class="language-bash">pip install &quot;crw[langchain]&quot;
-</code></pre>
-<pre><code class="language-python">from crw.integrations.langchain import CrwLoader
+<pre data-lang="bash"><code class="language-bash">pip install &quot;crw[langchain]&quot;</code></pre>
+<pre data-lang="python"><code class="language-python">from crw.integrations.langchain import CrwLoader
 
 # Self-hosted (default: localhost:3000)
 loader = CrwLoader(url=&quot;https://example.com&quot;, mode=&quot;scrape&quot;)
@@ -352,20 +349,18 @@ loader = CrwLoader(
     api_url=&quot;https://api.fastcrw.com&quot;,
     api_key=&quot;crw_live_...&quot;,
 )
-docs = loader.load()
-</code></pre>
+docs = loader.load()</code></pre>
 <h2 id="flowise-pr-pending">Flowise (PR pending)</h2>
 <p>CRW node submitted: <a href="https://github.com/FlowiseAI/Flowise/pull/6066">PR #6066</a></p>
 <p>Provides Scrape, Crawl, and Map nodes that connect to your CRW instance. Configure the CRW API URL in the node settings.</p>
 <h2 id="agno-pr-pending">Agno (PR pending)</h2>
 <p>CRW toolkit submitted: <a href="https://github.com/agno-agi/agno/pull/7183">PR #7183</a></p>
 <p>Once merged, usage will be:</p>
-<pre><code class="language-python">from agno.agent import Agent
+<pre data-lang="python"><code class="language-python">from agno.agent import Agent
 from agno.tools.crw import CrwTools
 
 agent = Agent(tools=[CrwTools()])
-agent.print_response(&quot;Scrape https://example.com and summarize it&quot;)
-</code></pre>
+agent.print_response(&quot;Scrape https://example.com and summarize it&quot;)</code></pre>
 <h2 id="openclaw">OpenClaw</h2>
 <p>OpenClaw integrates with CRW via the <strong>MCP server</strong> — no separate plugin package is needed. Point OpenClaw at the <code>crw-mcp</code> binary and it gains Scrape, Crawl, Map, and Search tools automatically.</p>
 <p>See the <a href="/docs/mcp">MCP documentation</a> for configuration details.</p>
@@ -373,8 +368,7 @@ agent.print_response(&quot;Scrape https://example.com and summarize it&quot;)
 <p>Published npm package: <a href="https://www.npmjs.com/package/n8n-nodes-crw"><code>n8n-nodes-crw</code></a></p>
 <p>Install via n8n UI: <strong>Settings &gt; Community Nodes &gt; Install &gt; <code>n8n-nodes-crw</code></strong></p>
 <p>Or via Docker:</p>
-<pre><code class="language-bash">docker run -e EXTRA_COMMUNITY_PACKAGES=n8n-nodes-crw n8nio/n8n
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">docker run -e EXTRA_COMMUNITY_PACKAGES=n8n-nodes-crw n8nio/n8n</code></pre>
 <p>Source: <a href="https://github.com/us/n8n-nodes-crw">github.com/us/n8n-nodes-crw</a></p>
 <h2 id="mcp-10-platforms">MCP (10+ Platforms)</h2>
 <p>CRW includes a built-in MCP server that works with any MCP-compatible platform. See the <a href="/docs/mcp">MCP documentation</a> for setup instructions for:</p>
@@ -420,30 +414,27 @@ agent.print_response(&quot;Scrape https://example.com and summarize it&quot;)
 </tbody></table>
 <h2 id="firecrawl-drop-in-replacement">Firecrawl Drop-in Replacement</h2>
 <p>CRW is API-compatible with Firecrawl. Any project that uses <code>FIRECRAWL_BASE_URL</code> or similar config can switch to CRW with zero code changes:</p>
-<pre><code class="language-bash"># Point Firecrawl SDK at your CRW instance
-export FIRECRAWL_API_URL=http://localhost:3000
-</code></pre>
-<pre><code class="language-python">from firecrawl import FirecrawlApp
+<pre data-lang="bash"><code class="language-bash"># Point Firecrawl SDK at your CRW instance
+export FIRECRAWL_API_URL=http://localhost:3000</code></pre>
+<pre data-lang="python"><code class="language-python">from firecrawl import FirecrawlApp
 
 # This talks to CRW, not Firecrawl
 app = FirecrawlApp(api_url=&quot;http://localhost:3000&quot;)
-result = app.scrape_url(&quot;https://example.com&quot;)
-</code></pre>
+result = app.scrape_url(&quot;https://example.com&quot;)</code></pre>
 <blockquote>
 <p><strong>Note:</strong> The Firecrawl Python SDK has changed its API across versions. The above works with <code>firecrawl-py</code> v1.x. Check the <a href="https://docs.firecrawl.dev">Firecrawl docs</a> for the latest SDK usage.</p>
 </blockquote>
 <h2 id="python-direct-http">Python (Direct HTTP)</h2>
-<pre><code class="language-python">import requests
+<pre data-lang="python"><code class="language-python">import requests
 
 response = requests.post(&quot;https://api.fastcrw.com/v1/scrape&quot;, json={
     &quot;url&quot;: &quot;https://example.com&quot;,
     &quot;formats&quot;: [&quot;markdown&quot;, &quot;links&quot;]
 })
 data = response.json()[&quot;data&quot;]
-print(data[&quot;markdown&quot;])
-</code></pre>
+print(data[&quot;markdown&quot;])</code></pre>
 <h2 id="nodejs-direct-http">Node.js (Direct HTTP)</h2>
-<pre><code class="language-javascript">const response = await fetch(&quot;https://api.fastcrw.com/v1/scrape&quot;, {
+<pre data-lang="javascript"><code class="language-javascript">const response = await fetch(&quot;https://api.fastcrw.com/v1/scrape&quot;, {
   method: &quot;POST&quot;,
   headers: { &quot;Content-Type&quot;: &quot;application/json&quot; },
   body: JSON.stringify({
@@ -452,8 +443,7 @@ print(data[&quot;markdown&quot;])
   })
 });
 const { data } = await response.json();
-console.log(data.markdown);
-</code></pre>
+console.log(data.markdown);</code></pre>
 <h2 id="building-custom-integrations">Building Custom Integrations</h2>
 <p>The API is straightforward enough that most integrations are a thin wrapper:</p>
 <ol>
@@ -576,10 +566,7 @@ console.log(data.markdown);
 <td>Yes</td>
 </tr>
 </tbody></table>
-<p>:::note
-In MCP <strong>proxy mode</strong> (<code>--api-url</code> / <code>CRW_API_URL</code> set), <code>crw_search</code> is always advertised and the remote server handles it. In <strong>embedded mode</strong>, <code>crw_search</code> is only available when a SearXNG sidecar is configured.
-:::</p>
-<h2 id="all-integrations">All Integrations</h2>
+<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">In MCP **proxy mode** (`--api-url` / `CRW_API_URL` set), `crw_search` is always advertised and the remote server handles it. In **embedded mode**, `crw_search` is only available when a SearXNG sidecar is configured.</div></div><h2 id="all-integrations">All Integrations</h2>
 <table>
 <thead>
 <tr>

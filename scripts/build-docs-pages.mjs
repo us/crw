@@ -189,6 +189,122 @@ function escHtml(str) {
     .replace(/>/g, "&gt;");
 }
 
+// ── Custom :::components (mirror docs/js/app.js parseComponents) ───────────────
+// marked() doesn't understand our :::tabs / :::note / :::cards directives. The
+// client (app.js) renders them, but for a prerendered page app.js TRUSTS the
+// existing HTML and does NOT re-render (see its init() guard) — so if the
+// prerender ships raw `:::tabs` text, that's what users AND crawlers see. We must
+// emit the same markup here. Keep these regexes byte-identical to app.js.
+// ponytail: getIcon returns "" — prerendered callout/card glyphs are dropped (the
+// colored box + text still render). Port app.js's `icons` map here if glyphs matter.
+const allSlugs = new Set(slugMeta.map((s) => s.slug));
+const getIcon = () => "";
+
+function normalizeDocHref(href) {
+  if (!href) return href;
+  if (/^(https?:|mailto:|tel:|#)/i.test(href)) return href;
+  if (/^javascript:/i.test(href)) return "#";
+  const [p, anchor] = href.split("#");
+  const cleanPath = p
+    .replace(/^\.?\//, "")
+    .replace(/^docs\/docs\//, "")
+    .replace(/^docs\//, "")
+    .replace(/^\/docs\//, "")
+    .replace(/\.md$/i, "")
+    .replace(/\/$/, "");
+  const slug = cleanPath.split("/").filter(Boolean).pop();
+  if (!slug || !allSlugs.has(slug)) return href;
+  return `/${slug}${anchor ? `#${anchor}` : ""}`;
+}
+
+function parseComponents(md) {
+  // Cards: :::cards ... :::
+  md = md.replace(/:::cards\n([\s\S]*?):::/g, (_, content) => {
+    const cards = [];
+    content.replace(/::card\{([^}]*)\}/g, (__, attrs) => {
+      const props = {};
+      attrs.replace(/(\w+)="([^"]*)"/g, (___, k, v) => { props[k] = v; });
+      cards.push(props);
+    });
+    return `\n\n<div class="card-grid">${cards.map((c) =>
+      `<a href="${normalizeDocHref(c.href || "#")}" class="doc-card"${c.href?.startsWith("http") ? ' target="_blank" rel="noopener"' : ""}>
+        ${c.icon ? `<div class="doc-card-icon">${getIcon(c.icon)}</div>` : ""}
+        <div class="doc-card-title">${c.title || ""}</div>
+        <div class="doc-card-desc">${c.description || ""}</div>
+      </a>`
+    ).join("")}</div>\n\n`;
+  });
+
+  // Features: :::features ... :::
+  md = md.replace(/:::features\n([\s\S]*?):::/g, (_, content) => {
+    const items = [];
+    content.replace(/::feature\{([^}]*)\}/g, (__, attrs) => {
+      const props = {};
+      attrs.replace(/(\w+)="([^"]*)"/g, (___, k, v) => { props[k] = v; });
+      items.push(props);
+    });
+    return `\n\n<div class="feature-grid">${items.map((f) =>
+      `<div class="feature-card">
+        ${f.icon ? `<div class="feature-card-icon">${getIcon(f.icon)}</div>` : ""}
+        <div class="feature-card-title">${f.title || ""}</div>
+        <div class="feature-card-desc">${f.description || ""}</div>
+      </div>`
+    ).join("")}</div>\n\n`;
+  });
+
+  // Callouts: :::note/warning/tip/info ... :::
+  md = md.replace(/:::(note|warning|tip|info)\n([\s\S]*?):::/g, (_, type, content) => {
+    const iconName = type === "warning" ? "alert" : type === "tip" ? "check" : "info";
+    return `\n\n<div class="callout callout-${type}"><div class="callout-icon">${getIcon(iconName)}</div><div class="callout-content">${content.trim()}</div></div>\n\n`;
+  });
+
+  // Collapsible: :::details{title="..."} ... :::
+  md = md.replace(/:::details\{title="([^"]*)"\}\n([\s\S]*?):::/g, (_, title, content) => {
+    return `\n\n<div class="details-block"><div class="details-summary" onclick="this.parentElement.classList.toggle('open')">${title}<span class="details-chevron">&#9654;</span></div><div class="details-content">${content.trim()}</div></div>\n\n`;
+  });
+
+  // Code tabs: :::tabs ... :::
+  md = md.replace(/:::tabs\n([\s\S]*?):::/g, (_, content) => {
+    const tabs = [];
+    const tabRegex = /::tab\{title="([^"]*)"\}\n([\s\S]*?)(?=::tab\{|$)/g;
+    let match;
+    while ((match = tabRegex.exec(content)) !== null) {
+      tabs.push({ title: match[1], content: match[2].trim() });
+    }
+    return `\n\n<div class="code-tabs">
+      <div class="code-tabs-header">${tabs.map((t, i) =>
+        `<button class="code-tab${i === 0 ? " active" : ""}" data-tab="${i}">${t.title}</button>`
+      ).join("")}</div>
+      ${tabs.map((t, i) =>
+        `<div class="code-tab-panel${i === 0 ? " active" : ""}" data-panel="${i}">${t.content}</div>`
+      ).join("")}
+    </div>\n\n`;
+  });
+
+  return md;
+}
+
+/**
+ * Render a doc the way app.js does: pull fenced code out first (so `:::` parsing
+ * and tab content stay clean), expand our components into HTML, run marked over
+ * the rest, then drop the code blocks back in.
+ */
+function renderMarkdown(md) {
+  const codeBlocks = [];
+  md = md.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+    const langAttr = lang ? ` class="language-${lang}"` : "";
+    const dataLang = lang ? ` data-lang="${lang}"` : "";
+    const ph = `@@CB${codeBlocks.length}@@`;
+    codeBlocks.push(`<pre${dataLang}><code${langAttr}>${escHtml(code.trim())}</code></pre>`);
+    return `\n\n${ph}\n\n`;
+  });
+  let html = marked.parse(parseComponents(md));
+  html = html
+    .replace(/<p>\s*@@CB(\d+)@@\s*<\/p>/g, (_, i) => codeBlocks[i])
+    .replace(/@@CB(\d+)@@/g, (_, i) => codeBlocks[i]);
+  return html;
+}
+
 // ── Generate pages ────────────────────────────────────────────────────────────
 let generated = 0;
 const errors = [];
@@ -204,8 +320,9 @@ for (const { slug, title } of slugMeta) {
   const mdContent = await readFile(mdPath, "utf8");
   const description = extractDescription(mdContent);
 
-  // Convert markdown → HTML (marked passes raw HTML blocks through unchanged)
-  const rawHtml = marked.parse(mdContent);
+  // Convert markdown → HTML, expanding our :::components first (marked alone
+  // leaves :::tabs/:::note/:::cards as raw text — see renderMarkdown).
+  const rawHtml = renderMarkdown(mdContent);
 
   // Add per-heading id anchors, then rewrite #slug → /slug cross-references
   const content = rewriteInternalLinks(addHeadingIds(rawHtml));

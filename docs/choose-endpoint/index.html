@@ -370,15 +370,14 @@ Do you know the exact URL of the page you want?
   │            ├─ Yes ──► Extract  POST /v1/scrape  (formats:[&quot;json&quot;] + jsonSchema)
   │            └─ No  ──► Scrape   POST /v1/scrape
   └─ No  ──► Are you looking across an entire site?
-               ├─ Yes ──► Do you want every page&#39;s content in one job?
+               ├─ Yes ──► Do you want every page's content in one job?
                │            ├─ Yes ──► Crawl  POST /v1/crawl
                │            └─ No  ──► Map    POST /v1/map
-               └─ No  ──► Search  POST /v1/search
-</code></pre>
+               └─ No  ──► Search  POST /v1/search</code></pre>
 <h2 id="about-extract">About extract</h2>
 <p>Extract reuses the scrape route. The only difference from a plain scrape is that you add
 two fields to the request body:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;url&quot;: &quot;https://example.com/product/42&quot;,
   &quot;formats&quot;: [&quot;json&quot;],
   &quot;jsonSchema&quot;: {
@@ -389,8 +388,7 @@ two fields to the request body:</p>
     },
     &quot;required&quot;: [&quot;title&quot;]
   }
-}
-</code></pre>
+}</code></pre>
 <p>CRW scrapes the page and then calls an LLM with your schema to produce the <code>data.json</code>
 field in the response. Because an LLM call is involved, extraction requires either a
 server-side <code>[extraction.llm]</code> configuration (self-hosted) or a per-request <code>llmApiKey</code>.
@@ -398,39 +396,35 @@ On the hosted service at <code>api.fastcrw.com</code> this is handled automatica
 <p>See <a href="extract.md">Extract</a> for the full parameter reference and provider options.</p>
 <h2 id="quick-examples">Quick examples</h2>
 <p><strong>Scrape one page as markdown:</strong></p>
-<pre><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/scrape \
+<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;url&quot;:&quot;https://example.com&quot;,&quot;formats&quot;:[&quot;markdown&quot;]}&#39;
-</code></pre>
+  -d '{&quot;url&quot;:&quot;https://example.com&quot;,&quot;formats&quot;:[&quot;markdown&quot;]}'</code></pre>
 <p><strong>Discover all URLs on a site:</strong></p>
-<pre><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/map \
+<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/map \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;url&quot;:&quot;https://example.com&quot;}&#39;
-</code></pre>
+  -d '{&quot;url&quot;:&quot;https://example.com&quot;}'</code></pre>
 <p><strong>Crawl an entire site (start + poll):</strong></p>
-<pre><code class="language-bash"># Start
+<pre data-lang="bash"><code class="language-bash"># Start
 curl -X POST https://api.fastcrw.com/v1/crawl \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;url&quot;:&quot;https://example.com&quot;}&#39;
+  -d '{&quot;url&quot;:&quot;https://example.com&quot;}'
 
 # Poll with the returned job ID
 curl https://api.fastcrw.com/v1/crawl/{id} \
-  -H &quot;Authorization: Bearer YOUR_API_KEY&quot;
-</code></pre>
+  -H &quot;Authorization: Bearer YOUR_API_KEY&quot;</code></pre>
 <p><strong>Search the web:</strong></p>
-<pre><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/search \
+<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/search \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;query&quot;:&quot;open source web scraping 2025&quot;,&quot;limit&quot;:5}&#39;
-</code></pre>
+  -d '{&quot;query&quot;:&quot;open source web scraping 2025&quot;,&quot;limit&quot;:5}'</code></pre>
 <p><strong>Extract structured data:</strong></p>
-<pre><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/scrape \
+<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
+  -d '{
     &quot;url&quot;: &quot;https://example.com/product/42&quot;,
     &quot;formats&quot;: [&quot;json&quot;],
     &quot;jsonSchema&quot;: {
@@ -441,13 +435,11 @@ curl https://api.fastcrw.com/v1/crawl/{id} \
       },
       &quot;required&quot;: [&quot;title&quot;]
     }
-  }&#39;
-</code></pre>
+  }'</code></pre>
 <p><strong>Parse a PDF:</strong></p>
-<pre><code class="language-bash">curl -X POST https://api.fastcrw.com/v2/parse \
+<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v2/parse \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
-  -F &quot;file=@/path/to/document.pdf&quot;
-</code></pre>
+  -F &quot;file=@/path/to/document.pdf&quot;</code></pre>
 <h2 id="what-to-read-next">What to read next</h2>
 <ul>
 <li><a href="scraping.md">Scraping</a> — full scrape parameter reference</li>

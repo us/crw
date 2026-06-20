@@ -298,35 +298,28 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <hr>
 <h2 id="step-1-swap-the-base-url">Step 1 — Swap the base URL</h2>
 <p>Every engine call goes to <code>https://api.fastcrw.com</code> instead of <code>https://api.firecrawl.dev</code>.</p>
-<p>:::tabs
-::tab{title=&quot;cURL — before&quot;}</p>
-<pre><code class="language-bash">curl -X POST https://api.firecrawl.dev/v1/scrape \
+<div class="code-tabs">
+      <div class="code-tabs-header"><button class="code-tab active" data-tab="0">cURL — before</button><button class="code-tab" data-tab="1">cURL — after</button></div>
+      <div class="code-tab-panel active" data-panel="0"><pre data-lang="bash"><code class="language-bash">curl -X POST https://api.firecrawl.dev/v1/scrape \
   -H &quot;Authorization: Bearer $FIRECRAWL_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
+  -d '{
     &quot;url&quot;: &quot;https://news.ycombinator.com&quot;,
     &quot;formats&quot;: [&quot;markdown&quot;]
-  }&#39;
-</code></pre>
-<p>::tab{title=&quot;cURL — after&quot;}</p>
-<pre><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/scrape \
+  }'</code></pre></div><div class="code-tab-panel" data-panel="1"><pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
+  -d '{
     &quot;url&quot;: &quot;https://news.ycombinator.com&quot;,
     &quot;formats&quot;: [&quot;markdown&quot;]
-  }&#39;
-</code></pre>
-<p>:::</p>
-<p><strong>Self-hosted:</strong> if you run your own <code>crw-server</code>, replace <code>https://api.fastcrw.com</code> with your server&#39;s address (e.g. <code>http://crw:3000</code>). Authentication is optional on self-hosted; disable it with <code>[server] auth_required = false</code> in your <code>config.toml</code>.</p>
+  }'</code></pre></div>
+    </div><p><strong>Self-hosted:</strong> if you run your own <code>crw-server</code>, replace <code>https://api.fastcrw.com</code> with your server&#39;s address (e.g. <code>http://crw:3000</code>). Authentication is optional on self-hosted; disable it with <code>[server] auth_required = false</code> in your <code>config.toml</code>.</p>
 <hr>
 <h2 id="step-2-swap-the-sdk-package">Step 2 — Swap the SDK package</h2>
 <h3 id="python">Python</h3>
-<p>:::tabs
-::tab{title=&quot;Before (firecrawl-py)&quot;}</p>
-<pre><code class="language-bash">pip install firecrawl-py
-</code></pre>
-<pre><code class="language-python">from firecrawl import FirecrawlApp
+<div class="code-tabs">
+      <div class="code-tabs-header"><button class="code-tab active" data-tab="0">Before (firecrawl-py)</button><button class="code-tab" data-tab="1">After (crw)</button></div>
+      <div class="code-tab-panel active" data-panel="0"><pre data-lang="bash"><code class="language-bash">pip install firecrawl-py</code></pre><p><pre data-lang="python"><code class="language-python">from firecrawl import FirecrawlApp
 
 app = FirecrawlApp(api_key=&quot;fc-...&quot;)
 
@@ -334,12 +327,8 @@ result = app.scrape_url(
     &quot;https://news.ycombinator.com&quot;,
     params={&quot;formats&quot;: [&quot;markdown&quot;]},
 )
-print(result[&quot;markdown&quot;][:500])
-</code></pre>
-<p>::tab{title=&quot;After (crw)&quot;}</p>
-<pre><code class="language-bash">pip install crw
-</code></pre>
-<pre><code class="language-python">from crw import CrwClient
+print(result[&quot;markdown&quot;][:500])</code></pre></div><div class="code-tab-panel" data-panel="1"><pre data-lang="bash"><code class="language-bash">pip install crw</code></pre></p>
+<p><pre data-lang="python"><code class="language-python">from crw import CrwClient
 
 client = CrwClient()  # reads CRW_API_KEY from env
 
@@ -347,36 +336,28 @@ result = client.scrape(
     &quot;https://news.ycombinator.com&quot;,
     formats=[&quot;markdown&quot;],
 )
-print(result[&quot;markdown&quot;][:500])
-</code></pre>
-<p>:::</p>
+print(result[&quot;markdown&quot;][:500])</code></pre></div>
+    </div></p>
 <h3 id="typescript-javascript">TypeScript / JavaScript</h3>
-<p>:::tabs
-::tab{title=&quot;Before (@mendable/firecrawl-js)&quot;}</p>
-<pre><code class="language-bash">npm install @mendable/firecrawl-js
-</code></pre>
-<pre><code class="language-typescript">import FirecrawlApp from &quot;@mendable/firecrawl-js&quot;;
+<div class="code-tabs">
+      <div class="code-tabs-header"><button class="code-tab active" data-tab="0">Before (@mendable/firecrawl-js)</button><button class="code-tab" data-tab="1">After (crw-sdk)</button></div>
+      <div class="code-tab-panel active" data-panel="0"><pre data-lang="bash"><code class="language-bash">npm install @mendable/firecrawl-js</code></pre><p><pre data-lang="typescript"><code class="language-typescript">import FirecrawlApp from &quot;@mendable/firecrawl-js&quot;;
 
 const app = new FirecrawlApp({ apiKey: &quot;fc-...&quot; });
 
 const result = await app.scrapeUrl(&quot;https://news.ycombinator.com&quot;, {
   formats: [&quot;markdown&quot;],
 });
-console.log(result.markdown?.slice(0, 500));
-</code></pre>
-<p>::tab{title=&quot;After (crw-sdk)&quot;}</p>
-<pre><code class="language-bash">npm install crw-sdk
-</code></pre>
-<pre><code class="language-typescript">import { CrwClient } from &quot;crw-sdk&quot;;
+console.log(result.markdown?.slice(0, 500));</code></pre></div><div class="code-tab-panel" data-panel="1"><pre data-lang="bash"><code class="language-bash">npm install crw-sdk</code></pre></p>
+<p><pre data-lang="typescript"><code class="language-typescript">import { CrwClient } from &quot;crw-sdk&quot;;
 
 const client = new CrwClient({ apiKey: process.env.CRW_API_KEY });
 
 const result = await client.scrape(&quot;https://news.ycombinator.com&quot;, {
   formats: [&quot;markdown&quot;],
 });
-console.log(result.markdown?.slice(0, 500));
-</code></pre>
-<p>:::</p>
+console.log(result.markdown?.slice(0, 500));</code></pre></div>
+    </div></p>
 <hr>
 <h2 id="step-3-rename-the-environment-variable">Step 3 — Rename the environment variable</h2>
 <table>
@@ -399,20 +380,19 @@ console.log(result.markdown?.slice(0, 500));
 </tr>
 </tbody></table>
 <p>Shell (<code>.env</code> or export):</p>
-<pre><code class="language-bash"># remove
+<pre data-lang="bash"><code class="language-bash"># remove
 # export FIRECRAWL_API_KEY=fc-...
 
 # add
-export CRW_API_KEY=crw-...
-</code></pre>
+export CRW_API_KEY=crw-...</code></pre>
 <p>Both SDKs read the variable automatically. No code change is needed once the env var is in place.</p>
 <hr>
 <h2 id="step-4-port-llm-extraction">Step 4 — Port LLM extraction</h2>
 <p>Firecrawl exposes a standalone <code>/v1/extract</code> route. fastCRW does <strong>not</strong> have that route. Single-URL extraction runs through <code>/v1/scrape</code> with <code>formats: [&quot;json&quot;]</code> and a <code>jsonSchema</code>. The response field is <code>data.json</code>.</p>
 <p>Multi-URL extraction (<code>/v1/extract</code> with an array of URLs) is not supported. Call scrape per URL or use <code>/v1/crawl</code>.</p>
-<p>:::tabs
-::tab{title=&quot;Python — before (Firecrawl /extract)&quot;}</p>
-<pre><code class="language-python">from firecrawl import FirecrawlApp
+<div class="code-tabs">
+      <div class="code-tabs-header"><button class="code-tab active" data-tab="0">Python — before (Firecrawl /extract)</button><button class="code-tab" data-tab="1">Python — after (crw scrape + json_schema)</button></div>
+      <div class="code-tab-panel active" data-panel="0"><pre data-lang="python"><code class="language-python">from firecrawl import FirecrawlApp
 
 app = FirecrawlApp(api_key=&quot;fc-...&quot;)
 
@@ -429,10 +409,7 @@ result = app.extract(
     [&quot;https://example.com/product&quot;],
     {&quot;schema&quot;: schema},
 )
-print(result)
-</code></pre>
-<p>::tab{title=&quot;Python — after (crw scrape + json_schema)&quot;}</p>
-<pre><code class="language-python">from crw import CrwClient
+print(result)</code></pre></div><div class="code-tab-panel" data-panel="1"><pre data-lang="python"><code class="language-python">from crw import CrwClient
 
 client = CrwClient()  # reads CRW_API_KEY from env
 
@@ -450,12 +427,10 @@ result = client.scrape(
     &quot;https://example.com/product&quot;,
     json_schema=schema,
 )
-print(result[&quot;json&quot;])
-</code></pre>
-<p>:::</p>
-<p>:::tabs
-::tab{title=&quot;TypeScript — before (Firecrawl /extract)&quot;}</p>
-<pre><code class="language-typescript">import FirecrawlApp from &quot;@mendable/firecrawl-js&quot;;
+print(result[&quot;json&quot;])</code></pre></div>
+    </div><div class="code-tabs">
+      <div class="code-tabs-header"><button class="code-tab active" data-tab="0">TypeScript — before (Firecrawl /extract)</button><button class="code-tab" data-tab="1">TypeScript — after (crw-sdk scrape + jsonSchema)</button></div>
+      <div class="code-tab-panel active" data-panel="0"><pre data-lang="typescript"><code class="language-typescript">import FirecrawlApp from &quot;@mendable/firecrawl-js&quot;;
 
 const app = new FirecrawlApp({ apiKey: &quot;fc-...&quot; });
 
@@ -471,10 +446,7 @@ const schema = {
 const result = await app.extract([&quot;https://example.com/product&quot;], {
   schema,
 });
-console.log(result.data);
-</code></pre>
-<p>::tab{title=&quot;TypeScript — after (crw-sdk scrape + jsonSchema)&quot;}</p>
-<pre><code class="language-typescript">import { CrwClient } from &quot;crw-sdk&quot;;
+console.log(result.data);</code></pre></div><div class="code-tab-panel" data-panel="1"><pre data-lang="typescript"><code class="language-typescript">import { CrwClient } from &quot;crw-sdk&quot;;
 
 const client = new CrwClient({ apiKey: process.env.CRW_API_KEY });
 
@@ -491,10 +463,8 @@ const schema = {
 const result = await client.scrape(&quot;https://example.com/product&quot;, {
   jsonSchema: schema,
 });
-console.log(result.json);
-</code></pre>
-<p>:::</p>
-<hr>
+console.log(result.json);</code></pre></div>
+    </div><hr>
 <h2 id="behavioral-differences-to-validate">Behavioral differences to validate</h2>
 <p>The following table lists the gaps documented in <a href="../COMPATIBILITY-firecrawl.md">COMPATIBILITY-firecrawl.md</a>. Validate each that applies to your workload <strong>before</strong> switching production traffic.</p>
 <table>
@@ -571,39 +541,35 @@ console.log(result.json);
 <h2 id="5-minute-verification-checklist">5-minute verification checklist</h2>
 <p>Run these five commands against a real URL from your workload after making the changes above. Use a URL you can manually inspect in your browser.</p>
 <p><strong>1. Smoke test — basic scrape</strong></p>
-<pre><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v1/scrape \
+<pre data-lang="bash"><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;url&quot;: &quot;https://news.ycombinator.com&quot;, &quot;formats&quot;: [&quot;markdown&quot;]}&#39; \
-  | python3 -m json.tool | head -30
-</code></pre>
+  -d '{&quot;url&quot;: &quot;https://news.ycombinator.com&quot;, &quot;formats&quot;: [&quot;markdown&quot;]}' \
+  | python3 -m json.tool | head -30</code></pre>
 <p>Expected: <code>&quot;success&quot;: true</code>, <code>&quot;markdown&quot;</code> field with real content.</p>
 <p><strong>2. Crawl smoke test</strong></p>
-<pre><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v1/crawl \
+<pre data-lang="bash"><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v1/crawl \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;url&quot;: &quot;https://example.com&quot;, &quot;maxDepth&quot;: 1, &quot;maxPages&quot;: 3}&#39; \
-  | python3 -m json.tool
-</code></pre>
+  -d '{&quot;url&quot;: &quot;https://example.com&quot;, &quot;maxDepth&quot;: 1, &quot;maxPages&quot;: 3}' \
+  | python3 -m json.tool</code></pre>
 <p>Expected: <code>{&quot;success&quot;: true, &quot;id&quot;: &quot;&lt;job-id&gt;&quot;}</code>. Poll <code>GET /v1/crawl/{id}</code> until <code>&quot;status&quot;: &quot;completed&quot;</code>.</p>
 <p><strong>3. Map smoke test</strong></p>
-<pre><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v1/map \
+<pre data-lang="bash"><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v1/map \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;url&quot;: &quot;https://example.com&quot;, &quot;maxDepth&quot;: 1}&#39; \
-  | python3 -m json.tool | head -20
-</code></pre>
+  -d '{&quot;url&quot;: &quot;https://example.com&quot;, &quot;maxDepth&quot;: 1}' \
+  | python3 -m json.tool | head -20</code></pre>
 <p>Expected: <code>&quot;links&quot;: [...]</code> with discovered URLs.</p>
 <p><strong>4. Search smoke test</strong></p>
-<pre><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v1/search \
+<pre data-lang="bash"><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v1/search \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;query&quot;: &quot;fastcrw web scraper&quot;, &quot;limit&quot;: 3}&#39; \
-  | python3 -m json.tool | head -30
-</code></pre>
+  -d '{&quot;query&quot;: &quot;fastcrw web scraper&quot;, &quot;limit&quot;: 3}' \
+  | python3 -m json.tool | head -30</code></pre>
 <p>Expected: <code>&quot;data&quot;: {&quot;results&quot;: [...]}</code> with search results.</p>
 <p><strong>5. SDK round-trip (Python)</strong></p>
-<pre><code class="language-python">import os
+<pre data-lang="python"><code class="language-python">import os
 from crw import CrwClient
 
 client = CrwClient()  # CRW_API_KEY must be set
@@ -618,15 +584,13 @@ links = client.map(&quot;https://example.com&quot;, max_depth=1)
 assert isinstance(links, list) and len(links) &gt; 0, &quot;map returned no links&quot;
 print(f&quot;map: OK ({len(links)} links)&quot;)
 
-print(&quot;All checks passed — safe to promote to production.&quot;)
-</code></pre>
+print(&quot;All checks passed — safe to promote to production.&quot;)</code></pre>
 <hr>
 <h2 id="feature-detect-the-engine">Feature-detect the engine</h2>
 <p>Use <code>GET /v1/capabilities</code> to confirm what the target engine supports before sending calls that depend on optional features (LLM extraction, file parsing, search):</p>
-<pre><code class="language-bash">curl -s https://api.fastcrw.com/v1/capabilities \
+<pre data-lang="bash"><code class="language-bash">curl -s https://api.fastcrw.com/v1/capabilities \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
-  | python3 -m json.tool
-</code></pre>
+  | python3 -m json.tool</code></pre>
 <p>The response lists <code>llm</code>, <code>search</code>, <code>documents.parsers</code>, and <code>formats</code> so your code can branch instead of assuming.</p>
 <hr>
 <h2 id="what-is-not-in-scope">What is not in scope</h2>

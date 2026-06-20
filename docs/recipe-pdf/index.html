@@ -291,19 +291,17 @@ from the same PDF in one request — no extra OCR pipeline, no intermediate file
 — but any PDF on disk works. The examples use a local file
 <code>annual_report.pdf</code> (replace with your own path).</p>
 <p><strong>What you will build:</strong></p>
-<pre><code>annual_report.pdf  →  POST /v2/parse  →  { markdown, json, metadata }
-</code></pre>
+<pre><code>annual_report.pdf  →  POST /v2/parse  →  { markdown, json, metadata }</code></pre>
 <p><strong>Prerequisites:</strong></p>
-<pre><code class="language-bash">pip install crw
-export CRW_API_KEY=&quot;crw-...&quot;
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">pip install crw
+export CRW_API_KEY=&quot;crw-...&quot;</code></pre>
 <hr>
 <h2 id="part-1-pdf-to-markdown">Part 1 — PDF to Markdown</h2>
 <p>The simplest call: upload a PDF, get markdown back. Default when no <code>formats</code>
 option is set is <code>[&quot;markdown&quot;]</code>.</p>
-<p>:::tabs
-::tab{title=&quot;Python (SDK)&quot;}</p>
-<pre><code class="language-python">import os
+<div class="code-tabs">
+      <div class="code-tabs-header"><button class="code-tab active" data-tab="0">Python (SDK)</button><button class="code-tab" data-tab="1">cURL</button></div>
+      <div class="code-tab-panel active" data-panel="0"><pre data-lang="python"><code class="language-python">import os
 from crw import CrwClient
 
 client = CrwClient()  # reads CRW_API_KEY from env
@@ -314,20 +312,15 @@ result = client.parse_file(path=&quot;annual_report.pdf&quot;)
 md = result[&quot;markdown&quot;]
 meta = result[&quot;metadata&quot;]
 
-print(f&quot;Pages : {meta[&#39;numPages&#39;]}&quot;)
-print(f&quot;Source: {meta[&#39;sourceFilename&#39;]}&quot;)
+print(f&quot;Pages : {meta['numPages']}&quot;)
+print(f&quot;Source: {meta['sourceFilename']}&quot;)
 print()
-print(md[:600])
-</code></pre>
-<p>::tab{title=&quot;cURL&quot;}</p>
-<pre><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v2/parse \
+print(md[:600])</code></pre></div><div class="code-tab-panel" data-panel="1"><pre data-lang="bash"><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v2/parse \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -F &quot;file=@annual_report.pdf;type=application/pdf&quot; \
-  | jq &#39;{ pages: .data.metadata.numPages, preview: .data.markdown[:300] }&#39;
-</code></pre>
-<p>:::</p>
-<p><strong>Expected response:</strong></p>
-<pre><code class="language-json">{
+  | jq '{ pages: .data.metadata.numPages, preview: .data.markdown[:300] }'</code></pre></div>
+    </div><p><strong>Expected response:</strong></p>
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;data&quot;: {
     &quot;markdown&quot;: &quot;# Annual Report 2025\n\nRevenue grew 18% year-over-year...&quot;,
@@ -340,8 +333,7 @@ print(md[:600])
       &quot;scrapeId&quot;: &quot;a1b2c3d4-...&quot;
     }
   }
-}
-</code></pre>
+}</code></pre>
 <p>Key metadata fields for parse responses:</p>
 <table>
 <thead>
@@ -369,9 +361,9 @@ print(md[:600])
 document in one shot. The engine parses the PDF to text first, then runs LLM
 extraction over that text using your schema. Requires an LLM configured on the
 engine (or your cloud account has one).</p>
-<p>:::tabs
-::tab{title=&quot;Python (SDK)&quot;}</p>
-<pre><code class="language-python">import os
+<div class="code-tabs">
+      <div class="code-tabs-header"><button class="code-tab active" data-tab="0">Python (SDK)</button><button class="code-tab" data-tab="1">cURL</button></div>
+      <div class="code-tab-panel active" data-panel="0"><pre data-lang="python"><code class="language-python">import os
 from crw import CrwClient
 
 client = CrwClient()  # reads CRW_API_KEY from env
@@ -400,17 +392,14 @@ print(&quot;Pages:&quot;, result[&quot;metadata&quot;][&quot;numPages&quot;])
 print()
 # Extracted structured fields
 fields = result.get(&quot;json&quot;, {})
-print(f&quot;Company : {fields.get(&#39;companyName&#39;)}&quot;)
-print(f&quot;FY      : {fields.get(&#39;fiscalYear&#39;)}&quot;)
-print(f&quot;Revenue : {fields.get(&#39;totalRevenue&#39;)}&quot;)
-print(f&quot;Net Inc : {fields.get(&#39;netIncome&#39;)}&quot;)
-print(f&quot;Auditor : {fields.get(&#39;auditor&#39;)}&quot;)
-</code></pre>
-<p>::tab{title=&quot;cURL&quot;}</p>
-<pre><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v2/parse \
+print(f&quot;Company : {fields.get('companyName')}&quot;)
+print(f&quot;FY      : {fields.get('fiscalYear')}&quot;)
+print(f&quot;Revenue : {fields.get('totalRevenue')}&quot;)
+print(f&quot;Net Inc : {fields.get('netIncome')}&quot;)
+print(f&quot;Auditor : {fields.get('auditor')}&quot;)</code></pre></div><div class="code-tab-panel" data-panel="1"><pre data-lang="bash"><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v2/parse \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -F &quot;file=@annual_report.pdf;type=application/pdf&quot; \
-  -F &#39;options={
+  -F 'options={
     &quot;formats&quot;: [&quot;markdown&quot;, &quot;json&quot;],
     &quot;jsonSchema&quot;: {
       &quot;type&quot;: &quot;object&quot;,
@@ -423,12 +412,10 @@ print(f&quot;Auditor : {fields.get(&#39;auditor&#39;)}&quot;)
       },
       &quot;required&quot;: [&quot;companyName&quot;, &quot;fiscalYear&quot;, &quot;totalRevenue&quot;]
     }
-  }&#39; \
-  | jq &#39;.data.json&#39;
-</code></pre>
-<p>:::</p>
-<p><strong>Expected response (<code>.data</code> excerpt):</strong></p>
-<pre><code class="language-json">{
+  }' \
+  | jq '.data.json'</code></pre></div>
+    </div><p><strong>Expected response (<code>.data</code> excerpt):</strong></p>
+<pre data-lang="json"><code class="language-json">{
   &quot;markdown&quot;: &quot;# Apple Inc. Form 10-K\n\nFor the fiscal year ended...&quot;,
   &quot;json&quot;: {
     &quot;companyName&quot;: &quot;Apple Inc.&quot;,
@@ -442,8 +429,7 @@ print(f&quot;Auditor : {fields.get(&#39;auditor&#39;)}&quot;)
     &quot;numPages&quot;: 88,
     &quot;sourceFilename&quot;: &quot;annual_report.pdf&quot;
   }
-}
-</code></pre>
+}</code></pre>
 <hr>
 <h2 id="part-3-limit-pages-strip-markdown-client-side">Part 3 — Limit pages + strip Markdown client-side</h2>
 <p>For large documents where you only need the executive summary (first N pages),
@@ -452,9 +438,9 @@ pass a <code>parsers</code> directive with <code>maxPages</code>. To get whitesp
 Markdown syntax client-side — <code>/v2/parse</code> does not return a <code>plainText</code> field
 (that field exists in the internal engine type but is not included in the
 <code>V2Document</code> response shape).</p>
-<p>:::tabs
-::tab{title=&quot;Python (SDK)&quot;}</p>
-<pre><code class="language-python">import os
+<div class="code-tabs">
+      <div class="code-tabs-header"><button class="code-tab active" data-tab="0">Python (SDK)</button><button class="code-tab" data-tab="1">cURL</button></div>
+      <div class="code-tab-panel active" data-panel="0"><pre data-lang="python"><code class="language-python">import os
 import re
 from crw import CrwClient
 
@@ -466,7 +452,7 @@ result = client.parse_file(
     parsers=[{&quot;type&quot;: &quot;pdf&quot;, &quot;maxPages&quot;: 10}],  # first 10 pages only
 )
 
-print(f&quot;Pages parsed: {result[&#39;metadata&#39;][&#39;numPages&#39;]}&quot;)
+print(f&quot;Pages parsed: {result['metadata']['numPages']}&quot;)
 print()
 
 md = result[&quot;markdown&quot;] or &quot;&quot;
@@ -478,19 +464,14 @@ plain = re.sub(r&quot;`{1,3}[^`]*`{1,3}&quot;, &quot;&quot;, plain)        # inl
 plain = re.sub(r&quot;\[([^\]]+)\]\([^)]+\)&quot;, r&quot;\1&quot;, plain) # links
 plain = re.sub(r&quot;\n{3,}&quot;, &quot;\n\n&quot;, plain).strip()        # excess blank lines
 
-print(plain[:400])
-</code></pre>
-<p>::tab{title=&quot;cURL&quot;}</p>
-<pre><code class="language-bash"># /v2/parse does not return a plainText field — request markdown and
+print(plain[:400])</code></pre></div><div class="code-tab-panel" data-panel="1"><pre data-lang="bash"><code class="language-bash"># /v2/parse does not return a plainText field — request markdown and
 # post-process with jq or sed to remove Markdown syntax.
 curl -s -X POST https://api.fastcrw.com/v2/parse \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -F &quot;file=@annual_report.pdf;type=application/pdf&quot; \
-  -F &#39;options={&quot;formats&quot;:[&quot;markdown&quot;],&quot;parsers&quot;:[{&quot;type&quot;:&quot;pdf&quot;,&quot;maxPages&quot;:10}]}&#39; \
-  | jq &#39;{ pages: .data.metadata.numPages, markdown_preview: .data.markdown[:300] }&#39;
-</code></pre>
-<p>:::</p>
-<blockquote>
+  -F 'options={&quot;formats&quot;:[&quot;markdown&quot;],&quot;parsers&quot;:[{&quot;type&quot;:&quot;pdf&quot;,&quot;maxPages&quot;:10}]}' \
+  | jq '{ pages: .data.metadata.numPages, markdown_preview: .data.markdown[:300] }'</code></pre></div>
+    </div><blockquote>
 <p><strong>Note — <code>parsers=</code> accepts strings or objects.</strong> The SDK type annotation is
 <code>parsers: list[str | dict] | None</code>, matching the server&#39;s <code>ParserSpec</code>
 deserializer.  Pass a bare string (<code>[&quot;pdf&quot;]</code>) when no extra options are needed,
@@ -501,7 +482,7 @@ as <code>maxPages</code>.</p>
 <h2 id="part-4-parse-from-bytes-in-memory">Part 4 — Parse from bytes in memory</h2>
 <p>When you download the PDF over HTTP rather than reading from disk, pass raw bytes
 directly so you avoid writing a temp file.</p>
-<pre><code class="language-python">import os
+<pre data-lang="python"><code class="language-python">import os
 import urllib.request
 from crw import CrwClient
 
@@ -519,12 +500,11 @@ result = client.parse_file(
 )
 
 print(f&quot;Downloaded {len(pdf_bytes):,} bytes&quot;)
-print(f&quot;Pages: {result[&#39;metadata&#39;][&#39;numPages&#39;]}&quot;)
-print(result[&quot;markdown&quot;][:400])
-</code></pre>
+print(f&quot;Pages: {result['metadata']['numPages']}&quot;)
+print(result[&quot;markdown&quot;][:400])</code></pre>
 <hr>
 <h2 id="complete-script">Complete script</h2>
-<pre><code class="language-python">&quot;&quot;&quot;
+<pre data-lang="python"><code class="language-python">&quot;&quot;&quot;
 recipe_pdf.py — parse a PDF report and extract structured fields with fastCRW.
 Run:     python recipe_pdf.py annual_report.pdf
 Requires: pip install crw
@@ -559,16 +539,15 @@ result = client.parse_file(
 meta   = result[&quot;metadata&quot;]
 fields = result.get(&quot;json&quot;, {})
 
-print(f&quot;File   : {meta[&#39;sourceFilename&#39;]}&quot;)
-print(f&quot;Pages  : {meta[&#39;numPages&#39;]}&quot;)
+print(f&quot;File   : {meta['sourceFilename']}&quot;)
+print(f&quot;Pages  : {meta['numPages']}&quot;)
 print()
 print(&quot;--- Extracted fields ---&quot;)
 for key, val in fields.items():
     print(f&quot;  {key:&lt;20} {val}&quot;)
 print()
 print(&quot;--- Markdown preview (first 500 chars) ---&quot;)
-print(result[&quot;markdown&quot;][:500])
-</code></pre>
+print(result[&quot;markdown&quot;][:500])</code></pre>
 <hr>
 <h2 id="options-reference">Options reference</h2>
 <p>The <code>options</code> multipart field accepts a JSON string with these keys:</p>

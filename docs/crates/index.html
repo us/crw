@@ -286,20 +286,17 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <p>crw is split into focused crates that can be used independently or together as libraries.</p>
 <h2 id="crw-core">crw-core</h2>
 <p>Core types, configuration, and error handling shared by all crw crates.</p>
-<pre><code class="language-bash">cargo add crw-core
-</code></pre>
-<pre><code class="language-rust">use crw_core::{AppConfig, CrwError, CrwResult};
+<pre data-lang="bash"><code class="language-bash">cargo add crw-core</code></pre>
+<pre data-lang="rust"><code class="language-rust">use crw_core::{AppConfig, CrwError, CrwResult};
 use crw_core::types::{OutputFormat, ScrapeData};
 
 let config = AppConfig::load()?;
-println!(&quot;Server port: {}&quot;, config.server.port);
-</code></pre>
+println!(&quot;Server port: {}&quot;, config.server.port);</code></pre>
 <h2 id="crw-renderer">crw-renderer</h2>
 <p>HTTP fetcher and CDP-based headless browser rendering with automatic SPA detection.</p>
-<pre><code class="language-bash">cargo add crw-renderer                # HTTP only
-cargo add crw-renderer --features cdp # HTTP + CDP rendering
-</code></pre>
-<pre><code class="language-rust">use crw_renderer::FallbackRenderer;
+<pre data-lang="bash"><code class="language-bash">cargo add crw-renderer                # HTTP only
+cargo add crw-renderer --features cdp # HTTP + CDP rendering</code></pre>
+<pre data-lang="rust"><code class="language-rust">use crw_renderer::FallbackRenderer;
 use crw_core::config::RendererConfig;
 use std::collections::HashMap;
 
@@ -313,13 +310,11 @@ let result = renderer.fetch(
     None,  // wait_for_ms
 ).await?;
 
-println!(&quot;Status: {}, HTML length: {}&quot;, result.status_code, result.html.len());
-</code></pre>
+println!(&quot;Status: {}, HTML length: {}&quot;, result.status_code, result.html.len());</code></pre>
 <h2 id="crw-extract">crw-extract</h2>
 <p>HTML content extraction — converts raw HTML to markdown, plain text, or cleaned HTML.</p>
-<pre><code class="language-bash">cargo add crw-extract
-</code></pre>
-<pre><code class="language-rust">use crw_extract::extract;
+<pre data-lang="bash"><code class="language-bash">cargo add crw-extract</code></pre>
+<pre data-lang="rust"><code class="language-rust">use crw_extract::extract;
 use crw_core::types::OutputFormat;
 
 let html = &quot;&lt;html&gt;&lt;body&gt;&lt;h1&gt;Title&lt;/h1&gt;&lt;p&gt;Content here.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;&quot;;
@@ -335,47 +330,39 @@ let data = extract(
     &amp;[],                // exclude_tags
 );
 
-println!(&quot;{}&quot;, data.markdown.unwrap());
-</code></pre>
+println!(&quot;{}&quot;, data.markdown.unwrap());</code></pre>
 <h2 id="crw-crawl">crw-crawl</h2>
 <p>Async BFS web crawler with rate limiting, robots.txt compliance, and sitemap support.</p>
-<pre><code class="language-bash">cargo add crw-crawl
-</code></pre>
-<pre><code class="language-rust">use crw_crawl::robots;
+<pre data-lang="bash"><code class="language-bash">cargo add crw-crawl</code></pre>
+<pre data-lang="rust"><code class="language-rust">use crw_crawl::robots;
 
 // Check robots.txt before crawling
 let allowed = robots::is_allowed(
     &quot;https://example.com/robots.txt&quot;,
     &quot;https://example.com/page&quot;,
     &quot;my-bot&quot;,
-).await?;
-</code></pre>
+).await?;</code></pre>
 <h2 id="crw-server">crw-server</h2>
 <p>Axum-based HTTP API server — Firecrawl-compatible REST endpoints and built-in MCP transport.</p>
-<pre><code class="language-bash">cargo add crw-server
-</code></pre>
-<pre><code class="language-rust">use crw_server::app;
+<pre data-lang="bash"><code class="language-bash">cargo add crw-server</code></pre>
+<pre data-lang="rust"><code class="language-rust">use crw_server::app;
 use crw_core::AppConfig;
 
 let config = AppConfig::load()?;
 let app = app::build_app(config).await;
 
 let listener = tokio::net::TcpListener::bind(&quot;0.0.0.0:3000&quot;).await?;
-axum::serve(listener, app).await?;
-</code></pre>
+axum::serve(listener, app).await?;</code></pre>
 <h2 id="crw-cli">crw-cli</h2>
 <p>Standalone CLI binary — scrape any URL to markdown, JSON, or plain text without a server.</p>
-<pre><code class="language-bash">cargo install crw-cli
-</code></pre>
-<pre><code class="language-bash">crw https://example.com              # markdown to stdout
+<pre data-lang="bash"><code class="language-bash">cargo install crw-cli</code></pre>
+<pre data-lang="bash"><code class="language-bash">crw https://example.com              # markdown to stdout
 crw https://example.com --format json
-crw https://example.com -o page.md
-</code></pre>
+crw https://example.com -o page.md</code></pre>
 <p>This is a standalone binary, not a library. See <a href="/quick-start">Quick Start</a> for usage examples.</p>
 <h2 id="crw-mcp">crw-mcp</h2>
 <p>MCP stdio proxy binary — connects AI assistants to a running crw server.</p>
-<pre><code class="language-bash">cargo install crw-mcp
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">cargo install crw-mcp</code></pre>
 <p>This is a standalone binary, not a library. See <a href="/mcp">MCP Server</a> for setup instructions.</p>
 </article>
     </main>

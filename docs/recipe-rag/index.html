@@ -290,22 +290,20 @@ in a vector database.</p>
 <p><strong>Target site used in this recipe:</strong> <code>https://docs.pydantic.dev/latest/</code> (~120 pages,
 publicly crawlable, no JS required, good real-world docs structure).</p>
 <p><strong>What you will build:</strong></p>
-<pre><code>docs site  →  map URLs  →  scrape each URL + chunk  →  embed  →  Chroma / pgvector  →  query
-</code></pre>
+<pre><code>docs site  →  map URLs  →  scrape each URL + chunk  →  embed  →  Chroma / pgvector  →  query</code></pre>
 <p><strong>Prerequisites:</strong></p>
-<pre><code class="language-bash">pip install crw chromadb openai          # vector DB + embeddings
+<pre data-lang="bash"><code class="language-bash">pip install crw chromadb openai          # vector DB + embeddings
 # or: pip install crw psycopg2-binary    # if you prefer pgvector
 export CRW_API_KEY=&quot;crw-...&quot;
-export OPENAI_API_KEY=&quot;sk-...&quot;           # for text-embedding-3-small
-</code></pre>
+export OPENAI_API_KEY=&quot;sk-...&quot;           # for text-embedding-3-small</code></pre>
 <hr>
 <h2 id="step-1-discover-all-documentation-urls">Step 1: Discover all documentation URLs</h2>
 <p>Use <code>/v1/map</code> to find every URL on the site before fetching any content. This is
 faster and cheaper than crawling blind — you know the full scope up front and can
 filter before spending credits on scrapes.</p>
-<p>:::tabs
-::tab{title=&quot;Python&quot;}</p>
-<pre><code class="language-python">import os
+<div class="code-tabs">
+      <div class="code-tabs-header"><button class="code-tab active" data-tab="0">Python</button><button class="code-tab" data-tab="1">cURL</button></div>
+      <div class="code-tab-panel active" data-panel="0"><pre data-lang="python"><code class="language-python">import os
 from crw import CrwClient
 
 client = CrwClient(api_key=os.environ[&quot;CRW_API_KEY&quot;])
@@ -319,24 +317,19 @@ urls = client.map(
 # Keep only docs pages (drop anchors, changelogs, API refs if unwanted)
 doc_urls = [u for u in urls if &quot;/api/&quot; not in u and &quot;#&quot; not in u]
 print(f&quot;Found {len(doc_urls)} documentation pages&quot;)
-# Found 87 documentation pages
-</code></pre>
-<p>::</p>
-<p>::tab{title=&quot;cURL&quot;}</p>
-<pre><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v1/map \
+# Found 87 documentation pages</code></pre><p>::</div><div class="code-tab-panel" data-panel="1"><pre data-lang="bash"><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v1/map \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
+  -d '{
     &quot;url&quot;: &quot;https://docs.pydantic.dev/latest/&quot;,
     &quot;maxDepth&quot;: 3,
     &quot;useSitemap&quot;: true
-  }&#39; | jq &#39;.data.links | length&#39;
-# 87
-</code></pre>
-<p>::
-:::</p>
+  }' | jq '.data.links | length'
+# 87</code></pre></p>
+<p>::</div>
+    </div></p>
 <p><strong>Expected response shape:</strong></p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;data&quot;: {
     &quot;links&quot;: [
@@ -345,8 +338,7 @@ print(f&quot;Found {len(doc_urls)} documentation pages&quot;)
       &quot;...&quot;
     ]
   }
-}
-</code></pre>
+}</code></pre>
 <hr>
 <h2 id="step-2-scrape-pages-and-chunk-each-one">Step 2: Scrape pages and chunk each one</h2>
 <p>Scrape each discovered URL with <code>POST /v1/scrape</code>, passing <code>chunkStrategy</code> to
@@ -382,9 +374,9 @@ individual <code>/v1/scrape</code> calls (looped) to get chunked output.</p>
 <td>custom separators</td>
 </tr>
 </tbody></table>
-<p>:::tabs
-::tab{title=&quot;Python&quot;}</p>
-<pre><code class="language-python"># POST /v1/scrape for each URL — chunkStrategy is a v1 parameter
+<div class="code-tabs">
+      <div class="code-tabs-header"><button class="code-tab active" data-tab="0">Python</button><button class="code-tab" data-tab="1">cURL</button></div>
+      <div class="code-tab-panel active" data-panel="0"><pre data-lang="python"><code class="language-python"># POST /v1/scrape for each URL — chunkStrategy is a v1 parameter
 pages = []
 for url in doc_urls[:50]:          # start small; remove slice for full run
     page = client.scrape(
@@ -401,26 +393,21 @@ for url in doc_urls[:50]:          # start small; remove slice for full run
     pages.append(page)
 
 print(f&quot;Scraped {len(pages)} pages&quot;)
-# Scraped 50 pages
-</code></pre>
-<p>::</p>
-<p>::tab{title=&quot;cURL&quot;}</p>
-<pre><code class="language-bash"># POST /v1/scrape with chunkStrategy (one call per URL)
+# Scraped 50 pages</code></pre><p>::</div><div class="code-tab-panel" data-panel="1"><pre data-lang="bash"><code class="language-bash"># POST /v1/scrape with chunkStrategy (one call per URL)
 curl -s -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
+  -d '{
     &quot;url&quot;: &quot;https://docs.pydantic.dev/latest/concepts/models/&quot;,
     &quot;formats&quot;: [&quot;markdown&quot;],
     &quot;chunkStrategy&quot;: { &quot;type&quot;: &quot;topic&quot;, &quot;maxChars&quot;: 1500, &quot;dedupe&quot;: true },
     &quot;onlyMainContent&quot;: true
-  }&#39; | jq &#39;.data.chunks | length&#39;
-# 3
-</code></pre>
-<p>::
-:::</p>
+  }' | jq '.data.chunks | length'
+# 3</code></pre></p>
+<p>::</div>
+    </div></p>
 <p><strong>Expected shape of one page result:</strong></p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;markdown&quot;: &quot;# Models\n\nPydantic models are...&quot;,
   &quot;chunks&quot;: [
     { &quot;index&quot;: 0, &quot;content&quot;: &quot;# Models\n\nPydantic models are the primary way...&quot;, &quot;score&quot;: null },
@@ -432,8 +419,7 @@ curl -s -X POST https://api.fastcrw.com/v1/scrape \
     &quot;sourceURL&quot;: &quot;https://docs.pydantic.dev/latest/concepts/models/&quot;,
     &quot;statusCode&quot;: 200
   }
-}
-</code></pre>
+}</code></pre>
 <blockquote>
 <p><strong>Note:</strong> <code>score</code> is <code>null</code> when no <code>query</code> + <code>filterMode</code> are passed. Scores
 appear when you do server-side BM25/cosine filtering — useful for one-shot QA but
@@ -444,7 +430,7 @@ not for building a knowledge base (you want all chunks indexed).</p>
 <p>Flatten all chunks from all pages into a single list, then embed them in batches.
 This recipe uses OpenAI <code>text-embedding-3-small</code> (1536 dims, cheap), but any
 embeddings API works.</p>
-<pre><code class="language-python">from openai import OpenAI
+<pre data-lang="python"><code class="language-python">from openai import OpenAI
 
 embed_client = OpenAI(api_key=os.environ[&quot;OPENAI_API_KEY&quot;])
 
@@ -475,11 +461,10 @@ for i in range(0, len(records), BATCH):
     vectors.extend(embed_batch(batch_texts))
 
 print(f&quot;Embedded {len(vectors)} vectors (dim={len(vectors[0])})&quot;)
-# Embedded 312 vectors (dim=1536)
-</code></pre>
+# Embedded 312 vectors (dim=1536)</code></pre>
 <hr>
 <h2 id="step-4-store-in-chroma-and-query">Step 4: Store in Chroma and query</h2>
-<pre><code class="language-python">import chromadb
+<pre data-lang="python"><code class="language-python">import chromadb
 
 chroma = chromadb.Client()
 collection = chroma.get_or_create_collection(
@@ -489,7 +474,7 @@ collection = chroma.get_or_create_collection(
 
 # Upsert all chunks — Chroma needs string IDs
 collection.upsert(
-    ids=[f&quot;{r[&#39;url&#39;]}#{r[&#39;index&#39;]}&quot; for r in records],
+    ids=[f&quot;{r['url']}#{r['index']}&quot; for r in records],
     embeddings=vectors,
     documents=[r[&quot;text&quot;] for r in records],
     metadatas=[{&quot;url&quot;: r[&quot;url&quot;], &quot;chunk_index&quot;: r[&quot;index&quot;]} for r in records],
@@ -513,40 +498,34 @@ for doc, meta, dist in zip(
     results[&quot;metadatas&quot;][0],
     results[&quot;distances&quot;][0],
 ):
-    print(f&quot;[score={1 - dist:.3f}] {meta[&#39;url&#39;]}&quot;)
+    print(f&quot;[score={1 - dist:.3f}] {meta['url']}&quot;)
     print(doc[:200])
-    print()
-</code></pre>
+    print()</code></pre>
 <p><strong>Expected query output:</strong></p>
 <pre><code>[score=0.871] https://docs.pydantic.dev/latest/concepts/fields/
 ## Default Values
 
-Fields can have default values set either directly or via `Field(default=...)`:
-
-```python
-from pydantic import BaseModel, Field
-
-class User(BaseModel):
+Fields can have default values set either directly or via `Field(default=...)`:</code></pre>
+<p>python
+from pydantic import BaseModel, Field</p>
+<p>class User(BaseModel):
     name: str
     age: int = 0          # direct default
-    bio: str = Field(default=&quot;&quot;, description=&quot;Short bio&quot;)
-</code></pre>
-<p>[score=0.843] <a href="https://docs.pydantic.dev/latest/concepts/models/">https://docs.pydantic.dev/latest/concepts/models/</a></p>
-<h2 id="field-definitions">Field Definitions</h2>
-<p>Fields are defined as class attributes with type annotations. A field without a
-default is required; a field with a default is optional...</p>
-<p>[score=0.801] <a href="https://docs.pydantic.dev/latest/concepts/validators/">https://docs.pydantic.dev/latest/concepts/validators/</a></p>
-<h2 id="field-validators">Field Validators</h2>
-<p>Use <code>@field_validator</code> to add validation logic. Validators run after the default...</p>
-<pre><code>
----
+    bio: str = Field(default=&quot;&quot;, description=&quot;Short bio&quot;)</p>
+<pre><code>[score=0.843] https://docs.pydantic.dev/latest/concepts/models/
+## Field Definitions
 
-## pgvector alternative (Step 4b)
+Fields are defined as class attributes with type annotations. A field without a
+default is required; a field with a default is optional...
 
-If you are already running Postgres, use pgvector instead of Chroma:
+[score=0.801] https://docs.pydantic.dev/latest/concepts/validators/
+## Field Validators
 
-```python
-import psycopg2
+Use `@field_validator` to add validation logic. Validators run after the default...</code></pre>
+<hr>
+<h2 id="pgvector-alternative-step-4b">pgvector alternative (Step 4b)</h2>
+<p>If you are already running Postgres, use pgvector instead of Chroma:</p>
+<pre data-lang="python"><code class="language-python">import psycopg2
 import json
 
 conn = psycopg2.connect(&quot;postgresql://localhost/mydb&quot;)
@@ -570,7 +549,7 @@ for rec, vec in zip(records, vectors):
         VALUES (%s, %s, %s, %s, %s)
         ON CONFLICT (id) DO UPDATE SET embedding = EXCLUDED.embedding
         &quot;&quot;&quot;,
-        (f&quot;{rec[&#39;url&#39;]}#{rec[&#39;index&#39;]}&quot;, rec[&quot;url&quot;], rec[&quot;index&quot;],
+        (f&quot;{rec['url']}#{rec['index']}&quot;, rec[&quot;url&quot;], rec[&quot;index&quot;],
          rec[&quot;text&quot;], json.dumps(vec)),
     )
 
@@ -590,11 +569,10 @@ cur.execute(
 for url, content, score in cur.fetchall():
     print(f&quot;[score={score:.3f}] {url}&quot;)
     print(content[:200])
-    print()
-</code></pre>
+    print()</code></pre>
 <hr>
 <h2 id="complete-script">Complete script</h2>
-<pre><code class="language-python">&quot;&quot;&quot;
+<pre data-lang="python"><code class="language-python">&quot;&quot;&quot;
 recipe_rag.py — build a RAG knowledge base from a docs site with fastCRW.
 Run: python recipe_rag.py
 Requires: pip install crw chromadb openai
@@ -649,7 +627,7 @@ print(f&quot;Embedded {len(vectors)} vectors&quot;)
 chroma      = chromadb.Client()
 collection  = chroma.get_or_create_collection(&quot;pydantic_docs&quot;, metadata={&quot;hnsw:space&quot;: &quot;cosine&quot;})
 collection.upsert(
-    ids=[f&quot;{r[&#39;url&#39;]}#{r[&#39;index&#39;]}&quot; for r in records],
+    ids=[f&quot;{r['url']}#{r['index']}&quot; for r in records],
     embeddings=vectors,
     documents=[r[&quot;text&quot;] for r in records],
     metadatas=[{&quot;url&quot;: r[&quot;url&quot;]} for r in records],
@@ -662,8 +640,7 @@ q_vec   = embed_batch([QUERY])[0]
 results = collection.query(query_embeddings=[q_vec], n_results=3,
                            include=[&quot;documents&quot;, &quot;metadatas&quot;, &quot;distances&quot;])
 for doc, meta, dist in zip(results[&quot;documents&quot;][0], results[&quot;metadatas&quot;][0], results[&quot;distances&quot;][0]):
-    print(f&quot;\n[score={1-dist:.3f}] {meta[&#39;url&#39;]}\n{doc[:300]}&quot;)
-</code></pre>
+    print(f&quot;\n[score={1-dist:.3f}] {meta['url']}\n{doc[:300]}&quot;)</code></pre>
 <hr>
 <h2 id="key-parameters">Key parameters</h2>
 <table>

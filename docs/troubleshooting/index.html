@@ -304,17 +304,16 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <p><strong>Symptom:</strong> Response is <code>success: true</code> but <code>data.markdown</code> is an empty string or fewer than 100 characters. The page renders fine in a browser.</p>
 <p><strong>Cause:</strong> The page is a JavaScript Single-Page Application (SPA). The HTTP-only fetcher receives the shell HTML before React/Vue/Next.js mounts content into the DOM. No JavaScript executes, so <code>readability</code> sees an empty container.</p>
 <p><strong>Fix:</strong> Set <code>renderJs: true</code> to force a headless browser render:</p>
-<pre><code class="language-bash"># cURL
+<pre data-lang="bash"><code class="language-bash"># cURL
 curl -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
+  -d '{
     &quot;url&quot;: &quot;https://app.example.com/dashboard&quot;,
     &quot;renderJs&quot;: true,
     &quot;waitFor&quot;: 1500
-  }&#39;
-</code></pre>
-<pre><code class="language-python"># Python — pip install crw
+  }'</code></pre>
+<pre data-lang="python"><code class="language-python"># Python — pip install crw
 from crw import CrwClient
 
 client = CrwClient(api_key=&quot;crw_live_YOUR_KEY&quot;)
@@ -323,8 +322,7 @@ result = client.scrape(
     render_js=True,
     wait_for=1500,
 )
-print(result[&quot;markdown&quot;][:300])
-</code></pre>
+print(result[&quot;markdown&quot;][:300])</code></pre>
 <p><strong>Self-hosted:</strong> <code>renderJs: true</code> requires a configured CDP renderer (LightPanda or Chrome). If neither is running you will get a warning <code>&quot;JS rendering was requested but no renderer is available&quot;</code> and the engine falls back to HTTP. Check <code>GET /health</code> and <code>GET /metrics/renderer-breakers</code>.</p>
 <p><strong><code>wait_for</code> guidance:</strong> Start with <code>1000</code>–<code>2000</code> ms for most SPAs. Complex hydration (Next.js App Router, React 18 concurrent mode) may need <code>3000</code>–<code>5000</code> ms.</p>
 <hr>
@@ -336,28 +334,26 @@ print(result[&quot;markdown&quot;][:300])
 <li>Add <code>&quot;stealth&quot;: true</code> to route through randomized headers and a pooled real-browser UA.</li>
 <li>Switch renderer to <code>&quot;chrome_proxy&quot;</code> to egress through residential IPs (fastcrw.com managed tier only):</li>
 </ol>
-<pre><code class="language-bash"># cURL — step 1: stealth headers
+<pre data-lang="bash"><code class="language-bash"># cURL — step 1: stealth headers
 curl -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
+  -d '{
     &quot;url&quot;: &quot;https://www.example-protected.com/product/123&quot;,
     &quot;renderJs&quot;: true,
     &quot;stealth&quot;: true
-  }&#39;
-</code></pre>
-<pre><code class="language-bash"># cURL — step 2: residential proxy Chrome tier
+  }'</code></pre>
+<pre data-lang="bash"><code class="language-bash"># cURL — step 2: residential proxy Chrome tier
 curl -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
+  -d '{
     &quot;url&quot;: &quot;https://www.example-protected.com/product/123&quot;,
     &quot;renderer&quot;: &quot;chrome_proxy&quot;,
     &quot;stealth&quot;: true,
     &quot;country&quot;: &quot;us&quot;
-  }&#39;
-</code></pre>
-<pre><code class="language-python"># Python — residential proxy tier
+  }'</code></pre>
+<pre data-lang="python"><code class="language-python"># Python — residential proxy tier
 from crw import CrwClient
 
 client = CrwClient(api_key=&quot;crw_live_YOUR_KEY&quot;)
@@ -367,8 +363,7 @@ result = client.scrape(
     stealth=True,
     country=&quot;us&quot;,
 )
-print(result[&quot;markdown&quot;][:300])
-</code></pre>
+print(result[&quot;markdown&quot;][:300])</code></pre>
 <p><strong>Note:</strong> <code>renderer: &quot;chrome_proxy&quot;</code> is only available on fastcrw.com managed infrastructure. Self-hosted deployments must supply their own residential proxy pool via <code>proxy</code> or <code>proxy_list</code> and use <code>renderer: &quot;chrome&quot;</code>.</p>
 <p><strong>Do not retry anti-bot blocks in a tight loop</strong> — each failed attempt teaches the WAF more about your traffic pattern.</p>
 <hr>
@@ -381,7 +376,7 @@ print(result[&quot;markdown&quot;][:300])
 <li>The URL targets a private/reserved IP that the URL safety validator blocks (e.g., <code>localhost</code>, <code>10.x.x.x</code>, <code>192.168.x.x</code>).</li>
 </ul>
 <p><strong>Fix:</strong></p>
-<pre><code class="language-bash"># Verify DNS resolves before calling the API
+<pre data-lang="bash"><code class="language-bash"># Verify DNS resolves before calling the API
 nslookup your-target.example.com
 
 # Check the URL is reachable from outside your network
@@ -391,12 +386,10 @@ curl -I https://your-target.example.com
 curl -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;url&quot;: &quot;https://your-target.example.com&quot;}&#39; | jq &#39;.error&#39;
-</code></pre>
+  -d '{&quot;url&quot;: &quot;https://your-target.example.com&quot;}' | jq '.error'</code></pre>
 <p><strong>Error code mapping</strong> (from <code>crw-server/src/error.rs</code>):</p>
 <pre><code>CrwError::TargetUnreachable → HTTP 422, error_code: &quot;target_unreachable&quot;
-CrwError::ExtractionError   → HTTP 422, error_code: &quot;extraction_error&quot;
-</code></pre>
+CrwError::ExtractionError   → HTTP 422, error_code: &quot;extraction_error&quot;</code></pre>
 <p>If the target URL is correct and externally reachable, the issue is intermittent — retry with backoff. If it is consistent, the target host has a problem unrelated to fastCRW.</p>
 <hr>
 <h2 id="4-http-401-invalid-api-key">4. HTTP 401 Invalid API key</h2>
@@ -409,22 +402,20 @@ CrwError::ExtractionError   → HTTP 422, error_code: &quot;extraction_error&quo
 <li>If <code>[auth].api_keys</code> is empty, all requests pass — no auth required.</li>
 </ol>
 <p><strong>Fix:</strong></p>
-<pre><code class="language-bash"># Correct header format
+<pre data-lang="bash"><code class="language-bash"># Correct header format
 curl -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer crw_live_YOUR_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;url&quot;: &quot;https://example.com&quot;}&#39;
+  -d '{&quot;url&quot;: &quot;https://example.com&quot;}'
 
 # Common mistakes that return 401:
 # -H &quot;Authorization: crw_live_YOUR_KEY&quot;        ← missing &quot;Bearer &quot;
 # -H &quot;Authorization: bearer crw_live_YOUR_KEY&quot; ← lowercase &quot;bearer&quot;
-# -H &quot;Authorization: Basic ...&quot;               ← wrong scheme
-</code></pre>
-<pre><code class="language-python">from crw import CrwClient
+# -H &quot;Authorization: Basic ...&quot;               ← wrong scheme</code></pre>
+<pre data-lang="python"><code class="language-python">from crw import CrwClient
 
 # Key is passed in the constructor — the SDK sets the header correctly
-client = CrwClient(api_key=&quot;crw_live_YOUR_KEY&quot;)
-</code></pre>
+client = CrwClient(api_key=&quot;crw_live_YOUR_KEY&quot;)</code></pre>
 <p><strong>Self-hosted:</strong> If you did not set <code>[auth].api_keys</code> in your config, the API is open to all. If you set keys, pass one of them verbatim as the Bearer token.</p>
 <hr>
 <h2 id="5-http-429-rate-limit-vs-credit-exhausted">5. HTTP 429 — rate limit vs. credit exhausted</h2>
@@ -453,14 +444,13 @@ client = CrwClient(api_key=&quot;crw_live_YOUR_KEY&quot;)
 </tr>
 </tbody></table>
 <p><strong>Rate limit (RPM):</strong></p>
-<pre><code class="language-bash"># Honor the Retry-After header (fastcrw.com cloud)
+<pre data-lang="bash"><code class="language-bash"># Honor the Retry-After header (fastcrw.com cloud)
 RETRY_AFTER=$(curl -sI -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;url&quot;: &quot;https://example.com&quot;}&#39; | grep -i retry-after | awk &#39;{print $2}&#39;)
-echo &quot;Retry after: $RETRY_AFTER seconds&quot;
-</code></pre>
-<pre><code class="language-python">import time, requests
+  -d '{&quot;url&quot;: &quot;https://example.com&quot;}' | grep -i retry-after | awk '{print $2}')
+echo &quot;Retry after: $RETRY_AFTER seconds&quot;</code></pre>
+<pre data-lang="python"><code class="language-python">import time, requests
 
 def scrape_with_retry(url, api_key, max_retries=5):
     headers = {&quot;Authorization&quot;: f&quot;Bearer {api_key}&quot;, &quot;Content-Type&quot;: &quot;application/json&quot;}
@@ -482,8 +472,7 @@ def scrape_with_retry(url, api_key, max_retries=5):
         return resp.json()
     raise RuntimeError(&quot;Max retries exceeded&quot;)
 
-result = scrape_with_retry(&quot;https://example.com&quot;, &quot;crw_live_YOUR_KEY&quot;)
-</code></pre>
+result = scrape_with_retry(&quot;https://example.com&quot;, &quot;crw_live_YOUR_KEY&quot;)</code></pre>
 <p><strong>Credit exhausted:</strong> Retrying on a timer does not help — the balance does not replenish on its own. Go to <code>fastcrw.com/dashboard</code> to top up or enable auto-recharge.</p>
 <p><strong>Self-hosted:</strong> <code>429</code> from a self-hosted instance is always the RPM rate limiter (<code>rate_limit_rps</code> in config). There is no credit system on self-hosted. No <code>Retry-After</code> header is emitted; use client-side exponential backoff.</p>
 <hr>
@@ -493,27 +482,23 @@ result = scrape_with_retry(&quot;https://example.com&quot;, &quot;crw_live_YOUR_
 <h3 id="6a-error_code-search_disabled-503">6a. <code>error_code: &quot;search_disabled&quot;</code> (503)</h3>
 <p><strong>Cause:</strong> The engine has no SearXNG instance configured. The search route requires <code>[search].searxng_url</code> in config or the <code>CRW_SEARCH__SEARXNG_URL</code> environment variable.</p>
 <p><strong>Fix (self-hosted):</strong></p>
-<pre><code class="language-toml"># config.toml
+<pre data-lang="toml"><code class="language-toml"># config.toml
 [search]
-searxng_url = &quot;http://localhost:8080&quot;
-</code></pre>
-<pre><code class="language-bash"># Or via environment variable
-export CRW_SEARCH__SEARXNG_URL=http://localhost:8080
-</code></pre>
-<pre><code class="language-bash"># Quickest self-hosted setup — use the bundled docker-compose
+searxng_url = &quot;http://localhost:8080&quot;</code></pre>
+<pre data-lang="bash"><code class="language-bash"># Or via environment variable
+export CRW_SEARCH__SEARXNG_URL=http://localhost:8080</code></pre>
+<pre data-lang="bash"><code class="language-bash"># Quickest self-hosted setup — use the bundled docker-compose
 docker compose up -d
-# The bundled docker-compose.yml already wires CRW to the searxng sidecar
-</code></pre>
+# The bundled docker-compose.yml already wires CRW to the searxng sidecar</code></pre>
 <p><strong>fastcrw.com cloud:</strong> <code>search_disabled</code> never occurs on the managed SaaS tier. <code>crw_search</code> is always available.</p>
 <h3 id="6b-empty-results-array-no-error">6b. Empty results array (no error)</h3>
 <p><strong>Cause:</strong> SearXNG returned zero results — usually because no search engines are enabled in the SearXNG instance, the instance is rate-limited by upstream search providers, or the query matched no results.</p>
 <p><strong>Diagnosis:</strong></p>
-<pre><code class="language-bash"># Hit the SearXNG UI directly to check it is working
-curl &quot;http://localhost:8080/?q=test+query&amp;format=json&quot; | jq &#39;.results | length&#39;
+<pre data-lang="bash"><code class="language-bash"># Hit the SearXNG UI directly to check it is working
+curl &quot;http://localhost:8080/?q=test+query&amp;format=json&quot; | jq '.results | length'
 
 # Check which engines SearXNG has enabled
-curl &quot;http://localhost:8080/config&quot; | jq &#39;.engines[] | select(.enabled == true) | .name&#39;
-</code></pre>
+curl &quot;http://localhost:8080/config&quot; | jq '.engines[] | select(.enabled == true) | .name'</code></pre>
 <p><strong>Fix:</strong> Enable engines in the SearXNG <code>settings.yml</code>, or use the bundled Docker image which comes pre-configured.</p>
 <hr>
 <h2 id="7-mcp-server-not-appearing-in-ai-client">7. MCP server not appearing in AI client</h2>
@@ -523,7 +508,7 @@ curl &quot;http://localhost:8080/config&quot; | jq &#39;.engines[] | select(.ena
 <p>MCP servers are registered at client start. Add the config entry then <strong>fully restart the application</strong> (not just reload the window).</p>
 <h3 id="7b-npx-is-not-in-path-when-the-client-launches">7b. <code>npx</code> is not in PATH when the client launches</h3>
 <p>GUI applications on macOS may not inherit your shell&#39;s PATH. The binary is not found and the MCP process silently fails to start.</p>
-<pre><code class="language-json">// Workaround: use the absolute path to npx
+<pre data-lang="json"><code class="language-json">// Workaround: use the absolute path to npx
 {
   &quot;mcpServers&quot;: {
     &quot;crw&quot;: {
@@ -531,8 +516,7 @@ curl &quot;http://localhost:8080/config&quot; | jq &#39;.engines[] | select(.ena
       &quot;args&quot;: [&quot;-y&quot;, &quot;crw-mcp&quot;]
     }
   }
-}
-</code></pre>
+}</code></pre>
 <p>Find your <code>npx</code> path with <code>which npx</code> in a terminal.</p>
 <h3 id="7c-wrong-config-file-location">7c. Wrong config file location</h3>
 <table>
@@ -567,9 +551,8 @@ curl &quot;http://localhost:8080/config&quot; | jq &#39;.engines[] | select(.ena
 </ul>
 <h3 id="7e-diagnosing-with-the-json-rpc-wire">7e. Diagnosing with the JSON-RPC wire</h3>
 <p>The MCP server communicates over stdio JSON-RPC. You can test it directly:</p>
-<pre><code class="language-bash"># List available tools (paste and press Enter, then Ctrl-D)
-echo &#39;{&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;id&quot;:1,&quot;method&quot;:&quot;tools/list&quot;,&quot;params&quot;:{}}&#39; | npx -y crw-mcp 2&gt;/dev/null
-</code></pre>
+<pre data-lang="bash"><code class="language-bash"># List available tools (paste and press Enter, then Ctrl-D)
+echo '{&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;id&quot;:1,&quot;method&quot;:&quot;tools/list&quot;,&quot;params&quot;:{}}' | npx -y crw-mcp 2&gt;/dev/null</code></pre>
 <p>If this produces a JSON response with a <code>tools</code> array, the binary works and the problem is in the client config.</p>
 <hr>
 <h2 id="8-credit-exhausted-402-vs-429">8. Credit exhausted — 402 vs 429</h2>
@@ -596,11 +579,10 @@ echo &#39;{&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;id&quot;:1,&quot;method&quo
 </tbody></table>
 <p><strong>Note for self-hosted users:</strong> Neither <code>402</code> nor credit-<code>429</code> exists on self-hosted. The only <code>429</code> on self-hosted is the RPM rate limiter (<code>rate_limited</code> error code). Self-hosted has no billing system.</p>
 <p><strong>Fix:</strong></p>
-<pre><code class="language-bash"># Check your balance (fastcrw.com SaaS)
+<pre data-lang="bash"><code class="language-bash"># Check your balance (fastcrw.com SaaS)
 curl https://fastcrw.com/api/v1/account/balance \
-  -H &quot;Authorization: Bearer $CRW_API_KEY&quot; | jq &#39;{balance, plan}&#39;
-</code></pre>
-<pre><code class="language-python"># Python — check balance before a large crawl
+  -H &quot;Authorization: Bearer $CRW_API_KEY&quot; | jq '{balance, plan}'</code></pre>
+<pre data-lang="python"><code class="language-python"># Python — check balance before a large crawl
 import requests
 
 resp = requests.get(
@@ -608,10 +590,9 @@ resp = requests.get(
     headers={&quot;Authorization&quot;: f&quot;Bearer {api_key}&quot;},
 )
 data = resp.json()
-print(f&quot;Balance: {data[&#39;balance&#39;]} credits&quot;)
+print(f&quot;Balance: {data['balance']} credits&quot;)
 if data[&quot;balance&quot;] &lt; 100:
-    print(&quot;Warning: low balance — top up at fastcrw.com/dashboard&quot;)
-</code></pre>
+    print(&quot;Warning: low balance — top up at fastcrw.com/dashboard&quot;)</code></pre>
 <p><strong>Do not retry a credit-<code>429</code> on a timer</strong> — the balance is exhausted and retrying consumes no credits (the request is rejected before any work starts) but it does waste time and may look like abuse. Replenish the balance first.</p>
 <hr>
 <h2 id="error-code-reference">Error code reference</h2>

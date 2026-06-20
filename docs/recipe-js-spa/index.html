@@ -288,18 +288,15 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <hr>
 <h2 id="step-1-plain-scrape-baseline">Step 1 — Plain scrape (baseline)</h2>
 <p>Always start without JS rendering. If the page is server-side rendered you save cost and latency.</p>
-<p>:::tabs
-::tab{title=&quot;cURL&quot;}</p>
-<pre><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v1/scrape \
+<div class="code-tabs">
+      <div class="code-tabs-header"><button class="code-tab active" data-tab="0">cURL</button><button class="code-tab" data-tab="1">Python (crw SDK)</button></div>
+      <div class="code-tab-panel active" data-panel="0"><pre data-lang="bash"><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
+  -d '{
     &quot;url&quot;: &quot;https://vercel.com/changelog&quot;,
     &quot;formats&quot;: [&quot;markdown&quot;]
-  }&#39;
-</code></pre>
-<p>::tab{title=&quot;Python (crw SDK)&quot;}</p>
-<pre><code class="language-python">from crw import CrwClient
+  }'</code></pre></div><div class="code-tab-panel" data-panel="1"><pre data-lang="python"><code class="language-python">from crw import CrwClient
 
 client = CrwClient()  # reads CRW_API_KEY from env
 
@@ -313,11 +310,9 @@ rendered_with = result[&quot;metadata&quot;][&quot;renderedWith&quot;]
 
 print(f&quot;renderedWith: {rendered_with}&quot;)
 print(f&quot;markdown length: {len(markdown)} chars&quot;)
-print(markdown[:300] or &quot;(empty)&quot;)
-</code></pre>
-<p>:::</p>
-<p><strong>Expected output (SPA shell — nothing useful):</strong></p>
-<pre><code class="language-json">{
+print(markdown[:300] or &quot;(empty)&quot;)</code></pre></div>
+    </div><p><strong>Expected output (SPA shell — nothing useful):</strong></p>
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;data&quot;: {
     &quot;markdown&quot;: &quot;&quot;,
@@ -329,26 +324,22 @@ print(markdown[:300] or &quot;(empty)&quot;)
       &quot;elapsedMs&quot;: 180
     }
   }
-}
-</code></pre>
+}</code></pre>
 <p><code>renderedWith: &quot;http&quot;</code> confirms no browser was used. The empty markdown is the SPA shell — all content is injected by JavaScript after load.</p>
 <hr>
 <h2 id="step-2-add-renderjs-true-and-a-waitfor">Step 2 — Add <code>renderJs: true</code> and a <code>waitFor</code></h2>
 <p>Force browser rendering and give the page time to hydrate.</p>
-<p>:::tabs
-::tab{title=&quot;cURL&quot;}</p>
-<pre><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v1/scrape \
+<div class="code-tabs">
+      <div class="code-tabs-header"><button class="code-tab active" data-tab="0">cURL</button><button class="code-tab" data-tab="1">Python (crw SDK)</button></div>
+      <div class="code-tab-panel active" data-panel="0"><pre data-lang="bash"><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
+  -d '{
     &quot;url&quot;: &quot;https://vercel.com/changelog&quot;,
     &quot;formats&quot;: [&quot;markdown&quot;],
     &quot;renderJs&quot;: true,
     &quot;waitFor&quot;: 2000
-  }&#39;
-</code></pre>
-<p>::tab{title=&quot;Python (crw SDK)&quot;}</p>
-<pre><code class="language-python">from crw import CrwClient
+  }'</code></pre></div><div class="code-tab-panel" data-panel="1"><pre data-lang="python"><code class="language-python">from crw import CrwClient
 
 client = CrwClient()
 
@@ -364,11 +355,9 @@ rendered_with = result[&quot;metadata&quot;][&quot;renderedWith&quot;]
 
 print(f&quot;renderedWith: {rendered_with}&quot;)
 print(f&quot;markdown length: {len(markdown)} chars&quot;)
-print(markdown[:500])
-</code></pre>
-<p>:::</p>
-<p><strong>Expected output (hydrated content):</strong></p>
-<pre><code class="language-json">{
+print(markdown[:500])</code></pre></div>
+    </div><p><strong>Expected output (hydrated content):</strong></p>
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;data&quot;: {
     &quot;markdown&quot;: &quot;# Changelog\n\n## June 2026\n\n### Build output compression...&quot;,
@@ -380,8 +369,7 @@ print(markdown[:500])
       &quot;elapsedMs&quot;: 2340
     }
   }
-}
-</code></pre>
+}</code></pre>
 <p><code>renderedWith</code> is now <code>&quot;lightpanda&quot;</code> (or <code>&quot;chrome&quot;</code> depending on your server config) — the browser rendered the page and the markdown has real content.</p>
 <h3 id="choosing-a-waitfor-value">Choosing a <code>waitFor</code> value</h3>
 <table>
@@ -437,31 +425,25 @@ print(markdown[:500])
 </tr>
 </tbody></table>
 <p>Pinning a non-<code>auto</code> renderer implies <code>renderJs: true</code>. If you also set <code>renderJs: false</code> explicitly, the pin is ignored and HTTP-only is used.</p>
-<p>:::tabs
-::tab{title=&quot;cURL — pin lightpanda&quot;}</p>
-<pre><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v1/scrape \
+<div class="code-tabs">
+      <div class="code-tabs-header"><button class="code-tab active" data-tab="0">cURL — pin lightpanda</button><button class="code-tab" data-tab="1">cURL — pin chrome</button><button class="code-tab" data-tab="2">Python (crw SDK)</button></div>
+      <div class="code-tab-panel active" data-panel="0"><pre data-lang="bash"><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
+  -d '{
     &quot;url&quot;: &quot;https://vercel.com/changelog&quot;,
     &quot;formats&quot;: [&quot;markdown&quot;],
     &quot;renderer&quot;: &quot;lightpanda&quot;,
     &quot;waitFor&quot;: 2000
-  }&#39;
-</code></pre>
-<p>::tab{title=&quot;cURL — pin chrome&quot;}</p>
-<pre><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v1/scrape \
+  }'</code></pre></div><div class="code-tab-panel" data-panel="1"><pre data-lang="bash"><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
+  -d '{
     &quot;url&quot;: &quot;https://vercel.com/changelog&quot;,
     &quot;formats&quot;: [&quot;markdown&quot;],
     &quot;renderer&quot;: &quot;chrome&quot;,
     &quot;waitFor&quot;: 2000
-  }&#39;
-</code></pre>
-<p>::tab{title=&quot;Python (crw SDK)&quot;}</p>
-<pre><code class="language-python">from crw import CrwClient
+  }'</code></pre></div><div class="code-tab-panel" data-panel="2"><pre data-lang="python"><code class="language-python">from crw import CrwClient
 
 client = CrwClient()
 
@@ -475,11 +457,9 @@ result = client.scrape(
 
 rendered_with = result[&quot;metadata&quot;][&quot;renderedWith&quot;]
 print(f&quot;renderedWith: {rendered_with}&quot;)   # &quot;lightpanda&quot;
-print(result[&quot;markdown&quot;][:400])
-</code></pre>
-<p>:::</p>
-<p><strong>Expected response when pinning <code>&quot;chrome&quot;</code>:</strong></p>
-<pre><code class="language-json">{
+print(result[&quot;markdown&quot;][:400])</code></pre></div>
+    </div><p><strong>Expected response when pinning <code>&quot;chrome&quot;</code>:</strong></p>
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;data&quot;: {
     &quot;markdown&quot;: &quot;# Changelog\n\n## June 2026\n\n### Build output compression...&quot;,
@@ -491,19 +471,17 @@ print(result[&quot;markdown&quot;][:400])
       &quot;elapsedMs&quot;: 3120
     }
   }
-}
-</code></pre>
+}</code></pre>
 <p>If the pinned renderer is not configured on your server, the API returns HTTP 400:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: false,
-  &quot;error&quot;: &quot;renderer &#39;chrome&#39; not available; configured renderers: [lightpanda]. Update server config or omit the &#39;renderer&#39; field.&quot;,
+  &quot;error&quot;: &quot;renderer 'chrome' not available; configured renderers: [lightpanda]. Update server config or omit the 'renderer' field.&quot;,
   &quot;error_code&quot;: &quot;invalid_request&quot;
-}
-</code></pre>
+}</code></pre>
 <hr>
 <h2 id="full-diagnostic-script-python">Full diagnostic script (Python)</h2>
 <p>Paste and run this to walk through all three steps automatically:</p>
-<pre><code class="language-python">import sys
+<pre data-lang="python"><code class="language-python">import sys
 from crw import CrwClient
 
 TARGET = &quot;https://vercel.com/changelog&quot;
@@ -514,7 +492,7 @@ def check(label: str, result: dict) -&gt; None:
     md = result.get(&quot;markdown&quot;, &quot;&quot;)
     rendered_with = result[&quot;metadata&quot;].get(&quot;renderedWith&quot;, &quot;?&quot;)
     elapsed = result[&quot;metadata&quot;].get(&quot;elapsedMs&quot;, 0)
-    print(f&quot;\n{&#39;=&#39;*60}&quot;)
+    print(f&quot;\n{'='*60}&quot;)
     print(f&quot;[{label}]  renderedWith={rendered_with}  elapsed={elapsed}ms&quot;)
     print(f&quot;  markdown length: {len(md)} chars&quot;)
     if md:
@@ -538,8 +516,7 @@ check(&quot;Step 3 — renderer=lightpanda (pinned)&quot;, r3)
 if len(r3.get(&quot;markdown&quot;, &quot;&quot;)) &gt; 200:
     print(&quot;\nDone — content looks good with pinned renderer.&quot;)
 else:
-    print(&quot;\nStill thin. Try renderer=&#39;chrome&#39; or increase waitFor.&quot;, file=sys.stderr)
-</code></pre>
+    print(&quot;\nStill thin. Try renderer='chrome' or increase waitFor.&quot;, file=sys.stderr)</code></pre>
 <hr>
 <h2 id="what-each-field-controls">What each field controls</h2>
 <table>

@@ -287,12 +287,8 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <p>This guide is written for AI agents and the systems that orchestrate them. It covers the minimum you need to start making API calls, the most common patterns, and how to handle errors gracefully.</p>
 <h2 id="authentication">Authentication</h2>
 <p>Every request requires an API key in the <code>Authorization</code> header:</p>
-<pre><code>Authorization: Bearer YOUR_API_KEY
-</code></pre>
-<p>:::note
-On self-hosted instances, authentication is configured via your server settings. Cloud only (fastcrw.com) provides a dashboard for key management.
-:::</p>
-<h2 id="available-endpoints">Available Endpoints</h2>
+<pre><code>Authorization: Bearer YOUR_API_KEY</code></pre>
+<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">On self-hosted instances, authentication is configured via your server settings. Cloud only (fastcrw.com) provides a dashboard for key management.</div></div><h2 id="available-endpoints">Available Endpoints</h2>
 <table>
 <thead>
 <tr>
@@ -337,41 +333,36 @@ On self-hosted instances, authentication is configured via your server settings.
 <ol>
 <li><strong>Discover</strong> what pages exist on a target domain:</li>
 </ol>
-<pre><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/map \
+<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/map \
   -H &quot;Authorization: Bearer $API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;url&quot;: &quot;https://example.com&quot;}&#39;
-</code></pre>
+  -d '{&quot;url&quot;: &quot;https://example.com&quot;}'</code></pre>
 <ol start="2">
 <li><strong>Extract</strong> content from specific pages:</li>
 </ol>
-<pre><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/scrape \
+<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer $API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;url&quot;: &quot;https://example.com/page&quot;, &quot;formats&quot;: [&quot;markdown&quot;]}&#39;
-</code></pre>
+  -d '{&quot;url&quot;: &quot;https://example.com/page&quot;, &quot;formats&quot;: [&quot;markdown&quot;]}'</code></pre>
 <ol start="3">
 <li><strong>Search</strong> when you need to find relevant pages across the web:</li>
 </ol>
-<pre><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/search \
+<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/search \
   -H &quot;Authorization: Bearer $API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;query&quot;: &quot;your search query&quot;, &quot;limit&quot;: 5}&#39;
-</code></pre>
+  -d '{&quot;query&quot;: &quot;your search query&quot;, &quot;limit&quot;: 5}'</code></pre>
 <h2 id="crawl-start-and-poll">Crawl: Start and Poll</h2>
 <p>Crawls are asynchronous. POST to <code>/v1/crawl</code> returns a job ID immediately; you must poll <code>GET /v1/crawl/:id</code> until the status reaches <code>completed</code> or <code>failed</code>.</p>
 <h3 id="start-a-crawl">Start a crawl</h3>
-<pre><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/crawl \
+<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/crawl \
   -H &quot;Authorization: Bearer $API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;url&quot;: &quot;https://example.com&quot;, &quot;maxPages&quot;: 50, &quot;formats&quot;: [&quot;markdown&quot;]}&#39;
-</code></pre>
+  -d '{&quot;url&quot;: &quot;https://example.com&quot;, &quot;maxPages&quot;: 50, &quot;formats&quot;: [&quot;markdown&quot;]}'</code></pre>
 <p>Response:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;id&quot;: &quot;3f2a1b4c-8e9d-4f7a-b6c5-2d1e0f9a8b7c&quot;
-}
-</code></pre>
+}</code></pre>
 <h3 id="poll-until-done">Poll until done</h3>
 <p><code>GET /v1/crawl/:id</code> returns:</p>
 <table>
@@ -410,21 +401,20 @@ On self-hosted instances, authentication is configured via your server settings.
 </tbody></table>
 <p><strong>Important:</strong> <code>data[]</code> is populated incrementally. You can consume partial results while the crawl is still <code>scraping</code>.</p>
 <p>Poll loop example (bash):</p>
-<pre><code class="language-bash">ID=&quot;3f2a1b4c-8e9d-4f7a-b6c5-2d1e0f9a8b7c&quot;
+<pre data-lang="bash"><code class="language-bash">ID=&quot;3f2a1b4c-8e9d-4f7a-b6c5-2d1e0f9a8b7c&quot;
 while true; do
   RESULT=$(curl -s -H &quot;Authorization: Bearer $API_KEY&quot; \
     &quot;https://api.fastcrw.com/v1/crawl/$ID&quot;)
-  STATUS=$(echo &quot;$RESULT&quot; | jq -r &#39;.status&#39;)
-  echo &quot;Status: $STATUS  ($(echo &quot;$RESULT&quot; | jq &#39;.completed&#39;)/$(echo &quot;$RESULT&quot; | jq &#39;.total&#39;) pages)&quot;
+  STATUS=$(echo &quot;$RESULT&quot; | jq -r '.status')
+  echo &quot;Status: $STATUS  ($(echo &quot;$RESULT&quot; | jq '.completed')/$(echo &quot;$RESULT&quot; | jq '.total') pages)&quot;
   if [ &quot;$STATUS&quot; = &quot;completed&quot; ] || [ &quot;$STATUS&quot; = &quot;failed&quot; ]; then
     break
   fi
   sleep 3
 done
-echo &quot;$RESULT&quot; | jq &#39;.data | length&#39;
-</code></pre>
+echo &quot;$RESULT&quot; | jq '.data | length'</code></pre>
 <p>Python example:</p>
-<pre><code class="language-python">import time
+<pre data-lang="python"><code class="language-python">import time
 import requests
 
 def poll_crawl(crawl_id: str, api_key: str, interval: float = 3.0) -&gt; dict:
@@ -435,25 +425,22 @@ def poll_crawl(crawl_id: str, api_key: str, interval: float = 3.0) -&gt; dict:
         resp.raise_for_status()
         data = resp.json()
         status = data[&quot;status&quot;]
-        print(f&quot;status={status}  pages={data[&#39;completed&#39;]}/{data[&#39;total&#39;]}&quot;)
+        print(f&quot;status={status}  pages={data['completed']}/{data['total']}&quot;)
         if status in (&quot;completed&quot;, &quot;failed&quot;):
             return data
-        time.sleep(interval)
-</code></pre>
+        time.sleep(interval)</code></pre>
 <h2 id="response-format">Response Format</h2>
 <p>All endpoints return JSON with a consistent structure:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;data&quot;: { ... }
-}
-</code></pre>
+}</code></pre>
 <p>On failure:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: false,
   &quot;error&quot;: &quot;description of what went wrong&quot;,
   &quot;error_code&quot;: &quot;machine_readable_code&quot;
-}
-</code></pre>
+}</code></pre>
 <h2 id="error-handling-for-agents">Error Handling for Agents</h2>
 <p>Agents must distinguish between different failure modes — some are permanent, some are transient, and some require user action.</p>
 <table>
@@ -526,19 +513,15 @@ def poll_crawl(crawl_id: str, api_key: str, interval: float = 3.0) -&gt; dict:
 <li><strong>429</strong> is used for both rate-limiting and the <strong>free-tier lifetime credit cap</strong> (500 one-time free credits). On the free tier, once credits are exhausted, retrying will not help — the user must upgrade.</li>
 <li><strong>402</strong> is used only when a <strong>paid plan</strong>&#39;s auto-recharge was blocked (spending cap hit, card declined, bank SCA required, or no payment method on file). The response headers carry <code>X-FASTCRW-Stop-Reason</code>, <code>X-FASTCRW-Credits-Available</code>, and <code>X-FASTCRW-Upgrade-Url</code> to surface the exact cause.</li>
 </ul>
-<p>:::note
-Stop-reason values (<code>cap_reached</code>, <code>card_declined</code>, <code>action_required</code>, <code>no_payment_method</code>) and the response headers listed above (<code>X-FASTCRW-Stop-Reason</code>, <code>X-FASTCRW-Credits-Available</code>, <code>X-FASTCRW-Upgrade-Url</code>) are SaaS billing internals — verify against the <a href="https://fastcrw.com/docs">fastcrw.com dashboard docs</a> if exact values matter for your integration.
-:::</p>
-<p>Your agent should check the status code, not guess from the error message:</p>
-<pre><code class="language-python">if resp.status_code == 402:
+<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">Stop-reason values (`cap_reached`, `card_declined`, `action_required`, `no_payment_method`) and the response headers listed above (`X-FASTCRW-Stop-Reason`, `X-FASTCRW-Credits-Available`, `X-FASTCRW-Upgrade-Url`) are SaaS billing internals — verify against the [fastcrw.com dashboard docs](https://fastcrw.com/docs) if exact values matter for your integration.</div></div><p>Your agent should check the status code, not guess from the error message:</p>
+<pre data-lang="python"><code class="language-python">if resp.status_code == 402:
     stop_reason = resp.headers.get(&quot;X-FASTCRW-Stop-Reason&quot;, &quot;unknown&quot;)
     upgrade_url = resp.headers.get(&quot;X-FASTCRW-Upgrade-Url&quot;, &quot;https://fastcrw.com/dashboard/billing&quot;)
     raise RuntimeError(f&quot;Credits exhausted (auto-recharge stop: {stop_reason}). Top up at {upgrade_url}&quot;)
 elif resp.status_code == 429:
     # Could be rate-limit or free-tier cap — check body
     body = resp.json()
-    raise RuntimeError(f&quot;Quota exceeded: {body.get(&#39;error&#39;)}&quot;)
-</code></pre>
+    raise RuntimeError(f&quot;Quota exceeded: {body.get('error')}&quot;)</code></pre>
 <h2 id="handling-js-gated-pages">Handling JS-Gated Pages</h2>
 <p>If <code>crw_scrape</code> returns an empty or near-empty <code>markdown</code> field for a page that visually has content, the page is likely JS-gated (client-side rendered, anti-bot wall, or heavy SPA). The engine&#39;s auto-detect heuristic may have missed it, or the page requires real browser interaction (login flow, cookie consent, infinite scroll).</p>
 <p>In that case, use <strong>crw-browse</strong> — the separate interactive browser MCP server that gives your agent full CDP control:</p>
@@ -558,20 +541,15 @@ elif resp.status_code == 429:
 <p>crw-browse is a separate binary (<code>crw-browse</code>), not a tool inside the main MCP server. See the <a href="/docs/crw-browse">crw-browse documentation</a> for setup. As a quick heuristic: if scrape returns <code>markdown: &quot;&quot;</code> or a very short markdown with no meaningful content, switch to crw-browse for that URL.</p>
 <h2 id="common-agent-patterns">Common Agent Patterns</h2>
 <h3 id="research-loop">Research Loop</h3>
-<pre><code>search(topic) -&gt; scrape(top results) -&gt; analyze -&gt; search(refined query) -&gt; repeat
-</code></pre>
+<pre><code>search(topic) -&gt; scrape(top results) -&gt; analyze -&gt; search(refined query) -&gt; repeat</code></pre>
 <h3 id="site-exploration">Site Exploration</h3>
-<pre><code>map(domain) -&gt; filter URLs -&gt; scrape(relevant pages) -&gt; synthesize
-</code></pre>
+<pre><code>map(domain) -&gt; filter URLs -&gt; scrape(relevant pages) -&gt; synthesize</code></pre>
 <h3 id="full-site-crawl">Full-Site Crawl</h3>
-<pre><code>crawl(domain) -&gt; poll until completed/failed -&gt; process data[]
-</code></pre>
+<pre><code>crawl(domain) -&gt; poll until completed/failed -&gt; process data[]</code></pre>
 <h3 id="monitoring">Monitoring</h3>
-<pre><code>scrape(url) -&gt; store result -&gt; wait -&gt; scrape(url) -&gt; compare with previous
-</code></pre>
+<pre><code>scrape(url) -&gt; store result -&gt; wait -&gt; scrape(url) -&gt; compare with previous</code></pre>
 <h3 id="js-gated-fallback">JS-Gated Fallback</h3>
-<pre><code>scrape(url) -&gt; if markdown empty -&gt; crw-browse goto(url) -&gt; tree/text -&gt; extract
-</code></pre>
+<pre><code>scrape(url) -&gt; if markdown empty -&gt; crw-browse goto(url) -&gt; tree/text -&gt; extract</code></pre>
 <h2 id="rate-limits">Rate Limits</h2>
 <p>Check the <a href="/docs/rate-limits">rate limits documentation</a> for current limits. Agents should respect <code>Retry-After</code> headers and implement exponential backoff.</p>
 <h2 id="mcp-integration">MCP Integration</h2>

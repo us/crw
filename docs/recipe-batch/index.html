@@ -325,8 +325,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 GET  /v2/batch/scrape/{id}   →  { status, total, completed, data[], next }
 GET  /v2/batch/scrape/{id}?skip=100   (paginate large results)
 DELETE /v2/batch/scrape/{id}  (cancel)
-GET  /v2/batch/scrape/{id}/errors
-</code></pre>
+GET  /v2/batch/scrape/{id}/errors</code></pre>
 <p><strong>Status values:</strong> <code>scraping</code> → <code>completed</code> | <code>failed</code></p>
 <p>The response is paginated (100 documents per page, max ~10 MB per page). While <code>status</code> is <code>scraping</code>, the <code>next</code> cursor is set even if the current page is empty — keep polling forward until <code>next</code> is <code>null</code> and <code>status</code> is <code>completed</code>.</p>
 <hr>
@@ -335,41 +334,37 @@ GET  /v2/batch/scrape/{id}/errors
 <p>These three unrelated pages are used throughout the examples below:</p>
 <pre><code>https://news.ycombinator.com/
 https://github.com/trending
-https://lobste.rs/
-</code></pre>
+https://lobste.rs/</code></pre>
 <hr>
 <h3 id="curl">cURL</h3>
 <p><strong>Step 1 — Start the job</strong></p>
-<pre><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v2/batch/scrape \
+<pre data-lang="bash"><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v2/batch/scrape \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
+  -d '{
     &quot;urls&quot;: [
       &quot;https://news.ycombinator.com/&quot;,
       &quot;https://github.com/trending&quot;,
       &quot;https://lobste.rs/&quot;
     ],
     &quot;formats&quot;: [&quot;markdown&quot;, &quot;links&quot;]
-  }&#39;
-</code></pre>
+  }'</code></pre>
 <p>Expected response:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;id&quot;: &quot;a1b2c3d4-e5f6-7890-abcd-ef1234567890&quot;,
   &quot;url&quot;: &quot;https://api.fastcrw.com/v2/batch/scrape/a1b2c3d4-e5f6-7890-abcd-ef1234567890&quot;,
   &quot;invalidURLs&quot;: []
-}
-</code></pre>
+}</code></pre>
 <p>Save the <code>id</code> value.</p>
 <hr>
 <p><strong>Step 2 — Poll for status</strong></p>
-<pre><code class="language-bash">JOB_ID=&quot;a1b2c3d4-e5f6-7890-abcd-ef1234567890&quot;
+<pre data-lang="bash"><code class="language-bash">JOB_ID=&quot;a1b2c3d4-e5f6-7890-abcd-ef1234567890&quot;
 
 curl -s &quot;https://api.fastcrw.com/v2/batch/scrape/$JOB_ID&quot; \
-  -H &quot;Authorization: Bearer $CRW_API_KEY&quot;
-</code></pre>
+  -H &quot;Authorization: Bearer $CRW_API_KEY&quot;</code></pre>
 <p>Repeat every 2–3 seconds until <code>&quot;status&quot;: &quot;completed&quot;</code>. While still running:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;status&quot;: &quot;scraping&quot;,
   &quot;total&quot;: 3,
@@ -394,10 +389,9 @@ curl -s &quot;https://api.fastcrw.com/v2/batch/scrape/$JOB_ID&quot; \
       }
     }
   ]
-}
-</code></pre>
+}</code></pre>
 <p>When complete:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;status&quot;: &quot;completed&quot;,
   &quot;total&quot;: 3,
@@ -406,20 +400,18 @@ curl -s &quot;https://api.fastcrw.com/v2/batch/scrape/$JOB_ID&quot; \
   &quot;expiresAt&quot;: &quot;2026-06-16T10:00:00.000Z&quot;,
   &quot;next&quot;: null,
   &quot;data&quot;: [ /* all 3 documents */ ]
-}
-</code></pre>
+}</code></pre>
 <hr>
 <p><strong>Step 3 — Paginate large results (optional)</strong></p>
 <p>For jobs with many URLs, use <code>?skip=N</code> to page through results. <code>next</code> always contains the ready-to-use URL:</p>
-<pre><code class="language-bash"># Page 2 (skip the first 100 docs)
+<pre data-lang="bash"><code class="language-bash"># Page 2 (skip the first 100 docs)
 curl -s &quot;https://api.fastcrw.com/v2/batch/scrape/$JOB_ID?skip=100&quot; \
-  -H &quot;Authorization: Bearer $CRW_API_KEY&quot;
-</code></pre>
+  -H &quot;Authorization: Bearer $CRW_API_KEY&quot;</code></pre>
 <p>Follow <code>next</code> until it is <code>null</code>.</p>
 <hr>
 <h3 id="python">Python</h3>
 <p>The <code>crw</code> SDK ships <code>batch_scrape()</code> which handles starting, polling, and paginating internally. It returns the flat list of page-result dicts once the job completes.</p>
-<pre><code class="language-python">import os
+<pre data-lang="python"><code class="language-python">import os
 from crw import CrwClient
 
 client = CrwClient(api_key=os.environ[&quot;CRW_API_KEY&quot;])
@@ -442,12 +434,11 @@ pages = client.batch_scrape(
 
 for page in pages:
     meta = page.get(&quot;metadata&quot;, {})
-    print(f&quot;URL: {meta.get(&#39;sourceURL&#39;)}&quot;)
-    print(f&quot;Status: {meta.get(&#39;statusCode&#39;)}&quot;)
+    print(f&quot;URL: {meta.get('sourceURL')}&quot;)
+    print(f&quot;Status: {meta.get('statusCode')}&quot;)
     md = page.get(&quot;markdown&quot;, &quot;&quot;)
     print(f&quot;Content ({len(md)} chars): {md[:200]}&quot;)
-    print(&quot;---&quot;)
-</code></pre>
+    print(&quot;---&quot;)</code></pre>
 <p>Expected output:</p>
 <pre><code>URL: https://news.ycombinator.com/
 Status: 200
@@ -464,12 +455,11 @@ Status: 200
 Content (3874 chars): # Lobsters
 
 [Show HN] ... submitted 2 hours ago ...
----
-</code></pre>
+---</code></pre>
 <hr>
 <h4 id="raw-http-no-sdk-python">Raw HTTP (no SDK) — Python</h4>
 <p>Use this when you want full control or need to integrate batch scraping into an existing HTTP session:</p>
-<pre><code class="language-python">import os
+<pre data-lang="python"><code class="language-python">import os
 import time
 import urllib.request
 import json
@@ -506,11 +496,11 @@ print(f&quot;Job started: {job_id}&quot;)
 # 2. Poll until completed
 while True:
     status = _call(&quot;GET&quot;, f&quot;/v2/batch/scrape/{job_id}&quot;)
-    print(f&quot;  {status[&#39;completed&#39;]}/{status[&#39;total&#39;]} completed ({status[&#39;status&#39;]})&quot;)
+    print(f&quot;  {status['completed']}/{status['total']} completed ({status['status']})&quot;)
     if status[&quot;status&quot;] == &quot;completed&quot;:
         break
     if status[&quot;status&quot;] == &quot;failed&quot;:
-        raise RuntimeError(f&quot;Batch failed: {status.get(&#39;error&#39;)}&quot;)
+        raise RuntimeError(f&quot;Batch failed: {status.get('error')}&quot;)
     time.sleep(2)
 
 # 3. Collect all pages (follow `next` cursor for large jobs)
@@ -529,8 +519,7 @@ print(f&quot;\nCollected {len(all_docs)} documents&quot;)
 for doc in all_docs:
     src = doc[&quot;metadata&quot;][&quot;sourceURL&quot;]
     chars = len(doc.get(&quot;markdown&quot;) or &quot;&quot;)
-    print(f&quot;  {src}: {chars} chars of markdown&quot;)
-</code></pre>
+    print(f&quot;  {src}: {chars} chars of markdown&quot;)</code></pre>
 <p>Expected output:</p>
 <pre><code>Job started: a1b2c3d4-e5f6-7890-abcd-ef1234567890
   1/3 completed (scraping)
@@ -540,8 +529,7 @@ for doc in all_docs:
 Collected 3 documents
   https://news.ycombinator.com/: 4821 chars of markdown
   https://github.com/trending: 5102 chars of markdown
-  https://lobste.rs/: 3874 chars of markdown
-</code></pre>
+  https://lobste.rs/: 3874 chars of markdown</code></pre>
 <hr>
 <h2 id="key-request-fields">Key Request Fields</h2>
 <p>All fields except <code>urls</code> are optional.</p>
@@ -621,8 +609,7 @@ Collected 3 documents
 <p><strong>Start response</strong> (<code>POST /v2/batch/scrape</code>):</p>
 <pre><code>id           — UUID for polling/cancellation
 url          — ready-to-use status URL
-invalidURLs  — URLs that were skipped
-</code></pre>
+invalidURLs  — URLs that were skipped</code></pre>
 <p><strong>Status response</strong> (<code>GET /v2/batch/scrape/{id}</code>):</p>
 <pre><code>status        — &quot;scraping&quot; | &quot;completed&quot; | &quot;failed&quot;
 total         — total URLs in the job
@@ -638,20 +625,17 @@ data[]        — Document objects for this page
     .statusCode     — HTTP status of the page
     .proxyUsed      — &quot;basic&quot; or &quot;stealth&quot;
     .creditsUsed    — credits for this document
-    .scrapeId       — per-document UUID
-</code></pre>
+    .scrapeId       — per-document UUID</code></pre>
 <hr>
 <h2 id="cancelling-a-job">Cancelling a Job</h2>
-<pre><code class="language-bash">curl -s -X DELETE &quot;https://api.fastcrw.com/v2/batch/scrape/$JOB_ID&quot; \
-  -H &quot;Authorization: Bearer $CRW_API_KEY&quot;
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">curl -s -X DELETE &quot;https://api.fastcrw.com/v2/batch/scrape/$JOB_ID&quot; \
+  -H &quot;Authorization: Bearer $CRW_API_KEY&quot;</code></pre>
 <p>Returns <code>{ &quot;success&quot;: true, &quot;status&quot;: &quot;cancelled&quot;, &quot;message&quot;: &quot;...&quot; }</code>.</p>
 <hr>
 <h2 id="checking-errors">Checking Errors</h2>
 <p>URLs that fail mid-job are recorded but don&#39;t fail the entire batch. Retrieve them after the job completes:</p>
-<pre><code class="language-bash">curl -s &quot;https://api.fastcrw.com/v2/batch/scrape/$JOB_ID/errors&quot; \
-  -H &quot;Authorization: Bearer $CRW_API_KEY&quot;
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">curl -s &quot;https://api.fastcrw.com/v2/batch/scrape/$JOB_ID/errors&quot; \
+  -H &quot;Authorization: Bearer $CRW_API_KEY&quot;</code></pre>
 <p>Returns <code>{ &quot;success&quot;: true, &quot;errors&quot;: [...], &quot;robotsBlocked&quot;: [] }</code>.</p>
 </article>
     </main>

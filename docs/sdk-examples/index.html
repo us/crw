@@ -310,131 +310,115 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <hr>
 <h2 id="scrape">Scrape</h2>
 <h3 id="python">Python</h3>
-<pre><code class="language-python">import os
+<pre data-lang="python"><code class="language-python">import os
 from crw import CrwClient
 
 client = CrwClient(api_key=os.environ[&quot;CRW_API_KEY&quot;])
 result = client.scrape(&quot;https://example.com&quot;, formats=[&quot;markdown&quot;])
-print(result[&quot;markdown&quot;])
-</code></pre>
+print(result[&quot;markdown&quot;])</code></pre>
 <h3 id="typescript">TypeScript</h3>
-<pre><code class="language-ts">import { CrwClient } from &quot;crw-sdk&quot;;
+<pre data-lang="ts"><code class="language-ts">import { CrwClient } from &quot;crw-sdk&quot;;
 
 const client = new CrwClient({ apiKey: process.env.CRW_API_KEY });
 const result = await client.scrape(&quot;https://example.com&quot;, { formats: [&quot;markdown&quot;] });
-console.log(result.markdown);
-</code></pre>
+console.log(result.markdown);</code></pre>
 <h3 id="curl-fallback">curl (fallback)</h3>
-<pre><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/scrape \
+<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;url&quot;:&quot;https://example.com&quot;,&quot;formats&quot;:[&quot;markdown&quot;]}&#39;
-</code></pre>
+  -d '{&quot;url&quot;:&quot;https://example.com&quot;,&quot;formats&quot;:[&quot;markdown&quot;]}'</code></pre>
 <h3 id="scrape-with-js-rendering">Scrape with JS rendering</h3>
-<pre><code class="language-python">result = client.scrape(
+<pre data-lang="python"><code class="language-python">result = client.scrape(
     &quot;https://example.com&quot;,
     formats=[&quot;markdown&quot;, &quot;html&quot;],
     render_js=True,
     wait_for=1500,  # ms
-)
-</code></pre>
-<pre><code class="language-ts">const result = await client.scrape(&quot;https://example.com&quot;, {
+)</code></pre>
+<pre data-lang="ts"><code class="language-ts">const result = await client.scrape(&quot;https://example.com&quot;, {
   formats: [&quot;markdown&quot;, &quot;html&quot;],
   renderJs: true,
   waitFor: 1500,
-});
-</code></pre>
+});</code></pre>
 <hr>
 <h2 id="crawl">Crawl</h2>
 <p><code>crawl()</code> starts an async job, polls for completion, and returns all page results as a list.</p>
 <h3 id="python-1">Python</h3>
-<pre><code class="language-python">pages = client.crawl(
+<pre data-lang="python"><code class="language-python">pages = client.crawl(
     &quot;https://example.com/docs&quot;,
     max_depth=3,
     max_pages=50,
 )
 
 for page in pages:
-    print(page.get(&quot;url&quot;), page.get(&quot;markdown&quot;, &quot;&quot;)[:80])
-</code></pre>
+    print(page.get(&quot;url&quot;), page.get(&quot;markdown&quot;, &quot;&quot;)[:80])</code></pre>
 <h3 id="typescript-1">TypeScript</h3>
-<pre><code class="language-ts">const pages = await client.crawl(&quot;https://example.com/docs&quot;, {
+<pre data-lang="ts"><code class="language-ts">const pages = await client.crawl(&quot;https://example.com/docs&quot;, {
   maxDepth: 3,
   maxPages: 50,
 });
 
 for (const page of pages) {
   console.log(page.url, String(page.markdown ?? &quot;&quot;).slice(0, 80));
-}
-</code></pre>
+}</code></pre>
 <h3 id="curl-start-poll">curl (start + poll)</h3>
-<pre><code class="language-bash"># 1. Start the crawl
+<pre data-lang="bash"><code class="language-bash"># 1. Start the crawl
 CRAWL=$(curl -s -X POST https://api.fastcrw.com/v1/crawl \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;url&quot;:&quot;https://example.com/docs&quot;,&quot;maxDepth&quot;:3,&quot;maxPages&quot;:50}&#39;)
+  -d '{&quot;url&quot;:&quot;https://example.com/docs&quot;,&quot;maxDepth&quot;:3,&quot;maxPages&quot;:50}')
 
-ID=$(echo $CRAWL | jq -r &#39;.id&#39;)
+ID=$(echo $CRAWL | jq -r '.id')
 
 # 2. Poll until status is &quot;completed&quot; or &quot;failed&quot;
 curl -s https://api.fastcrw.com/v1/crawl/$ID \
-  -H &quot;Authorization: Bearer $CRW_API_KEY&quot; | jq &#39;.status&#39;
-</code></pre>
+  -H &quot;Authorization: Bearer $CRW_API_KEY&quot; | jq '.status'</code></pre>
 <p>Crawl status values: <code>scraping</code> → <code>completed</code> | <code>failed</code>.</p>
 <hr>
 <h2 id="search">Search</h2>
 <h3 id="python-2">Python</h3>
-<pre><code class="language-python">results = client.search(&quot;web scraping tools 2026&quot;, limit=5)
+<pre data-lang="python"><code class="language-python">results = client.search(&quot;web scraping tools 2026&quot;, limit=5)
 for r in results:
-    print(r.get(&quot;url&quot;), r.get(&quot;title&quot;))
-</code></pre>
+    print(r.get(&quot;url&quot;), r.get(&quot;title&quot;))</code></pre>
 <h3 id="typescript-2">TypeScript</h3>
-<pre><code class="language-ts">const results = await client.search(&quot;web scraping tools 2026&quot;, { limit: 5 });
+<pre data-lang="ts"><code class="language-ts">const results = await client.search(&quot;web scraping tools 2026&quot;, { limit: 5 });
 for (const r of results as Record&lt;string, unknown&gt;[]) {
   console.log(r.url, r.title);
-}
-</code></pre>
+}</code></pre>
 <h3 id="search-scrape-results-in-one-call">Search + scrape results in one call</h3>
 <p>Pass <code>scrapeOptions</code> to fetch each result&#39;s page content in the same request:</p>
-<pre><code class="language-python">results = client.search(
+<pre data-lang="python"><code class="language-python">results = client.search(
     &quot;machine learning papers 2026&quot;,
     limit=3,
     scrape_options={&quot;formats&quot;: [&quot;markdown&quot;]},
-)
-</code></pre>
-<pre><code class="language-ts">const results = await client.search(&quot;machine learning papers 2026&quot;, {
+)</code></pre>
+<pre data-lang="ts"><code class="language-ts">const results = await client.search(&quot;machine learning papers 2026&quot;, {
   limit: 3,
   scrapeOptions: { formats: [&quot;markdown&quot;] },
-});
-</code></pre>
+});</code></pre>
 <h3 id="curl-fallback-1">curl (fallback)</h3>
-<pre><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/search \
+<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/search \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;query&quot;:&quot;web scraping tools 2026&quot;,&quot;limit&quot;:5}&#39;
-</code></pre>
+  -d '{&quot;query&quot;:&quot;web scraping tools 2026&quot;,&quot;limit&quot;:5}'</code></pre>
 <hr>
 <h2 id="map">Map</h2>
 <p>Discover all URLs on a site without downloading page content.</p>
 <h3 id="python-3">Python</h3>
-<pre><code class="language-python">urls = client.map(&quot;https://example.com&quot;, max_depth=2, use_sitemap=True)
-print(f&quot;Found {len(urls)} URLs&quot;)
-</code></pre>
+<pre data-lang="python"><code class="language-python">urls = client.map(&quot;https://example.com&quot;, max_depth=2, use_sitemap=True)
+print(f&quot;Found {len(urls)} URLs&quot;)</code></pre>
 <h3 id="typescript-3">TypeScript</h3>
-<pre><code class="language-ts">const urls = await client.map(&quot;https://example.com&quot;, { maxDepth: 2, useSitemap: true });
-console.log(`Found ${urls.length} URLs`);
-</code></pre>
+<pre data-lang="ts"><code class="language-ts">const urls = await client.map(&quot;https://example.com&quot;, { maxDepth: 2, useSitemap: true });
+console.log(`Found ${urls.length} URLs`);</code></pre>
 <h3 id="curl-fallback-2">curl (fallback)</h3>
-<pre><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/map \
+<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/map \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;url&quot;:&quot;https://example.com&quot;,&quot;maxDepth&quot;:2,&quot;useSitemap&quot;:true}&#39;
-</code></pre>
+  -d '{&quot;url&quot;:&quot;https://example.com&quot;,&quot;maxDepth&quot;:2,&quot;useSitemap&quot;:true}'</code></pre>
 <hr>
 <h2 id="structured-extraction">Structured Extraction</h2>
 <p>Pass a <code>json_schema</code> / <code>jsonSchema</code> to scrape and return structured JSON in one call. Requires an LLM provider configured on the engine.</p>
 <h3 id="python-4">Python</h3>
-<pre><code class="language-python">schema = {
+<pre data-lang="python"><code class="language-python">schema = {
     &quot;type&quot;: &quot;object&quot;,
     &quot;properties&quot;: {
         &quot;title&quot;: {&quot;type&quot;: &quot;string&quot;},
@@ -447,10 +431,9 @@ result = client.scrape(
     &quot;https://example.com/product/123&quot;,
     json_schema=schema,
 )
-print(result.get(&quot;json&quot;))
-</code></pre>
+print(result.get(&quot;json&quot;))</code></pre>
 <h3 id="typescript-4">TypeScript</h3>
-<pre><code class="language-ts">const schema = {
+<pre data-lang="ts"><code class="language-ts">const schema = {
   type: &quot;object&quot;,
   properties: {
     title: { type: &quot;string&quot; },
@@ -462,43 +445,37 @@ print(result.get(&quot;json&quot;))
 const result = await client.scrape(&quot;https://example.com/product/123&quot;, {
   jsonSchema: schema,
 });
-console.log(result.json);
-</code></pre>
+console.log(result.json);</code></pre>
 <hr>
 <h2 id="parse-file-pdf">Parse File (PDF)</h2>
 <h3 id="python-5">Python</h3>
-<pre><code class="language-python">result = client.parse_file(&quot;report.pdf&quot;, formats=[&quot;markdown&quot;])
-print(result.get(&quot;markdown&quot;))
-</code></pre>
+<pre data-lang="python"><code class="language-python">result = client.parse_file(&quot;report.pdf&quot;, formats=[&quot;markdown&quot;])
+print(result.get(&quot;markdown&quot;))</code></pre>
 <h3 id="typescript-5">TypeScript</h3>
-<pre><code class="language-ts">import { readFileSync } from &quot;fs&quot;;
+<pre data-lang="ts"><code class="language-ts">import { readFileSync } from &quot;fs&quot;;
 
 const pdf = new Uint8Array(readFileSync(&quot;report.pdf&quot;));
 const result = await client.parseFile(pdf, { filename: &quot;report.pdf&quot;, formats: [&quot;markdown&quot;] });
-console.log(result.markdown);
-</code></pre>
+console.log(result.markdown);</code></pre>
 <h3 id="curl-fallback-3">curl (fallback)</h3>
-<pre><code class="language-bash">curl -X POST https://api.fastcrw.com/v2/parse \
+<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v2/parse \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -F &quot;file=@report.pdf&quot; \
-  -F &#39;options={&quot;formats&quot;:[&quot;markdown&quot;]}&#39;
-</code></pre>
+  -F 'options={&quot;formats&quot;:[&quot;markdown&quot;]}'</code></pre>
 <hr>
 <h2 id="advanced-extract-multi-url-llm-extraction">Advanced: Extract (multi-URL LLM extraction)</h2>
 <p><code>extract()</code> / <code>batchScrape()</code> are HTTP-mode-only (cloud or self-hosted server).</p>
-<pre><code class="language-python">data = client.extract(
+<pre data-lang="python"><code class="language-python">data = client.extract(
     urls=[&quot;https://example.com/about&quot;, &quot;https://example.com/team&quot;],
-    prompt=&quot;List every person&#39;s name and role.&quot;,
+    prompt=&quot;List every person's name and role.&quot;,
     schema={&quot;type&quot;: &quot;array&quot;, &quot;items&quot;: {&quot;type&quot;: &quot;object&quot;, &quot;properties&quot;: {&quot;name&quot;: {&quot;type&quot;: &quot;string&quot;}, &quot;role&quot;: {&quot;type&quot;: &quot;string&quot;}}}},
 )
-print(data)
-</code></pre>
-<pre><code class="language-ts">const data = await client.extract({
+print(data)</code></pre>
+<pre data-lang="ts"><code class="language-ts">const data = await client.extract({
   urls: [&quot;https://example.com/about&quot;, &quot;https://example.com/team&quot;],
-  prompt: &quot;List every person&#39;s name and role.&quot;,
+  prompt: &quot;List every person's name and role.&quot;,
 });
-console.log(data);
-</code></pre>
+console.log(data);</code></pre>
 <hr>
 <h2 id="when-to-use-raw-http">When to Use Raw HTTP</h2>
 <p>Raw <code>curl</code> / <code>fetch</code> is a fine fallback when:</p>

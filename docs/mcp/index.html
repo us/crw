@@ -327,7 +327,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 </ul>
 <h2 id="quick-start-embedded-mode">Quick Start (Embedded Mode)</h2>
 <p>No server to start, no setup. Install and add <code>crw-mcp</code>:</p>
-<pre><code class="language-bash"># One-line install (auto-detects OS &amp; arch):
+<pre data-lang="bash"><code class="language-bash"># One-line install (auto-detects OS &amp; arch):
 curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | sh
 
 # npm (zero install):
@@ -340,33 +340,29 @@ pip install crw
 cargo install crw-mcp
 
 # Docker:
-docker run -i ghcr.io/us/crw crw-mcp
-</code></pre>
+docker run -i ghcr.io/us/crw crw-mcp</code></pre>
 <p>Add to your MCP client:</p>
-<pre><code class="language-bash"># Claude Code:
+<pre data-lang="bash"><code class="language-bash"># Claude Code:
 claude mcp add crw -- npx crw-mcp
 
 # OpenAI Codex CLI:
-codex mcp add crw -- npx crw-mcp
-</code></pre>
+codex mcp add crw -- npx crw-mcp</code></pre>
 <p>That&#39;s it. The agent starts <code>crw-mcp</code>, which contains the full scraping engine. When the agent disconnects, the process dies.</p>
 <p>If you want host-by-host config files instead of one-liners, jump to <a href="/mcp-clients">MCP Client Setup</a>.</p>
 <h3 id="with-cdp-rendering-lightpandachrome">With CDP rendering (LightPanda/Chrome)</h3>
 <p>If you have a CDP-compatible browser, pass it via env vars:</p>
-<pre><code class="language-bash">claude mcp add \
+<pre data-lang="bash"><code class="language-bash">claude mcp add \
   -e CRW_RENDERER__LIGHTPANDA__WS_URL=ws://127.0.0.1:9222 \
-  crw -- npx crw-mcp
-</code></pre>
+  crw -- npx crw-mcp</code></pre>
 <p>Without a CDP browser, <code>crw-mcp</code> uses its HTTP-only renderer (no JavaScript rendering).</p>
 <h3 id="embedded-mode-configuration">Embedded mode configuration</h3>
 <p>In embedded mode, <code>crw-mcp</code> loads config the same way as <code>crw-server</code>: <code>config.default.toml</code> → <code>config.local.toml</code> → env var overrides. Env vars use <code>CRW_</code> prefix with <code>__</code> separator:</p>
-<pre><code class="language-bash">CRW_CRAWLER__MAX_CONCURRENCY=5
+<pre data-lang="bash"><code class="language-bash">CRW_CRAWLER__MAX_CONCURRENCY=5
 CRW_RENDERER__LIGHTPANDA__WS_URL=ws://127.0.0.1:9222
-CRW_CRAWLER__USER_AGENT=&quot;MyBot/1.0&quot;
-</code></pre>
+CRW_CRAWLER__USER_AGENT=&quot;MyBot/1.0&quot;</code></pre>
 <h2 id="proxy-mode-remote-server">Proxy Mode (Remote Server)</h2>
 <p>Connect to <a href="https://fastcrw.com">fastcrw.com</a> or any remote CRW instance:</p>
-<pre><code class="language-bash"># Cloud server
+<pre data-lang="bash"><code class="language-bash"># Cloud server
 claude mcp add \
   -e CRW_API_URL=https://api.fastcrw.com \
   -e CRW_API_KEY=YOUR_API_KEY \
@@ -375,8 +371,7 @@ claude mcp add \
 # Local crw-server on custom port
 claude mcp add \
   -e CRW_API_URL=http://localhost:4000 \
-  crw -- npx crw-mcp
-</code></pre>
+  crw -- npx crw-mcp</code></pre>
 <p>The same <code>CRW_API_URL</code> + <code>CRW_API_KEY</code> env block also works in Codex, Claude Desktop, Cursor, Windsurf, Cline, and Continue. See <a href="/mcp-clients">MCP Client Setup</a> for ready-to-paste config files.</p>
 <h2 id="three-transport-options">Three Transport Options</h2>
 <table>
@@ -405,8 +400,7 @@ claude mcp add \
 </tbody></table>
 <h3 id="http-transport">HTTP Transport</h3>
 <p>The <code>crw-server</code> has a built-in <code>/mcp</code> endpoint. No extra binary needed:</p>
-<pre><code class="language-bash">claude mcp add --transport http crw http://localhost:3000/mcp
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">claude mcp add --transport http crw http://localhost:3000/mcp</code></pre>
 <h2 id="cli-options">CLI Options</h2>
 <table>
 <thead>
@@ -453,8 +447,7 @@ claude mcp add \
 </tr>
 </tbody></table>
 <p>Build a slim proxy-only binary:</p>
-<pre><code class="language-bash">cargo build --profile release-small --no-default-features -p crw-mcp
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">cargo build --profile release-small --no-default-features -p crw-mcp</code></pre>
 <p>This yields a ~4.2 MB binary (vs ~17 MB for the default embedded build) because the <code>embedded</code> feature gates the headless-browser engine (<code>crw-renderer</code>) and <code>crw-server</code>.</p>
 <h2 id="available-tools">Available Tools</h2>
 <table>
@@ -526,29 +519,26 @@ claude mcp add \
 </tbody></table>
 <p>See <a href="/docs/crw-browse">crw-browse</a> for the full list of 14 interaction tools, including click, fill, type_text, evaluate, screenshot, and more. Session state is automatically swept after an idle TTL.</p>
 <p>Install and launch:</p>
-<pre><code class="language-bash"># From crates.io
+<pre data-lang="bash"><code class="language-bash"># From crates.io
 cargo install crw-browse
 crw-browse
 
 # Or grab a prebuilt binary from the v0.4.0 GitHub release
-# https://github.com/us/crw/releases/tag/v0.4.0
-</code></pre>
+# https://github.com/us/crw/releases/tag/v0.4.0</code></pre>
 <p>Wire it into your client the same way you do <code>crw-mcp</code> — it uses stdio transport and is a self-hosted binary (no cloud account required).</p>
 <h2 id="best-first-setups">Best first setups</h2>
 <h3 id="claude-code">Claude Code</h3>
-<pre><code class="language-bash"># Local embedded
+<pre data-lang="bash"><code class="language-bash"># Local embedded
 claude mcp add crw -- npx crw-mcp
 
 # fastcrw.com cloud
 claude mcp add \
   -e CRW_API_URL=https://api.fastcrw.com \
   -e CRW_API_KEY=YOUR_API_KEY \
-  crw -- npx crw-mcp
-</code></pre>
+  crw -- npx crw-mcp</code></pre>
 <h3 id="openai-codex-cli">OpenAI Codex CLI</h3>
-<pre><code class="language-bash"># Local embedded
-codex mcp add crw -- npx crw-mcp
-</code></pre>
+<pre data-lang="bash"><code class="language-bash"># Local embedded
+codex mcp add crw -- npx crw-mcp</code></pre>
 <p>For cloud mode and file-based configs, continue in <a href="/mcp-clients">MCP Client Setup</a>.</p>
 <h3 id="crw_scrape">crw_scrape</h3>
 <table>
@@ -864,11 +854,10 @@ codex mcp add crw -- npx crw-mcp
 <li>local embedded and fastcrw.com cloud config variants side by side</li>
 </ul>
 <h2 id="verify-installation">Verify Installation</h2>
-<pre><code class="language-bash">echo &#39;{&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;id&quot;:1,&quot;method&quot;:&quot;initialize&quot;,&quot;params&quot;:{&quot;clientInfo&quot;:{&quot;name&quot;:&quot;test&quot;},&quot;protocolVersion&quot;:&quot;2025-06-18&quot;}}&#39; \
-  | crw-mcp 2&gt;/dev/null
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">echo '{&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;id&quot;:1,&quot;method&quot;:&quot;initialize&quot;,&quot;params&quot;:{&quot;clientInfo&quot;:{&quot;name&quot;:&quot;test&quot;},&quot;protocolVersion&quot;:&quot;2025-06-18&quot;}}' \
+  | crw-mcp 2&gt;/dev/null</code></pre>
 <p>Expected:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;jsonrpc&quot;: &quot;2.0&quot;,
   &quot;id&quot;: 1,
   &quot;result&quot;: {
@@ -876,18 +865,14 @@ codex mcp add crw -- npx crw-mcp
     &quot;capabilities&quot;: {&quot;tools&quot;: {}},
     &quot;serverInfo&quot;: {&quot;name&quot;: &quot;crw-mcp&quot;, &quot;version&quot;: &quot;&lt;current&gt;&quot;}
   }
-}
-</code></pre>
+}</code></pre>
 <h2 id="how-it-works">How It Works</h2>
 <p><strong>Embedded mode (default):</strong></p>
-<pre><code>AI Assistant → stdin (JSON-RPC 2.0) → crw-mcp [scraping engine] → Web pages
-</code></pre>
+<pre><code>AI Assistant → stdin (JSON-RPC 2.0) → crw-mcp [scraping engine] → Web pages</code></pre>
 <p><strong>Proxy mode:</strong></p>
-<pre><code>AI Assistant → stdin (JSON-RPC 2.0) → crw-mcp → HTTP → crw-server → Web pages
-</code></pre>
+<pre><code>AI Assistant → stdin (JSON-RPC 2.0) → crw-mcp → HTTP → crw-server → Web pages</code></pre>
 <p><strong>HTTP transport:</strong></p>
-<pre><code>AI Assistant → HTTP POST (JSON-RPC 2.0) → crw-server /mcp → Web pages
-</code></pre>
+<pre><code>AI Assistant → HTTP POST (JSON-RPC 2.0) → crw-server /mcp → Web pages</code></pre>
 <p>In embedded mode, the scraping engine runs in-process with zero overhead. In proxy mode, tool calls are forwarded over HTTP. The HTTP transport calls <code>crw-server</code> functions directly.</p>
 <p>Protocol version: <code>2025-06-18</code></p>
 <p>The <code>crw_search</code> tool declares an <code>outputSchema</code> and therefore returns its result both as the usual text content block and as a spec-compliant <code>structuredContent</code> object (MCP 2025-06-18) shaped like <code>{ success, data: { results: [...] } }</code> — strict clients can validate it directly, while lenient clients keep reading the text block unchanged.</p>

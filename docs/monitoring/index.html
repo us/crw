@@ -299,83 +299,29 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 </div><h2 id="what-this-is-for">What this is for</h2>
 <p>Use monitoring when you need to know the moment a page changes and only care about the changes that matter — competitor pricing, product catalogs, job listings, docs, changelogs, research papers, or government filings. A monitor runs scheduled scrapes or crawls, diffs each result against the last retained snapshot, classifies every page (<code>same</code>, <code>new</code>, <code>changed</code>, <code>removed</code>, or <code>error</code>), and delivers a structured diff. The output is just the change, so your agent ingests far fewer tokens than re-scraping everything.</p>
 <p>Reach for <code>monitoring</code> instead of polling <code>/v1/scrape</code> yourself when you want the schedule, snapshot storage, diffing, retries, and noise filtering handled for you.</p>
-<p>:::note
-<strong>Self-hosted users</strong>: the full scheduler + notification control plane is part of the hosted product. The open-core engine ships the <strong>stateless <code>changeTracking</code> primitive</strong> (diff one scrape against a snapshot you supply) plus an optional, feature-gated <strong><code>monitor</code> mode</strong> (SQLite scheduler, default OFF). See <a href="/monitoring">self-hosting monitoring</a> below.
-:::</p>
-<p>:::info Two-namespace split
+<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">**Self-hosted users**: the full scheduler + notification control plane is part of the hosted product. The open-core engine ships the **stateless `changeTracking` primitive** (diff one scrape against a snapshot you supply) plus an optional, feature-gated **`monitor` mode** (SQLite scheduler, default OFF). See [self-hosting monitoring](#monitoring) below.</div></div><p>:::info Two-namespace split
 <strong>Monitor CRUD</strong> (<code>/v1/monitor</code> and all sub-resources) is a <strong>SaaS-only control-plane feature</strong> served at <code>https://fastcrw.com/api</code>. It is not present in the open-source engine — no <code>/v1/monitor</code> route ships in <code>crw-server</code>.</p>
 <p><strong>Engine endpoints</strong> (scrape, crawl, map, search, change-tracking) are served at <code>https://api.fastcrw.com</code> on the hosted product and at your own origin when self-hosting.</p>
 <p><strong>Self-hosted installs</strong> have no monitor API. Use the stateless <code>changeTracking</code> primitive or build the engine with the optional <code>monitor</code> Cargo feature (SQLite scheduler) as described in <a href="#self-hosting-monitoring">Self-hosting monitoring</a> below.
 :::</p>
 <h2 id="endpoints">Endpoints</h2>
 <p>All monitor endpoints require a Bearer API key on the hosted API.</p>
-<pre><code class="language-http">POST   /v1/monitor                          # create
+<pre data-lang="http"><code class="language-http">POST   /v1/monitor                          # create
 GET    /v1/monitor                          # list
 GET    /v1/monitor/{id}                      # get
 PATCH  /v1/monitor/{id}                      # update
 DELETE /v1/monitor/{id}                      # delete
 POST   /v1/monitor/{id}/run                  # run now (409 if a check is in flight)
 GET    /v1/monitor/{id}/checks               # list checks
-GET    /v1/monitor/{id}/checks/{checkId}     # get one check + its pages
-</code></pre>
+GET    /v1/monitor/{id}/checks/{checkId}     # get one check + its pages</code></pre>
 <p>Base URL: <code>https://fastcrw.com/api</code> (hosted).</p>
 <h2 id="create-a-monitor">Create a monitor</h2>
 <p>Describe what to watch and how often. A <code>goal</code> enables the LLM judge so you are only alerted on meaningful changes.</p>
-<p>:::tabs</p>
-<pre><code class="language-bash">curl -s -X POST &quot;https://fastcrw.com/api/v1/monitor&quot; \
-  -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
-  -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
-    &quot;name&quot;: &quot;Pricing monitor&quot;,
-    &quot;schedule&quot;: { &quot;text&quot;: &quot;every 30 minutes&quot;, &quot;timezone&quot;: &quot;UTC&quot; },
-    &quot;goal&quot;: &quot;Alert when a pricing tier, price, or headline feature changes.&quot;,
-    &quot;targets&quot;: [
-      { &quot;type&quot;: &quot;scrape&quot;, &quot;urls&quot;: [&quot;https://example.com/pricing&quot;] }
-    ],
-    &quot;notification&quot;: {
-      &quot;email&quot;: { &quot;enabled&quot;: true, &quot;recipients&quot;: [&quot;alerts@example.com&quot;], &quot;includeDiffs&quot;: true }
-    }
-  }&#39;
+<div class="code-tabs">
+      <div class="code-tabs-header"></div><pre><code>&lt;/div&gt;
 </code></pre>
-<pre><code class="language-javascript">const res = await fetch(&quot;https://fastcrw.com/api/v1/monitor&quot;, {
-  method: &quot;POST&quot;,
-  headers: {
-    Authorization: `Bearer ${process.env.CRW_API_KEY}`,
-    &quot;Content-Type&quot;: &quot;application/json&quot;,
-  },
-  body: JSON.stringify({
-    name: &quot;Pricing monitor&quot;,
-    schedule: { text: &quot;every 30 minutes&quot;, timezone: &quot;UTC&quot; },
-    goal: &quot;Alert when a pricing tier, price, or headline feature changes.&quot;,
-    targets: [{ type: &quot;scrape&quot;, urls: [&quot;https://example.com/pricing&quot;] }],
-    notification: {
-      email: { enabled: true, recipients: [&quot;alerts@example.com&quot;], includeDiffs: true },
-    },
-  }),
-});
-const { data } = await res.json();
-console.log(data.id, data.nextRunAt);
-</code></pre>
-<pre><code class="language-python">import os, requests
-
-res = requests.post(
-    &quot;https://fastcrw.com/api/v1/monitor&quot;,
-    headers={&quot;Authorization&quot;: f&quot;Bearer {os.environ[&#39;CRW_API_KEY&#39;]}&quot;},
-    json={
-        &quot;name&quot;: &quot;Pricing monitor&quot;,
-        &quot;schedule&quot;: {&quot;text&quot;: &quot;every 30 minutes&quot;, &quot;timezone&quot;: &quot;UTC&quot;},
-        &quot;goal&quot;: &quot;Alert when a pricing tier, price, or headline feature changes.&quot;,
-        &quot;targets&quot;: [{&quot;type&quot;: &quot;scrape&quot;, &quot;urls&quot;: [&quot;https://example.com/pricing&quot;]}],
-        &quot;notification&quot;: {
-            &quot;email&quot;: {&quot;enabled&quot;: True, &quot;recipients&quot;: [&quot;alerts@example.com&quot;], &quot;includeDiffs&quot;: True}
-        },
-    },
-)
-print(res.json()[&quot;data&quot;][&quot;id&quot;])
-</code></pre>
-<p>:::</p>
 <p>The response returns the monitor with its normalized cron, computed <code>nextRunAt</code>, and <code>estimatedCreditsPerMonth</code> (an upper bound when judging is enabled). When the monitor has a webhook, the signing secret is returned <strong>once</strong> here as <code>webhookSecret</code>.</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;data&quot;: {
     &quot;id&quot;: &quot;019df960-06e7-7383-9d89-82c0113dc31a&quot;,
@@ -398,8 +344,7 @@ print(res.json()[&quot;data&quot;][&quot;id&quot;])
     &quot;createdAt&quot;: &quot;2026-05-30T15:30:00.000Z&quot;,
     &quot;updatedAt&quot;: &quot;2026-05-30T15:30:00.000Z&quot;
   }
-}
-</code></pre>
+}</code></pre>
 <h2 id="schedules">Schedules</h2>
 <p>Provide a schedule as cron <strong>or</strong> as natural-language <code>text</code>. The minimum interval is 15 minutes; responses always return the normalized cron. <code>timezone</code> is an IANA zone (DST-correct — &quot;daily at 9am&quot; tracks 9:00 wall-clock across transitions). Text schedules are spread by monitor id so many monitors don&#39;t all fire at the same instant.</p>
 <p>Supported natural-language forms: <code>every 30 minutes</code>, <code>every 15 minutes starting at :07</code>, <code>hourly</code>, <code>every 2 hours</code>, <code>daily</code>, <code>daily at 9:00</code>, <code>daily at 9am</code>, <code>daily at 5:30 PM</code>, <code>weekly</code>.</p>
@@ -427,22 +372,20 @@ print(res.json()[&quot;data&quot;][&quot;id&quot;])
 <li><strong><code>monitor.check.completed</code></strong> — sent after the full check reconciles, with summary counts.</li>
 </ul>
 <p>Deliveries are signed (<code>X-CRW-Signature: t=&lt;unix&gt;,v1=&lt;hmac-sha256&gt;</code> over <code>&lt;t&gt;.&lt;body&gt;</code>), support custom headers + metadata and per-event subscription, retry with backoff, and dead-letter after repeated failures (with a one-time failure email). Webhook URLs are SSRF-guarded (https-only, private/loopback/metadata ranges blocked).</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;webhook&quot;: {
     &quot;url&quot;: &quot;https://example.com/webhooks/crw&quot;,
     &quot;events&quot;: [&quot;monitor.page&quot;, &quot;monitor.check.completed&quot;],
     &quot;headers&quot;: { &quot;Authorization&quot;: &quot;Bearer your-secret&quot; },
     &quot;metadata&quot;: { &quot;environment&quot;: &quot;production&quot; }
   }
-}
-</code></pre>
+}</code></pre>
 <h3 id="email">Email</h3>
 <p>Email summaries are sent only when a check has <code>changed</code> / <code>new</code> / <code>removed</code> / <code>error</code> pages. With a goal + judging, noise-only checks are suppressed. New recipients receive a confirmation link (double opt-in) before any alert; up to 25 confirmed recipients per monitor. Set <code>includeDiffs: true</code> to embed the diff in the message.</p>
 <h2 id="check-results">Check results</h2>
 <p>List checks with <code>GET /v1/monitor/{id}/checks</code> (filter by <code>status</code>: <code>queued</code>, <code>running</code>, <code>completed</code>, <code>failed</code>, <code>partial</code>, <code>skipped_overlap</code>) and inspect one with <code>GET /v1/monitor/{id}/checks/{checkId}</code>. Both auto-paginate via an opaque <code>next</code> cursor. A check detail returns <code>estimatedCredits</code>, <code>actualCredits</code>, summary counts, and a paginated <code>pages[]</code> array; each changed page carries inline <code>diff</code> data and (json mode) a <code>snapshot</code>.</p>
-<pre><code class="language-bash">curl &quot;https://fastcrw.com/api/v1/monitor/$MONITOR_ID/checks/$CHECK_ID?status=changed&quot; \
-  -H &quot;Authorization: Bearer $CRW_API_KEY&quot;
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">curl &quot;https://fastcrw.com/api/v1/monitor/$MONITOR_ID/checks/$CHECK_ID?status=changed&quot; \
+  -H &quot;Authorization: Bearer $CRW_API_KEY&quot;</code></pre>
 <h2 id="parameters">Parameters</h2>
 <table>
 <thead>
@@ -580,19 +523,15 @@ print(res.json()[&quot;data&quot;][&quot;id&quot;])
 <li><strong><code>POST /v1/change-tracking/diff</code></strong> — diff a page (or a batch) against a supplied <code>previous</code> snapshot. The workhorse for crawl-based monitoring.</li>
 <li><strong>Optional <code>monitor</code> mode</strong> — build the engine with the <code>monitor</code> Cargo feature (default OFF) for a SQLite-backed scheduler, set-level <code>new</code>/<code>removed</code>, an LLM judge, and signed local webhooks, with no external database.</li>
 </ul>
-<pre><code class="language-bash"># diff the current scrape against your stored snapshot
+<pre data-lang="bash"><code class="language-bash"># diff the current scrape against your stored snapshot
 curl -s -X POST &quot;http://localhost:3000/v1/change-tracking/diff&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
+  -d '{
     &quot;modes&quot;: [&quot;gitDiff&quot;],
     &quot;previous&quot;: { &quot;markdown&quot;: &quot;Starter $19&quot;, &quot;contentHash&quot;: &quot;abc&quot; },
     &quot;current&quot;:  { &quot;markdown&quot;: &quot;Starter $24&quot; }
-  }&#39;
-</code></pre>
-<p>:::note
-The <code>monitor</code> feature pulls in SQLite/HMAC dependencies only when enabled — the default engine build stays dependency-light. Self-host monitoring uses UTC schedules and your own LLM key (BYOK) for judging.
-:::</p>
-<h2 id="change-tracking">Change Tracking</h2>
+  }'</code></pre>
+<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">The `monitor` feature pulls in SQLite/HMAC dependencies only when enabled — the default engine build stays dependency-light. Self-host monitoring uses UTC schedules and your own LLM key (BYOK) for judging.</div></div><h2 id="change-tracking">Change Tracking</h2>
 <p>Change tracking is a <strong>stateless</strong> primitive: you supply the current scraped content and the previous snapshot; the engine returns the diff and the new snapshot to persist as the next baseline. The engine stores nothing.</p>
 <p>Two entry points exist depending on whether you are running a single-page scrape or driving a custom orchestration loop:</p>
 <table>
@@ -613,7 +552,7 @@ The <code>monitor</code> feature pulls in SQLite/HMAC dependencies only when ena
 </tbody></table>
 <h3 id="changetracking-format-on-v1scrape"><code>changeTracking</code> format on <code>/v1/scrape</code></h3>
 <p>Add <code>&quot;changeTracking&quot;</code> to <code>formats</code> and pass a sibling <code>changeTracking</code> object with the options. The alias <code>&quot;change-tracking&quot;</code> is also accepted on the wire.</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;url&quot;: &quot;https://example.com/pricing&quot;,
   &quot;formats&quot;: [&quot;markdown&quot;, &quot;changeTracking&quot;],
   &quot;changeTracking&quot;: {
@@ -623,8 +562,7 @@ The <code>monitor</code> feature pulls in SQLite/HMAC dependencies only when ena
       &quot;contentHash&quot;: &quot;a3f8...&quot;
     }
   }
-}
-</code></pre>
+}</code></pre>
 <p>The <code>changeTracking</code> field is <strong>not</strong> valid as an object inside the <code>formats</code> array — it must be the plain string <code>&quot;changeTracking&quot;</code> there; options ride on the top-level sibling field.</p>
 <h4 id="changetracking-options"><code>changeTracking</code> options</h4>
 <table>
@@ -676,33 +614,31 @@ The <code>monitor</code> feature pulls in SQLite/HMAC dependencies only when ena
 <blockquote>
 <p><strong>Judge fields are top-level — not inside <code>changeTracking</code>.</strong>
 To use the meaningful-change judge from <code>/v1/scrape</code>, set <code>goal</code> and <code>judgeEnabled</code> as top-level fields of the scrape request body — siblings of <code>url</code>, <code>formats</code>, and <code>changeTracking</code> — not inside the <code>changeTracking</code> object:</p>
-<pre><code class="language-json">{
-  &quot;url&quot;: &quot;https://example.com&quot;,
-  &quot;formats&quot;: [&quot;changeTracking&quot;],
-  &quot;changeTracking&quot;: { &quot;modes&quot;: [&quot;gitDiff&quot;], &quot;previous&quot;: { &quot;...&quot; : &quot;...&quot; } },
-  &quot;goal&quot;: &quot;Alert when pricing changes&quot;,
-  &quot;judgeEnabled&quot;: true
-}
-</code></pre>
 </blockquote>
+<pre data-lang="json"><code class="language-json">&gt; {
+&gt;   &quot;url&quot;: &quot;https://example.com&quot;,
+&gt;   &quot;formats&quot;: [&quot;changeTracking&quot;],
+&gt;   &quot;changeTracking&quot;: { &quot;modes&quot;: [&quot;gitDiff&quot;], &quot;previous&quot;: { &quot;...&quot; : &quot;...&quot; } },
+&gt;   &quot;goal&quot;: &quot;Alert when pricing changes&quot;,
+&gt;   &quot;judgeEnabled&quot;: true
+&gt; }
+&gt;</code></pre>
 <h3 id="post-v1change-trackingdiff"><code>POST /v1/change-tracking/diff</code></h3>
 <p>A dedicated stateless endpoint served at the <strong>engine</strong> base URL: <code>https://api.fastcrw.com</code> (hosted) or your own origin when self-hosting.</p>
 <pre><code>POST https://api.fastcrw.com/v1/change-tracking/diff
 Content-Type: application/json
-Authorization: Bearer $CRW_API_KEY
-</code></pre>
+Authorization: Bearer $CRW_API_KEY</code></pre>
 <p>The endpoint accepts two wire shapes on one route, discriminated by the presence of the <code>batch</code> key.</p>
 <h4 id="single-item">Single item</h4>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;modes&quot;: [&quot;gitDiff&quot;],
   &quot;previous&quot;: { &quot;markdown&quot;: &quot;Starter $19&quot;, &quot;contentHash&quot;: &quot;a3f8...&quot; },
   &quot;current&quot;:  { &quot;markdown&quot;: &quot;Starter $24&quot; }
-}
-</code></pre>
+}</code></pre>
 <p>Response: <code>{ &quot;success&quot;: true, &quot;data&quot;: &lt;ChangeTrackingResult&gt; }</code></p>
 <h4 id="batch">Batch</h4>
 <p>Supply a <code>batch</code> array. Top-level <code>modes</code>, <code>schema</code>, <code>prompt</code>, and <code>contentType</code> act as shared defaults; individual items may override them.</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;modes&quot;: [&quot;gitDiff&quot;],
   &quot;batch&quot;: [
     {
@@ -716,8 +652,7 @@ Authorization: Bearer $CRW_API_KEY
       &quot;current&quot;:  { &quot;markdown&quot;: &quot;# Intro&quot; }
     }
   ]
-}
-</code></pre>
+}</code></pre>
 <p>Response: <code>{ &quot;success&quot;: true, &quot;data&quot;: [&lt;ChangeTrackingResult&gt;, ...] }</code> — an array in the same order as <code>batch</code>.</p>
 <p>The <code>batch</code> array must contain at least one item; an empty array returns <code>400 Bad Request</code>.</p>
 <h4 id="request-fields">Request fields</h4>
@@ -811,13 +746,12 @@ Authorization: Bearer $CRW_API_KEY
 </tbody></table>
 <h3 id="changetrackingsnapshot"><code>ChangeTrackingSnapshot</code></h3>
 <p>The snapshot is the baseline the engine diffs the current scrape against, and also the value you must persist between checks as the next baseline. The engine returns the current snapshot on every result.</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;markdown&quot;: &quot;Starter $19\n\nPro $49&quot;,
   &quot;json&quot;: { &quot;price&quot;: &quot;$19&quot; },
   &quot;contentHash&quot;: &quot;a3f8c2d...&quot;,
   &quot;capturedAt&quot;: &quot;2026-06-15T12:00:00Z&quot;
-}
-</code></pre>
+}</code></pre>
 <table>
 <thead>
 <tr>
@@ -849,7 +783,7 @@ Authorization: Bearer $CRW_API_KEY
 </tbody></table>
 <h3 id="changetrackingresult"><code>ChangeTrackingResult</code></h3>
 <p>Returned in <code>ScrapeData.changeTracking</code> (when <code>changeTracking</code> is in <code>formats</code>) and in <code>data</code> of <code>POST /v1/change-tracking/diff</code>.</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;status&quot;: &quot;changed&quot;,
   &quot;firstObservation&quot;: false,
   &quot;contentHash&quot;: &quot;b7e2a1f...&quot;,
@@ -880,8 +814,7 @@ Authorization: Bearer $CRW_API_KEY
     }
   }
   // tag and truncated are omitted when absent/false
-}
-</code></pre>
+}</code></pre>
 <table>
 <thead>
 <tr>
@@ -943,21 +876,19 @@ Authorization: Bearer $CRW_API_KEY
 </tbody></table>
 <h4 id="diffjson-gitdiff-only-mode-parse-diff-ast"><code>diff.json</code> — <code>gitDiff</code>-only mode (parse-diff AST)</h4>
 <p>When <code>modes</code> is <code>[&quot;gitDiff&quot;]</code> (or omitted), <code>diff.json</code> is a parse-diff-style AST:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;files&quot;: [ { &quot;from&quot;: &quot;previous&quot;, &quot;to&quot;: &quot;current&quot;, &quot;additions&quot;: 1, &quot;deletions&quot;: 1, &quot;chunks&quot;: [...] } ],
   &quot;additions&quot;: 1,
   &quot;deletions&quot;: 1
   // truncated only appears when true (AST was capped at max_diff_changes)
-}
-</code></pre>
+}</code></pre>
 <p>Each chunk entry in <code>changes[]</code> carries <code>type</code> (<code>&quot;add&quot;</code> / <code>&quot;del&quot;</code> / <code>&quot;normal&quot;</code>), <code>content</code> (the line without newline), and line numbers (<code>ln</code> for <code>add</code> (new-file line) and <code>del</code> (old-file line); <code>ln1</code> (old-file) + <code>ln2</code> (new-file) for <code>normal</code> context lines).</p>
 <h4 id="diffjson-json-and-mixed-modes-per-field-map"><code>diff.json</code> — <code>json</code> and <code>mixed</code> modes (per-field map)</h4>
 <p>When <code>modes</code> includes <code>&quot;json&quot;</code>, <code>diff.json</code> is a flat object keyed by dot-notation / bracket-notation JSON path, with each entry carrying <code>{ &quot;previous&quot;: &lt;value&gt;, &quot;current&quot;: &lt;value&gt; }</code>. Added fields have <code>&quot;previous&quot;: null</code>; removed fields have <code>&quot;current&quot;: null</code>.</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;plans[0].price&quot;: { &quot;previous&quot;: &quot;$19&quot;, &quot;current&quot;: &quot;$24&quot; },
   &quot;plans[1].name&quot;:  { &quot;previous&quot;: &quot;Pro&quot;,  &quot;current&quot;: null }
-}
-</code></pre>
+}</code></pre>
 <p>In <code>mixed</code> mode, both <code>diff.text</code> and <code>diff.json</code> (per-field map) are present.</p>
 <h3 id="normalization-and-hashing">Normalization and hashing</h3>
 <p>The engine normalizes markdown before hashing and diffing so cosmetic churn never flips a page from <code>same</code> to <code>changed</code>:</p>

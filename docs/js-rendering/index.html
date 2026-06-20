@@ -286,11 +286,10 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <p>crw supports JavaScript rendering for single-page applications (SPAs) and JS-heavy sites via the Chrome DevTools Protocol (CDP).</p>
 <h2 id="rendering-modes">Rendering Modes</h2>
 <p>Set the rendering mode in your config:</p>
-<pre><code class="language-toml">[renderer]
+<pre data-lang="toml"><code class="language-toml">[renderer]
 mode = &quot;auto&quot;          # auto | lightpanda | playwright | chrome | none
 page_timeout_ms = 30000
-pool_size = 4
-</code></pre>
+pool_size = 4</code></pre>
 <table>
 <thead>
 <tr>
@@ -325,12 +324,11 @@ pool_size = 4
 </tbody></table>
 <h2 id="per-request-control">Per-request control</h2>
 <p>Override the rendering mode per request using <code>renderJs</code>:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;url&quot;: &quot;https://spa-app.com&quot;,
   &quot;renderJs&quot;: true,
   &quot;waitFor&quot;: 3000
-}
-</code></pre>
+}</code></pre>
 <table>
 <thead>
 <tr>
@@ -353,24 +351,21 @@ pool_size = 4
 </tbody></table>
 <h2 id="global-default">Global default</h2>
 <p>To force JS rendering for every request that doesn&#39;t specify <code>renderJs</code> explicitly, set <code>render_js_default</code> in your config:</p>
-<pre><code class="language-toml">[renderer]
+<pre data-lang="toml"><code class="language-toml">[renderer]
 mode = &quot;chrome&quot;
-render_js_default = true   # alias: force_js = true
-</code></pre>
-<pre><code class="language-bash"># Or via environment variables
+render_js_default = true   # alias: force_js = true</code></pre>
+<pre data-lang="bash"><code class="language-bash"># Or via environment variables
 CRW_RENDERER__MODE=chrome
 CRW_RENDERER__RENDER_JS_DEFAULT=true
 # Backward-compat alias:
-CRW_RENDERER__FORCE_JS=true
-</code></pre>
+CRW_RENDERER__FORCE_JS=true</code></pre>
 <p>Precedence: a per-request <code>renderJs</code> always wins over the global default. Unset (<code>null</code>) on the request falls back to the default; if the default is also unset, the auto-detection heuristics below apply.</p>
 <h2 id="per-request-renderer-override">Per-request renderer override</h2>
 <p>When <code>mode = &quot;auto&quot;</code> and you have multiple renderers configured (e.g., LightPanda + Chrome), the auto-detect chain decides which one to use. Sometimes you already know that a specific site needs Chrome (Cloudflare-protected SPAs) or LightPanda (fast static-JS sites). Pin the renderer per request with the <code>renderer</code> field:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;url&quot;: &quot;https://x.com/elonmusk&quot;,
   &quot;renderer&quot;: &quot;chrome&quot;
-}
-</code></pre>
+}</code></pre>
 <table>
 <thead>
 <tr>
@@ -407,23 +402,21 @@ CRW_RENDERER__FORCE_JS=true
 <p>A non-<code>auto</code> <code>renderer</code> value implies <code>renderJs:true</code>. If you set <code>renderJs:false</code> explicitly, the request stays HTTP-only and the pin is silently ignored — <code>renderJs:false</code> always wins. This means the availability check is also skipped when <code>renderJs:false</code> is set, so combinations like <code>{&quot;mode&quot;:&quot;none&quot;,&quot;renderJs&quot;:false,&quot;renderer&quot;:&quot;chrome&quot;}</code> are accepted.</p>
 <h3 id="errors-and-validation">Errors and validation</h3>
 <p>If the named renderer isn&#39;t available in the server&#39;s pool, the request returns HTTP 400 immediately with <code>error_code: &quot;invalid_request&quot;</code> and a message listing the configured renderers:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: false,
-  &quot;error&quot;: &quot;renderer &#39;chrome&#39; not available; configured renderers: [lightpanda]. Update server config or omit the &#39;renderer&#39; field.&quot;,
+  &quot;error&quot;: &quot;renderer 'chrome' not available; configured renderers: [lightpanda]. Update server config or omit the 'renderer' field.&quot;,
   &quot;error_code&quot;: &quot;invalid_request&quot;
-}
-</code></pre>
+}</code></pre>
 <p>For <code>/v1/crawl</code>, this validation runs <strong>once at job acceptance</strong> — bad combinations return 400 before the job is queued.</p>
 <h3 id="pinning-reduces-resilience">Pinning reduces resilience</h3>
 <p>Hard-pinning a renderer means transient failures of that renderer surface as errors instead of silently falling back to HTTP. If you need maximum resilience, omit <code>renderer</code> (or set it to <code>auto</code>) so the auto-detect chain can fall back. If you need determinism — &quot;I know this site needs Chrome and a LightPanda success would be a wrong answer&quot; — pin it.</p>
 <p>For crawls, per-page failures of a pinned renderer are still logged and skipped; the rest of the crawl continues. Pages that fail will not appear in the results.</p>
 <h2 id="per-request-country-residential-proxy-tier">Per-request country (residential proxy tier)</h2>
 <p>When the operator configures a <code>chrome_proxy</code> tier backed by a residential proxy provider you configure, each request can route through a specific country by setting <code>country</code> in the request body:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;url&quot;: &quot;https://geo-restricted.example.com&quot;,
   &quot;country&quot;: &quot;us&quot;
-}
-</code></pre>
+}</code></pre>
 <table>
 <thead>
 <tr>
@@ -462,10 +455,7 @@ CRW_RENDERER__FORCE_JS=true
 <li><code>2000</code> for typical JS-heavy pages,</li>
 <li><code>3000</code> to <code>5000</code> only when you have confirmed the target hydrates slowly.</li>
 </ul>
-<p>:::warning
-Long waits are not automatically safer. They increase latency and can hide the fact that the page is blocked rather than merely slow.
-:::</p>
-<h2 id="auto-detection">Auto-detection</h2>
+<div class="callout callout-warning"><div class="callout-icon"></div><div class="callout-content">Long waits are not automatically safer. They increase latency and can hide the fact that the page is blocked rather than merely slow.</div></div><h2 id="auto-detection">Auto-detection</h2>
 <p>When <code>renderJs</code> is <code>null</code>, crw fetches the page via HTTP first, then checks for SPA signals:</p>
 <p><strong>Triggered when body text &lt; 200 chars and:</strong></p>
 <ul>
@@ -481,23 +471,19 @@ Long waits are not automatically safer. They increase latency and can hide the f
 <h2 id="cdp-backends">CDP Backends</h2>
 <h3 id="lightpanda-recommended">LightPanda (Recommended)</h3>
 <p>Fastest option. Lightweight browser engine purpose-built for scraping.</p>
-<pre><code class="language-bash"># Auto-install
+<pre data-lang="bash"><code class="language-bash"># Auto-install
 crw-server setup
 
 # Manual start
-lightpanda serve --host 127.0.0.1 --port 9222 &amp;
-</code></pre>
-<pre><code class="language-toml">[renderer.lightpanda]
-ws_url = &quot;ws://127.0.0.1:9222/&quot;
-</code></pre>
+lightpanda serve --host 127.0.0.1 --port 9222 &amp;</code></pre>
+<pre data-lang="toml"><code class="language-toml">[renderer.lightpanda]
+ws_url = &quot;ws://127.0.0.1:9222/&quot;</code></pre>
 <h3 id="playwright">Playwright</h3>
-<pre><code class="language-toml">[renderer.playwright]
-ws_url = &quot;ws://playwright:9222&quot;
-</code></pre>
+<pre data-lang="toml"><code class="language-toml">[renderer.playwright]
+ws_url = &quot;ws://playwright:9222&quot;</code></pre>
 <h3 id="chrome-chromium">Chrome / Chromium</h3>
-<pre><code class="language-toml">[renderer.chrome]
-ws_url = &quot;ws://chrome:9222&quot;
-</code></pre>
+<pre data-lang="toml"><code class="language-toml">[renderer.chrome]
+ws_url = &quot;ws://chrome:9222&quot;</code></pre>
 <h2 id="how-cdp-rendering-works">How CDP rendering works</h2>
 <ol>
 <li>Open a new browser tab via <code>Target.createTarget</code></li>
@@ -518,23 +504,20 @@ Chrome can&#39;t get past). It is a <a href="https://github.com/daijro/camoufox"
 configured endpoint stays out of the <code>auto</code> failover chain until you ask for it.</p>
 <h3 id="requirements">Requirements</h3>
 <ol>
-<li><p>A build with the feature compiled in: <code>--features camoufox</code> (the default
-build does not include it).</p>
-</li>
-<li><p>A running camofox-browser sidecar (default port <code>9377</code>):</p>
-<pre><code class="language-bash">docker run -p 9377:9377 -e CAMOFOX_PORT=9377 jo-inc/camofox-browser
-</code></pre>
-</li>
-<li><p>The endpoint in your config:</p>
-<pre><code class="language-toml">[renderer.camoufox]
-base_url = &quot;http://127.0.0.1:9377&quot;
-# api_key = &quot;...&quot;             # sent as `Authorization: Bearer` — only needed
-#                             # if you front the sidecar with an auth proxy
-# include_in_auto = false     # default: stay OUT of the auto ladder
-# camoufox_timeout_ms = 60000 # per-request REST budget (default 60s)
-</code></pre>
-</li>
+<li>A build with the feature compiled in: <code>--features camoufox</code> (the default
+build does not include it).</li>
+<li>A running camofox-browser sidecar (default port <code>9377</code>):</li>
 </ol>
+<pre data-lang="bash"><code class="language-bash">docker run -p 9377:9377 -e CAMOFOX_PORT=9377 jo-inc/camofox-browser</code></pre>
+<ol start="3">
+<li>The endpoint in your config:</li>
+</ol>
+<pre data-lang="toml"><code class="language-toml">[renderer.camoufox]
+   base_url = &quot;http://127.0.0.1:9377&quot;
+   # api_key = &quot;...&quot;             # sent as `Authorization: Bearer` — only needed
+   #                             # if you front the sidecar with an auth proxy
+   # include_in_auto = false     # default: stay OUT of the auto ladder
+   # camoufox_timeout_ms = 60000 # per-request REST budget (default 60s)</code></pre>
 <h3 id="three-ways-to-use-it">Three ways to use it</h3>
 <table>
 <thead>
@@ -606,7 +589,7 @@ is skipped rather than failing every request.</p>
 </ul>
 <h2 id="docker-compose">Docker Compose</h2>
 <p>The included <code>docker-compose.yml</code> runs crw with a LightPanda sidecar:</p>
-<pre><code class="language-yaml">services:
+<pre data-lang="yaml"><code class="language-yaml">services:
   crw:
     image: ghcr.io/us/crw:latest
     ports:
@@ -615,8 +598,7 @@ is skipped rather than failing every request.</p>
       - CRW_RENDERER__LIGHTPANDA__WS_URL=ws://lightpanda:9222
   lightpanda:
     image: lightpanda/lightpanda:latest
-    command: [&quot;serve&quot;, &quot;--host&quot;, &quot;0.0.0.0&quot;, &quot;--port&quot;, &quot;9222&quot;]
-</code></pre>
+    command: [&quot;serve&quot;, &quot;--host&quot;, &quot;0.0.0.0&quot;, &quot;--port&quot;, &quot;9222&quot;]</code></pre>
 </article>
     </main>
 

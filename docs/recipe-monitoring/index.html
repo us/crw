@@ -294,20 +294,19 @@ api.fastcrw.com  ← scrapes competitor.com/pricing
     ↓  diff against last snapshot
 LLM judge        ← is this a meaningful price change?
     ↓  yes → signed webhook
-Your server      ← verifies X-CRW-Signature, posts to Slack
-</code></pre>
+Your server      ← verifies X-CRW-Signature, posts to Slack</code></pre>
 <p>The monitor control plane (<code>/v1/monitor</code>) lives at <code>https://fastcrw.com/api</code> — separate from the scrape engine at <code>https://api.fastcrw.com</code>. You only call the control plane to create/update the monitor; the scrapes and webhooks happen automatically on schedule.</p>
 <blockquote>
 <p><strong>SaaS-only fields.</strong> <code>targets[].changeMode</code> (<code>&quot;markdown&quot;</code> | <code>&quot;json&quot;</code> | <code>&quot;mixed&quot;</code>) is a SaaS control-plane field (validated by the Zod schema in <code>src/lib/monitor/validation.ts</code>; stored as <code>changeMode TEXT DEFAULT &#39;markdown&#39;</code> in the <code>MonitorTarget</code> table). It is not present on the open-source <code>MonitorTarget</code> type in <code>crw-monitor/src/types.rs</code>, which uses a top-level <code>modes[]</code> array instead. Use <code>changeMode</code> only when calling <code>https://fastcrw.com/api</code>.</p>
 </blockquote>
 <hr>
 <h2 id="step-1-create-the-monitor">Step 1 — Create the monitor</h2>
-<p>:::tabs
-::tab{title=&quot;cURL&quot;}</p>
-<pre><code class="language-bash">curl -s -X POST &quot;https://fastcrw.com/api/v1/monitor&quot; \
+<div class="code-tabs">
+      <div class="code-tabs-header"><button class="code-tab active" data-tab="0">cURL</button><button class="code-tab" data-tab="1">Python</button></div>
+      <div class="code-tab-panel active" data-panel="0"><pre data-lang="bash"><code class="language-bash">curl -s -X POST &quot;https://fastcrw.com/api/v1/monitor&quot; \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
+  -d '{
     &quot;name&quot;: &quot;Competitor pricing watcher&quot;,
     &quot;schedule&quot;: { &quot;text&quot;: &quot;every 30 minutes&quot;, &quot;timezone&quot;: &quot;UTC&quot; },
     &quot;goal&quot;: &quot;Alert only when a pricing tier name, price, or headline feature changes. Ignore navigation, footer, or cookie banner changes.&quot;,
@@ -323,16 +322,12 @@ Your server      ← verifies X-CRW-Signature, posts to Slack
       &quot;events&quot;: [&quot;monitor.page&quot;, &quot;monitor.check.completed&quot;],
       &quot;metadata&quot;: { &quot;slackChannel&quot;: &quot;#pricing-alerts&quot; }
     }
-  }&#39;
-</code></pre>
-<p>::
-::tab{title=&quot;Python&quot;}</p>
-<pre><code class="language-python">import os
+  }'</code></pre><p>::</div><div class="code-tab-panel" data-panel="1"><pre data-lang="python"><code class="language-python">import os
 import requests
 
 res = requests.post(
     &quot;https://fastcrw.com/api/v1/monitor&quot;,
-    headers={&quot;Authorization&quot;: f&quot;Bearer {os.environ[&#39;CRW_API_KEY&#39;]}&quot;},
+    headers={&quot;Authorization&quot;: f&quot;Bearer {os.environ['CRW_API_KEY']}&quot;},
     json={
         &quot;name&quot;: &quot;Competitor pricing watcher&quot;,
         &quot;schedule&quot;: {&quot;text&quot;: &quot;every 30 minutes&quot;, &quot;timezone&quot;: &quot;UTC&quot;},
@@ -357,13 +352,12 @@ res = requests.post(
 data = res.json()[&quot;data&quot;]
 print(&quot;monitor id :&quot;, data[&quot;id&quot;])
 print(&quot;next run   :&quot;, data[&quot;nextRunAt&quot;])
-print(&quot;webhook secret (save this — shown once):&quot;, data.get(&quot;webhookSecret&quot;))
-</code></pre>
-<p>::
-:::</p>
+print(&quot;webhook secret (save this — shown once):&quot;, data.get(&quot;webhookSecret&quot;))</code></pre></p>
+<p>::</div>
+    </div></p>
 <p><strong>Store the <code>webhookSecret</code> now.</strong> It is returned once in the create response and never again. You need it to verify signatures.</p>
 <h3 id="expected-response">Expected response</h3>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;data&quot;: {
     &quot;id&quot;: &quot;019df960-06e7-7383-9d89-82c0113dc31a&quot;,
@@ -389,13 +383,12 @@ print(&quot;webhook secret (save this — shown once):&quot;, data.get(&quot;web
     &quot;estimatedCreditsPerMonth&quot;: 2880,
     &quot;createdAt&quot;: &quot;2026-06-15T12:00:00.000Z&quot;
   }
-}
-</code></pre>
+}</code></pre>
 <hr>
 <h2 id="step-2-webhook-handler-python">Step 2 — Webhook handler (Python)</h2>
 <p>Save your <code>webhookSecret</code> as an environment variable (<code>CRW_WEBHOOK_SECRET</code>) and run this Flask app. It verifies the HMAC-SHA256 signature, then posts to Slack when the LLM judge finds a meaningful change.</p>
 <p><strong>Signature scheme:</strong> the <code>X-CRW-Signature</code> header has the form <code>t=&lt;unix&gt;,v1=&lt;hex&gt;</code>. The MAC is <code>HMAC-SHA256(secret, &quot;&lt;t&gt;.&lt;raw_body&gt;&quot;)</code> over the raw request bytes. Verify before parsing.</p>
-<pre><code class="language-python"># webhook_handler.py
+<pre data-lang="python"><code class="language-python"># webhook_handler.py
 import hashlib
 import hmac
 import json
@@ -520,7 +513,7 @@ def handle_check_completed(payload: dict, channel: str) -&gt; None:
     if changed + new + removed == 0:
         return  # nothing changed, no alert
 
-    lines = [f&quot;:bar_chart: *Check complete* — {summary.get(&#39;totalPages&#39;, 0)} pages scanned&quot;]
+    lines = [f&quot;:bar_chart: *Check complete* — {summary.get('totalPages', 0)} pages scanned&quot;]
     if changed:
         lines.append(f&quot;  • `{changed}` changed&quot;)
     if new:
@@ -532,18 +525,16 @@ def handle_check_completed(payload: dict, channel: str) -&gt; None:
 
 
 if __name__ == &quot;__main__&quot;:
-    app.run(port=8080)
-</code></pre>
+    app.run(port=8080)</code></pre>
 <p>Run it:</p>
-<pre><code class="language-bash">pip install flask requests
+<pre data-lang="bash"><code class="language-bash">pip install flask requests
 CRW_WEBHOOK_SECRET=&lt;from create response&gt; \
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/... \
-python webhook_handler.py
-</code></pre>
+python webhook_handler.py</code></pre>
 <hr>
 <h2 id="webhook-envelope-shape">Webhook envelope shape</h2>
 <p>Every delivery wraps the event payload in a common envelope:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;type&quot;: &quot;monitor.page&quot;,
   &quot;id&quot;: &quot;&lt;checkId&gt;&quot;,
@@ -557,10 +548,9 @@ python webhook_handler.py
     }
   ],
   &quot;metadata&quot;: { &quot;slackChannel&quot;: &quot;#pricing-alerts&quot; }
-}
-</code></pre>
+}</code></pre>
 <p>And for <code>monitor.check.completed</code>:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;type&quot;: &quot;monitor.check.completed&quot;,
   &quot;id&quot;: &quot;019e1234-abcd-7000-8000-000000000001&quot;,
@@ -579,19 +569,14 @@ python webhook_handler.py
       &quot;siteDown&quot;: false
     }
   ]
-}
-</code></pre>
+}</code></pre>
 <hr>
 <h2 id="step-3-inspect-the-diff-optional">Step 3 — Inspect the diff (optional)</h2>
 <p>Fetch the check detail to read the full text diff before it appears in Slack, or to build a richer alert:</p>
-<p>:::tabs
-::tab{title=&quot;cURL&quot;}</p>
-<pre><code class="language-bash">curl &quot;https://fastcrw.com/api/v1/monitor/$MONITOR_ID/checks/$CHECK_ID?status=changed&quot; \
-  -H &quot;Authorization: Bearer $CRW_API_KEY&quot;
-</code></pre>
-<p>::
-::tab{title=&quot;Python&quot;}</p>
-<pre><code class="language-python">import os, requests
+<div class="code-tabs">
+      <div class="code-tabs-header"><button class="code-tab active" data-tab="0">cURL</button><button class="code-tab" data-tab="1">Python</button></div>
+      <div class="code-tab-panel active" data-panel="0"><pre data-lang="bash"><code class="language-bash">curl &quot;https://fastcrw.com/api/v1/monitor/$MONITOR_ID/checks/$CHECK_ID?status=changed&quot; \
+  -H &quot;Authorization: Bearer $CRW_API_KEY&quot;</code></pre><p>::</div><div class="code-tab-panel" data-panel="1"><pre data-lang="python"><code class="language-python">import os, requests
 
 monitor_id = &quot;019df960-06e7-7383-9d89-82c0113dc31a&quot;
 check_id   = &quot;019e1234-abcd-7000-8000-000000000001&quot;
@@ -599,17 +584,16 @@ check_id   = &quot;019e1234-abcd-7000-8000-000000000001&quot;
 res = requests.get(
     f&quot;https://fastcrw.com/api/v1/monitor/{monitor_id}/checks/{check_id}&quot;,
     params={&quot;status&quot;: &quot;changed&quot;},
-    headers={&quot;Authorization&quot;: f&quot;Bearer {os.environ[&#39;CRW_API_KEY&#39;]}&quot;},
+    headers={&quot;Authorization&quot;: f&quot;Bearer {os.environ['CRW_API_KEY']}&quot;},
 )
 check = res.json()[&quot;data&quot;]
 
 for page in check.get(&quot;pages&quot;, []):
     if page[&quot;status&quot;] == &quot;changed&quot;:
         print(page[&quot;url&quot;])
-        print(page.get(&quot;diffText&quot;, &quot;(no text diff)&quot;))
-</code></pre>
-<p>::
-:::</p>
+        print(page.get(&quot;diffText&quot;, &quot;(no text diff)&quot;))</code></pre></p>
+<p>::</div>
+    </div></p>
 <hr>
 <h2 id="what-the-slack-alert-looks-like">What the Slack alert looks like</h2>
 <p>When the judge marks a change meaningful your <code>#pricing-alerts</code> channel gets:</p>
@@ -617,8 +601,7 @@ for page in check.get(&quot;pages&quot;, []):
 URL: https://competitor.com/pricing
 Status: `changed`
 Check: `019e1234-abcd-7000-8000-000000000001`
-Diff: https://fastcrw.com/dashboard (monitor → latest check)
-</code></pre>
+Diff: https://fastcrw.com/dashboard (monitor → latest check)</code></pre>
 <p>When a check completes with no meaningful changes, the <code>monitor.page</code> handler returns early (because <code>isMeaningful</code> is not <code>true</code>) and the <code>monitor.check.completed</code> handler returns early (because <code>changed + new + removed == 0</code>). Slack stays quiet.</p>
 <hr>
 <h2 id="tuning-the-judge">Tuning the judge</h2>

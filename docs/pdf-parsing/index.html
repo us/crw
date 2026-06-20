@@ -297,9 +297,8 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
   </div>
 </div><h2 id="pdf-parsing-with-crw">PDF Parsing with CRW</h2>
 <h3 id="v2parse">/v2/parse</h3>
-<pre><code class="language-http">POST /v2/parse
-Content-Type: multipart/form-data
-</code></pre>
+<pre data-lang="http"><code class="language-http">POST /v2/parse
+Content-Type: multipart/form-data</code></pre>
 <p>Authentication:</p>
 <ul>
 <li>Hosted: send <code>Authorization: Bearer YOUR_API_KEY</code></li>
@@ -327,30 +326,21 @@ Content-Type: multipart/form-data
 </tbody></table>
 <p>The file must be a valid PDF. Binary files with other content types are rejected with <code>400 Bad Request</code>. A corrupt or encrypted PDF returns <code>422 Unprocessable Entity</code>. The maximum upload size is <strong>50 MiB</strong> (52,428,800 bytes); requests above this limit receive a <code>413 Content Too Large</code> before the body is fully read.</p>
 <h3 id="quick-start-quick-start">Quick start {#quick-start}</h3>
-<p>:::tabs
-::tab{title=&quot;cURL&quot;}</p>
-<pre><code class="language-bash">curl -X POST https://api.fastcrw.com/v2/parse \
+<div class="code-tabs">
+      <div class="code-tabs-header"><button class="code-tab active" data-tab="0">cURL</button><button class="code-tab" data-tab="1">Python (SDK)</button><button class="code-tab" data-tab="2">TypeScript (SDK)</button><button class="code-tab" data-tab="3">Python (requests)</button></div>
+      <div class="code-tab-panel active" data-panel="0"><pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v2/parse \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
-  -F &quot;file=@/path/to/document.pdf;type=application/pdf&quot;
-</code></pre>
-<p>::tab{title=&quot;Python (SDK)&quot;}</p>
-<pre><code class="language-python">from crw import CrwClient
+  -F &quot;file=@/path/to/document.pdf;type=application/pdf&quot;</code></pre></div><div class="code-tab-panel" data-panel="1"><pre data-lang="python"><code class="language-python">from crw import CrwClient
 
 client = CrwClient()  # reads CRW_API_KEY from env
 result = client.parse_file(path=&quot;/path/to/document.pdf&quot;)
-print(result[&quot;markdown&quot;])
-</code></pre>
-<p>::tab{title=&quot;TypeScript (SDK)&quot;}</p>
-<pre><code class="language-typescript">import { CrwClient } from &quot;crw-sdk&quot;;
+print(result[&quot;markdown&quot;])</code></pre></div><div class="code-tab-panel" data-panel="2"><pre data-lang="typescript"><code class="language-typescript">import { CrwClient } from &quot;crw-sdk&quot;;
 import { readFileSync } from &quot;fs&quot;;
 
 const client = new CrwClient();
 const bytes = new Uint8Array(readFileSync(&quot;/path/to/document.pdf&quot;));
 const result = await client.parseFile(bytes, { filename: &quot;document.pdf&quot; });
-console.log(result.markdown);
-</code></pre>
-<p>::tab{title=&quot;Python (requests)&quot;}</p>
-<pre><code class="language-python">import requests
+console.log(result.markdown);</code></pre></div><div class="code-tab-panel" data-panel="3"><pre data-lang="python"><code class="language-python">import requests
 
 with open(&quot;/path/to/document.pdf&quot;, &quot;rb&quot;) as f:
     resp = requests.post(
@@ -359,11 +349,9 @@ with open(&quot;/path/to/document.pdf&quot;, &quot;rb&quot;) as f:
         files={&quot;file&quot;: (&quot;document.pdf&quot;, f, &quot;application/pdf&quot;)},
     )
 
-print(resp.json()[&quot;data&quot;][&quot;markdown&quot;])
-</code></pre>
-<p>:::</p>
-<h3 id="response">Response</h3>
-<pre><code class="language-json">{
+print(resp.json()[&quot;data&quot;][&quot;markdown&quot;])</code></pre></div>
+    </div><h3 id="response">Response</h3>
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;data&quot;: {
     &quot;markdown&quot;: &quot;# Annual Report 2025\n\nRevenue grew 18%...&quot;,
@@ -379,8 +367,7 @@ print(resp.json()[&quot;data&quot;][&quot;markdown&quot;])
       &quot;scrapeId&quot;: &quot;a1b2c3d4-...&quot;
     }
   }
-}
-</code></pre>
+}</code></pre>
 <p>Key metadata fields for PDF responses:</p>
 <table>
 <thead>
@@ -445,11 +432,10 @@ print(resp.json()[&quot;data&quot;][&quot;markdown&quot;])
 </tr>
 </tbody></table>
 <h3 id="example-with-options">Example with options</h3>
-<pre><code class="language-bash">curl -X POST https://api.fastcrw.com/v2/parse \
+<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v2/parse \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
   -F &quot;file=@/path/to/document.pdf;type=application/pdf&quot; \
-  -F &#39;options={&quot;formats&quot;:[&quot;markdown&quot;,&quot;plainText&quot;],&quot;parsers&quot;:[{&quot;type&quot;:&quot;pdf&quot;,&quot;maxPages&quot;:5}]}&#39;
-</code></pre>
+  -F 'options={&quot;formats&quot;:[&quot;markdown&quot;,&quot;plainText&quot;],&quot;parsers&quot;:[{&quot;type&quot;:&quot;pdf&quot;,&quot;maxPages&quot;:5}]}'</code></pre>
 <h3 id="formats-formats">Formats {#formats}</h3>
 <p><code>/v2/parse</code> supports a subset of the scrape formats. Formats that require a renderer (<code>html</code>, <code>rawHtml</code>, <code>changeTracking</code>) are not applicable to uploaded documents and return a warning if requested.</p>
 <table>
@@ -484,12 +470,11 @@ print(resp.json()[&quot;data&quot;][&quot;markdown&quot;])
 <h3 id="parsers-parsers">parsers[] {#parsers}</h3>
 <p>The <code>parsers</code> field controls how the document is processed. Currently only <code>&quot;pdf&quot;</code> is supported.</p>
 <p><strong>Accepted forms</strong> (the server accepts both):</p>
-<pre><code class="language-json">// Short form (bare string):
+<pre data-lang="json"><code class="language-json">// Short form (bare string):
 &quot;parsers&quot;: [&quot;pdf&quot;]
 
 // Object form (full control):
-&quot;parsers&quot;: [{ &quot;type&quot;: &quot;pdf&quot;, &quot;mode&quot;: &quot;auto&quot;, &quot;maxPages&quot;: 10 }]
-</code></pre>
+&quot;parsers&quot;: [{ &quot;type&quot;: &quot;pdf&quot;, &quot;mode&quot;: &quot;auto&quot;, &quot;maxPages&quot;: 10 }]</code></pre>
 <table>
 <thead>
 <tr>
@@ -518,13 +503,10 @@ print(resp.json()[&quot;data&quot;][&quot;markdown&quot;])
 <td>Cap the number of pages converted. Useful for very large documents where you only need the first N pages.</td>
 </tr>
 </tbody></table>
-<p>:::note
-fastCRW performs <strong>text-layer extraction only</strong>. Image-only (scanned) PDFs that have no embedded text layer will return empty or near-empty markdown. No warning is guaranteed for individual scanned pages — check <code>numPages</code> vs actual content length if you expect text.
-:::</p>
-<h2 id="sdk-usage">SDK usage</h2>
+<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">fastCRW performs **text-layer extraction only**. Image-only (scanned) PDFs that have no embedded text layer will return empty or near-empty markdown. No warning is guaranteed for individual scanned pages — check `numPages` vs actual content length if you expect text.</div></div><h2 id="sdk-usage">SDK usage</h2>
 <h3 id="python-sdk-clientparse_file">Python SDK — <code>client.parse_file()</code></h3>
 <p>The Python SDK <code>parse_file()</code> works in both HTTP mode (cloud or self-hosted server) and local subprocess mode.</p>
-<pre><code class="language-python">from crw import CrwClient
+<pre data-lang="python"><code class="language-python">from crw import CrwClient
 
 client = CrwClient()  # CRW_API_KEY from env
 
@@ -549,10 +531,9 @@ result = client.parse_file(
 )
 
 print(result[&quot;markdown&quot;])
-print(&quot;Pages:&quot;, result[&quot;metadata&quot;][&quot;numPages&quot;])
-</code></pre>
+print(&quot;Pages:&quot;, result[&quot;metadata&quot;][&quot;numPages&quot;])</code></pre>
 <p><strong>Signature:</strong></p>
-<pre><code class="language-python">def parse_file(
+<pre data-lang="python"><code class="language-python">def parse_file(
     path: str | None = None,
     *,
     content: bytes | None = None,
@@ -561,12 +542,11 @@ print(&quot;Pages:&quot;, result[&quot;metadata&quot;][&quot;numPages&quot;])
     json_schema: dict | None = None,
     parsers: list[str] | None = None,
     **kwargs,
-) -&gt; dict
-</code></pre>
+) -&gt; dict</code></pre>
 <p>Provide either <code>path</code> (file on disk) or <code>content</code> (raw bytes). <code>filename</code> defaults to the basename of <code>path</code>, or <code>&quot;document.pdf&quot;</code> when using <code>content=</code> without a name.</p>
 <h3 id="typescript-sdk-clientparsefile">TypeScript SDK — <code>client.parseFile()</code></h3>
 <p>The TypeScript SDK takes the file as a <code>Uint8Array</code> (not a path). Read the file before calling.</p>
-<pre><code class="language-typescript">import { CrwClient } from &quot;crw-sdk&quot;;
+<pre data-lang="typescript"><code class="language-typescript">import { CrwClient } from &quot;crw-sdk&quot;;
 import { readFileSync } from &quot;fs&quot;;
 
 const client = new CrwClient(); // CRW_API_KEY from env
@@ -582,10 +562,9 @@ const result2 = await client.parseFile(bytes, {
   formats: [&quot;markdown&quot;, &quot;plainText&quot;],
   parsers: [{ type: &quot;pdf&quot;, maxPages: 20 }],
 });
-console.log(result2.metadata.numPages);
-</code></pre>
+console.log(result2.metadata.numPages);</code></pre>
 <p><strong>Signature:</strong></p>
-<pre><code class="language-typescript">parseFile(
+<pre data-lang="typescript"><code class="language-typescript">parseFile(
   content: Uint8Array,
   opts?: ParseFileOptions,
 ): Promise&lt;ParseResult&gt;
@@ -596,13 +575,12 @@ interface ParseFileOptions {
   jsonSchema?: object;
   parsers?: string[];
   [key: string]: unknown;  // any other engine option passed through
-}
-</code></pre>
+}</code></pre>
 <p><strong>Python vs TypeScript asymmetry:</strong> The Python SDK accepts either a <code>path</code> string or raw <code>content</code> bytes (your choice). The TypeScript SDK accepts only raw bytes (<code>Uint8Array</code>) — you must read the file before calling <code>parseFile</code>. This is intentional: TypeScript environments (Deno, edge runtimes, browsers) cannot always read from a filesystem path.</p>
 <h2 id="mcp-tool-crw_parse_file">MCP tool — <code>crw_parse_file</code></h2>
 <p>When running CRW via MCP (e.g. in Claude Desktop or Cursor), the <code>crw_parse_file</code> tool is available. It accepts Base64-encoded PDF bytes — the MCP transport cannot carry raw binary.</p>
 <p><strong>Tool definition (excerpt):</strong></p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;name&quot;: &quot;crw_parse_file&quot;,
   &quot;description&quot;: &quot;Parse a local PDF (base64 in contentBase64) to markdown. No OCR: scanned PDFs return empty markdown with a warning.&quot;,
   &quot;inputSchema&quot;: {
@@ -623,10 +601,9 @@ interface ParseFileOptions {
     },
     &quot;required&quot;: [&quot;contentBase64&quot;]
   }
-}
-</code></pre>
+}</code></pre>
 <p><strong>Example call from Python with the MCP transport:</strong></p>
-<pre><code class="language-python">import base64
+<pre data-lang="python"><code class="language-python">import base64
 from crw import CrwClient
 
 # local mode: CRW_LOCAL=1, no HTTP server needed
@@ -637,12 +614,11 @@ with open(&quot;report.pdf&quot;, &quot;rb&quot;) as f:
 
 # The SDK handles base64 encoding automatically in local mode:
 result = client.parse_file(content=pdf_bytes, filename=&quot;report.pdf&quot;)
-print(result[&quot;markdown&quot;])
-</code></pre>
+print(result[&quot;markdown&quot;])</code></pre>
 <p>The Python and TypeScript SDKs <strong>automatically</strong> base64-encode the bytes when running in local/MCP mode. You do not call <code>crw_parse_file</code> directly — call <code>parse_file()</code> / <code>parseFile()</code> and the SDK chooses the transport.</p>
 <h2 id="crawl-parse-workflow-crawl-parse-workflow">Crawl → Parse workflow {#crawl-parse-workflow}</h2>
 <p>A common pattern: crawl a documentation site, identify PDF links in the crawl output, then parse each PDF for full-text content.</p>
-<pre><code class="language-python">import requests
+<pre data-lang="python"><code class="language-python">import requests
 import time
 import base64
 from crw import CrwClient
@@ -686,15 +662,14 @@ for url in pdf_urls[:5]:  # start small
         filename=url.split(&quot;/&quot;)[-1],
         formats=[&quot;markdown&quot;],
     )
-    print(f&quot;\n--- {url} ({result[&#39;metadata&#39;][&#39;numPages&#39;]} pages) ---&quot;)
-    print(result[&quot;markdown&quot;][:500])
-</code></pre>
+    print(f&quot;\n--- {url} ({result['metadata']['numPages']} pages) ---&quot;)
+    print(result[&quot;markdown&quot;][:500])</code></pre>
 <h2 id="structured-extraction-from-pdfs">Structured extraction from PDFs</h2>
 <p>Combine <code>/v2/parse</code> with <code>formats: [&quot;json&quot;]</code> and a <code>jsonSchema</code> to extract structured data from a PDF in one step. Requires an LLM configured on the engine.</p>
-<pre><code class="language-bash">curl -X POST https://api.fastcrw.com/v2/parse \
+<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v2/parse \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
   -F &quot;file=@/path/to/contract.pdf;type=application/pdf&quot; \
-  -F &#39;options={
+  -F 'options={
     &quot;formats&quot;: [&quot;json&quot;],
     &quot;jsonSchema&quot;: {
       &quot;type&quot;: &quot;object&quot;,
@@ -704,10 +679,9 @@ for url in pdf_urls[:5]:  # start small
         &quot;value&quot;:         { &quot;type&quot;: &quot;string&quot; }
       }
     }
-  }&#39;
-</code></pre>
+  }'</code></pre>
 <p>Response:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;data&quot;: {
     &quot;json&quot;: {
@@ -717,8 +691,7 @@ for url in pdf_urls[:5]:  # start small
     },
     &quot;metadata&quot;: { &quot;numPages&quot;: 8, &quot;sourceFilename&quot;: &quot;contract.pdf&quot; }
   }
-}
-</code></pre>
+}</code></pre>
 <h2 id="error-reference">Error reference</h2>
 <table>
 <thead>
@@ -761,7 +734,7 @@ for url in pdf_urls[:5]:  # start small
 </tbody></table>
 <h2 id="self-hosted-configuration">Self-hosted configuration</h2>
 <p>Document parsing is enabled by default. To tune it, add a <code>[document]</code> section to <code>config.toml</code>:</p>
-<pre><code class="language-toml">[document]
+<pre data-lang="toml"><code class="language-toml">[document]
 enabled              = true
 max_pages            = 0          # 0 = no limit
 max_upload_bytes     = 52428800   # 50 MiB (hard cap)
@@ -769,8 +742,7 @@ upload_concurrency   = 4          # simultaneous uploads buffered in memory
 max_concurrent_parses = 8         # across all surfaces (URL, crawl, upload)
 parse_timeout_ms     = 30000      # ms; 0 = no timeout
 max_decompressed_bytes = 104857600  # 100 MiB decompression-bomb guard
-sandbox              = false      # isolate each parse in a child process
-</code></pre>
+sandbox              = false      # isolate each parse in a child process</code></pre>
 <p><code>sandbox = true</code> is recommended for hosts that accept untrusted PDF uploads. It runs each parse in a child process with hard OS memory and CPU limits. Cost: ~1–3 ms spawn overhead per parse.</p>
 <h2 id="when-to-use-something-else">When to use something else</h2>
 <ul>

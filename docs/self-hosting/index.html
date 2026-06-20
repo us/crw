@@ -286,13 +286,11 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <p>Use self-hosting when you want CRW running inside your own infrastructure. The hosted API is still the fastest first-run path; self-hosting is the better fit when network control, auth, and deployment ownership matter more than zero-setup speed.</p>
 <h2 id="quick-start">Quick Start</h2>
 <p>The shortest self-hosted path is Docker:</p>
-<pre><code class="language-bash">docker run -p 3000:3000 ghcr.io/us/crw
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">docker run -p 3000:3000 ghcr.io/us/crw</code></pre>
 <p>Then make a local request:</p>
-<pre><code class="language-bash">curl -X POST http://localhost:3000/v1/scrape \
+<pre data-lang="bash"><code class="language-bash">curl -X POST http://localhost:3000/v1/scrape \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;url&quot;:&quot;https://example.com&quot;,&quot;formats&quot;:[&quot;markdown&quot;]}&#39;
-</code></pre>
+  -d '{&quot;url&quot;:&quot;https://example.com&quot;,&quot;formats&quot;:[&quot;markdown&quot;]}'</code></pre>
 <h2 id="what-you-get">What You Get</h2>
 <ul>
 <li>the same core self-hosted routes: <code>scrape</code>, <code>crawl</code>, <code>map</code>, <code>mcp</code>, <code>health</code></li>
@@ -360,14 +358,13 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 stealth tier. It is a REST sidecar — separate from the CDP browsers — and is
 <strong>off by default</strong>: it requires a <code>--features camoufox</code> build and never joins
 the <code>auto</code> chain unless you opt in.</p>
-<pre><code class="language-bash"># 1. run the camofox-browser sidecar (default port 9377)
+<pre data-lang="bash"><code class="language-bash"># 1. run the camofox-browser sidecar (default port 9377)
 docker run -p 9377:9377 -e CAMOFOX_PORT=9377 jo-inc/camofox-browser
 
 # 2. point CRW at it (config.toml)
 #    [renderer.camoufox]
 #    base_url = &quot;http://127.0.0.1:9377&quot;
-#    # include_in_auto = true   # optional: add as the last auto-failover tier
-</code></pre>
+#    # include_in_auto = true   # optional: add as the last auto-failover tier</code></pre>
 <p>Reach it per request with <code>&quot;renderer&quot;: &quot;camoufox&quot;</code>, pin every request with
 <code>mode = &quot;camoufox&quot;</code>, or set <code>include_in_auto = true</code>. It is a heavier
 (Firefox-class) render than the CDP tiers, so enable it only for the requests

@@ -286,32 +286,27 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <h2 id="cloud-no-installation-needed">Cloud (no installation needed)</h2>
 <p>Sign up at <a href="https://fastcrw.com">fastcrw.com</a> and start using the API immediately.
 Same Firecrawl-compatible endpoints, zero infrastructure.</p>
-<pre><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/scrape \
+<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;url&quot;: &quot;https://example.com&quot;}&#39;
-</code></pre>
+  -d '{&quot;url&quot;: &quot;https://example.com&quot;}'</code></pre>
 <h2 id="one-line-install-recommended">One-Line Install (Recommended)</h2>
 <p>The install script auto-detects your OS and architecture, downloads the latest binary, and installs it:</p>
-<pre><code class="language-bash">curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | sh
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | sh</code></pre>
 <p>Or with <code>wget</code>:</p>
-<pre><code class="language-bash">wget -qO- https://raw.githubusercontent.com/us/crw/main/install.sh | sh
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">wget -qO- https://raw.githubusercontent.com/us/crw/main/install.sh | sh</code></pre>
 <p><strong>Options:</strong></p>
-<pre><code class="language-bash"># Install to a custom directory:
-curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | CRW_INSTALL_DIR=~/.local/bin sh
-</code></pre>
+<pre data-lang="bash"><code class="language-bash"># Install to a custom directory:
+curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | CRW_INSTALL_DIR=~/.local/bin sh</code></pre>
 <p>Supported platforms: macOS (Intel &amp; Apple Silicon), Linux (x64 &amp; ARM64), Windows (via MSYS2/Git Bash).</p>
 <h2 id="from-cratesio">From crates.io</h2>
-<pre><code class="language-bash"># CLI tool (no server required)
+<pre data-lang="bash"><code class="language-bash"># CLI tool (no server required)
 cargo install crw-cli
 
 # REST API server
-cargo install crw-server
-</code></pre>
+cargo install crw-server</code></pre>
 <h2 id="from-source">From source</h2>
-<pre><code class="language-bash">git clone https://github.com/us/crw.git
+<pre data-lang="bash"><code class="language-bash">git clone https://github.com/us/crw.git
 cd crw
 
 # CLI tool (no server, no setup)
@@ -327,33 +322,30 @@ cargo build --release --bin crw-server --features crw-server/cdp
 cargo build --release --bin crw-mcp
 
 # MCP stdio binary — lean browser-free proxy (~4.2 MB, no embedded browser)
-cargo build --profile release-small --no-default-features -p crw-mcp
-</code></pre>
+cargo build --profile release-small --no-default-features -p crw-mcp</code></pre>
 <p>Binaries are placed in <code>target/release/</code> (or <code>target/release-small/</code> for the lean build).</p>
 <p>The lean build (<code>--no-default-features</code>) omits the <code>embedded</code> cargo feature that gates the headless browser engine. Use it when you want a minimal proxy-only binary that forwards requests to a remote CRW server or fastcrw.com.</p>
 <h2 id="docker">Docker</h2>
-<pre><code class="language-bash"># Pre-built image
+<pre data-lang="bash"><code class="language-bash"># Pre-built image
 docker run -p 3000:3000 ghcr.io/us/crw:latest
 
 # With docker-compose (includes LightPanda sidecar)
-docker compose up
-</code></pre>
+docker compose up</code></pre>
 <p>The Docker image uses a multi-stage build: <code>rust:1.93-bookworm</code> for building, <code>debian:bookworm-slim</code> for runtime. The compose file includes a LightPanda sidecar for JS rendering.</p>
 <h2 id="js-rendering-setup">JS Rendering Setup</h2>
 <p>crw supports JavaScript rendering via CDP (Chrome DevTools Protocol). The fastest option is LightPanda:</p>
-<pre><code class="language-bash"># Automatic setup (downloads LightPanda + creates config.local.toml)
+<pre data-lang="bash"><code class="language-bash"># Automatic setup (downloads LightPanda + creates config.local.toml)
 crw-server setup
 
 # Start LightPanda
 lightpanda serve --host 127.0.0.1 --port 9222 &amp;
 
 # Start crw
-crw-server
-</code></pre>
+crw-server</code></pre>
 <p>The <code>setup</code> command detects your platform (Linux x86_64, macOS aarch64) and downloads the appropriate LightPanda binary to <code>~/.local/bin/lightpanda</code>.</p>
 <h3 id="other-cdp-backends">Other CDP backends</h3>
 <p>You can also use Playwright or Chrome. Set the WebSocket URL in your config:</p>
-<pre><code class="language-toml">[renderer]
+<pre data-lang="toml"><code class="language-toml">[renderer]
 mode = &quot;auto&quot;
 
 [renderer.playwright]
@@ -361,14 +353,12 @@ ws_url = &quot;ws://playwright:9222&quot;
 
 # or
 [renderer.chrome]
-ws_url = &quot;ws://chrome:9222&quot;
-</code></pre>
+ws_url = &quot;ws://chrome:9222&quot;</code></pre>
 <h2 id="verify">Verify</h2>
-<pre><code class="language-bash">crw-server
+<pre data-lang="bash"><code class="language-bash">crw-server
 # Server starts on http://localhost:3000
 
-curl http://localhost:3000/health
-</code></pre>
+curl http://localhost:3000/health</code></pre>
 </article>
     </main>
 

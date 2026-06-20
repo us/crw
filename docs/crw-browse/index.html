@@ -382,12 +382,11 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
   → stdin JSON-RPC 2.0
   → crw-browse process
   → CDP WebSocket (ws://localhost:9222)
-  → Chrome / Lightpanda
-</code></pre>
+  → Chrome / Lightpanda</code></pre>
 <p>A <code>SessionRegistry</code> holds named <code>BrowserSession</code> objects keyed by UUID, with 4-char base62 <code>short_id</code> tokens returned to the agent. Session state is automatically swept after an idle TTL.</p>
 <h2 id="prerequisites-start-a-cdp-browser-first">Prerequisites: start a CDP browser first</h2>
 <p><code>crw-browse</code> does <strong>not</strong> launch a browser. You must start one yourself and point <code>crw-browse</code> at its CDP endpoint.</p>
-<pre><code class="language-bash"># Chrome/Chromium — macOS
+<pre data-lang="bash"><code class="language-bash"># Chrome/Chromium — macOS
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
   --remote-debugging-port=9222 \
   --headless=new \
@@ -400,19 +399,17 @@ google-chrome \
   --user-data-dir=/tmp/crw-chrome
 
 # Lightpanda (faster and lighter — no screenshots)
-lightpanda serve --host 127.0.0.1 --port 9222
-</code></pre>
+lightpanda serve --host 127.0.0.1 --port 9222</code></pre>
 <h2 id="install">Install</h2>
-<pre><code class="language-bash"># From crates.io
+<pre data-lang="bash"><code class="language-bash"># From crates.io
 cargo install crw-browse
 
 # Or build from the workspace
 cargo build -p crw-browse --release
-# Binary: target/release/crw-browse
-</code></pre>
+# Binary: target/release/crw-browse</code></pre>
 <p>Prebuilt binaries are attached to the <a href="https://github.com/us/crw/releases/tag/v0.4.0">v0.4.0 GitHub release</a> and later.</p>
 <h2 id="start-crw-browse">Start crw-browse</h2>
-<pre><code class="language-bash"># Default: CDP at ws://localhost:9222
+<pre data-lang="bash"><code class="language-bash"># Default: CDP at ws://localhost:9222
 crw-browse
 
 # Explicit endpoint
@@ -421,8 +418,7 @@ crw-browse --ws-url ws://localhost:9222
 # Lightpanda as interactive browser + separate Chrome for screenshots
 crw-browse \
   --ws-url ws://lightpanda:9222 \
-  --chrome-ws-url ws://chrome:9223
-</code></pre>
+  --chrome-ws-url ws://chrome:9223</code></pre>
 <h3 id="environment-variables">Environment variables</h3>
 <table>
 <thead>
@@ -496,29 +492,26 @@ crw-browse \
 <h2 id="wire-into-your-mcp-client">Wire into your MCP client</h2>
 <p><code>crw-browse</code> uses stdio transport, same as <code>crw-mcp</code>. The JSON config is the same shape:</p>
 <h3 id="claude-code">Claude Code</h3>
-<pre><code class="language-bash">claude mcp add crw-browse -- crw-browse --ws-url ws://localhost:9222
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">claude mcp add crw-browse -- crw-browse --ws-url ws://localhost:9222</code></pre>
 <p>Or via config file (<code>~/.claude/mcp.json</code> / <code>.mcp.json</code>):</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;mcpServers&quot;: {
     &quot;crw-browse&quot;: {
       &quot;command&quot;: &quot;crw-browse&quot;,
       &quot;args&quot;: [&quot;--ws-url&quot;, &quot;ws://localhost:9222&quot;]
     }
   }
-}
-</code></pre>
+}</code></pre>
 <h3 id="claude-desktop">Claude Desktop</h3>
 <p><code>~/Library/Application Support/Claude/claude_desktop_config.json</code> (macOS):</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;mcpServers&quot;: {
     &quot;crw-browse&quot;: {
       &quot;command&quot;: &quot;crw-browse&quot;,
       &quot;args&quot;: [&quot;--ws-url&quot;, &quot;ws://localhost:9222&quot;]
     }
   }
-}
-</code></pre>
+}</code></pre>
 <h2 id="available-tools">Available tools</h2>
 <table>
 <thead>
@@ -589,7 +582,7 @@ crw-browse \
 </blockquote>
 <h2 id="basic-example-login-flow">Basic example: login flow</h2>
 <p>A complete agent flow navigating a login page:</p>
-<pre><code class="language-json">// 1. Navigate to login page
+<pre data-lang="json"><code class="language-json">// 1. Navigate to login page
 {&quot;method&quot;: &quot;tools/call&quot;, &quot;params&quot;: {&quot;name&quot;: &quot;goto&quot;, &quot;arguments&quot;: {&quot;url&quot;: &quot;https://example.com/login&quot;}}}
 // → {&quot;ok&quot;: true, &quot;session&quot;: &quot;a3f1&quot;, &quot;url&quot;: &quot;https://example.com/login&quot;, &quot;data&quot;: {&quot;status&quot;: 200}}
 
@@ -610,10 +603,9 @@ crw-browse \
 {&quot;method&quot;: &quot;tools/call&quot;, &quot;params&quot;: {&quot;name&quot;: &quot;wait&quot;, &quot;arguments&quot;: {&quot;selector&quot;: &quot;#dashboard&quot;, &quot;condition&quot;: &quot;visible&quot;}}}
 
 // 7. Read the authenticated content
-{&quot;method&quot;: &quot;tools/call&quot;, &quot;params&quot;: {&quot;name&quot;: &quot;text&quot;, &quot;arguments&quot;: {}}}
-</code></pre>
+{&quot;method&quot;: &quot;tools/call&quot;, &quot;params&quot;: {&quot;name&quot;: &quot;text&quot;, &quot;arguments&quot;: {}}}</code></pre>
 <p>The same flow using <code>script</code> in a single round-trip:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;method&quot;: &quot;tools/call&quot;,
   &quot;params&quot;: {
     &quot;name&quot;: &quot;script&quot;,
@@ -628,14 +620,12 @@ crw-browse \
       ]
     }
   }
-}
-</code></pre>
+}</code></pre>
 <h2 id="verify-installation">Verify installation</h2>
-<pre><code class="language-bash">echo &#39;{&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;id&quot;:1,&quot;method&quot;:&quot;initialize&quot;,&quot;params&quot;:{&quot;clientInfo&quot;:{&quot;name&quot;:&quot;test&quot;},&quot;protocolVersion&quot;:&quot;2024-11-05&quot;}}&#39; \
-  | crw-browse 2&gt;/dev/null
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">echo '{&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;id&quot;:1,&quot;method&quot;:&quot;initialize&quot;,&quot;params&quot;:{&quot;clientInfo&quot;:{&quot;name&quot;:&quot;test&quot;},&quot;protocolVersion&quot;:&quot;2024-11-05&quot;}}' \
+  | crw-browse 2&gt;/dev/null</code></pre>
 <p>Expected:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;jsonrpc&quot;: &quot;2.0&quot;,
   &quot;id&quot;: 1,
   &quot;result&quot;: {
@@ -644,8 +634,7 @@ crw-browse \
     &quot;serverInfo&quot;: {&quot;name&quot;: &quot;crw-browse&quot;, &quot;version&quot;: &quot;&lt;current&gt;&quot;},
     &quot;instructions&quot;: &quot;Interactive browser automation over CDP. Call `goto` to navigate, then `tree` to inspect the rendered accessibility tree.&quot;
   }
-}
-</code></pre>
+}</code></pre>
 <h2 id="current-limitations">Current limitations</h2>
 <ul>
 <li><strong>Single default session per process.</strong> If two MCP clients connect to the same <code>crw-browse</code> process, they share browser state. Multi-session isolation (via <code>session.new</code> / <code>session.close</code>) is on the roadmap.</li>

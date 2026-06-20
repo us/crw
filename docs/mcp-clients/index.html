@@ -350,22 +350,16 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <li><code>goto</code> — navigate the browser to an URL</li>
 <li><code>tree</code> — accessibility snapshot of the current page</li>
 </ul>
-<p>:::tip
-If you only remember one rule, remember this one: local embedded mode is the easiest setup (up to 6 tools, with <code>crw_search</code> appearing automatically when SearXNG is configured), and fastcrw.com cloud mode is the easiest way to get all 6 tools including always-on web search.
-:::</p>
-<h2 id="claude-code">Claude Code</h2>
+<div class="callout callout-tip"><div class="callout-icon"></div><div class="callout-content">If you only remember one rule, remember this one: local embedded mode is the easiest setup (up to 6 tools, with `crw_search` appearing automatically when SearXNG is configured), and fastcrw.com cloud mode is the easiest way to get all 6 tools including always-on web search.</div></div><h2 id="claude-code">Claude Code</h2>
 <h3 id="local-embedded">Local embedded</h3>
-<pre><code class="language-bash">claude mcp add crw -- npx crw-mcp
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">claude mcp add crw -- npx crw-mcp</code></pre>
 <h3 id="fastcrwcom-cloud">fastcrw.com cloud</h3>
-<pre><code class="language-bash">claude mcp add \
+<pre data-lang="bash"><code class="language-bash">claude mcp add \
   -e CRW_API_URL=https://api.fastcrw.com \
   -e CRW_API_KEY=YOUR_API_KEY \
-  crw -- npx crw-mcp
-</code></pre>
+  crw -- npx crw-mcp</code></pre>
 <h3 id="local-http-transport">Local HTTP transport</h3>
-<pre><code class="language-bash">claude mcp add --transport http crw http://localhost:3000/mcp
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">claude mcp add --transport http crw http://localhost:3000/mcp</code></pre>
 <p>Useful commands:</p>
 <ul>
 <li><code>claude mcp list</code></li>
@@ -373,26 +367,20 @@ If you only remember one rule, remember this one: local embedded mode is the eas
 </ul>
 <h2 id="openai-codex-cli">OpenAI Codex CLI</h2>
 <h3 id="local-embedded-1">Local embedded</h3>
-<pre><code class="language-bash">codex mcp add crw -- npx crw-mcp
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">codex mcp add crw -- npx crw-mcp</code></pre>
 <p>Or edit <code>~/.codex/config.toml</code>:</p>
-<pre><code class="language-toml">[mcp_servers.crw]
+<pre data-lang="toml"><code class="language-toml">[mcp_servers.crw]
 command = &quot;npx&quot;
-args = [&quot;crw-mcp&quot;]
-</code></pre>
+args = [&quot;crw-mcp&quot;]</code></pre>
 <h3 id="fastcrwcom-cloud-1">fastcrw.com cloud</h3>
-<pre><code class="language-toml">[mcp_servers.crw]
+<pre data-lang="toml"><code class="language-toml">[mcp_servers.crw]
 command = &quot;npx&quot;
 args = [&quot;crw-mcp&quot;]
 
 [mcp_servers.crw.env]
 CRW_API_URL = &quot;https://api.fastcrw.com&quot;
-CRW_API_KEY = &quot;YOUR_API_KEY&quot;
-</code></pre>
-<p>:::note
-Codex uses the same stdio MCP server as Claude Code. The only difference is where you register it.
-:::</p>
-<h2 id="claude-desktop">Claude Desktop</h2>
+CRW_API_KEY = &quot;YOUR_API_KEY&quot;</code></pre>
+<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">Codex uses the same stdio MCP server as Claude Code. The only difference is where you register it.</div></div><h2 id="claude-desktop">Claude Desktop</h2>
 <p>Edit the config file for your OS:</p>
 <table>
 <thead>
@@ -415,17 +403,16 @@ Codex uses the same stdio MCP server as Claude Code. The only difference is wher
 </tr>
 </tbody></table>
 <h3 id="local-embedded-2">Local embedded</h3>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;mcpServers&quot;: {
     &quot;crw&quot;: {
       &quot;command&quot;: &quot;npx&quot;,
       &quot;args&quot;: [&quot;crw-mcp&quot;]
     }
   }
-}
-</code></pre>
+}</code></pre>
 <h3 id="fastcrwcom-cloud-2">fastcrw.com cloud</h3>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;mcpServers&quot;: {
     &quot;crw&quot;: {
       &quot;command&quot;: &quot;npx&quot;,
@@ -436,23 +423,21 @@ Codex uses the same stdio MCP server as Claude Code. The only difference is wher
       }
     }
   }
-}
-</code></pre>
+}</code></pre>
 <p>Fully quit and restart Claude Desktop after editing the file.</p>
 <h2 id="cursor">Cursor</h2>
 <p>Create or edit <code>~/.cursor/mcp.json</code> for global setup, or <code>.cursor/mcp.json</code> inside one project.</p>
 <h3 id="local-embedded-3">Local embedded</h3>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;mcpServers&quot;: {
     &quot;crw&quot;: {
       &quot;command&quot;: &quot;npx&quot;,
       &quot;args&quot;: [&quot;crw-mcp&quot;]
     }
   }
-}
-</code></pre>
+}</code></pre>
 <h3 id="fastcrwcom-cloud-3">fastcrw.com cloud</h3>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;mcpServers&quot;: {
     &quot;crw&quot;: {
       &quot;command&quot;: &quot;npx&quot;,
@@ -463,23 +448,21 @@ Codex uses the same stdio MCP server as Claude Code. The only difference is wher
       }
     }
   }
-}
-</code></pre>
+}</code></pre>
 <p>You can also add the same config from Cursor&#39;s MCP UI under Settings.</p>
 <h2 id="windsurf">Windsurf</h2>
 <p>Edit <code>~/.codeium/windsurf/mcp_config.json</code>.</p>
 <h3 id="local-embedded-4">Local embedded</h3>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;mcpServers&quot;: {
     &quot;crw&quot;: {
       &quot;command&quot;: &quot;npx&quot;,
       &quot;args&quot;: [&quot;crw-mcp&quot;]
     }
   }
-}
-</code></pre>
+}</code></pre>
 <h3 id="fastcrwcom-cloud-4">fastcrw.com cloud</h3>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;mcpServers&quot;: {
     &quot;crw&quot;: {
       &quot;command&quot;: &quot;npx&quot;,
@@ -490,12 +473,8 @@ Codex uses the same stdio MCP server as Claude Code. The only difference is wher
       }
     }
   }
-}
-</code></pre>
-<p>:::note
-Windsurf has a total MCP tool limit. CRW stays lightweight: local embedded mode exposes up to 6 tools (<code>crw_search</code> is hidden unless a SearXNG backend is configured), and cloud mode always exposes all 6 tools.
-:::</p>
-<h2 id="cline">Cline</h2>
+}</code></pre>
+<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">Windsurf has a total MCP tool limit. CRW stays lightweight: local embedded mode exposes up to 6 tools (`crw_search` is hidden unless a SearXNG backend is configured), and cloud mode always exposes all 6 tools.</div></div><h2 id="cline">Cline</h2>
 <p>Edit the Cline MCP settings file:</p>
 <table>
 <thead>
@@ -518,7 +497,7 @@ Windsurf has a total MCP tool limit. CRW stays lightweight: local embedded mode 
 </tr>
 </tbody></table>
 <h3 id="local-embedded-5">Local embedded</h3>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;mcpServers&quot;: {
     &quot;crw&quot;: {
       &quot;command&quot;: &quot;npx&quot;,
@@ -527,10 +506,9 @@ Windsurf has a total MCP tool limit. CRW stays lightweight: local embedded mode 
       &quot;disabled&quot;: false
     }
   }
-}
-</code></pre>
+}</code></pre>
 <h3 id="fastcrwcom-cloud-5">fastcrw.com cloud</h3>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;mcpServers&quot;: {
     &quot;crw&quot;: {
       &quot;command&quot;: &quot;npx&quot;,
@@ -543,44 +521,39 @@ Windsurf has a total MCP tool limit. CRW stays lightweight: local embedded mode 
       }
     }
   }
-}
-</code></pre>
+}</code></pre>
 <h2 id="continue">Continue</h2>
 <p>Edit <code>~/.continue/config.yaml</code>.</p>
 <h3 id="local-embedded-6">Local embedded</h3>
-<pre><code class="language-yaml">mcpServers:
+<pre data-lang="yaml"><code class="language-yaml">mcpServers:
   - name: crw
     command: npx
     args:
-      - crw-mcp
-</code></pre>
+      - crw-mcp</code></pre>
 <h3 id="fastcrwcom-cloud-6">fastcrw.com cloud</h3>
-<pre><code class="language-yaml">mcpServers:
+<pre data-lang="yaml"><code class="language-yaml">mcpServers:
   - name: crw
     command: npx
     args:
       - crw-mcp
     env:
       CRW_API_URL: https://api.fastcrw.com
-      CRW_API_KEY: YOUR_API_KEY
-</code></pre>
+      CRW_API_KEY: YOUR_API_KEY</code></pre>
 <p>MCP tools in Continue only work in Agent mode, not plain chat mode.</p>
 <h2 id="gemini-cli">Gemini CLI</h2>
 <h3 id="local-embedded-7">Local embedded</h3>
-<pre><code class="language-bash">gemini mcp add crw -- npx crw-mcp
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">gemini mcp add crw -- npx crw-mcp</code></pre>
 <p>Or edit <code>~/.gemini/settings.json</code>:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;mcpServers&quot;: {
     &quot;crw&quot;: {
       &quot;command&quot;: &quot;npx&quot;,
       &quot;args&quot;: [&quot;crw-mcp&quot;]
     }
   }
-}
-</code></pre>
+}</code></pre>
 <h3 id="fastcrwcom-cloud-7">fastcrw.com cloud</h3>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;mcpServers&quot;: {
     &quot;crw&quot;: {
       &quot;command&quot;: &quot;npx&quot;,
@@ -591,8 +564,7 @@ Windsurf has a total MCP tool limit. CRW stays lightweight: local embedded mode 
       }
     }
   }
-}
-</code></pre>
+}</code></pre>
 <p>Useful commands:</p>
 <ul>
 <li><code>gemini mcp list</code></li>
@@ -601,17 +573,16 @@ Windsurf has a total MCP tool limit. CRW stays lightweight: local embedded mode 
 <h2 id="any-mcp-client">Any MCP client</h2>
 <p>If your client accepts the standard JSON <code>mcpServers</code> shape, start here:</p>
 <h3 id="local-embedded-8">Local embedded</h3>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;mcpServers&quot;: {
     &quot;crw&quot;: {
       &quot;command&quot;: &quot;npx&quot;,
       &quot;args&quot;: [&quot;crw-mcp&quot;]
     }
   }
-}
-</code></pre>
+}</code></pre>
 <h3 id="fastcrwcom-cloud-8">fastcrw.com cloud</h3>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;mcpServers&quot;: {
     &quot;crw&quot;: {
       &quot;command&quot;: &quot;npx&quot;,
@@ -622,8 +593,7 @@ Windsurf has a total MCP tool limit. CRW stays lightweight: local embedded mode 
       }
     }
   }
-}
-</code></pre>
+}</code></pre>
 <h2 id="local-rendering-and-config">Local rendering and config</h2>
 <p>Local embedded mode uses the same config chain as <code>crw-server</code>:</p>
 <ul>
@@ -632,10 +602,9 @@ Windsurf has a total MCP tool limit. CRW stays lightweight: local embedded mode 
 <li><code>CRW_...</code> environment overrides</li>
 </ul>
 <p>If you need JavaScript rendering in local MCP mode, pass a renderer URL:</p>
-<pre><code class="language-bash">claude mcp add \
+<pre data-lang="bash"><code class="language-bash">claude mcp add \
   -e CRW_RENDERER__LIGHTPANDA__WS_URL=ws://127.0.0.1:9222 \
-  crw -- npx crw-mcp
-</code></pre>
+  crw -- npx crw-mcp</code></pre>
 <p>Without a configured renderer, CRW still works in HTTP-only mode.</p>
 <h2 id="how-to-choose-local-vs-fastcrwcom">How to choose local vs fastcrw.com</h2>
 <p>Use local embedded mode when:</p>

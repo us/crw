@@ -302,15 +302,31 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <li><code>/health</code> is always public</li>
 </ul>
 <h2 id="pick-the-right-endpoint">Pick the right endpoint</h2>
-<p>:::cards
-::card{icon=&quot;code&quot; title=&quot;Scrape&quot; href=&quot;#scraping&quot; description=&quot;One known URL in, clean content out. This is the default starting point.&quot;}
-::card{icon=&quot;search&quot; title=&quot;Search&quot; href=&quot;#search&quot; description=&quot;Hosted discovery-first workflow when you do not know the URLs yet.&quot;}
-::card{icon=&quot;map&quot; title=&quot;Map&quot; href=&quot;#map&quot; description=&quot;Discover URLs first without paying for full scraping.&quot;}
-::card{icon=&quot;globe&quot; title=&quot;Crawl&quot; href=&quot;#crawling&quot; description=&quot;Run an async multi-page job when one page is not enough.&quot;}
-::card{icon=&quot;zap&quot; title=&quot;Extract&quot; href=&quot;#extract&quot; description=&quot;Return structured JSON when downstream systems want fields, not prose.&quot;}
-::card{icon=&quot;plug&quot; title=&quot;MCP&quot; href=&quot;#mcp&quot; description=&quot;Expose CRW as tools to Claude, Codex, Cursor, and other MCP hosts.&quot;}
-:::</p>
-<h2 id="route-summary">Route summary</h2>
+<div class="card-grid"><a href="/scraping" class="doc-card">
+        <div class="doc-card-icon"></div>
+        <div class="doc-card-title">Scrape</div>
+        <div class="doc-card-desc">One known URL in, clean content out. This is the default starting point.</div>
+      </a><a href="/search" class="doc-card">
+        <div class="doc-card-icon"></div>
+        <div class="doc-card-title">Search</div>
+        <div class="doc-card-desc">Hosted discovery-first workflow when you do not know the URLs yet.</div>
+      </a><a href="/map" class="doc-card">
+        <div class="doc-card-icon"></div>
+        <div class="doc-card-title">Map</div>
+        <div class="doc-card-desc">Discover URLs first without paying for full scraping.</div>
+      </a><a href="/crawling" class="doc-card">
+        <div class="doc-card-icon"></div>
+        <div class="doc-card-title">Crawl</div>
+        <div class="doc-card-desc">Run an async multi-page job when one page is not enough.</div>
+      </a><a href="/extract" class="doc-card">
+        <div class="doc-card-icon"></div>
+        <div class="doc-card-title">Extract</div>
+        <div class="doc-card-desc">Return structured JSON when downstream systems want fields, not prose.</div>
+      </a><a href="/mcp" class="doc-card">
+        <div class="doc-card-icon"></div>
+        <div class="doc-card-title">MCP</div>
+        <div class="doc-card-desc">Expose CRW as tools to Claude, Codex, Cursor, and other MCP hosts.</div>
+      </a></div><h2 id="route-summary">Route summary</h2>
 <table>
 <thead>
 <tr>
@@ -366,11 +382,10 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 </tr>
 </tbody></table>
 <h2 id="start-with-this-request">Start with this request</h2>
-<pre><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/scrape \
+<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;url&quot;:&quot;https://example.com&quot;,&quot;formats&quot;:[&quot;markdown&quot;]}&#39;
-</code></pre>
+  -d '{&quot;url&quot;:&quot;https://example.com&quot;,&quot;formats&quot;:[&quot;markdown&quot;]}'</code></pre>
 <p>If that request works, continue into <a href="/scraping">Scrape</a> and only then branch into search, map, crawl, or extraction.</p>
 <h2 id="shared-reference-pages">Shared reference pages</h2>
 <ul>

@@ -285,16 +285,14 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
       <article id="article" role="main"><h1 id="docker">Docker</h1>
 <p>Run crw with Docker Compose for the easiest setup with JS rendering included.</p>
 <h2 id="pre-built-image">Pre-built Image</h2>
-<pre><code class="language-bash">docker pull ghcr.io/us/crw:0.16.0
-docker run -p 3000:3000 ghcr.io/us/crw:0.16.0
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">docker pull ghcr.io/us/crw:0.16.0
+docker run -p 3000:3000 ghcr.io/us/crw:0.16.0</code></pre>
 <p>Available tags: <code>latest</code>, <code>0.16</code> (tracks the current minor), <code>0.16.0</code> (pinned).
 Use a pinned tag in production — <code>latest</code> rolls forward on every release.</p>
 <h2 id="docker-compose">Docker Compose</h2>
-<pre><code class="language-bash">git clone https://github.com/us/crw.git
+<pre data-lang="bash"><code class="language-bash">git clone https://github.com/us/crw.git
 cd crw
-docker compose up
-</code></pre>
+docker compose up</code></pre>
 <blockquote>
 <p><strong>Build memory.</strong> The container build uses thin LTO across 16 codegen units
 (<code>CARGO_PROFILE_RELEASE_LTO=thin</code>, <code>CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16</code>),
@@ -357,21 +355,18 @@ the link step: <code>CARGO_BUILD_JOBS=1 docker compose build crw</code>, then
 service name on Compose&#39;s default bridge network (<code>lightpanda:9222</code>, <code>chrome:9222</code>, <code>searxng:8080</code>). You
 don&#39;t need to wire renderer URLs through environment variables — they&#39;re in the config file.</p>
 <p>The optional <code>chrome</code> / <code>chrome-stealth</code> tiers are opt-in so small hosts skip the ~500 MB Chromium image:</p>
-<pre><code class="language-bash">docker compose --profile heavy up -d      # add the vanilla Chromium fallback
-docker compose --profile stealth up -d    # add the anti-fingerprint tier (review the SSPL license first)
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">docker compose --profile heavy up -d      # add the vanilla Chromium fallback
+docker compose --profile stealth up -d    # add the anti-fingerprint tier (review the SSPL license first)</code></pre>
 <h2 id="search-searxng">Search (SearXNG)</h2>
 <p><code>/v1/search</code> (and the <code>crw_search</code> MCP tool) is backed by the bundled <strong>searxng</strong> service, reachable inside
 the Compose network as <code>searxng:8080</code>. This is configured by default in <code>config.docker.toml</code>:</p>
-<pre><code class="language-toml">[search]
-searxng_url = &quot;http://searxng:8080&quot;
-</code></pre>
+<pre data-lang="toml"><code class="language-toml">[search]
+searxng_url = &quot;http://searxng:8080&quot;</code></pre>
 <p>To point CRW at an <strong>external</strong> SearXNG instead of the sidecar, override it without editing the file:</p>
-<pre><code class="language-yaml">services:
+<pre data-lang="yaml"><code class="language-yaml">services:
   crw:
     environment:
-      - CRW_SEARCH__SEARXNG_URL=http://your-searxng-host:8080   # env wins over the config file
-</code></pre>
+      - CRW_SEARCH__SEARXNG_URL=http://your-searxng-host:8080   # env wins over the config file</code></pre>
 <blockquote>
 <p><strong>Two different URLs — don&#39;t confuse them.</strong> <code>SEARXNG_BASE_URL</code> (set on the <code>searxng</code> service) is
 SearXNG&#39;s <em>own</em> self-reference for the links it renders. <code>[search].searxng_url</code> /
@@ -389,7 +384,7 @@ hasn&#39;t finished booting yet — the server logs the configured search host a
 on the build platform (no QEMU for compiles) and cross-compiles to <code>linux/arm64</code> via
 the <code>aarch64-linux-gnu-gcc</code> cross linker. Only the final runtime layer (ca-certificates)
 uses QEMU, so multi-arch builds are fast:</p>
-<pre><code class="language-dockerfile">FROM --platform=$BUILDPLATFORM rust:1.93-bookworm AS builder
+<pre data-lang="dockerfile"><code class="language-dockerfile">FROM --platform=$BUILDPLATFORM rust:1.93-bookworm AS builder
 ARG TARGETARCH
 # Install Rust target + cross linker for arm64, then record the triple.
 # Override LTO to thin + 16 codegen units (lower peak RAM vs. workspace fat LTO).
@@ -404,13 +399,12 @@ COPY --from=builder /out/crw /out/crw-server /out/crw-mcp /usr/local/bin/
 COPY config.default.toml config.docker.toml /app/
 WORKDIR /app
 EXPOSE 3000
-CMD [&quot;crw-server&quot;]
-</code></pre>
+CMD [&quot;crw-server&quot;]</code></pre>
 <h2 id="container-security">Container Security</h2>
 <p>The bundled <code>docker-compose.yml</code> applies defense-in-depth hardening to every service.
 Here is what is in place and what you must change before production:</p>
 <h3 id="what-the-compose-file-already-enforces">What the Compose file already enforces</h3>
-<pre><code class="language-yaml">services:
+<pre data-lang="yaml"><code class="language-yaml">services:
   crw:
     read_only: true            # immutable root FS — nothing a parser drops survives a restart
     tmpfs:
@@ -421,8 +415,7 @@ Here is what is in place and what you must change before production:</p>
       - no-new-privileges:true # child processes can never elevate via setuid
     mem_limit: 2g
     memswap_limit: 2g          # no swap escape hatch
-    pids_limit: 512            # bounds fork-bombs and runaway worker spawning
-</code></pre>
+    pids_limit: 512            # bounds fork-bombs and runaway worker spawning</code></pre>
 <p>The same <code>read_only</code>, <code>cap_drop: ALL</code>, and <code>no-new-privileges</code> flags are applied to the
 <code>searxng</code> service as well.</p>
 <blockquote>
@@ -460,17 +453,15 @@ rotated before any internet-facing deployment:</p>
 </tbody></table>
 <p>Generate strong values and write them to a <code>.env</code> file in the project root (never
 commit this file):</p>
-<pre><code class="language-bash"># Run once; .env is git-ignored by default
+<pre data-lang="bash"><code class="language-bash"># Run once; .env is git-ignored by default
 echo &quot;SEARXNG_SECRET_KEY=$(openssl rand -hex 32)&quot; &gt;&gt; .env
-echo &quot;BROWSERLESS_TOKEN=$(openssl rand -hex 24)&quot; &gt;&gt; .env
-</code></pre>
+echo &quot;BROWSERLESS_TOKEN=$(openssl rand -hex 24)&quot; &gt;&gt; .env</code></pre>
 <p>Docker Compose reads <code>.env</code> automatically. The Compose file picks up the values via:</p>
-<pre><code class="language-yaml"># searxng service
+<pre data-lang="yaml"><code class="language-yaml"># searxng service
 - SEARXNG_SECRET_KEY=${SEARXNG_SECRET_KEY:-change-me-with-openssl-rand-hex-32-please}
 
 # chrome-stealth service
-- TOKEN=${BROWSERLESS_TOKEN:-crwtest}
-</code></pre>
+- TOKEN=${BROWSERLESS_TOKEN:-crwtest}</code></pre>
 <p>The <code>:-fallback</code> syntax means an unset variable falls back to the placeholder — the
 warning above is intentional, not a bug. Once <code>.env</code> is present, the placeholder is
 never used.</p>
@@ -494,7 +485,7 @@ through to Chrome — defeating the lightweight tier.</p>
 rendering to be handled by Chrome (or fail entirely if Chrome is not enabled).</p>
 <h2 id="custom-configuration">Custom Configuration</h2>
 <p>Override settings via environment variables:</p>
-<pre><code class="language-yaml">services:
+<pre data-lang="yaml"><code class="language-yaml">services:
   crw:
     build: .
     ports:
@@ -505,19 +496,17 @@ rendering to be handled by Chrome (or fail entirely if Chrome is not enabled).</
       - CRW_CRAWLER__REQUESTS_PER_SECOND=5.0
       - CRW_CRAWLER__USER_AGENT=MyBot/1.0
       - CRW_AUTH__API_KEYS=[&quot;sk-production-key&quot;]
-      - CRW_RENDERER__LIGHTPANDA__WS_URL=ws://lightpanda:9222
-</code></pre>
+      - CRW_RENDERER__LIGHTPANDA__WS_URL=ws://lightpanda:9222</code></pre>
 <h2 id="production-tips">Production Tips</h2>
 <h3 id="resource-limits">Resource Limits</h3>
 <p>Use <code>mem_limit</code> / <code>memswap_limit</code> / <code>pids_limit</code> — these are the standalone Compose
 (non-Swarm) knobs and work with <code>docker compose up</code> without a Swarm cluster. The
 <code>deploy.resources</code> block (Swarm syntax) is silently ignored by standalone Compose.</p>
-<pre><code class="language-yaml">services:
+<pre data-lang="yaml"><code class="language-yaml">services:
   crw:
     mem_limit: 2g
     memswap_limit: 2g    # prevents swap escape — set equal to mem_limit
-    pids_limit: 512
-</code></pre>
+    pids_limit: 512</code></pre>
 <p>The bundled <code>docker-compose.yml</code> already includes these limits (sized for the PDF
 sandbox: <code>base + 2 × 512 MiB sandbox children ≈ 1.3 GiB &lt; 2 GiB</code>). Adjust down
 if the PDF parser (<code>[document]</code>) is disabled or <code>max_concurrent_parses</code> is reduced.</p>
@@ -525,22 +514,20 @@ if the PDF parser (<code>[document]</code>) is disabled or <code>max_concurrent_
 ceiling in the bundled file is dominated by the PDF sandbox children, not the engine
 itself.</p>
 <h3 id="health-check">Health Check</h3>
-<pre><code class="language-yaml">services:
+<pre data-lang="yaml"><code class="language-yaml">services:
   crw:
     healthcheck:
       test: [&quot;CMD&quot;, &quot;curl&quot;, &quot;-f&quot;, &quot;http://localhost:3000/health&quot;]
       interval: 30s
       timeout: 5s
-      retries: 3
-</code></pre>
+      retries: 3</code></pre>
 <h3 id="persistent-config">Persistent Config</h3>
-<pre><code class="language-yaml">services:
+<pre data-lang="yaml"><code class="language-yaml">services:
   crw:
     volumes:
-      - ./my-config.toml:/app/config.docker.toml:ro
-</code></pre>
+      - ./my-config.toml:/app/config.docker.toml:ro</code></pre>
 <h3 id="logging">Logging</h3>
-<pre><code class="language-yaml">services:
+<pre data-lang="yaml"><code class="language-yaml">services:
   crw:
     environment:
       - RUST_LOG=crw_server=info,crw_renderer=warn
@@ -548,8 +535,7 @@ itself.</p>
       driver: json-file
       options:
         max-size: &quot;10m&quot;
-        max-file: &quot;3&quot;
-</code></pre>
+        max-file: &quot;3&quot;</code></pre>
 </article>
     </main>
 

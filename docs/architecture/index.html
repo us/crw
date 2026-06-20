@@ -293,8 +293,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 │       └── crw-core
 └── crw-core
 
-crw-mcp (Stdio MCP proxy — standalone binary)
-</code></pre>
+crw-mcp (Stdio MCP proxy — standalone binary)</code></pre>
 <h2 id="request-flow">Request Flow</h2>
 <h3 id="scrape-request">Scrape request</h3>
 <pre><code>Client → POST /v1/scrape
@@ -316,8 +315,7 @@ crw-mcp (Stdio MCP proxy — standalone binary)
       → JSON (LLM extraction via Anthropic/OpenAI)
     → Metadata extraction
       → title, description, og:*, canonical, lang
-  → JSON response
-</code></pre>
+  → JSON response</code></pre>
 <h3 id="crawl-request">Crawl request</h3>
 <pre><code>Client → POST /v1/crawl
   → Create crawl job (UUID)
@@ -338,8 +336,7 @@ crw-mcp (Stdio MCP proxy — standalone binary)
 
 Client → GET /v1/crawl/{id}
   → Read crawl state via watch::Receiver
-  → Return progress + results
-</code></pre>
+  → Return progress + results</code></pre>
 <h2 id="middleware-stack">Middleware Stack</h2>
 <p>The Axum server applies middleware in this order:</p>
 <ol>

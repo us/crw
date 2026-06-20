@@ -285,7 +285,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
       <article id="article" role="main"><h1 id="response-shapes">Response Shapes</h1>
 <p>Use this page when you want the common CRW envelopes in one place. The endpoint pages stay the source of truth for behavior; this page is the quick shape reference.</p>
 <h2 id="scrape">Scrape</h2>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;data&quot;: {
     &quot;markdown&quot;: &quot;string or null&quot;,
@@ -320,16 +320,14 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
       &quot;elapsedMs&quot;: 32
     }
   }
-}
-</code></pre>
+}</code></pre>
 <h2 id="crawl-start">Crawl Start</h2>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;id&quot;: &quot;550e8400-e29b-41d4-a716-446655440000&quot;
-}
-</code></pre>
+}</code></pre>
 <h2 id="crawl-status">Crawl Status</h2>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;status&quot;: &quot;completed&quot;,
   &quot;total&quot;: 12,
@@ -342,10 +340,9 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
       }
     }
   ]
-}
-</code></pre>
+}</code></pre>
 <h2 id="map">Map</h2>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;data&quot;: {
     &quot;links&quot;: [
@@ -353,11 +350,10 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
       &quot;https://example.com/about&quot;
     ]
   }
-}
-</code></pre>
+}</code></pre>
 <h2 id="search">Search</h2>
 <p><code>data</code> is a wrapper around the actual results. When you do not use any LLM feature, the wrapper still holds the results in <code>data.results</code> and the other fields stay empty/null.</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;data&quot;: {
     &quot;results&quot;: &lt;flat array OR grouped object — see below&gt;,
@@ -368,15 +364,14 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
     &quot;llmUsage&quot;: { &quot;inputTokens&quot;: 3420, &quot;outputTokens&quot;: 96, &quot;totalTokens&quot;: 3516, &quot;estimatedCostUsd&quot;: 0.0008, &quot;model&quot;: &quot;gpt-4o-mini&quot;, &quot;provider&quot;: &quot;openai&quot; },
     &quot;warnings&quot;: []
   }
-}
-</code></pre>
+}</code></pre>
 <p><code>results</code> shape:</p>
 <ul>
 <li>flat array when <code>sources</code> is not set</li>
 <li>grouped object when <code>sources</code> is set</li>
 </ul>
 <p>Flat (each entry may also carry <code>markdown</code> from <code>scrapeOptions</code> and <code>summary</code> from <code>summarizeResults</code>):</p>
-<pre><code class="language-json">[
+<pre data-lang="json"><code class="language-json">[
   {
     &quot;url&quot;: &quot;https://example.com/article&quot;,
     &quot;title&quot;: &quot;Article Title&quot;,
@@ -386,22 +381,19 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
     &quot;markdown&quot;: &quot;# Article Title\n\n…&quot;,
     &quot;summary&quot;: &quot;Short LLM-generated digest of this single result.&quot;
   }
-]
-</code></pre>
+]</code></pre>
 <p>Grouped:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;web&quot;: [{ &quot;url&quot;: &quot;...&quot;, &quot;title&quot;: &quot;...&quot; }],
   &quot;news&quot;: [{ &quot;url&quot;: &quot;...&quot;, &quot;title&quot;: &quot;...&quot;, &quot;publishedDate&quot;: &quot;2026-04-02T14:00:00&quot; }]
-}
-</code></pre>
+}</code></pre>
 <p><code>answer</code>, <code>citations</code>, and the top-level <code>llmUsage</code> are populated only when <code>answer: true</code> was sent. Per-result <code>summary</code> is populated only when <code>summarizeResults: true</code> was sent.</p>
 <h2 id="error-envelope">Error Envelope</h2>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: false,
   &quot;error&quot;: &quot;Human-readable error message&quot;,
   &quot;error_code&quot;: &quot;machine_readable_code&quot;
-}
-</code></pre>
+}</code></pre>
 <h2 id="what-to-read-next">What To Read Next</h2>
 <ul>
 <li><a href="/scraping">Scrape</a></li>

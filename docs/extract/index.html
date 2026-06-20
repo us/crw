@@ -305,8 +305,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
   </div>
 </div><h2 id="extracting-structured-data-with-crw">Extracting structured data with CRW</h2>
 <h3 id="v1scrape">/v1/scrape</h3>
-<pre><code class="language-http">POST /v1/scrape
-</code></pre>
+<pre data-lang="http"><code class="language-http">POST /v1/scrape</code></pre>
 <p>Authentication:</p>
 <ul>
 <li>Hosted: send <code>Authorization: Bearer YOUR_API_KEY</code></li>
@@ -316,7 +315,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <p>Extraction uses the same HTTP route as scrape, so you can use the same client code and only change the payload.</p>
 <h3 id="basic-usage">Basic usage</h3>
 <p>Start with this request:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;url&quot;: &quot;https://example.com/product/123&quot;,
   &quot;formats&quot;: [&quot;json&quot;],
   &quot;jsonSchema&quot;: {
@@ -328,11 +327,10 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
     },
     &quot;required&quot;: [&quot;title&quot;]
   }
-}
-</code></pre>
-<p>:::tabs
-::tab{title=&quot;Python&quot;}</p>
-<pre><code class="language-python">import requests
+}</code></pre>
+<div class="code-tabs">
+      <div class="code-tabs-header"><button class="code-tab active" data-tab="0">Python</button><button class="code-tab" data-tab="1">Node.js</button><button class="code-tab" data-tab="2">cURL</button></div>
+      <div class="code-tab-panel active" data-panel="0"><pre data-lang="python"><code class="language-python">import requests
 
 resp = requests.post(
     &quot;https://api.fastcrw.com/v1/scrape&quot;,
@@ -352,10 +350,7 @@ resp = requests.post(
     },
 )
 
-print(resp.json()[&quot;data&quot;][&quot;json&quot;])
-</code></pre>
-<p>::tab{title=&quot;Node.js&quot;}</p>
-<pre><code class="language-javascript">const resp = await fetch(&quot;https://api.fastcrw.com/v1/scrape&quot;, {
+print(resp.json()[&quot;data&quot;][&quot;json&quot;])</code></pre></div><div class="code-tab-panel" data-panel="1"><pre data-lang="javascript"><code class="language-javascript">const resp = await fetch(&quot;https://api.fastcrw.com/v1/scrape&quot;, {
   method: &quot;POST&quot;,
   headers: {
     &quot;Authorization&quot;: &quot;Bearer YOUR_API_KEY&quot;,
@@ -377,13 +372,10 @@ print(resp.json()[&quot;data&quot;][&quot;json&quot;])
 });
 
 const body = await resp.json();
-console.log(body.data.json);
-</code></pre>
-<p>::tab{title=&quot;cURL&quot;}</p>
-<pre><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/scrape \
+console.log(body.data.json);</code></pre></div><div class="code-tab-panel" data-panel="2"><pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
+  -d '{
     &quot;url&quot;:&quot;https://example.com/product/123&quot;,
     &quot;formats&quot;:[&quot;json&quot;],
     &quot;jsonSchema&quot;:{
@@ -395,11 +387,9 @@ console.log(body.data.json);
       },
       &quot;required&quot;:[&quot;title&quot;]
     }
-  }&#39;
-</code></pre>
-<p>:::</p>
-<h3 id="response">Response</h3>
-<pre><code class="language-json">{
+  }'</code></pre></div>
+    </div><h3 id="response">Response</h3>
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;data&quot;: {
     &quot;json&quot;: {
@@ -413,8 +403,7 @@ console.log(body.data.json);
       &quot;elapsedMs&quot;: 846
     }
   }
-}
-</code></pre>
+}</code></pre>
 <h2 id="parameters">Parameters</h2>
 <table>
 <thead>
@@ -492,13 +481,7 @@ console.log(body.data.json);
 <td>Narrow the page before extraction</td>
 </tr>
 </tbody></table>
-<p>:::note
-Firecrawl-compatible aliases <code>formats: [&quot;extract&quot;]</code> and <code>formats: [&quot;llm-extract&quot;]</code> are accepted, but <code>[&quot;json&quot;]</code> is the canonical CRW shape.
-:::</p>
-<p>:::warning
-On self-hosted deployments, JSON extraction requires either <code>[extraction.llm]</code> in <code>config.toml</code> or a per-request <code>llmApiKey</code>. Without one of those, CRW returns an extraction error instead of guessed output.
-:::</p>
-<h2 id="schema-design">Schema design</h2>
+<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">Firecrawl-compatible aliases `formats: ["extract"]` and `formats: ["llm-extract"]` are accepted, but `["json"]` is the canonical CRW shape.</div></div><div class="callout callout-warning"><div class="callout-icon"></div><div class="callout-content">On self-hosted deployments, JSON extraction requires either `[extraction.llm]` in `config.toml` or a per-request `llmApiKey`. Without one of those, CRW returns an extraction error instead of guessed output.</div></div><h2 id="schema-design">Schema design</h2>
 <p>The easiest extraction schema is a small one:</p>
 <ul>
 <li>ask for the fields you actually need,</li>

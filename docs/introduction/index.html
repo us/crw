@@ -337,15 +337,14 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 </tr>
 </tbody></table>
 <p>All five core verbs share the same API key and base URL. You can mix them in a single workflow.</p>
-<pre><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/scrape \
+<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
+  -d '{
     &quot;url&quot;: &quot;https://example.com&quot;,
     &quot;formats&quot;: [&quot;markdown&quot;]
-  }&#39;
-</code></pre>
-<pre><code class="language-json">{
+  }'</code></pre>
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;data&quot;: {
     &quot;markdown&quot;: &quot;# Example Domain\n\nThis domain is for use in illustrative examples in documents.&quot;,
@@ -357,22 +356,38 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
       &quot;elapsedMs&quot;: 218
     }
   }
-}
-</code></pre>
+}</code></pre>
 <h2 id="start-here">Start here</h2>
-<p>:::cards
-::card{icon=&quot;code&quot; title=&quot;Scrape a page&quot; href=&quot;#scraping&quot; description=&quot;Use one URL and get markdown, HTML, links, or JSON back.&quot;}
-::card{icon=&quot;search&quot; title=&quot;Search the web&quot; href=&quot;#search&quot; description=&quot;Find URLs first, then scrape only the results you care about.&quot;}
-::card{icon=&quot;cursor&quot; title=&quot;crw-browse (companion)&quot; href=&quot;/docs/mcp#browser-automation-crw-browse&quot; description=&quot;Separate companion service for multi-step browser automation — clicks, form fills, stateful sessions. Not part of the core API verbs.&quot;}
-::card{icon=&quot;plug&quot; title=&quot;Add MCP tools&quot; href=&quot;#mcp&quot; description=&quot;Give Claude, Cursor, Codex, and other hosts live web access.&quot;}
-:::</p>
-<h2 id="choose-your-path">Choose your path</h2>
-<p>:::cards
-::card{icon=&quot;rocket&quot; title=&quot;Cloud API&quot; href=&quot;#quick-start&quot; description=&quot;The fastest first run: get a key, copy one request, and move.&quot;}
-::card{icon=&quot;plug&quot; title=&quot;MCP&quot; href=&quot;#mcp&quot; description=&quot;Best when your agent runtime already expects MCP tools.&quot;}
-::card{icon=&quot;box&quot; title=&quot;Self-host&quot; href=&quot;#self-hosting&quot; description=&quot;Best when you want your own infrastructure, auth, and deployment controls.&quot;}
-:::</p>
-<h2 id="why-teams-switch-to-crw">Why teams switch to CRW</h2>
+<div class="card-grid"><a href="/scraping" class="doc-card">
+        <div class="doc-card-icon"></div>
+        <div class="doc-card-title">Scrape a page</div>
+        <div class="doc-card-desc">Use one URL and get markdown, HTML, links, or JSON back.</div>
+      </a><a href="/search" class="doc-card">
+        <div class="doc-card-icon"></div>
+        <div class="doc-card-title">Search the web</div>
+        <div class="doc-card-desc">Find URLs first, then scrape only the results you care about.</div>
+      </a><a href="/mcp#browser-automation-crw-browse" class="doc-card">
+        <div class="doc-card-icon"></div>
+        <div class="doc-card-title">crw-browse (companion)</div>
+        <div class="doc-card-desc">Separate companion service for multi-step browser automation — clicks, form fills, stateful sessions. Not part of the core API verbs.</div>
+      </a><a href="/mcp" class="doc-card">
+        <div class="doc-card-icon"></div>
+        <div class="doc-card-title">Add MCP tools</div>
+        <div class="doc-card-desc">Give Claude, Cursor, Codex, and other hosts live web access.</div>
+      </a></div><h2 id="choose-your-path">Choose your path</h2>
+<div class="card-grid"><a href="/quick-start" class="doc-card">
+        <div class="doc-card-icon"></div>
+        <div class="doc-card-title">Cloud API</div>
+        <div class="doc-card-desc">The fastest first run: get a key, copy one request, and move.</div>
+      </a><a href="/mcp" class="doc-card">
+        <div class="doc-card-icon"></div>
+        <div class="doc-card-title">MCP</div>
+        <div class="doc-card-desc">Best when your agent runtime already expects MCP tools.</div>
+      </a><a href="/self-hosting" class="doc-card">
+        <div class="doc-card-icon"></div>
+        <div class="doc-card-title">Self-host</div>
+        <div class="doc-card-desc">Best when you want your own infrastructure, auth, and deployment controls.</div>
+      </a></div><h2 id="why-teams-switch-to-crw">Why teams switch to CRW</h2>
 <p>CRW is meant to feel easy on day one without closing off the more serious use cases:</p>
 <ul>
 <li>one API surface for single-page scrape, discovery, bounded crawl, and extraction,</li>

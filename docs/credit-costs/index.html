@@ -283,10 +283,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 
     <main class="content" id="content">
       <article id="article" role="main"><h1 id="credit-costs">Credit Costs</h1>
-<p>:::note
-Cloud only (fastcrw.com) -- self-hosted instances do not have credit-based billing.
-:::</p>
-<h2 id="current-billing-rules">Current billing rules</h2>
+<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">Cloud only (fastcrw.com) -- self-hosted instances do not have credit-based billing.</div></div><h2 id="current-billing-rules">Current billing rules</h2>
 <table>
 <thead>
 <tr>
@@ -341,10 +338,7 @@ Cloud only (fastcrw.com) -- self-hosted instances do not have credit-based billi
 </tbody></table>
 <p>Chrome&#39;s 2-credit cost is applied by the engine renderer (<code>crw-renderer/src/lib.rs: credit_for(RendererKind::Chrome) = 2</code>).
 The 5-credit cost for LLM-backed extraction (<code>json</code>/<code>summary</code> formats) is applied by the managed cloud billing layer; the open-source engine itself does not add an extra surcharge beyond the render cost.</p>
-<p>:::note
-<strong>Managed-LLM markup (fastcrw.com cloud only)</strong> — this is a SaaS billing policy enforced by the cloud platform, not by the open-source engine. When you use <code>answer</code>, <code>summarizeResults</code>, or other managed LLM features on fastcrw.com, token usage is billed at a 3× markup over the provider price, capped at 8 000 credits per request. BYOK requests pay only a flat infra fee with no token markup. Self-hosted deployments have no billing layer and are unaffected.
-:::</p>
-<h2 id="why-crawl-billing-looks-different">Why crawl billing looks different</h2>
+<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">**Managed-LLM markup (fastcrw.com cloud only)** — this is a SaaS billing policy enforced by the cloud platform, not by the open-source engine. When you use `answer`, `summarizeResults`, or other managed LLM features on fastcrw.com, token usage is billed at a 3× markup over the provider price, capped at 8 000 credits per request. BYOK requests pay only a flat infra fee with no token markup. Self-hosted deployments have no billing layer and are unaffected.</div></div><h2 id="why-crawl-billing-looks-different">Why crawl billing looks different</h2>
 <p>The crawl start reserves the job. Subsequent polls charge only for newly materialized pages, not for the total accumulated page count each time.</p>
 <p>That prevents the same already-seen pages from being charged again and again just because you are checking progress.</p>
 <h2 id="simple-examples">Simple Examples</h2>
@@ -393,15 +387,14 @@ The 5-credit cost for LLM-backed extraction (<code>json</code>/<code>summary</co
 <p>The safest way to confirm actual consumption is still the balance endpoint before and after a test.</p>
 <h2 id="the-creditcost-response-field">The <code>creditCost</code> response field</h2>
 <p>Every successful scrape response (v1 <code>/v1/scrape</code>) includes a <code>creditCost</code> field inside the <code>data</code> object:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;data&quot;: {
     &quot;markdown&quot;: &quot;...&quot;,
     &quot;metadata&quot;: { ... },
     &quot;creditCost&quot;: 2
   }
-}
-</code></pre>
+}</code></pre>
 <p>The value reflects the renderer cost only (1 for HTTP/lightpanda, 2 for Chrome). On the managed cloud the SaaS billing layer may charge additional credits for LLM features (extraction, summary), which are tracked separately in <code>creditsUsed</code> on v2 responses and in your account billing dashboard.</p>
 <p>The field is omitted when its value would be 0 (internal paths that have not yet been priced).</p>
 <h2 id="balance-check">Balance check</h2>

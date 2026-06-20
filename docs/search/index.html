@@ -304,14 +304,10 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
     <a class="page-btn primary" href="https://fastcrw.com/playground" target="_blank" rel="noopener">Open Playground</a>
     <a class="page-btn secondary" href="https://fastcrw.com/register" target="_blank" rel="noopener">Get API Key</a>
   </div>
-</div><p>:::note
-<strong>Self-hosted users</strong>: <code>docker compose up</code> boots a SearXNG sidecar automatically (reachable inside the Compose network as <code>searxng:8080</code>). <code>/v1/search</code> is live on <code>http://localhost:3000</code> with no extra setup. To point at an existing SearXNG instance instead, set <code>CRW_SEARCH__SEARXNG_URL=http://your-host:8080</code> and remove the <code>searxng</code> service from your compose file. To disable search entirely, set <code>[search].enabled = false</code> — the route returns a clear <code>search_disabled</code> error (HTTP 503). See the <a href="/docker">Docker → Search (SearXNG)</a> section for the full setup, the <code>SEARXNG_BASE_URL</code> vs <code>searxng_url</code> distinction, and cold-start timing.
-:::</p>
-<h2 id="searching-the-web-with-crw">Searching the web with CRW</h2>
+</div><div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">**Self-hosted users**: `docker compose up` boots a SearXNG sidecar automatically (reachable inside the Compose network as `searxng:8080`). `/v1/search` is live on `http://localhost:3000` with no extra setup. To point at an existing SearXNG instance instead, set `CRW_SEARCH__SEARXNG_URL=http://your-host:8080` and remove the `searxng` service from your compose file. To disable search entirely, set `[search].enabled = false` — the route returns a clear `search_disabled` error (HTTP 503). See the [Docker → Search (SearXNG)](/docker) section for the full setup, the `SEARXNG_BASE_URL` vs `searxng_url` distinction, and cold-start timing.</div></div><h2 id="searching-the-web-with-crw">Searching the web with CRW</h2>
 <h3 id="v1search">/v1/search</h3>
-<pre><code class="language-http">POST http://localhost:3000/v1/search          # self-hosted
-POST https://api.fastcrw.com/v1/search        # hosted
-</code></pre>
+<pre data-lang="http"><code class="language-http">POST http://localhost:3000/v1/search          # self-hosted
+POST https://api.fastcrw.com/v1/search        # hosted</code></pre>
 <p>Authentication:</p>
 <ul>
 <li>Self-hosted: no auth by default (add a reverse proxy / API key middleware if you expose it publicly)</li>
@@ -321,14 +317,13 @@ POST https://api.fastcrw.com/v1/search        # hosted
 <p>Like the rest of the CRW API, search is HTTP-first. Use cURL or your existing HTTP client.</p>
 <h3 id="basic-usage">Basic usage</h3>
 <p>Start with this request:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;query&quot;: &quot;web scraping tools&quot;,
   &quot;limit&quot;: 5
-}
-</code></pre>
-<p>:::tabs
-::tab{title=&quot;Python&quot;}</p>
-<pre><code class="language-python">import requests
+}</code></pre>
+<div class="code-tabs">
+      <div class="code-tabs-header"><button class="code-tab active" data-tab="0">Python</button><button class="code-tab" data-tab="1">Node.js</button><button class="code-tab" data-tab="2">cURL</button></div>
+      <div class="code-tab-panel active" data-panel="0"><pre data-lang="python"><code class="language-python">import requests
 
 # Self-hosted
 resp = requests.post(
@@ -347,33 +342,25 @@ resp = requests.post(
 # `snippet` is the LLM-ready summary line (Firecrawl-compatible name);
 # `description` is the same value, kept as an alias.
 for item in resp.json()[&quot;data&quot;]:
-    print(item[&quot;title&quot;], item[&quot;url&quot;], item[&quot;snippet&quot;])
-</code></pre>
-<p>::tab{title=&quot;Node.js&quot;}</p>
-<pre><code class="language-javascript">const resp = await fetch(&quot;http://localhost:3000/v1/search&quot;, {
+    print(item[&quot;title&quot;], item[&quot;url&quot;], item[&quot;snippet&quot;])</code></pre></div><div class="code-tab-panel" data-panel="1"><pre data-lang="javascript"><code class="language-javascript">const resp = await fetch(&quot;http://localhost:3000/v1/search&quot;, {
   method: &quot;POST&quot;,
   headers: { &quot;Content-Type&quot;: &quot;application/json&quot; },
   body: JSON.stringify({ query: &quot;web scraping tools&quot;, limit: 5 })
 });
 
 const body = await resp.json();
-console.log(body.data);
-</code></pre>
-<p>::tab{title=&quot;cURL&quot;}</p>
-<pre><code class="language-bash"># Self-hosted (no auth)
+console.log(body.data);</code></pre></div><div class="code-tab-panel" data-panel="2"><pre data-lang="bash"><code class="language-bash"># Self-hosted (no auth)
 curl -X POST http://localhost:3000/v1/search \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;query&quot;: &quot;web scraping tools&quot;, &quot;limit&quot;: 5}&#39;
+  -d '{&quot;query&quot;: &quot;web scraping tools&quot;, &quot;limit&quot;: 5}'
 
 # Hosted
 curl -X POST https://api.fastcrw.com/v1/search \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;query&quot;: &quot;web scraping tools&quot;, &quot;limit&quot;: 5}&#39;
-</code></pre>
-<p>:::</p>
-<h3 id="response">Response</h3>
-<pre><code class="language-json">{
+  -d '{&quot;query&quot;: &quot;web scraping tools&quot;, &quot;limit&quot;: 5}'</code></pre></div>
+    </div><h3 id="response">Response</h3>
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;data&quot;: [
     {
@@ -385,8 +372,7 @@ curl -X POST https://api.fastcrw.com/v1/search \
       &quot;score&quot;: 9.5
     }
   ]
-}
-</code></pre>
+}</code></pre>
 <p><code>snippet</code> is the LLM-ready summary line — name kept identical to Firecrawl
 so existing pipelines work unchanged. <code>description</code> is the same value
 under the SearXNG-native name. Pick whichever; both are emitted.</p>
@@ -559,7 +545,7 @@ under the SearXNG-native name. Pick whichever; both are emitted.</p>
 </tbody></table>
 <h2 id="search-result-types">Search result types</h2>
 <p>Without <code>sources</code>, CRW returns a flat list:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;data&quot;: [
     {
@@ -571,34 +557,31 @@ under the SearXNG-native name. Pick whichever; both are emitted.</p>
       &quot;score&quot;: 9.5
     }
   ]
-}
-</code></pre>
+}</code></pre>
 <p>With <code>sources</code>, CRW returns grouped results:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;data&quot;: {
     &quot;web&quot;: [{ &quot;url&quot;: &quot;...&quot;, &quot;title&quot;: &quot;...&quot;, &quot;snippet&quot;: &quot;...&quot;, &quot;description&quot;: &quot;...&quot; }],
     &quot;news&quot;: [{ &quot;url&quot;: &quot;...&quot;, &quot;title&quot;: &quot;...&quot;, &quot;snippet&quot;: &quot;...&quot;, &quot;description&quot;: &quot;...&quot;, &quot;publishedDate&quot;: &quot;2026-04-02T14:00:00&quot; }],
     &quot;images&quot;: [{ &quot;url&quot;: &quot;...&quot;, &quot;imageUrl&quot;: &quot;...&quot;, &quot;thumbnailUrl&quot;: &quot;...&quot; }]
   }
-}
-</code></pre>
+}</code></pre>
 <h2 id="search-with-content-scraping">Search with content scraping</h2>
 <p>When you need more than result snippets, add <code>scrapeOptions</code>:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;query&quot;: &quot;web scraping tools&quot;,
   &quot;limit&quot;: 3,
   &quot;scrapeOptions&quot;: {
     &quot;formats&quot;: [&quot;markdown&quot;],
     &quot;onlyMainContent&quot;: true
   }
-}
-</code></pre>
+}</code></pre>
 <p>That enriches eligible results with scraped page content. It is powerful, but it is also the moment search becomes more expensive, so keep it off until you need it.</p>
 <h2 id="llm-assisted-search">LLM-assisted search</h2>
 <p>CRW can turn a search-with-scrape into either per-result summaries or a single synthesized answer (or both).</p>
 <h3 id="per-result-summaries-summarizeresults">Per-result summaries (<code>summarizeResults</code>)</h3>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;query&quot;: &quot;what is tokio rust&quot;,
   &quot;limit&quot;: 3,
   &quot;scrapeOptions&quot;: { &quot;formats&quot;: [&quot;markdown&quot;] },
@@ -608,11 +591,10 @@ under the SearXNG-native name. Pick whichever; both are emitted.</p>
   &quot;llmApiKey&quot;: &quot;sk-...&quot;,
   &quot;llmProvider&quot;: &quot;openai&quot;,
   &quot;llmModel&quot;: &quot;gpt-4o-mini&quot;
-}
-</code></pre>
+}</code></pre>
 <p>Each scraped result that produced markdown gets a <code>result.summary</code> field. Per-result failures attach a <code>warning</code> on the response but do not fail the whole request. Fan-out is bounded by <code>[extraction.llm].max_concurrency</code> (default 4).</p>
 <h3 id="synthesized-answer-answer">Synthesized answer (<code>answer</code>)</h3>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;query&quot;: &quot;what is tokio rust&quot;,
   &quot;limit&quot;: 3,
   &quot;answer&quot;: true,
@@ -622,10 +604,9 @@ under the SearXNG-native name. Pick whichever; both are emitted.</p>
   &quot;llmApiKey&quot;: &quot;sk-...&quot;,
   &quot;llmProvider&quot;: &quot;openai&quot;,
   &quot;llmModel&quot;: &quot;gpt-4o-mini&quot;
-}
-</code></pre>
+}</code></pre>
 <p>The response wrapper carries:</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;data&quot;: {
     &quot;results&quot;: [ /* normal flat or grouped search results */ ],
@@ -636,8 +617,7 @@ under the SearXNG-native name. Pick whichever; both are emitted.</p>
     &quot;llmUsage&quot;: { &quot;inputTokens&quot;: 3420, &quot;outputTokens&quot;: 96, &quot;totalTokens&quot;: 3516, &quot;estimatedCostUsd&quot;: 0.0008, &quot;model&quot;: &quot;gpt-4o-mini&quot;, &quot;provider&quot;: &quot;openai&quot; },
     &quot;warnings&quot;: []
   }
-}
-</code></pre>
+}</code></pre>
 <p>Citation discipline:</p>
 <ul>
 <li><code>source_id</code> returned by the model must map to a source actually in the input list. Fabricated ids are dropped.</li>
@@ -693,22 +673,17 @@ under the SearXNG-native name. Pick whichever; both are emitted.</p>
 </tr>
 </tbody></table>
 <p>The curated names (<code>github</code>/<code>research</code>/<code>pdf</code>) are <strong>Firecrawl-compatible</strong> and behave exactly as before. Passthrough values are the additive part: CRW does not maintain its own engine list for them — it hands the category string to SearXNG, which already knows the engine→category routing from its own <code>settings.yml</code>. That means new categories work <strong>without any CRW code or config change</strong>, and your self-hosted SearXNG governs exactly which engines each category hits.</p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;query&quot;: &quot;crispr base editing&quot;,
   &quot;categories&quot;: [&quot;science&quot;],
   &quot;limit&quot;: 5
-}
-</code></pre>
-<pre><code class="language-json">{
+}</code></pre>
+<pre data-lang="json"><code class="language-json">{
   &quot;query&quot;: &quot;rust async runtime&quot;,
   &quot;categories&quot;: [&quot;research&quot;, &quot;it&quot;]
-}
-</code></pre>
+}</code></pre>
 <p>In the second example, <code>research</code> still drives CRW&#39;s curated academic engines while <code>it</code> is forwarded to SearXNG as a native category — both apply to the same query.</p>
-<p>:::note
-Which passthrough categories actually return results depends on the engines your SearXNG instance enables. The bundled sidecar uses <code>use_default_settings: true</code> (see <code>config/searxng/settings.yml</code>), so all of upstream SearXNG&#39;s default categories are available. An unknown or disabled category is silently ignored by SearXNG (it falls back to <code>general</code>) rather than erroring. The list of categories a given instance exposes is documented under <a href="https://docs.searxng.org/user/configured_engines.html">SearXNG → Configured Engines</a>.
-:::</p>
-<h3 id="searxng-query-parameters-crw-sends">SearXNG query parameters CRW sends</h3>
+<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">Which passthrough categories actually return results depends on the engines your SearXNG instance enables. The bundled sidecar uses `use_default_settings: true` (see `config/searxng/settings.yml`), so all of upstream SearXNG's default categories are available. An unknown or disabled category is silently ignored by SearXNG (it falls back to `general`) rather than erroring. The list of categories a given instance exposes is documented under [SearXNG → Configured Engines](https://docs.searxng.org/user/configured_engines.html).</div></div><h3 id="searxng-query-parameters-crw-sends">SearXNG query parameters CRW sends</h3>
 <p>For reference (and when debugging a self-hosted SearXNG directly), this is how the public request fields map onto the SearXNG <code>/search</code> query parameters CRW emits:</p>
 <table>
 <thead>

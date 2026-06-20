@@ -340,12 +340,11 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <p><strong>How to protect them:</strong></p>
 <p>Option 1 — network policy (preferred for most deployments): bind fastCRW to a non-public interface or port and allow only your monitoring system (Prometheus scraper, internal ops tooling) to reach it. In Docker Compose the default <code>ports</code> block should only publish to localhost (<code>127.0.0.1:&lt;port&gt;:&lt;port&gt;</code>), never <code>0.0.0.0</code>.</p>
 <p>Option 2 — reverse-proxy access control: if the process must be reachable on a shared interface, configure your reverse proxy to block or require HTTP Basic / mutual-TLS on the <code>/metrics</code> and <code>/admin</code> path prefixes before traffic reaches fastCRW. Example (nginx):</p>
-<pre><code class="language-nginx">location ~ ^/(metrics|admin)/ {
+<pre data-lang="nginx"><code class="language-nginx">location ~ ^/(metrics|admin)/ {
     # Only allow your Prometheus scraper and ops CIDR
     allow 10.0.0.0/8;
     deny  all;
-}
-</code></pre>
+}</code></pre>
 <p>Option 3 — firewall rule: drop inbound traffic to the fastCRW port except from trusted source IPs (iptables/nftables/cloud security group).</p>
 <p>All three options can be layered.</p>
 <h2 id="runtime-isolation">Runtime Isolation</h2>
@@ -365,15 +364,12 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <p>Both variables ship with <strong>publicly-known placeholder defaults</strong> in the repository. These defaults are intentional for local dev but must be replaced before any internet-facing or shared deployment.</p>
 <p><strong><code>SEARXNG_SECRET_KEY</code></strong> (<code>docker-compose.yml</code> line: <code>${SEARXNG_SECRET_KEY:-change-me-with-openssl-rand-hex-32-please}</code>):
 SearXNG uses this key to sign session cookies. Anyone who knows the default value can forge cookies against your SearXNG instance. Generate a real key and inject it:</p>
-<pre><code class="language-bash">echo &quot;SEARXNG_SECRET_KEY=$(openssl rand -hex 32)&quot; &gt;&gt; .env
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">echo &quot;SEARXNG_SECRET_KEY=$(openssl rand -hex 32)&quot; &gt;&gt; .env</code></pre>
 <p><strong><code>BROWSERLESS_TOKEN</code></strong> (<code>docker-compose.yml</code> and <code>docker-compose.stealth.yml</code>: <code>${BROWSERLESS_TOKEN:-crwtest}</code>):
 Browserless v2 requires this token in every CDP WebSocket URL (<code>?token=...</code>). The default <code>crwtest</code> is public. Without a real token, any process that can reach the browserless port can open Chrome sessions against your host. Generate and inject:</p>
-<pre><code class="language-bash">echo &quot;BROWSERLESS_TOKEN=$(openssl rand -hex 24)&quot; &gt;&gt; .env
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">echo &quot;BROWSERLESS_TOKEN=$(openssl rand -hex 24)&quot; &gt;&gt; .env</code></pre>
 <p>Both commands append to an <code>.env</code> file that Docker Compose reads automatically. After setting the variables, restart the affected containers:</p>
-<pre><code class="language-bash">docker compose up -d --force-recreate searxng chrome-stealth
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">docker compose up -d --force-recreate searxng chrome-stealth</code></pre>
 <p>Rotate again whenever you rotate other credentials (deployment cutover, suspected exposure, team member offboarding).</p>
 <h2 id="agpl-30-13-network-use-obligations">AGPL-3.0 §13 — Network Use Obligations</h2>
 <p>fastCRW is licensed under AGPL-3.0 (<code>Cargo.toml</code>: <code>license = &quot;AGPL-3.0&quot;</code>). AGPL §13 extends the GPL copyleft to network use: <strong>if you run a modified version of fastCRW and allow third parties to interact with it over a network (including your own users calling your API), you must offer them the complete corresponding source code</strong> under the same license.</p>
@@ -388,11 +384,10 @@ Browserless v2 requires this token in every CDP WebSocket URL (<code>?token=...<
 <h2 id="llm-features-and-trust-boundary">LLM features and trust boundary</h2>
 <p>CRW&#39;s <code>summary</code> format and <code>/v1/search</code> answer/summarize features need an LLM key. There are two deployment shapes; pick one and lock it down with the runtime guards listed below.</p>
 <p><strong>Solo / self-hosted (key in server config):</strong></p>
-<pre><code class="language-toml">[extraction.llm]
+<pre data-lang="toml"><code class="language-toml">[extraction.llm]
 provider = &quot;openai&quot;
 api_key  = &quot;sk-...&quot;
-model    = &quot;gpt-4o-mini&quot;
-</code></pre>
+model    = &quot;gpt-4o-mini&quot;</code></pre>
 <p>Anyone who can reach your opencore can spend on that key. Front it with auth, network policy, or a private network.</p>
 <p><strong>SaaS / multi-tenant (BYOK, per-request keys):</strong></p>
 <ul>

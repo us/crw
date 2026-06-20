@@ -309,22 +309,20 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <p>Copy the key and keep it somewhere safe. You will paste it into the <code>Authorization</code> header below.</p>
 <h2 id="first-scrape">First scrape</h2>
 <p>Paste your key in place of <code>YOUR_API_KEY</code> and run:</p>
-<pre><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/scrape \
+<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{
+  -d '{
     &quot;url&quot;: &quot;https://example.com&quot;,
     &quot;formats&quot;: [&quot;markdown&quot;]
-  }&#39;
-</code></pre>
+  }'</code></pre>
 <p><strong>Windows (PowerShell / Command Prompt)</strong>:</p>
-<pre><code class="language-powershell">curl.exe -X POST https://api.fastcrw.com/v1/scrape ^
+<pre data-lang="powershell"><code class="language-powershell">curl.exe -X POST https://api.fastcrw.com/v1/scrape ^
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; ^
   -H &quot;Content-Type: application/json&quot; ^
-  -d &quot;{\&quot;url\&quot;:\&quot;https://example.com\&quot;,\&quot;formats\&quot;:[\&quot;markdown\&quot;]}&quot;
-</code></pre>
+  -d &quot;{\&quot;url\&quot;:\&quot;https://example.com\&quot;,\&quot;formats\&quot;:[\&quot;markdown\&quot;]}&quot;</code></pre>
 <p><strong>Expected response:</strong></p>
-<pre><code class="language-json">{
+<pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;data&quot;: {
     &quot;markdown&quot;: &quot;# Example Domain\n\nThis domain is for use in illustrative examples...&quot;,
@@ -335,8 +333,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
       &quot;elapsedMs&quot;: 38
     }
   }
-}
-</code></pre>
+}</code></pre>
 <h2 id="confirm-success">Confirm success</h2>
 <p>A good response has three signs:</p>
 <ol>
@@ -386,8 +383,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <h2 id="mcp-path-optional">MCP path (optional)</h2>
 <p>MCP (Model Context Protocol) is a standard that lets AI assistants call external tools — in this case, live web scraping — without you writing any glue code. If your goal is to give Claude, Cursor, Windsurf, or another MCP-compatible assistant live web access, this is the fastest way to do it.</p>
 <p><strong>Requires Node.js 18+</strong> (<a href="https://nodejs.org/en/download/">nodejs.org/en/download</a>).</p>
-<pre><code class="language-bash">claude mcp add crw -- npx -y crw-mcp
-</code></pre>
+<pre data-lang="bash"><code class="language-bash">claude mcp add crw -- npx -y crw-mcp</code></pre>
 <p>Once registered, your AI assistant gains six web tools (<code>crw_scrape</code>, <code>crw_crawl</code>, <code>crw_map</code>, <code>crw_search</code> (SearXNG-backed search; available when a SearXNG backend is configured), <code>crw_parse_file</code>, and more). On the next conversation turn the assistant can call them automatically whenever it needs to fetch a live page or run a crawl. No further setup is needed for the embedded mode.</p>
 <p>For client-specific config files (Codex, Cursor, Windsurf, Cline, Continue.dev) and the proxy mode that connects to the fastcrw.com cloud, see <a href="mcp.md">MCP Server</a>.</p>
 </article>

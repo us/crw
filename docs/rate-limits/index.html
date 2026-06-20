@@ -287,10 +287,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <p>CRW uses a <strong>token-bucket rate limiter</strong> scoped to the server process. Tokens refill continuously at the configured rate (<code>rate_limit_rps</code>). A burst can drain the bucket immediately; tokens replenish every second proportional to elapsed time.</p>
 <p>Self-hosted instances set <code>[server].rate_limit_rps</code> in their config (default: 10 RPS, 0 = unlimited). Cloud plans (fastcrw.com) enforce per-API-key plan limits instead.</p>
 <h2 id="current-per-plan-limits">Current per-plan limits</h2>
-<p>:::note
-Cloud only (fastcrw.com) -- self-hosted instances can configure their own rate limits.
-:::</p>
-<table>
+<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">Cloud only (fastcrw.com) -- self-hosted instances can configure their own rate limits.</div></div><table>
 <thead>
 <tr>
 <th>Plan</th>
@@ -323,7 +320,7 @@ Cloud only (fastcrw.com) -- self-hosted instances can configure their own rate l
 <h3 id="branch-1-rpm-rate-limit-exceeded">Branch 1 — RPM rate limit exceeded</h3>
 <p>Your request rate exceeded the plan&#39;s requests-per-minute cap (or the self-hosted <code>rate_limit_rps</code> setting). The response body carries <code>error_code: &quot;rate_limited&quot;</code>.</p>
 <p><strong>Action:</strong> back off and retry. Apply exponential backoff starting at 1 second:</p>
-<pre><code class="language-ts">async function callWithRetry(fn: () =&gt; Promise&lt;Response&gt;, maxRetries = 5): Promise&lt;Response&gt; {
+<pre data-lang="ts"><code class="language-ts">async function callWithRetry(fn: () =&gt; Promise&lt;Response&gt;, maxRetries = 5): Promise&lt;Response&gt; {
   for (let attempt = 0; attempt &lt; maxRetries; attempt++) {
     const res = await fn();
     if (res.status !== 429) return res;
@@ -336,26 +333,18 @@ Cloud only (fastcrw.com) -- self-hosted instances can configure their own rate l
     await new Promise(r =&gt; setTimeout(r, backoffMs));
   }
   throw new Error(&quot;Max retries exceeded&quot;);
-}
-</code></pre>
-<p>:::note
-The open-source server does not currently send <code>Retry-After</code>, <code>X-RateLimit-Limit</code>, or <code>X-RateLimit-Remaining</code> response headers. Use client-side exponential backoff instead of reading a header.
-:::</p>
-<h3 id="branch-2-credits-exhausted-cloud-only">Branch 2 — Credits exhausted (cloud only)</h3>
+}</code></pre>
+<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">The open-source server does not currently send `Retry-After`, `X-RateLimit-Limit`, or `X-RateLimit-Remaining` response headers. Use client-side exponential backoff instead of reading a header.</div></div><h3 id="branch-2-credits-exhausted-cloud-only">Branch 2 — Credits exhausted (cloud only)</h3>
 <p>On fastcrw.com, once your account balance reaches zero the API returns <code>429</code> with <code>error_code: &quot;insufficient_credits&quot;</code>.</p>
-<p>:::note
-<code>insufficient_credits</code> is a fastcrw.com-only error code added by the SaaS billing layer. The open-source engine does not produce this code — it is not part of <code>CrwError::error_code()</code> in crw-core.
-:::</p>
-<p><strong>Action:</strong> do NOT retry. Retrying burns no credits (the request is rejected before processing) but creates noise in your logs and may hide the real cause. Alert or pause your pipeline and top up your balance.</p>
-<pre><code class="language-ts">if (res.status === 429) {
+<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">`insufficient_credits` is a fastcrw.com-only error code added by the SaaS billing layer. The open-source engine does not produce this code — it is not part of `CrwError::error_code()` in crw-core.</div></div><p><strong>Action:</strong> do NOT retry. Retrying burns no credits (the request is rejected before processing) but creates noise in your logs and may hide the real cause. Alert or pause your pipeline and top up your balance.</p>
+<pre data-lang="ts"><code class="language-ts">if (res.status === 429) {
   const body = await res.json();
   if (body.error_code === &quot;insufficient_credits&quot;) {
     // Alert your team, halt the pipeline.
     throw new Error(&quot;Credit balance exhausted — top up at fastcrw.com/billing&quot;);
   }
-  // Otherwise it&#39;s an RPM limit — backoff and retry (see above).
-}
-</code></pre>
+  // Otherwise it's an RPM limit — backoff and retry (see above).
+}</code></pre>
 <h2 id="handling-503">Handling <code>503</code></h2>
 <p>A <code>503 Service Unavailable</code> response means the server is up but a dependency is temporarily unavailable. Two cases:</p>
 <table>
@@ -378,12 +367,11 @@ The open-source server does not currently send <code>Retry-After</code>, <code>X
 </tr>
 </tbody></table>
 <p><strong>Action for 503:</strong> retry with exponential backoff; this is a transient condition. If it persists beyond a few minutes, check renderer health at <code>/ready</code> or your SearXNG container.</p>
-<pre><code class="language-ts">if (res.status === 503) {
+<pre data-lang="ts"><code class="language-ts">if (res.status === 503) {
   // Transient — back off and retry, then alert if it persists.
   await sleep(backoffMs);
   return retryRequest();
-}
-</code></pre>
+}</code></pre>
 <h2 id="practical-client-behavior">Practical Client Behavior</h2>
 <p>A well-behaved client should:</p>
 <ul>
