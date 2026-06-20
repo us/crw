@@ -1,6 +1,6 @@
 # Output Formats
 
-crw supports 8 output formats. Request multiple formats in a single scrape call.
+crw supports 9 output formats. Request multiple formats in a single scrape call.
 
 ## Formats
 
@@ -14,6 +14,7 @@ crw supports 8 output formats. Request multiple formats in a single scrape call.
 | JSON | `json` | LLM structured extraction with JSON schema validation |
 | Summary | `summary` | LLM-generated prose summary of the page |
 | Change Tracking | `changeTracking` | Diff-based change detection against a prior snapshot |
+| Screenshot | `screenshot` | PNG screenshot via Chrome/CDP, returned as a `data:image/png;base64,…` URL (use `screenshot@fullPage` for the full page) |
 | Extract | `extract` | Alias for `json` — accepted for Firecrawl compatibility |
 
 ## Which Format Should You Choose?
