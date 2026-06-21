@@ -130,6 +130,16 @@
           "type": "json",
           "path": "sdks/typescript/package.json",
           "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "docs/openapi.json",
+          "jsonpath": "$.info.version"
+        },
+        {
+          "type": "json",
+          "path": "crates/crw-server/openapi/openapi.json",
+          "jsonpath": "$.info.version"
         }
       ]
     }
