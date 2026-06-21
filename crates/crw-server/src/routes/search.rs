@@ -187,16 +187,54 @@ pub async fn search_inner(
     // Multi-query expansion (gated): on the LLM path, also fetch an
     // entity/keyword rewrite of the query and UNION the pools so the answer's
     // source is more likely to surface. Falls back to the single fetch.
-    let mut response = if state.config.search.query_expand
+    // Per-request override (eval A/B) wins over the server config; clamp so a
+    // hostile caller can't fan out unbounded SearXNG fetches.
+    let variants_n = req
+        .query_expand_variants
+        .unwrap_or(state.config.search.query_expand_variants)
+        .clamp(1, MAX_QUERY_EXPAND_VARIANTS);
+    // Phase C1: when expansion + scrapeOptions are both in play, overlap the
+    // scrape of the original-query results with the expansion (LLM rewrite +
+    // variant fetches) instead of doing them serially. The final pool is the
+    // identical union, so the reranked source set is unchanged — only the
+    // ~5-10s expansion overhead is hidden behind the original scrape.
+    let c1_overlap = state.config.search.pipeline_overlap
+        && state.config.search.query_expand
+        && llm_path
+        && req.scrape_options.is_some()
+        && effective_llm.is_some();
+    let mut prescraped: Vec<SearchResult> = Vec::new();
+    let mut response = if c1_overlap {
+        let llm = effective_llm.expect("c1_overlap requires effective_llm");
+        let opts = req
+            .scrape_options
+            .as_ref()
+            .expect("c1_overlap requires scrape_options");
+        let orig = client
+            .fetch(&params)
+            .await
+            .map_err(|e| map_search_error(e, state.config.search.timeout_ms, client.base_url()))?;
+        let mut data_orig = SearchData::Flat(transform_flat_reranked(
+            &orig,
+            &req.query,
+            limit,
+            state.config.search.rerank_relevance,
+        ));
+        // Scrape the original results WHILE the expansion fetches run.
+        let (_enr, variant_pools) = tokio::join!(
+            enrich_with_scrape(&mut data_orig, opts, state),
+            fetch_variant_pools(&client, &req.query, &params, llm, variants_n),
+        );
+        if let SearchData::Flat(v) = data_orig {
+            prescraped = v;
+        }
+        let mut merged = orig;
+        union_pools(&mut merged, variant_pools);
+        merged
+    } else if state.config.search.query_expand
         && llm_path
         && let Some(llm) = effective_llm
     {
-        // Per-request override (eval A/B) wins over the server config; clamp so a
-        // hostile caller can't fan out unbounded SearXNG fetches.
-        let variants_n = req
-            .query_expand_variants
-            .unwrap_or(state.config.search.query_expand_variants)
-            .clamp(1, MAX_QUERY_EXPAND_VARIANTS);
         fetch_expanded(&client, &req.query, &params, llm, variants_n)
             .await
             .map_err(|e| map_search_error(e, state.config.search.timeout_ms, client.base_url()))?
@@ -297,6 +335,29 @@ pub async fn search_inner(
                     limit,
                     state.config.search.rerank_relevance,
                 ));
+            }
+        }
+    }
+
+    // Phase C1: fold the original-results scrapes done during the overlap back
+    // into the final (reranked-over-union) source set. Entries that match by URL
+    // get their scraped fields reused; enrich_with_scrape then skips them
+    // (metadata.is_some()) and only scrapes the URLs the expansion newly added.
+    if !prescraped.is_empty()
+        && let SearchData::Flat(v) = &mut data
+    {
+        let by_url: std::collections::HashMap<&str, &SearchResult> =
+            prescraped.iter().map(|r| (r.url.as_str(), r)).collect();
+        for r in v.iter_mut() {
+            if r.metadata.is_none()
+                && let Some(src) = by_url.get(r.url.as_str())
+                && src.metadata.is_some()
+            {
+                r.markdown = src.markdown.clone();
+                r.html = src.html.clone();
+                r.raw_html = src.raw_html.clone();
+                r.links = src.links.clone();
+                r.metadata = src.metadata.clone();
             }
         }
     }
@@ -958,24 +1019,25 @@ fn map_search_error(err: SearchError, timeout_ms: u64, base_url: &str) -> CrwErr
 /// increase vs a single fetch. The original fetch's error propagates (same
 /// failure semantics as the single-fetch path); a failed variant fetch is
 /// ignored. If the rewrite is empty/trivial, this is exactly the single fetch.
-async fn fetch_expanded(
+/// Expand the query (LLM rewrite) and fetch all variant pools concurrently
+/// (bounded by the variant count) so N rewrites cost ~one extra fetch of
+/// wall-clock, not N sequential ones. Does NOT fetch the original query — the
+/// caller owns that, which lets the C1 overlap path scrape the original results
+/// while this runs. A failed variant fetch is dropped (recall-only, never fatal).
+async fn fetch_variant_pools(
     client: &SearxngClient,
     query: &str,
     base_params: &SearxngParams,
     llm: &LlmConfig,
     max_variants: usize,
-) -> Result<SearxngResponse, SearchError> {
+) -> Vec<SearxngResponse> {
     let mut leg = llm.clone();
     leg.max_tokens = leg.max_tokens.min(SEARCH_LLM_MAX_TOKENS_PER_LEG);
     let variants = crw_extract::llm::expand_query(&leg, query, max_variants).await;
-    let mut merged = client.fetch(base_params).await?;
     if variants.is_empty() {
-        return Ok(merged);
+        return Vec::new();
     }
-    // Fetch all variant pools concurrently (bounded by the variant count) so N
-    // rewrites cost ~one extra fetch of wall-clock, not N sequential ones, then
-    // union by URL. A failed variant fetch is dropped (recall-only, never fatal).
-    let variant_responses: Vec<SearxngResponse> = stream::iter(variants)
+    stream::iter(variants)
         .map(|v| {
             let client = client.clone();
             let mut vp = base_params.clone();
@@ -985,13 +1047,19 @@ async fn fetch_expanded(
         .buffer_unordered(max_variants.max(1))
         .filter_map(|r| async move { r })
         .collect()
-        .await;
+        .await
+}
+
+/// Union variant pools into `merged`, deduping by URL (recall-only — never
+/// removes existing sources). Shared by the serial and C1-overlap paths so both
+/// produce the identical unioned pool.
+fn union_pools(merged: &mut SearxngResponse, pools: Vec<SearxngResponse>) {
     let mut seen: std::collections::HashSet<String> = merged
         .results
         .iter()
         .filter_map(|r| r.url.clone())
         .collect();
-    for resp in variant_responses {
+    for resp in pools {
         for row in resp.results {
             if let Some(u) = row.url.clone()
                 && seen.insert(u)
@@ -1001,6 +1069,22 @@ async fn fetch_expanded(
         }
     }
     merged.number_of_results = merged.results.len() as u64;
+}
+
+async fn fetch_expanded(
+    client: &SearxngClient,
+    query: &str,
+    base_params: &SearxngParams,
+    llm: &LlmConfig,
+    max_variants: usize,
+) -> Result<SearxngResponse, SearchError> {
+    // Original fetch overlaps the expansion+variant fetches; union is identical.
+    let (orig, variant_pools) = tokio::join!(
+        client.fetch(base_params),
+        fetch_variant_pools(client, query, base_params, llm, max_variants)
+    );
+    let mut merged = orig?;
+    union_pools(&mut merged, variant_pools);
     Ok(merged)
 }
 
@@ -1027,6 +1111,11 @@ async fn enrich_with_scrape(
     // Validate each URL and remember which slot it came from.
     let mut jobs: Vec<(usize, String)> = Vec::new();
     for (idx, r) in targets.iter().enumerate() {
+        // C1 overlap: a slot already enriched by the original-results prefetch
+        // (metadata set by apply_scrape_to_result) is reused, not re-scraped.
+        if r.metadata.is_some() {
+            continue;
+        }
         let parsed = match url::Url::parse(&r.url) {
             Ok(u) => u,
             Err(_) => continue,
