@@ -21,3 +21,4 @@ config.local.toml
 # Service-account / API-key files (never commit)
 bench/secrets/
 *-service-account*.json
+config.local-bench.toml
