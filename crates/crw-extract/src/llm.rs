@@ -14,6 +14,7 @@ use crate::pricing;
 use crw_core::config::LlmConfig;
 use crw_core::error::{CrwError, CrwResult};
 use crw_core::types::LlmUsage;
+use rand::Rng;
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -86,6 +87,7 @@ pub async fn extract_via_llm(
         max_tokens,
         azure_api_version,
         None, // extraction path: keep provider-default temperature
+        None, // extraction path: no reasoning_effort
         EXTRACTION_SYSTEM_PROMPT,
         &user_msg,
     )
@@ -117,6 +119,7 @@ pub async fn chat(
         cfg.max_tokens,
         cfg.azure_api_version.as_deref(),
         cfg.temperature,
+        cfg.reasoning_effort.as_deref(),
         system_prompt,
         user_msg,
     )
@@ -233,6 +236,7 @@ async fn dispatch(
     max_tokens: u32,
     azure_api_version: Option<&str>,
     temperature: Option<f32>,
+    reasoning_effort: Option<&str>,
     system_prompt: &str,
     user_msg: &str,
 ) -> CrwResult<LlmCallResult> {
@@ -263,6 +267,7 @@ async fn dispatch(
                 base_url,
                 max_tokens,
                 temperature,
+                reasoning_effort,
                 system_prompt,
                 user_msg,
                 provider_tag,
@@ -370,6 +375,7 @@ async fn call_openai(
     base_url: Option<&str>,
     max_tokens: u32,
     temperature: Option<f32>,
+    reasoning_effort: Option<&str>,
     system_prompt: &str,
     user_msg: &str,
     provider: &str,
@@ -401,20 +407,50 @@ async fn call_openai(
         body["temperature"] = serde_json::json!(t);
         body["seed"] = serde_json::json!(42);
     }
-    let resp = client
-        .post(url)
-        .bearer_auth(api_key)
-        .header("content-type", "application/json")
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| CrwError::Internal(format!("LLM request failed: {e}")))?;
+    // Only forward a present, non-empty value. A configured-but-empty value
+    // deserializes to `Some("")` and would be rejected (HTTP 400) by providers
+    // that validate the field, so treat it as unset.
+    if let Some(effort) = reasoning_effort.filter(|s| !s.is_empty()) {
+        body["reasoning_effort"] = serde_json::json!(effort);
+    }
+    // Fixed self-limiting retry on transient server throttling (HTTP 429/503)
+    // only. The shared client carries a 30s per-attempt timeout and the
+    // caller's request deadline is not threaded in here, so the budget stays
+    // small and fixed (a few short jittered sleeps). 429/503 are fast server
+    // rejects, so the worst case stays well under the request deadline. All
+    // other non-2xx responses (and transport/timeout errors) keep the original
+    // single-POST contract: hard-error on the first response.
+    const MAX_ATTEMPTS: u32 = 3;
+    let mut attempt: u32 = 0;
+    let (status, text) = loop {
+        attempt += 1;
+        let resp = client
+            .post(url)
+            .bearer_auth(api_key)
+            .header("content-type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| CrwError::Internal(format!("LLM request failed: {e}")))?;
 
-    let status = resp.status();
-    let text = resp
-        .text()
-        .await
-        .map_err(|e| CrwError::Internal(format!("LLM response read failed: {e}")))?;
+        let status = resp.status();
+        let is_retryable = status == reqwest::StatusCode::TOO_MANY_REQUESTS
+            || status == reqwest::StatusCode::SERVICE_UNAVAILABLE;
+        if is_retryable && attempt < MAX_ATTEMPTS {
+            // Exponential backoff with jitter: ~0.5s, ~1s base + up to ~1s
+            // jitter. Drop the response body unread — the status is enough.
+            let base_ms = 500u64 * (1u64 << (attempt - 1));
+            let jitter_ms = rand::rng().random_range(0..1000);
+            tokio::time::sleep(Duration::from_millis(base_ms + jitter_ms)).await;
+            continue;
+        }
+
+        let text = resp
+            .text()
+            .await
+            .map_err(|e| CrwError::Internal(format!("LLM response read failed: {e}")))?;
+        break (status, text);
+    };
     if !status.is_success() {
         return Err(CrwError::Internal(format!("LLM HTTP {status} from openai")));
     }

@@ -114,6 +114,16 @@ async fn run_server() {
         std::process::exit(1);
     }
 
+    // Boot guard: the configured LLM model must live in this project's own
+    // `crw-` namespace. This catches a misconfigured deploy before any request
+    // is served. Skipped when no LLM is configured (non-LLM deploys are fine).
+    if let Some(llm) = config.extraction.llm.as_ref()
+        && !llm.model.starts_with("crw-")
+    {
+        tracing::error!("[extraction.llm].model must use the `crw-` namespace (refusing to boot).");
+        std::process::exit(1);
+    }
+
     let state = match AppState::new(config) {
         Ok(s) => s,
         Err(e) => {

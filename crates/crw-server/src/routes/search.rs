@@ -885,6 +885,9 @@ fn build_byok_search_llm_config(
     if let Some(b) = &req.base_url {
         cfg.base_url = Some(b.clone());
     }
+    // Never inherit the server's reasoning_effort into a BYOK request — the
+    // customer's endpoint must receive only what they explicitly configure.
+    cfg.reasoning_effort = None;
     Some(cfg)
 }
 
@@ -1285,6 +1288,32 @@ mod tests {
             }
             other => panic!("expected TargetUnreachable, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn byok_config_clears_reasoning_effort() {
+        // A BYOK request must never inherit the server's reasoning_effort.
+        let server_cfg = LlmConfig {
+            reasoning_effort: Some("none".into()),
+            ..Default::default()
+        };
+        let mut r = req("hello");
+        r.llm_api_key = Some("byok-key".into());
+        let byok = build_byok_search_llm_config(&r, Some(&server_cfg))
+            .expect("byok config built when llm_api_key present");
+        assert_eq!(byok.reasoning_effort, None);
+        assert_eq!(byok.api_key, "byok-key");
+    }
+
+    #[test]
+    fn byok_config_none_without_api_key() {
+        let server_cfg = LlmConfig {
+            reasoning_effort: Some("none".into()),
+            ..Default::default()
+        };
+        // No llm_api_key => not a BYOK request.
+        let byok = build_byok_search_llm_config(&req("hello"), Some(&server_cfg));
+        assert!(byok.is_none());
     }
 
     #[test]
