@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "CRW REST API",
-    "version": "0.16.0",
+    "version": "0.17.0",
     "description": "Firecrawl-compatible web scraping, crawling, mapping, search, and extraction API. Hosted at https://api.fastcrw.com; self-host with `docker run -p 3000:3000 ghcr.io/us/crw:latest`.",
     "license": {
       "name": "AGPL-3.0",
@@ -23,39 +23,71 @@
     }
   ],
   "security": [
-    { "bearerAuth": [] },
+    {
+      "bearerAuth": []
+    },
     {}
   ],
   "tags": [
-    { "name": "search", "description": "Web search via SearXNG (self-hosted) or managed (hosted)" },
-    { "name": "scrape",  "description": "Single-URL content extraction" },
-    { "name": "crawl",   "description": "Async multi-page crawl jobs" },
-    { "name": "map",     "description": "URL discovery without full scraping" },
-    { "name": "extract", "description": "Structured JSON extraction via scrape + jsonOptions" },
-    { "name": "change-tracking", "description": "Stateless diff of a scrape against a caller-supplied previous snapshot (monitor primitive)" }
+    {
+      "name": "search",
+      "description": "Web search via SearXNG (self-hosted) or managed (hosted)"
+    },
+    {
+      "name": "scrape",
+      "description": "Single-URL content extraction"
+    },
+    {
+      "name": "crawl",
+      "description": "Async multi-page crawl jobs"
+    },
+    {
+      "name": "map",
+      "description": "URL discovery without full scraping"
+    },
+    {
+      "name": "extract",
+      "description": "Structured JSON extraction via scrape + jsonOptions"
+    },
+    {
+      "name": "change-tracking",
+      "description": "Stateless diff of a scrape against a caller-supplied previous snapshot (monitor primitive)"
+    }
   ],
   "paths": {
     "/v1/search": {
       "post": {
-        "tags": ["search"],
+        "tags": [
+          "search"
+        ],
         "summary": "Search the web and optionally scrape results",
         "operationId": "search",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/SearchRequest" },
+              "schema": {
+                "$ref": "#/components/schemas/SearchRequest"
+              },
               "examples": {
                 "minimal": {
                   "summary": "Top 3 results, no scraping",
-                  "value": { "query": "renewable energy trends 2024", "limit": 3 }
+                  "value": {
+                    "query": "renewable energy trends 2024",
+                    "limit": 3
+                  }
                 },
                 "with_scrape": {
                   "summary": "Scrape each result as markdown",
                   "value": {
                     "query": "rust async runtime",
                     "limit": 5,
-                    "scrapeOptions": { "formats": ["markdown"], "onlyMainContent": true }
+                    "scrapeOptions": {
+                      "formats": [
+                        "markdown"
+                      ],
+                      "onlyMainContent": true
+                    }
                   }
                 }
               }
@@ -67,27 +99,41 @@
             "description": "Search results",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SearchResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "429": { "$ref": "#/components/responses/RateLimited" },
-          "503": { "$ref": "#/components/responses/SearchDisabled" }
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "$ref": "#/components/responses/SearchDisabled"
+          }
         }
       }
     },
     "/v1/scrape": {
       "post": {
-        "tags": ["scrape"],
+        "tags": [
+          "scrape"
+        ],
         "summary": "Scrape one URL",
         "operationId": "scrape",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ScrapeRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/ScrapeRequest"
+              }
             }
           }
         },
@@ -96,25 +142,35 @@
             "description": "Scrape result",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ScrapeResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ScrapeResponse"
+                }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
         }
       }
     },
     "/v1/map": {
       "post": {
-        "tags": ["map"],
+        "tags": [
+          "map"
+        ],
         "summary": "Discover URLs on a site",
         "operationId": "map",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/MapRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/MapRequest"
+              }
             }
           }
         },
@@ -123,7 +179,9 @@
             "description": "List of URLs",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/MapResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/MapResponse"
+                }
               }
             }
           }
@@ -132,14 +190,18 @@
     },
     "/v1/crawl": {
       "post": {
-        "tags": ["crawl"],
+        "tags": [
+          "crawl"
+        ],
         "summary": "Start an async crawl job",
         "operationId": "crawlStart",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CrawlRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/CrawlRequest"
+              }
             }
           }
         },
@@ -148,7 +210,9 @@
             "description": "Crawl job accepted; poll with /v1/crawl/{id}",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/CrawlAccepted" }
+                "schema": {
+                  "$ref": "#/components/schemas/CrawlAccepted"
+                }
               }
             }
           }
@@ -157,7 +221,9 @@
     },
     "/v1/crawl/{id}": {
       "get": {
-        "tags": ["crawl"],
+        "tags": [
+          "crawl"
+        ],
         "summary": "Get crawl job status and results",
         "operationId": "crawlStatus",
         "parameters": [
@@ -165,7 +231,9 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "Crawl job id returned by POST /v1/crawl"
           }
         ],
@@ -174,17 +242,23 @@
             "description": "Job status + collected pages",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/CrawlStatus" }
+                "schema": {
+                  "$ref": "#/components/schemas/CrawlStatus"
+                }
               }
             }
           },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
     "/v1/change-tracking/diff": {
       "post": {
-        "tags": ["change-tracking"],
+        "tags": [
+          "change-tracking"
+        ],
         "summary": "Diff current scrape content against a previous snapshot",
         "description": "Stateless: opencore stores nothing — the caller supplies the `previous` snapshot. Accepts a single body or a `batch` array (presence of `batch` selects batch mode). The crawl-path workhorse for monitors.",
         "operationId": "changeTrackingDiff",
@@ -192,22 +266,46 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ChangeTrackingDiffRequest" },
+              "schema": {
+                "$ref": "#/components/schemas/ChangeTrackingDiffRequest"
+              },
               "examples": {
                 "single_gitdiff": {
                   "summary": "Single page, markdown git-diff",
                   "value": {
-                    "modes": ["gitDiff"],
-                    "previous": { "markdown": "Starter $19", "contentHash": "abc" },
-                    "current": { "markdown": "Starter $24" }
+                    "modes": [
+                      "gitDiff"
+                    ],
+                    "previous": {
+                      "markdown": "Starter $19",
+                      "contentHash": "abc"
+                    },
+                    "current": {
+                      "markdown": "Starter $24"
+                    }
                   }
                 },
                 "batch_json": {
                   "summary": "Batch, json per-field mode",
                   "value": {
-                    "modes": ["json"],
+                    "modes": [
+                      "json"
+                    ],
                     "batch": [
-                      { "url": "https://example.com/pricing", "previous": { "json": { "price": "$19" }, "contentHash": "abc" }, "current": { "json": { "price": "$24" } } }
+                      {
+                        "url": "https://example.com/pricing",
+                        "previous": {
+                          "json": {
+                            "price": "$19"
+                          },
+                          "contentHash": "abc"
+                        },
+                        "current": {
+                          "json": {
+                            "price": "$24"
+                          }
+                        }
+                      }
                     ]
                   }
                 }
@@ -222,13 +320,25 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["success", "data"],
+                  "required": [
+                    "success",
+                    "data"
+                  ],
                   "properties": {
-                    "success": { "type": "boolean" },
+                    "success": {
+                      "type": "boolean"
+                    },
                     "data": {
                       "oneOf": [
-                        { "$ref": "#/components/schemas/ChangeTrackingResult" },
-                        { "type": "array", "items": { "$ref": "#/components/schemas/ChangeTrackingResult" } }
+                        {
+                          "$ref": "#/components/schemas/ChangeTrackingResult"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ChangeTrackingResult"
+                          }
+                        }
                       ]
                     }
                   }
@@ -236,18 +346,29 @@
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
         }
       }
     },
     "/v1/capabilities": {
       "get": {
-        "tags": ["capabilities"],
+        "tags": [
+          "capabilities"
+        ],
         "summary": "Server capability discovery",
         "description": "Returns which LLM providers, output formats, search features, and document parsers this opencore instance supports. SaaS frontends call this on boot to decide which options to surface.",
         "operationId": "capabilities",
-        "security": [{ "bearerAuth": [] }, {}],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {}
+        ],
         "responses": {
           "200": {
             "description": "Capability report for this opencore instance",
@@ -255,50 +376,155 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["version", "llm", "formats", "search", "documents"],
+                  "required": [
+                    "version",
+                    "llm",
+                    "formats",
+                    "search",
+                    "documents"
+                  ],
                   "properties": {
-                    "version": { "type": "string", "description": "opencore semver string" },
+                    "version": {
+                      "type": "string",
+                      "description": "opencore semver string"
+                    },
                     "llm": {
                       "type": "object",
-                      "required": ["providers", "supportsBaseUrl", "serverKeyConfigured", "maxConcurrency"],
+                      "required": [
+                        "providers",
+                        "supportsBaseUrl",
+                        "serverKeyConfigured",
+                        "maxConcurrency"
+                      ],
                       "properties": {
-                        "providers": { "type": "array", "items": { "type": "string" }, "example": ["anthropic", "openai", "deepseek", "openai-compatible", "azure"] },
-                        "supportsBaseUrl": { "type": "boolean" },
-                        "serverKeyConfigured": { "type": "boolean", "description": "True when a server-side LLM API key is present; false for BYOK-only deployments" },
-                        "maxConcurrency": { "type": "integer", "description": "Server-configured LLM fan-out cap; 0 when no server LLM config is present" },
-                        "requireByokHeader": { "type": "string", "description": "Header name required on LLM-touching requests; omitted when no header guard is configured" }
+                        "providers": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "example": [
+                            "anthropic",
+                            "openai",
+                            "deepseek",
+                            "openai-compatible",
+                            "azure"
+                          ]
+                        },
+                        "supportsBaseUrl": {
+                          "type": "boolean"
+                        },
+                        "serverKeyConfigured": {
+                          "type": "boolean",
+                          "description": "True when a server-side LLM API key is present; false for BYOK-only deployments"
+                        },
+                        "maxConcurrency": {
+                          "type": "integer",
+                          "description": "Server-configured LLM fan-out cap; 0 when no server LLM config is present"
+                        },
+                        "requireByokHeader": {
+                          "type": "string",
+                          "description": "Header name required on LLM-touching requests; omitted when no header guard is configured"
+                        }
                       }
                     },
                     "formats": {
                       "type": "object",
-                      "required": ["supported", "changeTrackingModes"],
+                      "required": [
+                        "supported",
+                        "changeTrackingModes"
+                      ],
                       "properties": {
-                        "supported": { "type": "array", "items": { "type": "string" }, "example": ["markdown", "html", "rawHtml", "plainText", "links", "json", "summary", "changeTracking"] },
-                        "changeTrackingModes": { "type": "array", "items": { "type": "string" }, "example": ["gitDiff", "json"] }
+                        "supported": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "example": [
+                            "markdown",
+                            "html",
+                            "rawHtml",
+                            "plainText",
+                            "links",
+                            "json",
+                            "summary",
+                            "changeTracking"
+                          ]
+                        },
+                        "changeTrackingModes": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "example": [
+                            "gitDiff",
+                            "json"
+                          ]
+                        }
                       }
                     },
                     "search": {
                       "type": "object",
-                      "required": ["answer", "summarizeResults"],
+                      "required": [
+                        "answer",
+                        "summarizeResults"
+                      ],
                       "properties": {
-                        "answer": { "type": "boolean" },
-                        "summarizeResults": { "type": "boolean" }
+                        "answer": {
+                          "type": "boolean"
+                        },
+                        "summarizeResults": {
+                          "type": "boolean"
+                        }
                       }
                     },
                     "documents": {
                       "type": "object",
-                      "required": ["parsers", "fileUpload"],
+                      "required": [
+                        "parsers",
+                        "fileUpload"
+                      ],
                       "properties": {
-                        "parsers": { "type": "array", "items": { "type": "string" }, "example": ["pdf"] },
+                        "parsers": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "example": [
+                            "pdf"
+                          ]
+                        },
                         "fileUpload": {
                           "type": "object",
-                          "required": ["supported", "endpoint", "maxBytes", "types", "ocr"],
+                          "required": [
+                            "supported",
+                            "endpoint",
+                            "maxBytes",
+                            "types",
+                            "ocr"
+                          ],
                           "properties": {
-                            "supported": { "type": "boolean" },
-                            "endpoint": { "type": "string", "example": "/v2/parse" },
-                            "maxBytes": { "type": "integer" },
-                            "types": { "type": "array", "items": { "type": "string" }, "example": ["application/pdf"] },
-                            "ocr": { "type": "boolean" }
+                            "supported": {
+                              "type": "boolean"
+                            },
+                            "endpoint": {
+                              "type": "string",
+                              "example": "/v2/parse"
+                            },
+                            "maxBytes": {
+                              "type": "integer"
+                            },
+                            "types": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              },
+                              "example": [
+                                "application/pdf"
+                              ]
+                            },
+                            "ocr": {
+                              "type": "boolean"
+                            }
                           }
                         }
                       }
@@ -324,106 +550,408 @@
     "schemas": {
       "SearchRequest": {
         "type": "object",
-        "required": ["query"],
+        "required": [
+          "query"
+        ],
         "properties": {
-          "query": { "type": "string", "minLength": 1, "maxLength": 2000 },
-          "limit": { "type": "integer", "minimum": 1, "maximum": 20, "default": 5 },
-          "lang":  { "type": "string", "example": "en" },
-          "tbs":   { "type": "string", "enum": ["qdr:h", "qdr:d", "qdr:w", "qdr:m", "qdr:y"] },
-          "sources":    { "type": "array", "items": { "type": "string", "enum": ["web", "news", "images"] } },
-          "categories": { "type": "array", "items": { "type": "string" } },
-          "scrapeOptions": { "$ref": "#/components/schemas/ScrapeOptions" }
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "default": 5
+          },
+          "lang": {
+            "type": "string",
+            "example": "en"
+          },
+          "tbs": {
+            "type": "string",
+            "enum": [
+              "qdr:h",
+              "qdr:d",
+              "qdr:w",
+              "qdr:m",
+              "qdr:y"
+            ]
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "web",
+                "news",
+                "images"
+              ]
+            }
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scrapeOptions": {
+            "$ref": "#/components/schemas/ScrapeOptions"
+          }
         }
       },
       "SearchResult": {
         "type": "object",
-        "required": ["url", "title"],
+        "required": [
+          "url",
+          "title"
+        ],
         "properties": {
-          "url":         { "type": "string", "format": "uri" },
-          "title":       { "type": "string" },
-          "snippet":     { "type": "string", "description": "Result blurb (LLM-ready summary line)" },
-          "description": { "type": "string", "description": "Alias of snippet (same value, kept for Firecrawl response-shape parity)" },
-          "position":    { "type": "integer" },
-          "score":       { "type": "number" },
-          "category":    { "type": "string", "description": "SearXNG result category (e.g. 'general')" },
-          "markdown":    { "type": "string", "description": "Present when scrapeOptions.formats includes 'markdown'" }
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string"
+          },
+          "snippet": {
+            "type": "string",
+            "description": "Result blurb (LLM-ready summary line)"
+          },
+          "description": {
+            "type": "string",
+            "description": "Alias of snippet (same value, kept for Firecrawl response-shape parity)"
+          },
+          "position": {
+            "type": "integer"
+          },
+          "score": {
+            "type": "number"
+          },
+          "category": {
+            "type": "string",
+            "description": "SearXNG result category (e.g. 'general')"
+          },
+          "markdown": {
+            "type": "string",
+            "description": "Present when scrapeOptions.formats includes 'markdown'"
+          }
         }
       },
       "SearchResponse": {
         "type": "object",
-        "required": ["success", "data"],
+        "required": [
+          "success",
+          "data"
+        ],
         "properties": {
-          "success": { "type": "boolean" },
-          "data":    { "type": "array", "items": { "$ref": "#/components/schemas/SearchResult" } }
+          "success": {
+            "type": "boolean"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchResult"
+            }
+          }
         }
       },
       "ScrapeOptions": {
         "type": "object",
         "properties": {
-          "formats":         { "type": "array", "items": { "type": "string", "enum": ["markdown", "html", "rawHtml", "links"] }, "default": ["markdown"] },
-          "onlyMainContent": { "type": "boolean", "default": true }
+          "formats": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "markdown",
+                "html",
+                "rawHtml",
+                "links"
+              ]
+            },
+            "default": [
+              "markdown"
+            ]
+          },
+          "onlyMainContent": {
+            "type": "boolean",
+            "default": true
+          }
         }
       },
       "ScrapeRequest": {
         "type": "object",
-        "required": ["url"],
+        "required": [
+          "url"
+        ],
         "properties": {
-          "url":             { "type": "string", "format": "uri" },
-          "formats":         { "type": "array", "items": { "type": "string", "enum": ["markdown", "html", "rawHtml", "plainText", "links", "json", "summary", "changeTracking"] }, "default": ["markdown"] },
-          "onlyMainContent": { "type": "boolean", "default": true, "description": "Strip navigation, ads, and boilerplate; keep main article content only" },
-          "renderJs":        { "type": "boolean", "nullable": true, "description": "null = auto-detect, true = force JS rendering, false = skip JS rendering" },
-          "waitFor":         { "type": "integer", "minimum": 0, "description": "Milliseconds to wait after JS rendering before extracting content" },
-          "includeTags":     { "type": "array", "items": { "type": "string" }, "default": [], "description": "CSS selectors / HTML tags to include in extraction" },
-          "excludeTags":     { "type": "array", "items": { "type": "string" }, "default": [], "description": "CSS selectors / HTML tags to remove before extraction" },
-          "jsonSchema":      { "type": "object", "additionalProperties": true, "description": "JSON Schema describing the structured output shape for the 'json' format" },
-          "headers":         { "type": "object", "additionalProperties": { "type": "string" }, "description": "Custom HTTP request headers forwarded to the target URL" },
-          "cssSelector":     { "type": "string", "description": "CSS selector to narrow content extraction to a specific element" },
-          "xpath":           { "type": "string", "description": "XPath expression to narrow content extraction to a specific element" },
-          "chunkStrategy":   { "$ref": "#/components/schemas/ChunkStrategy", "description": "Strategy for chunking the extracted markdown" },
-          "query":           { "type": "string", "description": "Query string for BM25/cosine chunk filtering (used with chunkStrategy)" },
-          "filterMode":      { "type": "string", "enum": ["bm25", "cosine"], "description": "Filtering algorithm to rank chunks against query" },
-          "topK":            { "type": "integer", "minimum": 1, "description": "Number of top chunks to return after filtering (default: 5)" },
-          "proxy":           { "type": "string", "description": "Per-request proxy URL (http/https/socks5). Overrides global config." },
-          "proxyList":       { "type": "array", "items": { "type": "string" }, "default": [], "description": "Per-request proxy pool to rotate among (BYOP). Takes precedence over proxy and server config." },
-          "proxyRotation":   { "type": "string", "enum": ["round_robin", "random", "sticky_per_host"], "description": "Rotation strategy for proxyList (default: sticky_per_host)" },
-          "country":         { "type": "string", "description": "2-letter ISO 3166-1 alpha-2 country code for residential proxy egress (e.g. 'us', 'gb')" },
-          "stealth":         { "type": "boolean", "description": "Override stealth mode for this request (null = use global config)" },
-          "actions":         { "type": "object", "additionalProperties": true, "description": "Unsupported Firecrawl parameter — returns a clear error if supplied" },
-          "extract":         { "$ref": "#/components/schemas/ExtractOptions", "description": "Firecrawl-compatible extract object (e.g. { schema: {...} })" },
-          "llmApiKey":       { "type": "string", "description": "BYOK: LLM provider API key for structured extraction (overrides server key)" },
-          "llmProvider":     { "type": "string", "enum": ["anthropic", "openai", "deepseek", "azure", "openai-compatible"], "description": "Per-request LLM provider override" },
-          "llmModel":        { "type": "string", "description": "Per-request LLM model identifier override" },
-          "baseUrl":         { "type": "string", "description": "Per-request LLM base URL override for OpenAI-compatible providers (e.g. https://api.deepseek.com/v1)" },
-          "summaryPrompt":   { "type": "string", "maxLength": 500, "description": "User-supplied instructions appended to the summary system prompt (capped at 500 chars)" },
-          "maxContentChars": { "type": "integer", "minimum": 1, "description": "Maximum bytes of scraped content sent to LLM for 'summary' format (capped at 200 KB)" },
-          "renderer":        { "type": "string", "enum": ["auto", "lightpanda", "chrome", "chrome_proxy", "playwright"], "description": "Pin this request to a specific renderer. Non-auto implies renderJs:true unless renderJs:false is set." },
-          "deadlineMs":      { "type": "integer", "minimum": 1, "maximum": 60000, "description": "End-to-end deadline budget in milliseconds (default: 8000, max: 60000)" },
-          "debug":           { "type": "boolean", "description": "When true, response includes debugExtraction trace with every candidate the extractor considered" },
-          "changeTracking":  { "$ref": "#/components/schemas/ChangeTrackingOptions", "description": "Activated when formats includes 'changeTracking'. The format entry is the plain string; options ride on this sibling field." },
-          "goal":            { "type": "string", "maxLength": 2048, "description": "Plain-language monitor goal for the meaningful-change judge" },
-          "judgeEnabled":    { "type": "boolean", "description": "Run the LLM meaningful-change judge on a changed page (requires goal)" },
-          "parsers":         { "type": "array", "items": { "$ref": "#/components/schemas/ParserSpec" }, "description": "Document parser directives. Omit = auto-parse PDFs. Empty array = disable parsing." }
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "formats": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "markdown",
+                "html",
+                "rawHtml",
+                "plainText",
+                "links",
+                "json",
+                "summary",
+                "changeTracking"
+              ]
+            },
+            "default": [
+              "markdown"
+            ]
+          },
+          "onlyMainContent": {
+            "type": "boolean",
+            "default": true,
+            "description": "Strip navigation, ads, and boilerplate; keep main article content only"
+          },
+          "renderJs": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "null = auto-detect, true = force JS rendering, false = skip JS rendering"
+          },
+          "waitFor": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Milliseconds to wait after JS rendering before extracting content"
+          },
+          "includeTags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "description": "CSS selectors / HTML tags to include in extraction"
+          },
+          "excludeTags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "description": "CSS selectors / HTML tags to remove before extraction"
+          },
+          "jsonSchema": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "JSON Schema describing the structured output shape for the 'json' format"
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Custom HTTP request headers forwarded to the target URL"
+          },
+          "cssSelector": {
+            "type": "string",
+            "description": "CSS selector to narrow content extraction to a specific element"
+          },
+          "xpath": {
+            "type": "string",
+            "description": "XPath expression to narrow content extraction to a specific element"
+          },
+          "chunkStrategy": {
+            "$ref": "#/components/schemas/ChunkStrategy",
+            "description": "Strategy for chunking the extracted markdown"
+          },
+          "query": {
+            "type": "string",
+            "description": "Query string for BM25/cosine chunk filtering (used with chunkStrategy)"
+          },
+          "filterMode": {
+            "type": "string",
+            "enum": [
+              "bm25",
+              "cosine"
+            ],
+            "description": "Filtering algorithm to rank chunks against query"
+          },
+          "topK": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Number of top chunks to return after filtering (default: 5)"
+          },
+          "proxy": {
+            "type": "string",
+            "description": "Per-request proxy URL (http/https/socks5). Overrides global config."
+          },
+          "proxyList": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "description": "Per-request proxy pool to rotate among (BYOP). Takes precedence over proxy and server config."
+          },
+          "proxyRotation": {
+            "type": "string",
+            "enum": [
+              "round_robin",
+              "random",
+              "sticky_per_host"
+            ],
+            "description": "Rotation strategy for proxyList (default: sticky_per_host)"
+          },
+          "country": {
+            "type": "string",
+            "description": "2-letter ISO 3166-1 alpha-2 country code for residential proxy egress (e.g. 'us', 'gb')"
+          },
+          "stealth": {
+            "type": "boolean",
+            "description": "Override stealth mode for this request (null = use global config)"
+          },
+          "actions": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Unsupported Firecrawl parameter — returns a clear error if supplied"
+          },
+          "extract": {
+            "$ref": "#/components/schemas/ExtractOptions",
+            "description": "Firecrawl-compatible extract object (e.g. { schema: {...} })"
+          },
+          "llmApiKey": {
+            "type": "string",
+            "description": "BYOK: LLM provider API key for structured extraction (overrides server key)"
+          },
+          "llmProvider": {
+            "type": "string",
+            "enum": [
+              "anthropic",
+              "openai",
+              "deepseek",
+              "azure",
+              "openai-compatible"
+            ],
+            "description": "Per-request LLM provider override"
+          },
+          "llmModel": {
+            "type": "string",
+            "description": "Per-request LLM model identifier override"
+          },
+          "baseUrl": {
+            "type": "string",
+            "description": "Per-request LLM base URL override for OpenAI-compatible providers (e.g. https://api.deepseek.com/v1)"
+          },
+          "summaryPrompt": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "User-supplied instructions appended to the summary system prompt (capped at 500 chars)"
+          },
+          "maxContentChars": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Maximum bytes of scraped content sent to LLM for 'summary' format (capped at 200 KB)"
+          },
+          "renderer": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "lightpanda",
+              "chrome",
+              "chrome_proxy",
+              "playwright"
+            ],
+            "description": "Pin this request to a specific renderer. Non-auto implies renderJs:true unless renderJs:false is set."
+          },
+          "deadlineMs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60000,
+            "description": "End-to-end deadline budget in milliseconds (default: 8000, max: 60000)"
+          },
+          "debug": {
+            "type": "boolean",
+            "description": "When true, response includes debugExtraction trace with every candidate the extractor considered"
+          },
+          "changeTracking": {
+            "$ref": "#/components/schemas/ChangeTrackingOptions",
+            "description": "Activated when formats includes 'changeTracking'. The format entry is the plain string; options ride on this sibling field."
+          },
+          "goal": {
+            "type": "string",
+            "maxLength": 2048,
+            "description": "Plain-language monitor goal for the meaningful-change judge"
+          },
+          "judgeEnabled": {
+            "type": "boolean",
+            "description": "Run the LLM meaningful-change judge on a changed page (requires goal)"
+          },
+          "parsers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParserSpec"
+            },
+            "description": "Document parser directives. Omit = auto-parse PDFs. Empty array = disable parsing."
+          }
         }
       },
       "ScrapeResponse": {
         "type": "object",
-        "required": ["success", "data"],
+        "required": [
+          "success",
+          "data"
+        ],
         "properties": {
-          "success": { "type": "boolean" },
-          "warning": { "type": "string", "description": "Top-level advisory (e.g. fallback render notice)" },
+          "success": {
+            "type": "boolean"
+          },
+          "warning": {
+            "type": "string",
+            "description": "Top-level advisory (e.g. fallback render notice)"
+          },
           "data": {
             "type": "object",
             "properties": {
-              "markdown": { "type": "string" },
-              "html":     { "type": "string" },
-              "rawHtml":  { "type": "string" },
-              "links":    { "type": "array", "items": { "type": "string", "format": "uri" } },
-              "json":     { "type": "object", "additionalProperties": true },
-              "metadata": { "$ref": "#/components/schemas/PageMetadata" },
-              "warning":  { "type": "string" },
-              "warnings": { "type": "array", "items": { "type": "string" } },
-              "renderDecision": { "type": "string", "description": "Which renderer ran (e.g. 'http', 'browser')" },
-              "creditCost":     { "type": "number" }
+              "markdown": {
+                "type": "string"
+              },
+              "html": {
+                "type": "string"
+              },
+              "rawHtml": {
+                "type": "string"
+              },
+              "links": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "json": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/PageMetadata"
+              },
+              "warning": {
+                "type": "string"
+              },
+              "warnings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "renderDecision": {
+                "type": "string",
+                "description": "Which renderer ran (e.g. 'http', 'browser')"
+              },
+              "creditCost": {
+                "type": "number"
+              }
             }
           }
         }
@@ -431,140 +959,337 @@
       "JsonOptions": {
         "type": "object",
         "properties": {
-          "schema":       { "type": "object", "description": "JSON schema for the extracted shape", "additionalProperties": true },
-          "prompt":       { "type": "string" },
-          "systemPrompt": { "type": "string" }
+          "schema": {
+            "type": "object",
+            "description": "JSON schema for the extracted shape",
+            "additionalProperties": true
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "systemPrompt": {
+            "type": "string"
+          }
         }
       },
       "MapRequest": {
         "type": "object",
-        "required": ["url"],
+        "required": [
+          "url"
+        ],
         "properties": {
-          "url":      { "type": "string", "format": "uri" },
-          "maxDepth": { "type": "integer", "minimum": 0, "description": "Maximum link-follow depth from the start URL" },
-          "useSitemap":     { "type": "boolean", "default": true, "description": "Fetch and parse sitemap.xml first" },
-          "crawlFallback":  { "type": "boolean", "default": true, "description": "Fall back to BFS crawl when sitemap is missing or sparse" },
-          "timeout":        { "type": "integer", "description": "Custom timeout in seconds (default: 120)" }
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "maxDepth": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Maximum link-follow depth from the start URL"
+          },
+          "useSitemap": {
+            "type": "boolean",
+            "default": true,
+            "description": "Fetch and parse sitemap.xml first"
+          },
+          "crawlFallback": {
+            "type": "boolean",
+            "default": true,
+            "description": "Fall back to BFS crawl when sitemap is missing or sparse"
+          },
+          "timeout": {
+            "type": "integer",
+            "description": "Custom timeout in seconds (default: 120)"
+          }
         }
       },
       "MapResponse": {
         "type": "object",
-        "required": ["success", "data"],
+        "required": [
+          "success",
+          "data"
+        ],
         "properties": {
-          "success": { "type": "boolean" },
+          "success": {
+            "type": "boolean"
+          },
           "data": {
             "type": "object",
-            "required": ["links"],
+            "required": [
+              "links"
+            ],
             "properties": {
-              "links": { "type": "array", "items": { "type": "string", "format": "uri" } },
-              "droppedActionCount":    { "type": "integer" },
-              "strippedTrackingCount": { "type": "integer" }
+              "links": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "droppedActionCount": {
+                "type": "integer"
+              },
+              "strippedTrackingCount": {
+                "type": "integer"
+              }
             }
           }
         }
       },
       "CrawlRequest": {
         "type": "object",
-        "required": ["url"],
+        "required": [
+          "url"
+        ],
         "properties": {
-          "url":      { "type": "string", "format": "uri" },
-          "maxPages": { "type": "integer", "minimum": 1, "default": 100 },
-          "maxDepth": { "type": "integer", "minimum": 0, "default": 2 },
-          "scrapeOptions": { "$ref": "#/components/schemas/ScrapeOptions" }
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "maxPages": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100
+          },
+          "maxDepth": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 2
+          },
+          "scrapeOptions": {
+            "$ref": "#/components/schemas/ScrapeOptions"
+          }
         }
       },
       "CrawlAccepted": {
         "type": "object",
-        "required": ["success", "id"],
+        "required": [
+          "success",
+          "id"
+        ],
         "properties": {
-          "success": { "type": "boolean" },
-          "id":      { "type": "string" },
-          "url":     { "type": "string", "format": "uri", "description": "URL to poll with GET /v1/crawl/{id}" }
+          "success": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to poll with GET /v1/crawl/{id}"
+          }
         }
       },
       "CrawlStatus": {
         "type": "object",
-        "required": ["status"],
+        "required": [
+          "status"
+        ],
         "properties": {
-          "status":    { "type": "string", "enum": ["scraping", "completed", "failed"] },
-          "completed": { "type": "integer" },
-          "total":     { "type": "integer" },
-          "data":      { "type": "array", "items": { "$ref": "#/components/schemas/ScrapeResponse" } }
+          "status": {
+            "type": "string",
+            "enum": [
+              "scraping",
+              "completed",
+              "failed"
+            ]
+          },
+          "completed": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScrapeResponse"
+            }
+          }
         }
       },
       "ExtractRequest": {
         "type": "object",
-        "required": ["url"],
+        "required": [
+          "url"
+        ],
         "properties": {
-          "url":    { "type": "string", "format": "uri" },
-          "schema": { "type": "object", "additionalProperties": true },
-          "prompt": { "type": "string" },
-          "llmApiKey":   { "type": "string", "description": "BYOK: LLM provider API key (required unless server has one configured)" },
-          "llmProvider": { "type": "string", "description": "LLM provider name (e.g. openai, anthropic)" },
-          "llmModel":    { "type": "string", "description": "Model identifier passed to the provider" }
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "schema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "llmApiKey": {
+            "type": "string",
+            "description": "BYOK: LLM provider API key (required unless server has one configured)"
+          },
+          "llmProvider": {
+            "type": "string",
+            "description": "LLM provider name (e.g. openai, anthropic)"
+          },
+          "llmModel": {
+            "type": "string",
+            "description": "Model identifier passed to the provider"
+          }
         }
       },
       "ExtractResponse": {
         "type": "object",
-        "required": ["success", "data"],
+        "required": [
+          "success",
+          "data"
+        ],
         "properties": {
-          "success": { "type": "boolean" },
-          "data":    { "type": "object", "additionalProperties": true }
+          "success": {
+            "type": "boolean"
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true
+          }
         }
       },
       "PageMetadata": {
         "type": "object",
         "additionalProperties": true,
         "properties": {
-          "title":       { "type": "string" },
-          "description": { "type": "string" },
-          "sourceURL":   { "type": "string", "format": "uri" },
-          "statusCode":  { "type": "integer" }
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "sourceURL": {
+            "type": "string",
+            "format": "uri"
+          },
+          "statusCode": {
+            "type": "integer"
+          }
         }
       },
       "ChangeTrackingOptions": {
         "type": "object",
         "properties": {
-          "modes":   { "type": "array", "items": { "type": "string", "enum": ["gitDiff", "json"] }, "description": "Diff surfaces. gitDiff = markdown unified diff + AST; json = per-field diff; both = mixed." },
-          "schema":  { "type": "object", "additionalProperties": true, "description": "JSON schema of tracked fields (json/mixed mode)" },
-          "prompt":  { "type": "string" },
-          "previous": { "$ref": "#/components/schemas/ChangeTrackingSnapshot" },
-          "tag":     { "type": "string", "description": "Opaque caller tag echoed on the result" },
-          "contentType": { "type": "string", "description": "MIME type; non-text content is hashed, not diffed" }
+          "modes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "gitDiff",
+                "json"
+              ]
+            },
+            "description": "Diff surfaces. gitDiff = markdown unified diff + AST; json = per-field diff; both = mixed."
+          },
+          "schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "JSON schema of tracked fields (json/mixed mode)"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "previous": {
+            "$ref": "#/components/schemas/ChangeTrackingSnapshot"
+          },
+          "tag": {
+            "type": "string",
+            "description": "Opaque caller tag echoed on the result"
+          },
+          "contentType": {
+            "type": "string",
+            "description": "MIME type; non-text content is hashed, not diffed"
+          }
         }
       },
       "ChangeTrackingSnapshot": {
         "type": "object",
         "properties": {
-          "markdown":    { "type": "string", "description": "Present for gitDiff/mixed mode" },
-          "json":        { "type": "object", "additionalProperties": true, "description": "Present for json/mixed mode" },
-          "contentHash": { "type": "string", "description": "Mode-aware hash; persist + supply on the next check" },
-          "capturedAt":  { "type": "string", "description": "Caller-stamped capture time, echoed untouched" }
+          "markdown": {
+            "type": "string",
+            "description": "Present for gitDiff/mixed mode"
+          },
+          "json": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Present for json/mixed mode"
+          },
+          "contentHash": {
+            "type": "string",
+            "description": "Mode-aware hash; persist + supply on the next check"
+          },
+          "capturedAt": {
+            "type": "string",
+            "description": "Caller-stamped capture time, echoed untouched"
+          }
         }
       },
       "ChangeDiff": {
         "type": "object",
         "properties": {
-          "text": { "type": "string", "description": "Unified markdown diff (gitDiff/mixed)" },
-          "json": { "type": "object", "additionalProperties": true, "description": "Parse-diff AST (gitDiff-only) OR per-field path map {previous,current} (json/mixed)" }
+          "text": {
+            "type": "string",
+            "description": "Unified markdown diff (gitDiff/mixed)"
+          },
+          "json": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Parse-diff AST (gitDiff-only) OR per-field path map {previous,current} (json/mixed)"
+          }
         }
       },
       "ChangeJudgment": {
         "type": "object",
-        "required": ["meaningful", "confidence", "reason"],
+        "required": [
+          "meaningful",
+          "confidence",
+          "reason"
+        ],
         "properties": {
-          "meaningful": { "type": "boolean" },
-          "confidence": { "type": "string", "enum": ["low", "medium", "high"] },
-          "reason":     { "type": "string" },
+          "meaningful": {
+            "type": "boolean"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
           "meaningfulChanges": {
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
-                "type":   { "type": "string", "enum": ["added", "removed", "changed"] },
-                "before": { "type": "string" },
-                "after":  { "type": "string" },
-                "reason": { "type": "string" }
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "added",
+                    "removed",
+                    "changed"
+                  ]
+                },
+                "before": {
+                  "type": "string"
+                },
+                "after": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
               }
             }
           }
@@ -572,90 +1297,290 @@
       },
       "ChangeTrackingResult": {
         "type": "object",
-        "required": ["status", "contentHash"],
+        "required": [
+          "status",
+          "contentHash"
+        ],
         "properties": {
-          "status":           { "type": "string", "enum": ["same", "changed"], "description": "Per-page status. Set-level new/removed are computed by the caller's reconciler." },
-          "firstObservation": { "type": "boolean", "description": "True when no previous was supplied — caller maps to 'new'" },
-          "contentHash":      { "type": "string" },
-          "snapshot":         { "$ref": "#/components/schemas/ChangeTrackingSnapshot" },
-          "diff":             { "$ref": "#/components/schemas/ChangeDiff" },
-          "judgment":         { "$ref": "#/components/schemas/ChangeJudgment" },
-          "tag":              { "type": "string" },
-          "truncated":        { "type": "boolean" }
+          "status": {
+            "type": "string",
+            "enum": [
+              "same",
+              "changed"
+            ],
+            "description": "Per-page status. Set-level new/removed are computed by the caller's reconciler."
+          },
+          "firstObservation": {
+            "type": "boolean",
+            "description": "True when no previous was supplied — caller maps to 'new'"
+          },
+          "contentHash": {
+            "type": "string"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/ChangeTrackingSnapshot"
+          },
+          "diff": {
+            "$ref": "#/components/schemas/ChangeDiff"
+          },
+          "judgment": {
+            "$ref": "#/components/schemas/ChangeJudgment"
+          },
+          "tag": {
+            "type": "string"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
         }
       },
       "ChangeTrackingDiffItem": {
         "type": "object",
-        "required": ["current"],
+        "required": [
+          "current"
+        ],
         "properties": {
-          "url":      { "type": "string", "format": "uri" },
-          "current":  { "type": "object", "properties": { "markdown": { "type": "string" }, "json": { "type": "object", "additionalProperties": true } } },
-          "previous": { "$ref": "#/components/schemas/ChangeTrackingSnapshot" },
-          "modes":    { "type": "array", "items": { "type": "string", "enum": ["gitDiff", "json"] } },
-          "schema":   { "type": "object", "additionalProperties": true },
-          "prompt":   { "type": "string" },
-          "contentType": { "type": "string" },
-          "tag":      { "type": "string" }
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "current": {
+            "type": "object",
+            "properties": {
+              "markdown": {
+                "type": "string"
+              },
+              "json": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          },
+          "previous": {
+            "$ref": "#/components/schemas/ChangeTrackingSnapshot"
+          },
+          "modes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "gitDiff",
+                "json"
+              ]
+            }
+          },
+          "schema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string"
+          }
         }
       },
       "ChangeTrackingDiffRequest": {
         "type": "object",
         "description": "Single body (provide 'current') OR batch (provide 'batch'). Top-level modes/schema/prompt/contentType act as shared defaults in batch mode.",
         "properties": {
-          "batch":    { "type": "array", "items": { "$ref": "#/components/schemas/ChangeTrackingDiffItem" } },
-          "current":  { "type": "object", "properties": { "markdown": { "type": "string" }, "json": { "type": "object", "additionalProperties": true } } },
-          "previous": { "$ref": "#/components/schemas/ChangeTrackingSnapshot" },
-          "modes":    { "type": "array", "items": { "type": "string", "enum": ["gitDiff", "json"] } },
-          "schema":   { "type": "object", "additionalProperties": true },
-          "prompt":   { "type": "string" },
-          "contentType": { "type": "string" }
+          "batch": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChangeTrackingDiffItem"
+            }
+          },
+          "current": {
+            "type": "object",
+            "properties": {
+              "markdown": {
+                "type": "string"
+              },
+              "json": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          },
+          "previous": {
+            "$ref": "#/components/schemas/ChangeTrackingSnapshot"
+          },
+          "modes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "gitDiff",
+                "json"
+              ]
+            }
+          },
+          "schema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string"
+          }
         }
       },
       "ChunkStrategy": {
         "type": "object",
         "description": "Strategy for chunking extracted markdown before query-based filtering",
-        "required": ["type"],
+        "required": [
+          "type"
+        ],
         "properties": {
-          "type":         { "type": "string", "enum": ["sentence", "regex", "topic"], "description": "Chunking algorithm: sentence = split on .!?, regex = split on pattern, topic = split on markdown headings" },
-          "maxChars":     { "type": "integer", "minimum": 1, "description": "Maximum characters per chunk (merges short chunks up to this limit)" },
-          "overlapChars": { "type": "integer", "minimum": 0, "description": "Character overlap between adjacent chunks" },
-          "dedupe":       { "type": "boolean", "description": "Remove duplicate chunks" },
-          "pattern":      { "type": "string", "description": "Regex pattern to split on (required when type = 'regex')" }
+          "type": {
+            "type": "string",
+            "enum": [
+              "sentence",
+              "regex",
+              "topic"
+            ],
+            "description": "Chunking algorithm: sentence = split on .!?, regex = split on pattern, topic = split on markdown headings"
+          },
+          "maxChars": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Maximum characters per chunk (merges short chunks up to this limit)"
+          },
+          "overlapChars": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Character overlap between adjacent chunks"
+          },
+          "dedupe": {
+            "type": "boolean",
+            "description": "Remove duplicate chunks"
+          },
+          "pattern": {
+            "type": "string",
+            "description": "Regex pattern to split on (required when type = 'regex')"
+          }
         }
       },
       "ExtractOptions": {
         "type": "object",
         "description": "Firecrawl-compatible extraction options sub-object",
         "properties": {
-          "schema": { "type": "object", "additionalProperties": true, "description": "JSON Schema for structured extraction. Used as jsonSchema when jsonSchema is not set directly." }
+          "schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "JSON Schema for structured extraction. Used as jsonSchema when jsonSchema is not set directly."
+          }
         }
       },
       "ParserSpec": {
         "type": "object",
         "description": "Document parser directive. Accepts string form ('pdf') or object form.",
-        "required": ["type"],
+        "required": [
+          "type"
+        ],
         "properties": {
-          "type":     { "type": "string", "enum": ["pdf"], "description": "Parser type (only 'pdf' is supported)" },
-          "mode":     { "type": "string", "enum": ["auto", "fast", "ocr"], "description": "Parsing strategy (auto = text-first; ocr degrades to text extraction with a warning)" },
-          "maxPages": { "type": "integer", "minimum": 1, "description": "Optional cap on the number of pages to parse" }
+          "type": {
+            "type": "string",
+            "enum": [
+              "pdf"
+            ],
+            "description": "Parser type (only 'pdf' is supported)"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "fast",
+              "ocr"
+            ],
+            "description": "Parsing strategy (auto = text-first; ocr degrades to text extraction with a warning)"
+          },
+          "maxPages": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Optional cap on the number of pages to parse"
+          }
         }
       },
       "Error": {
         "type": "object",
-        "required": ["success", "error"],
+        "required": [
+          "success",
+          "error"
+        ],
         "properties": {
-          "success":    { "type": "boolean", "const": false },
-          "error":      { "type": "string", "description": "Human-readable error message" },
-          "error_code": { "type": "string", "description": "Machine-readable error code (see docs/error-codes.md)" }
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "error": {
+            "type": "string",
+            "description": "Human-readable error message"
+          },
+          "error_code": {
+            "type": "string",
+            "description": "Machine-readable error code (see docs/error-codes.md)"
+          }
         }
       }
     },
     "responses": {
-      "BadRequest":      { "description": "Invalid request body", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-      "Unauthorized":    { "description": "Missing or invalid bearer token (hosted only)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-      "NotFound":        { "description": "Resource not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-      "RateLimited":     { "description": "Rate limit exceeded", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-      "SearchDisabled":  { "description": "Search is disabled in self-hosted config (error: search_disabled)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+      "BadRequest": {
+        "description": "Invalid request body",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Missing or invalid bearer token (hosted only)",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "Rate limit exceeded",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "SearchDisabled": {
+        "description": "Search is disabled in self-hosted config (error: search_disabled)",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
     }
   }
 }
