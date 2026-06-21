@@ -249,12 +249,53 @@ fn pick_ua<'a>(default_ua: &'a str, stealth: &'a StealthConfig) -> String {
     }
 }
 
+/// Pure classification of a JS-renderer result (no side-effects). Produced by
+/// `FallbackRenderer::classify_js_attempt`; consumed by the serial loop and the
+/// conditional hedge to apply the identical accept-gate.
+#[allow(dead_code)] // full classification kept for completeness; hedge uses a subset
+struct JsAttemptClass {
+    text_len: usize,
+    is_placeholder: bool,
+    failed_render: Option<detector::FailedRenderReason>,
+    is_bot_wall: bool,
+    vendor_block: Option<&'static str>,
+    is_status_blocked: bool,
+    antibot: crw_extract::antibot::AntibotResult,
+    antibot_blocked: bool,
+    /// Egress-recoverable hard-block (drives the gated chrome_proxy recovery arm).
+    hard_block: bool,
+    /// Passes the success accept-gate (return as-is, don't escalate).
+    acceptable: bool,
+}
+
+/// Result of the conditional hedge (race lightpanda+chrome).
+enum HedgeOutcome {
+    /// A tier passed the accept-gate — return as-is (terminal).
+    Accepted(FetchResult),
+    /// Both tiers thin/failed — best-thin result + whether a hard-block was seen
+    /// (so the caller can fire the gated auto-egress recovery arm). Mirrors the
+    /// serial loop's `thin_result` + `saw_hard_block` fall-through.
+    Thin(FetchResult, bool),
+}
+
 /// Composite renderer that tries multiple backends in order.
 pub struct FallbackRenderer {
     http: Arc<dyn PageFetcher>,
     js_renderers: Vec<Arc<dyn PageFetcher>>,
     /// Global default for `render_js` when a request doesn't specify one.
     render_js_default: Option<bool>,
+    /// Phase 0 (latency-qn): emit per-fetch structured timing for bench runs.
+    latency_breakdown: bool,
+    /// Phase 2 (latency-qn): gate chrome_proxy as a hard-block-only recovery arm
+    /// (removed from the normal ladder) instead of an always-on tier.
+    auto_egress_escalation: bool,
+    /// latency-qn: conditional hedge — race lightpanda+chrome concurrently.
+    chrome_hedge: bool,
+    /// Headroom gate for the hedge: bounds concurrent hedges to pool_size/2 so the
+    /// 2-contexts-per-request hedge can never deadlock the context pool. Acquired
+    /// with `try_acquire` (no permit → serial fallback; blocking would defeat the
+    /// latency win).
+    hedge_sem: Arc<tokio::sync::Semaphore>,
     /// Per-host renderer preference learning (auto-mode only).
     preferences: Arc<HostPreferences>,
     /// Per-host + global circuit breakers per renderer.
@@ -380,6 +421,10 @@ impl FallbackRenderer {
                 http,
                 js_renderers,
                 render_js_default: config.render_js_default,
+                latency_breakdown: config.latency_breakdown,
+                auto_egress_escalation: config.auto_egress_escalation,
+                chrome_hedge: config.chrome_hedge,
+                hedge_sem: Arc::new(tokio::sync::Semaphore::new((config.pool_size / 2).max(1))),
                 preferences: Arc::new(HostPreferences::with_defaults()),
                 breakers: Arc::new(BreakerRegistry::with_defaults()),
                 tier_timeouts: tier_timeouts_from(config),
@@ -456,6 +501,17 @@ impl FallbackRenderer {
                         config.pool_size,
                     )
                     .with_nav_budget(config.chrome_nav_budget_ms)
+                    .with_challenge_retries(
+                        config
+                            .chrome_challenge_max_retries
+                            .unwrap_or(cdp::CHALLENGE_MAX_RETRIES),
+                    )
+                    .with_spa_selector_max(
+                        config
+                            .chrome_spa_selector_max_ms
+                            .unwrap_or(cdp::SPA_SELECTOR_MAX_MS),
+                    )
+                    .with_fast_ready(config.chrome_fast_ready)
                     .with_interception(
                         config.chrome_intercept_resources,
                         blocklist,
@@ -534,6 +590,17 @@ impl FallbackRenderer {
                         config.pool_size,
                     )
                     .with_nav_budget(config.chrome_nav_budget_ms)
+                    .with_challenge_retries(
+                        config
+                            .chrome_challenge_max_retries
+                            .unwrap_or(cdp::CHALLENGE_MAX_RETRIES),
+                    )
+                    .with_spa_selector_max(
+                        config
+                            .chrome_spa_selector_max_ms
+                            .unwrap_or(cdp::SPA_SELECTOR_MAX_MS),
+                    )
+                    .with_fast_ready(config.chrome_fast_ready)
                     .with_interception(
                         config.chrome_intercept_resources,
                         blocklist,
@@ -611,6 +678,10 @@ impl FallbackRenderer {
             http,
             js_renderers,
             render_js_default: config.render_js_default,
+            latency_breakdown: config.latency_breakdown,
+            auto_egress_escalation: config.auto_egress_escalation,
+            chrome_hedge: config.chrome_hedge,
+            hedge_sem: Arc::new(tokio::sync::Semaphore::new((config.pool_size / 2).max(1))),
             preferences: Arc::new(HostPreferences::with_defaults()),
             breakers: Arc::new(BreakerRegistry::with_defaults()),
             tier_timeouts: tier_timeouts_from(config),
@@ -759,6 +830,64 @@ impl FallbackRenderer {
     /// challenge retry logic that waits for non-interactive JS challenges to
     /// auto-resolve.
     pub async fn fetch(
+        &self,
+        url: &str,
+        headers: &HashMap<String, String>,
+        render_js: Option<bool>,
+        wait_for_ms: Option<u64>,
+        requested_renderer: Option<&str>,
+        deadline: crw_core::Deadline,
+    ) -> CrwResult<FetchResult> {
+        // Phase 0 (latency-qn): time the whole fetch and emit a structured
+        // breakdown event so bench runs can attribute p90 to a tier. The flag
+        // is off by default, so the only cost on the hot path is one cheap
+        // `Instant::now()` + a branch. The accepted tier is `rendered_with`,
+        // which already distinguishes the HTTP fast-path from each JS renderer.
+        if !self.latency_breakdown {
+            return self
+                .fetch_inner(
+                    url,
+                    headers,
+                    render_js,
+                    wait_for_ms,
+                    requested_renderer,
+                    deadline,
+                )
+                .await;
+        }
+        let t0 = std::time::Instant::now();
+        let out = self
+            .fetch_inner(
+                url,
+                headers,
+                render_js,
+                wait_for_ms,
+                requested_renderer,
+                deadline,
+            )
+            .await;
+        let total_ms = t0.elapsed().as_millis() as u64;
+        match &out {
+            Ok(r) => tracing::info!(
+                target: "latency_breakdown",
+                url,
+                total_ms,
+                rendered_with = r.rendered_with.as_deref().unwrap_or("unknown"),
+                content_len = r.html.len(),
+                "scrape latency breakdown"
+            ),
+            Err(e) => tracing::info!(
+                target: "latency_breakdown",
+                url,
+                total_ms,
+                error = %e,
+                "scrape latency breakdown (error)"
+            ),
+        }
+        out
+    }
+
+    async fn fetch_inner(
         &self,
         url: &str,
         headers: &HashMap<String, String>,
@@ -1031,6 +1160,242 @@ impl FallbackRenderer {
     /// next renderer in the chain is tried.
     const MIN_RENDERED_TEXT_LEN: usize = 50;
 
+    /// Pure classification of a JS-renderer result: the accept-gate + thin/block
+    /// signals, NO side-effects. Shared by the serial escalation loop and the
+    /// conditional hedge so both apply the identical accept criteria (the red
+    /// line: hedge must be provably ≡ serial on success/recall).
+    fn classify_js_attempt(&self, result: &FetchResult) -> JsAttemptClass {
+        let text_len = html_body_text_len(&result.html);
+        let is_placeholder = detector::looks_like_loading_placeholder(&result.html);
+        let failed_render = detector::looks_like_failed_render(&result.html);
+        let is_bot_wall = detector::looks_like_generic_bot_wall(&result.html);
+        let vendor_block = detector::looks_like_vendor_block(&result.html);
+        let is_status_blocked = matches!(
+            result.status_code,
+            401 | 403 | 404 | 405 | 406 | 410 | 412 | 429 | 451 | 500 | 503
+        );
+        let antibot = if self.antibot.enabled {
+            crw_extract::antibot::classify(Some(result.status_code), &result.html)
+        } else {
+            crw_extract::antibot::AntibotResult::none()
+        };
+        let antibot_blocked = self.antibot.escalate_in_failover && antibot.signal.is_blocked();
+        // Egress-recoverable hard-block subset (drives the gated chrome_proxy arm).
+        let hard_block = matches!(result.status_code, 401 | 403 | 429 | 503)
+            || (520..=530).contains(&result.status_code)
+            || is_bot_wall
+            || vendor_block.is_some()
+            || antibot.signal.is_blocked();
+        let acceptable = text_len >= Self::MIN_RENDERED_TEXT_LEN
+            && !is_placeholder
+            && failed_render.is_none()
+            && !is_bot_wall
+            && vendor_block.is_none()
+            && !is_status_blocked
+            && !antibot_blocked;
+        JsAttemptClass {
+            text_len,
+            is_placeholder,
+            failed_render,
+            is_bot_wall,
+            vendor_block,
+            is_status_blocked,
+            antibot,
+            antibot_blocked,
+            hard_block,
+            acceptable,
+        }
+    }
+
+    /// Conditional hedge: race lightpanda + chrome CONCURRENTLY (chrome's render
+    /// clock starts immediately instead of after lightpanda fails) and take the
+    /// best result by tier priority. Returns `None` if a breaker was open (caller
+    /// falls back to serial). Success/recall ≡ serial:
+    ///   * Rule A: among gate-passing results, lightpanda wins (serial accepts
+    ///     lightpanda when it passes, never seeing chrome); a faster-arriving
+    ///     chrome only wins if lightpanda is NOT acceptable.
+    ///   * Rule B: if neither passes, return the richest-HTML thin (== serial's
+    ///     thin stitch).
+    ///   * Rule C: record breaker/preference side-effects only for tiers that
+    ///     actually COMPLETED (the cancelled loser — dropped on the other's
+    ///     accept — records nothing); its in-flight render is reaped by the
+    ///     PoolGuard Drop reaper.
+    #[allow(clippy::too_many_arguments)] // url/headers/wait/deadline/host mirror fetch_with_js
+    async fn try_hedge(
+        &self,
+        lp: &Arc<dyn PageFetcher>,
+        chrome: &Arc<dyn PageFetcher>,
+        url: &str,
+        headers: &HashMap<String, String>,
+        wait_for_ms: Option<u64>,
+        deadline: crw_core::Deadline,
+        host: &str,
+    ) -> CrwResult<Option<HedgeOutcome>> {
+        // Breaker gates (mirror serial). If either tier's breaker is open, bail to
+        // serial so its skip/leak-through handling applies.
+        let (lp_permit, lp_guard) = self
+            .breakers
+            .acquire_with_guard(host, RendererKind::Lightpanda)
+            .await;
+        if lp_permit == Permit::Rejected {
+            drop(lp_guard);
+            return Ok(None);
+        }
+        let (ch_permit, ch_guard) = self
+            .breakers
+            .acquire_with_guard(host, RendererKind::Chrome)
+            .await;
+        if ch_permit == Permit::Rejected {
+            drop(lp_guard);
+            drop(ch_guard);
+            return Ok(None);
+        }
+        let mut lp_guard = Some(lp_guard);
+        let mut ch_guard = Some(ch_guard);
+
+        // Race both on the CURRENT task (select!, not spawn) so REQUEST_PROXY /
+        // REQUEST_COUNTRY task-locals propagate into each fetch.
+        let lp_fut = lp.fetch(url, headers, wait_for_ms, deadline);
+        let chrome_fut = chrome.fetch(url, headers, wait_for_ms, deadline);
+        tokio::pin!(lp_fut, chrome_fut);
+        let (mut lp_done, mut ch_done) = (false, false);
+        let mut lp_res: Option<CrwResult<FetchResult>> = None;
+        let mut ch_res: Option<CrwResult<FetchResult>> = None;
+        while !(lp_done && ch_done) {
+            tokio::select! {
+                biased;
+                r = &mut lp_fut, if !lp_done => {
+                    lp_done = true;
+                    let accept = matches!(&r, Ok(res) if self.classify_js_attempt(res).acceptable);
+                    lp_res = Some(r);
+                    // Rule A: lightpanda authoritative — accept now, drop chrome.
+                    if accept {
+                        break;
+                    }
+                }
+                r = &mut chrome_fut, if !ch_done => {
+                    ch_done = true;
+                    let ch_accept = matches!(&r, Ok(res) if self.classify_js_attempt(res).acceptable);
+                    ch_res = Some(r);
+                    // chrome may finish first; only accept it early once lightpanda
+                    // is known NOT acceptable (else wait for lightpanda — Rule A).
+                    if lp_done {
+                        let lp_accept = matches!(&lp_res, Some(Ok(res)) if self.classify_js_attempt(res).acceptable);
+                        if !lp_accept && ch_accept {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        // The still-pending future (if any) drops at scope end → PoolGuard reaper.
+
+        // Finalize. Record side-effects only for COMPLETED tiers (Some result).
+        let lp_accept =
+            matches!(&lp_res, Some(Ok(res)) if self.classify_js_attempt(res).acceptable);
+        let ch_accept =
+            matches!(&ch_res, Some(Ok(res)) if self.classify_js_attempt(res).acceptable);
+
+        // Rule A: lightpanda wins if acceptable.
+        if lp_accept {
+            let mut r = lp_res.unwrap().unwrap();
+            self.record_hedge_success(host, RendererKind::Lightpanda, &r, &mut lp_guard)
+                .await;
+            // chrome cancelled or thin → no record (Rule C).
+            r.credit_cost = credit_for(RendererKind::Lightpanda);
+            r.render_decision = Some(RenderDecision::AutoDefault {
+                chosen: RendererKind::Lightpanda,
+            });
+            return Ok(Some(HedgeOutcome::Accepted(r)));
+        }
+        // lightpanda completed thin → record it (serial would have).
+        let mut saw_hard_block = false;
+        if let Some(Ok(res)) = &lp_res {
+            let cls = self.classify_js_attempt(res);
+            saw_hard_block |= cls.hard_block;
+            self.record_hedge_thin(host, RendererKind::Lightpanda, &cls, &mut lp_guard)
+                .await;
+        }
+        if ch_accept {
+            let mut r = ch_res.unwrap().unwrap();
+            self.record_hedge_success(host, RendererKind::Chrome, &r, &mut ch_guard)
+                .await;
+            r.credit_cost = credit_for(RendererKind::Chrome);
+            r.render_decision = Some(RenderDecision::Failover {
+                chain: vec![RendererKind::Lightpanda, RendererKind::Chrome],
+                reason: FailoverErrorKind::Other,
+            });
+            return Ok(Some(HedgeOutcome::Accepted(r)));
+        }
+        // chrome completed thin → record it.
+        if let Some(Ok(res)) = &ch_res {
+            let cls = self.classify_js_attempt(res);
+            saw_hard_block |= cls.hard_block;
+            self.record_hedge_thin(host, RendererKind::Chrome, &cls, &mut ch_guard)
+                .await;
+        }
+
+        // Rule B: best-thin = richest HTML among completed Ok results.
+        let thin = [lp_res, ch_res]
+            .into_iter()
+            .flatten()
+            .filter_map(|r| r.ok())
+            .max_by_key(|r| r.html.len());
+        match thin {
+            Some(r) => Ok(Some(HedgeOutcome::Thin(r, saw_hard_block))),
+            // Both tiers errored — let the caller fall back to serial for its
+            // richer error handling rather than inventing an error here.
+            None => Ok(None),
+        }
+    }
+
+    /// Record a hedge winner's success side-effects (breaker + preference + guard).
+    async fn record_hedge_success(
+        &self,
+        host: &str,
+        k: RendererKind,
+        result: &FetchResult,
+        guard: &mut Option<ProbeGuard>,
+    ) {
+        if !host.is_empty() {
+            let outcome = if result.truncated {
+                BreakerOutcome::Truncated
+            } else {
+                BreakerOutcome::Success
+            };
+            self.breakers.record_outcome(host, k, outcome).await;
+            self.preferences.record_success(host).await;
+        }
+        if let Some(g) = guard.take() {
+            g.disarm();
+        }
+    }
+
+    /// Record a hedge thin/blocked tier's failure side-effects.
+    async fn record_hedge_thin(
+        &self,
+        host: &str,
+        k: RendererKind,
+        cls: &JsAttemptClass,
+        guard: &mut Option<ProbeGuard>,
+    ) {
+        if !host.is_empty() {
+            self.breakers
+                .record_outcome(host, k, BreakerOutcome::RenderError)
+                .await;
+            if k == RendererKind::Lightpanda {
+                let err_kind = if cls.is_status_blocked || cls.is_bot_wall || cls.antibot_blocked {
+                    FailoverErrorKind::AntibotBlock
+                } else {
+                    FailoverErrorKind::PlaceholderContent
+                };
+                let _ = self.preferences.record_failure(host, &err_kind).await;
+            }
+        }
+        // Thin attempt → leave the probe guard armed (drops as a no-op).
+        let _ = guard;
+    }
+
     async fn fetch_with_js(
         &self,
         url: &str,
@@ -1117,6 +1482,26 @@ impl FallbackRenderer {
                 ));
             }
         }
+        // Phase 2 (latency-qn): gated auto-egress. Pull chrome_proxy OUT of the
+        // normal ladder and hold it as a hard-block-only recovery arm fired ONCE
+        // after the ladder (below), with a reserved deadline budget. A naive
+        // always-on chrome_proxy ladder tier is net-negative (bench: success
+        // −2pp, p90 +69%) because the slow residential tier burns the deadline
+        // on every escalation; gating it to genuine hard-blocks keeps the
+        // recovery without the regression. Only in auto mode and when the
+        // request isn't already proxied (that path wants chrome_proxy in-ladder).
+        let auto_egress_arm: Option<Arc<dyn PageFetcher>> =
+            if self.auto_egress_escalation && !is_user_pinned && !proxy_active {
+                let arm = self
+                    .js_renderers
+                    .iter()
+                    .find(|r| r.name() == "chrome_proxy")
+                    .cloned();
+                renderers.retain(|r| r.name() != "chrome_proxy");
+                arm
+            } else {
+                None
+            };
 
         // Auto mode: if this host has been promoted, try Chrome first.
         if !is_user_pinned
@@ -1151,13 +1536,60 @@ impl FallbackRenderer {
         let mut last_error = None;
         let mut last_failover_reason: Option<FailoverErrorKind> = None;
         let mut thin_result: Option<FetchResult> = None;
+        // Phase 2: did any ladder attempt end in a hard block (egress-recoverable
+        // subset: 401/403/429/503/520-530 or a bot-wall/vendor/antibot wall)?
+        // Drives the gated chrome_proxy recovery arm below. Excludes
+        // 404/410/412/451/500 (a different egress IP won't fix those).
+        let mut saw_hard_block = false;
         // Snapshot for the leak-through fallback below. The main loop
         // consumes `renderers`; we keep a parallel reference list so a
         // single skipped renderer can still get a shot when its host
         // breaker is closed.
         let renderers_snapshot: Vec<&Arc<dyn PageFetcher>> = renderers.clone();
 
+        // latency-qn conditional hedge: when lightpanda is first (cheap-first, not
+        // promoted to chrome) and chrome is present, race them concurrently so
+        // chrome's render clock starts immediately instead of after lightpanda
+        // fails. Headroom-gated (try_acquire) so it can't deadlock the pool; on no
+        // permit / open breaker / both-errored it falls through to the serial loop.
+        let mut hedge_done = false;
+        if self.chrome_hedge
+            && !is_user_pinned
+            && !proxy_active
+            && renderers.first().map(|r| r.name()) == Some("lightpanda")
+            && renderers.iter().any(|r| r.name() == "chrome")
+            && let Ok(_permit) = self.hedge_sem.clone().try_acquire_owned()
+        {
+            let lp = renderers
+                .iter()
+                .find(|r| r.name() == "lightpanda")
+                .expect("checked above");
+            let chrome = renderers
+                .iter()
+                .find(|r| r.name() == "chrome")
+                .expect("checked above");
+            match self
+                .try_hedge(lp, chrome, url, headers, wait_for_ms, deadline, &host)
+                .await
+            {
+                Ok(Some(HedgeOutcome::Accepted(r))) => return Ok(r),
+                Ok(Some(HedgeOutcome::Thin(r, hb))) => {
+                    thin_result = Some(r);
+                    saw_hard_block |= hb;
+                    chain.push(RendererKind::Lightpanda);
+                    chain.push(RendererKind::Chrome);
+                    hedge_done = true;
+                }
+                // breaker open / both-errored → fall back to the serial loop.
+                Ok(None) => {}
+                Err(e) => last_error = Some(e),
+            }
+        }
+
         for renderer in renderers {
+            if hedge_done {
+                break;
+            }
             let kind = renderer_kind_for(renderer.name());
 
             // Skip empty hosts: don't pollute breaker/preference caches
@@ -1206,7 +1638,34 @@ impl FallbackRenderer {
                     .unwrap_or(remaining);
                 AttemptContext::capture(remaining, tier_budget)
             };
-            match renderer.fetch(url, headers, wait_for_ms, deadline).await {
+            // Phase 1 (latency-qn): per-attempt timing. The whole-fetch wrapper
+            // only records total + accepted tier; this records each tier's
+            // wall time + outcome so a bench run can tell whether the p90 tail
+            // is stacked failed-tier time (a hedge would cut it) or the final
+            // accepted render itself (a hedge would NOT). Feeds the Phase 1.5
+            // kill-gate. Off in prod (gated by `latency_breakdown`).
+            let attempt_start = std::time::Instant::now();
+            let attempt_outcome = renderer.fetch(url, headers, wait_for_ms, deadline).await;
+            if self.latency_breakdown {
+                let attempt_ms = attempt_start.elapsed().as_millis() as u64;
+                let tier = renderer.name();
+                match &attempt_outcome {
+                    Ok(r) => tracing::info!(
+                        target: "latency_breakdown",
+                        url, tier, attempt_ms,
+                        status = r.status_code,
+                        html_len = r.html.len(),
+                        "hedge attempt"
+                    ),
+                    Err(e) => tracing::info!(
+                        target: "latency_breakdown",
+                        url, tier, attempt_ms,
+                        error = %e,
+                        "hedge attempt (error)"
+                    ),
+                }
+            }
+            match attempt_outcome {
                 Ok(mut result) => {
                     let text_len = html_body_text_len(&result.html);
                     let is_placeholder = detector::looks_like_loading_placeholder(&result.html);
@@ -1235,6 +1694,17 @@ impl FallbackRenderer {
                     };
                     let antibot_blocked =
                         self.antibot.escalate_in_failover && antibot.signal.is_blocked();
+                    // Phase 2: track hard-block (egress-recoverable) outcomes for
+                    // the gated chrome_proxy arm. Hard-block status subset only
+                    // (not 404/410/412/451/500) + interstitial walls.
+                    if matches!(result.status_code, 401 | 403 | 429 | 503)
+                        || (520..=530).contains(&result.status_code)
+                        || is_bot_wall
+                        || vendor_block.is_some()
+                        || antibot.signal.is_blocked()
+                    {
+                        saw_hard_block = true;
+                    }
                     if text_len >= Self::MIN_RENDERED_TEXT_LEN
                         && !is_placeholder
                         && failed_render.is_none()
@@ -1608,6 +2078,80 @@ impl FallbackRenderer {
                             .await;
                         last_error = Some(e);
                         break;
+                    }
+                }
+            }
+        }
+
+        // Phase 2 (latency-qn): gated auto-egress recovery. chrome_proxy was held
+        // out of the ladder; fire it ONCE iff the ladder hit a hard block AND the
+        // deadline can still absorb a full chrome_proxy attempt (so it never
+        // causes a timeout the baseline wouldn't have — the failure mode the
+        // naive always-on ladder tier showed: success −2pp, p90 +69%).
+        // best-result-wins: never replace usable content with an empty retry.
+        if let Some(arm) = auto_egress_arm {
+            let kind = RendererKind::ChromeProxy;
+            let tier_budget = self
+                .tier_timeouts
+                .get(&kind)
+                .copied()
+                .unwrap_or_else(|| std::time::Duration::from_secs(30));
+            if saw_hard_block && deadline.remaining() >= tier_budget {
+                chain.push(kind);
+                let entry = self.pick_proxy_for_url(url);
+                let attempt = REQUEST_PROXY
+                    .scope(entry, arm.fetch(url, headers, wait_for_ms, deadline))
+                    .await;
+                match attempt {
+                    Ok(r) => {
+                        let r_text = html_body_text_len(&r.html);
+                        let r_ok = r_text >= Self::MIN_RENDERED_TEXT_LEN
+                            && detector::looks_like_failed_render(&r.html).is_none()
+                            && !detector::looks_like_loading_placeholder(&r.html);
+                        if !host.is_empty() {
+                            let outcome = if r_ok {
+                                BreakerOutcome::Success
+                            } else {
+                                BreakerOutcome::RenderError
+                            };
+                            self.breakers.record_outcome(&host, kind, outcome).await;
+                        }
+                        // best-result-wins vs the ladder's thin_result: ONLY take
+                        // the proxy result if it is content-OK (red line: a thin/
+                        // empty proxy result must never turn a baseline Err into an
+                        // Ok(empty), nor replace a usable thin_result). Code-review
+                        // 🔴#1: gate `None` case on r_ok too, else all-tiers-errored
+                        // would ship an empty proxy body as success.
+                        let better = r_ok
+                            && match &thin_result {
+                                Some(prev) => r.html.len() > prev.html.len(),
+                                None => true,
+                            };
+                        if self.latency_breakdown {
+                            tracing::info!(
+                                target: "latency_breakdown",
+                                url, tier = "chrome_proxy",
+                                ok = r_ok, consumed = better,
+                                "auto_egress fired"
+                            );
+                        }
+                        if better {
+                            thin_result = Some(r);
+                        }
+                    }
+                    Err(e) => {
+                        if !host.is_empty() {
+                            self.breakers
+                                .record_outcome(&host, kind, BreakerOutcome::ConnectionError)
+                                .await;
+                        }
+                        if self.latency_breakdown {
+                            tracing::info!(
+                                target: "latency_breakdown",
+                                url, tier = "chrome_proxy", error = %e,
+                                "auto_egress fired (error)"
+                            );
+                        }
                     }
                 }
             }

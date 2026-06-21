@@ -258,6 +258,14 @@ pub struct SearchConfig {
     /// SearXNG fetch each. Clamped to `MAX_QUERY_EXPAND_VARIANTS` in the route.
     #[serde(default = "default_query_expand_variants")]
     pub query_expand_variants: usize,
+    /// Phase C1 (latency-qn): on the answer path with query_expand + scrapeOptions,
+    /// scrape the original-query results CONCURRENTLY with the expansion (LLM
+    /// rewrite + variant SearXNG fetches), then union and reuse the scrapes.
+    /// Final source set is identical to the serial path (rerank over the same
+    /// union) → quality-neutral; only the scheduling overlaps the ~5-10s
+    /// expansion overhead. Default off.
+    #[serde(default)]
+    pub pipeline_overlap: bool,
     /// Adaptive multi-round retrieval (the "evidence-scout" loop). When the
     /// round-1 answer ABSTAINS (sources lacked the fact), an LLM scout reads the
     /// round-1 evidence and emits targeted follow-up queries (acronym-expanded,
@@ -379,6 +387,7 @@ impl Default for SearchConfig {
             rerank_enabled: true,
             query_expand: false,
             query_expand_variants: default_query_expand_variants(),
+            pipeline_overlap: false,
             multi_round: false,
             passage_select: false,
             page2_fallback: false,
@@ -552,6 +561,54 @@ pub struct RendererConfig {
     pub chrome_timeout_ms: Option<u64>,
     #[serde(default = "default_pool_size")]
     pub pool_size: usize,
+    /// latency-qn: override the chrome post-navigate challenge-clear retry count
+    /// (default 3 → 3×3s=9s). Measured at 28% of render time, mostly on shells
+    /// that never clear (fail anyway); Firecrawl/Spider run no such loop. Lower
+    /// to trim the anti-bot tail (e.g. 1); 0 disables it. `None` keeps the 3
+    /// default. A/B-gated: must hold scrape-success/recall on the bench.
+    #[serde(default)]
+    pub chrome_challenge_max_retries: Option<u32>,
+    /// latency-qn: override the chrome SPA-readiness poll budget (default 8000ms,
+    /// `SPA_SELECTOR_MAX_MS`). Measured at 67% of render time. The poll still
+    /// exits early on content-ready/network-idle; this caps the wait when the
+    /// selector never mounts. A/B-gated on the bench. `None` keeps 8000.
+    #[serde(default)]
+    pub chrome_spa_selector_max_ms: Option<u64>,
+    /// latency-qn: event-driven earliest-ready render exit. When true, the
+    /// post-navigate poll exits as soon as the page is genuinely settled (body
+    /// innerText ≥ content-floor AND networkAlmostIdle≤2, OR substantial text)
+    /// instead of requiring a specific content selector + networkIdle(0) up to
+    /// the 8s ceiling. Keeps a mandatory content floor (never snapshots an empty
+    /// shell). Default off; A/B-gated on the bench (quality_gate must hold).
+    #[serde(default)]
+    pub chrome_fast_ready: bool,
+    /// latency-qn: conditional hedge. In auto mode, race lightpanda + chrome
+    /// CONCURRENTLY (chrome's clock starts immediately instead of after lightpanda
+    /// fails) and take the best by tier priority. Cuts the serial prefix (~3.4s
+    /// mean / 5.7s p90) on chrome-bound pages. Bounded by a headroom semaphore
+    /// (falls back to serial when the pool is busy) so it can't deadlock the
+    /// context pool. best-result-wins ⇒ success/recall ≡ serial. Default off.
+    #[serde(default)]
+    pub chrome_hedge: bool,
+    /// Phase 2 (latency-qn): gated auto-egress escalation. When true, the
+    /// chrome_proxy (residential/stealth) tier is REMOVED from the normal
+    /// HTTP→LP→Chrome ladder and instead fired ONCE, only when the ladder's
+    /// result is a hard block (403/429/503/401/520-530 or a CF/bot-wall/vendor
+    /// interstitial) AND the remaining deadline can absorb a full chrome_proxy
+    /// attempt AND its breaker is closed. The retry is best-result-wins vs the
+    /// ladder's result (never replaces usable content with empty). Bench proved
+    /// a naive always-on chrome_proxy ladder is net-negative (success −2pp, p90
+    /// +69%); this gate is what makes residential recovery net-positive. Off by
+    /// default; requires a configured `[renderer.chrome_proxy]` tier to do anything.
+    #[serde(default)]
+    pub auto_egress_escalation: bool,
+    /// Phase 0 (latency-qn): when true, the renderer emits a structured
+    /// `target: "latency_breakdown"` tracing event per fetch with total wall
+    /// time and the tier that produced the accepted result. Off by default;
+    /// turned on only for bench/diagnostic runs so we can see where the p90
+    /// budget actually goes (HTTP fast-path vs JS render) before optimizing.
+    #[serde(default)]
+    pub latency_breakdown: bool,
     /// If set, applies to every request that doesn't specify `renderJs` explicitly.
     /// `Some(true)` = force JS rendering; `Some(false)` = skip JS; `None` = auto-detect.
     ///
@@ -808,6 +865,12 @@ impl Default for RendererConfig {
             lightpanda_timeout_ms: None,
             chrome_timeout_ms: None,
             pool_size: default_pool_size(),
+            chrome_challenge_max_retries: None,
+            chrome_spa_selector_max_ms: None,
+            chrome_fast_ready: false,
+            chrome_hedge: false,
+            auto_egress_escalation: false,
+            latency_breakdown: false,
             render_js_default: None,
             lightpanda: None,
             playwright: None,

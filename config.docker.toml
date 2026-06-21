@@ -70,8 +70,14 @@ ws_url = "ws://lightpanda:9222/"
 [renderer.chrome]
 ws_url = "ws://chrome:9222/"
 
+# Phase A (latency-qn): the browser-CONTEXT pool. This — not the legacy
+# `CRW_RENDERER__POOL_SIZE` env — is the knob that limits Chrome concurrency.
+# Bench (stealth rig, conc=8): size 4 → 8 cut p90 -34% / p99 -37% with recall
+# held, because under concurrent load the 4-slot pool saturates and requests
+# queue behind in-flight renders. Pair with chrome mem_limit 3g (8 contexts can
+# exceed the old 2g under load). Drop to 6 if RAM headroom tightens.
 [renderer.chrome_pool]
-size = 4
+size = 8
 
 # /v1/search points at the bundled SearXNG sidecar. On the reference
 # docker-compose stack the sidecar is reachable as `searxng:8080` over the

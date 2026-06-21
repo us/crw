@@ -34,7 +34,11 @@ tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "trace", "timeout", "set-header"] }
 
 # HTTP client
-reqwest = { version = "0.13", default-features = false, features = ["json", "cookies", "rustls", "gzip", "brotli", "deflate", "socks", "stream", "multipart"] }
+# Phase B (latency-qn): `hickory-dns` makes hickory the default resolver, which
+# caches DNS answers across requests on a reused Client — cuts repeated-host
+# resolution latency in crawls/scrape fan-outs (NOT response caching; the
+# "no cache" rule doesn't apply to DNS). Quality-neutral: identical bytes.
+reqwest = { version = "0.13", default-features = false, features = ["json", "cookies", "rustls", "gzip", "brotli", "deflate", "socks", "stream", "multipart", "hickory-dns"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
