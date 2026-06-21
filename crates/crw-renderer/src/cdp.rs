@@ -2025,9 +2025,8 @@ impl CdpRenderer {
             // we attempt a partial-DOM snapshot and return `truncated = true`;
             // `single.rs` decides success on md length.
             let phase = self.post_navigate_phase(conn, &session_id, url, wait_for_ms, &net_tracker);
-            let (html, screenshot, truncated) = match tokio::time::timeout(nav_budget, phase).await
-            {
-                Ok(Ok((html, screenshot))) => (html, screenshot, false),
+            let (html, truncated) = match tokio::time::timeout(nav_budget, phase).await {
+                Ok(Ok(html)) => (html, false),
                 Ok(Err(err)) => return Err(err),
                 Err(_) => {
                     tracing::info!(
@@ -2050,9 +2049,20 @@ impl CdpRenderer {
                         .chrome_budget_truncated_total
                         .with_label_values(&[if html.is_empty() { "empty" } else { "ok" }])
                         .inc();
-                    // Best-effort: no screenshot when the budget elapsed.
-                    (html, None, true)
+                    (html, true)
                 }
+            };
+            // Screenshot capture runs AFTER the page-load budget race resolves,
+            // with its own timeout. A full-page capture of a heavy page must not
+            // be cancelled by the nav budget (which closes the WS mid-capture and
+            // drops the screenshot). The session is still live here — the
+            // partial-snapshot branch above uses it too.
+            let screenshot = match crate::current_screenshot_req() {
+                Some(req) => {
+                    self.capture_screenshot(conn, &session_id, req.full_page)
+                        .await
+                }
+                None => None,
             };
             Ok::<_, CrwError>((html, status_code, truncated, screenshot))
         };
@@ -2198,7 +2208,7 @@ impl CdpRenderer {
         url: &str,
         wait_for_ms: Option<u64>,
         net: &NetworkActivityTracker,
-    ) -> CrwResult<(String, Option<String>)> {
+    ) -> CrwResult<String> {
         // 2.5. Best-effort consent / CMP dismissal. Cookie banners can both
         // hide content behind an overlay and inflate `body.innerText` past
         // the SPA-readiness threshold prematurely (the banner copy alone
@@ -2311,39 +2321,45 @@ impl CdpRenderer {
             }
         }
 
-        // 6. Screenshot capture (CDP `Page.captureScreenshot`). Runs after the
-        // full wait/scroll/reveal window so the PNG reflects the final rendered
-        // DOM. Only when a screenshot was requested via the task-local. Keeps
-        // the raw base64 (no decode); `single.rs` wraps the `data:` prefix.
-        // Capture failure is non-fatal — the page content still returns.
-        let screenshot = if let Some(req) = crate::current_screenshot_req() {
-            match conn
-                .send_recv(
-                    "Page.captureScreenshot",
-                    serde_json::json!({
-                        "format": "png",
-                        "captureBeyondViewport": req.full_page,
-                        "fromSurface": true,
-                    }),
-                    Some(session_id),
-                    self.page_timeout,
-                )
-                .await
-            {
-                Ok(resp) => resp
-                    .get("data")
-                    .and_then(|v| v.as_str())
-                    .map(str::to_string),
-                Err(e) => {
-                    tracing::warn!(url, "Page.captureScreenshot failed: {e}");
-                    None
-                }
-            }
-        } else {
-            None
-        };
+        Ok(html)
+    }
 
-        Ok((html, screenshot))
+    /// Capture a PNG via CDP `Page.captureScreenshot` with its OWN timeout,
+    /// independent of the page-load `nav_budget`. This MUST run outside the
+    /// nav-budget race: a full-page capture of a heavy/tall page can take
+    /// several seconds, and if it competes with (and is cancelled by) the
+    /// budget the in-flight WS request dies ("WS closed") and the screenshot is
+    /// silently dropped. Best-effort: returns `None` (and logs) on failure so
+    /// the scrape still returns its content. Raw base64 is kept undecoded;
+    /// `single.rs` wraps the `data:` URL prefix.
+    async fn capture_screenshot(
+        &self,
+        conn: &CdpConnection,
+        session_id: &str,
+        full_page: bool,
+    ) -> Option<String> {
+        match conn
+            .send_recv(
+                "Page.captureScreenshot",
+                serde_json::json!({
+                    "format": "png",
+                    "captureBeyondViewport": full_page,
+                    "fromSurface": true,
+                }),
+                Some(session_id),
+                self.page_timeout,
+            )
+            .await
+        {
+            Ok(resp) => resp
+                .get("data")
+                .and_then(|v| v.as_str())
+                .map(str::to_string),
+            Err(e) => {
+                tracing::warn!("Page.captureScreenshot failed: {e}");
+                None
+            }
+        }
     }
 }
 
