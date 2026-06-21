@@ -2,6 +2,36 @@
 
 All notable changes to CRW are documented here.
 
+## [0.17.0](https://github.com/us/crw/compare/v0.16.0...v0.17.0) (2026-06-21)
+
+
+### Features
+
+* **renderer:** add opt-in Camoufox stealth renderer tier ([744beda](https://github.com/us/crw/commit/744beda540fad3e17b6d9c1d2127cad30ab83767))
+* **renderer:** conditional hedge + event-driven readiness for p90 ([9065007](https://github.com/us/crw/commit/90650079d8f34e65cf67f22aad5bf96f62c580ef))
+* **scrape:** add screenshot output format via CDP capture ([61e03e7](https://github.com/us/crw/commit/61e03e71b8dda137dffa730bcb864660009b270d)), closes [#161](https://github.com/us/crw/issues/161)
+* **sdk:** add Research API methods to TS + Python SDKs ([3a2f710](https://github.com/us/crw/commit/3a2f71062b00acd0c67092fc5da7bb4caa1cf527))
+* **search:** add Firecrawl-compatible research API engine layer ([ba1a87c](https://github.com/us/crw/commit/ba1a87c568da7f152f33cef63b188180ec210a29))
+* **search:** overlap query-expansion scrape with original (C1) ([4f6147e](https://github.com/us/crw/commit/4f6147e8ef7ab3146387bad4cf0902e587d1660c))
+* **skills:** add crw agent skill set ([0ddbe01](https://github.com/us/crw/commit/0ddbe010fdfe484f2c58db773569d85989441372))
+* **skills:** publish crw-research agent skill + docs install command ([4638715](https://github.com/us/crw/commit/4638715bed7d34db0c3a08ec49be6b4a80f39791))
+
+
+### Bug Fixes
+
+* **docs:** render :::tabs and :::callouts in prerendered pages ([f3a495a](https://github.com/us/crw/commit/f3a495ac745598eddc83926466dede60fd7d4fa0))
+* **map:** render SPA shells during URL discovery ([0ec4bf9](https://github.com/us/crw/commit/0ec4bf9b7c405e98def0b6f7ab3f73bf6320c275)), closes [#166](https://github.com/us/crw/issues/166)
+* **mcp,sdk:** drop phantom search country param, export CrwApiError ([58b8e5c](https://github.com/us/crw/commit/58b8e5cd67347c3f4f7c8ebd341236873ba201b9))
+* **pdf:** bound sandbox child address space to prevent false pdf_too_large ([06acb83](https://github.com/us/crw/commit/06acb8331490713967cf95bd40005c5af839373b))
+* **proxy:** normalize empty CRW_CRAWLER__PROXY to None ([#154](https://github.com/us/crw/issues/154)) ([b3d0fe9](https://github.com/us/crw/commit/b3d0fe996a2d0e2b8f3231c55f6ed86f0b14552b))
+* **scrape:** capture screenshot outside the nav-budget race ([4021b50](https://github.com/us/crw/commit/4021b5084db3b24b1f4c143f7729aa268006a039))
+* **search:** resolve arXiv inspect via Semantic Scholar ([70126c6](https://github.com/us/crw/commit/70126c6e5e3c07fb7ad05400424adbdfdf129563))
+
+
+### Performance
+
+* **search:** research concurrency 4-&gt;8, cache cap 20k-&gt;3k ([e3a6ac3](https://github.com/us/crw/commit/e3a6ac3bef2a901a9f87b1cb710d594154ebe00f))
+
 ## [0.16.0](https://github.com/us/crw/compare/v0.15.2...v0.16.0) (2026-06-14)
 
 
