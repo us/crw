@@ -695,14 +695,12 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResul
         // proxy (sticky-per-host), not direct. Resolved once into REQUEST_PROXY.
         let resolved_proxy = renderer.pick_proxy_for_url(&url);
         let empty_headers: HashMap<String, String> = HashMap::new();
-        let fetch_fut = renderer.fetch(
-            &url,
-            &empty_headers,
-            Some(false),
-            None,
-            None,
-            discover_deadline,
-        );
+        // render_js = None (auto), not Some(false): SPAs (Angular/React/Vue)
+        // serve an empty app shell over plain HTTP, so HTTP-only discovery finds
+        // zero navigational links and /map returns only the seed URL (issue #166).
+        // Auto mode lets the renderer escalate thin/SPA shells to a JS render
+        // (it stays HTTP-only for static sites), matching /scrape and /crawl.
+        let fetch_fut = renderer.fetch(&url, &empty_headers, None, None, None, discover_deadline);
         let fetch = crw_renderer::REQUEST_PROXY
             .scope(resolved_proxy, fetch_fut)
             .await;
