@@ -54,7 +54,7 @@ Add to your MCP client:
 
 ```bash
 # Claude Code:
-claude mcp add crw -- npx crw-mcp
+claude mcp add crw -- npx -y crw-mcp
 
 # OpenAI Codex CLI:
 codex mcp add crw -- npx crw-mcp
@@ -69,9 +69,9 @@ If you want host-by-host config files instead of one-liners, jump to [MCP Client
 If you have a CDP-compatible browser, pass it via env vars:
 
 ```bash
-claude mcp add \
+claude mcp add crw \
   -e CRW_RENDERER__LIGHTPANDA__WS_URL=ws://127.0.0.1:9222 \
-  crw -- npx crw-mcp
+  -- npx -y crw-mcp
 ```
 
 Without a CDP browser, `crw-mcp` uses its HTTP-only renderer (no JavaScript rendering).
@@ -92,15 +92,15 @@ Connect to [fastcrw.com](https://fastcrw.com) or any remote CRW instance:
 
 ```bash
 # Cloud server
-claude mcp add \
+claude mcp add crw \
   -e CRW_API_URL=https://api.fastcrw.com \
   -e CRW_API_KEY=YOUR_API_KEY \
-  crw -- npx crw-mcp
+  -- npx -y crw-mcp
 
 # Local crw-server on custom port
-claude mcp add \
+claude mcp add crw \
   -e CRW_API_URL=http://localhost:4000 \
-  crw -- npx crw-mcp
+  -- npx -y crw-mcp
 ```
 
 The same `CRW_API_URL` + `CRW_API_KEY` env block also works in Codex, Claude Desktop, Cursor, Windsurf, Cline, and Continue. See [MCP Client Setup](#mcp-clients) for ready-to-paste config files.
@@ -109,7 +109,7 @@ The same `CRW_API_URL` + `CRW_API_KEY` env block also works in Codex, Claude Des
 
 | Transport | Setup | Requires |
 |-----------|-------|----------|
-| **Stdio embedded** (recommended) | `claude mcp add crw -- npx crw-mcp` | Nothing |
+| **Stdio embedded** (recommended) | `claude mcp add crw -- npx -y crw-mcp` | Nothing |
 | **Stdio proxy** | `CRW_API_URL=... npx crw-mcp` | Remote CRW server |
 | **HTTP** | `claude mcp add --transport http crw http://localhost:3000/mcp` | `crw-server` running |
 
@@ -187,13 +187,13 @@ Wire it into your client the same way you do `crw-mcp` — it uses stdio transpo
 
 ```bash
 # Local embedded
-claude mcp add crw -- npx crw-mcp
+claude mcp add crw -- npx -y crw-mcp
 
 # fastcrw.com cloud
-claude mcp add \
+claude mcp add crw \
   -e CRW_API_URL=https://api.fastcrw.com \
   -e CRW_API_KEY=YOUR_API_KEY \
-  crw -- npx crw-mcp
+  -- npx -y crw-mcp
 ```
 
 ### OpenAI Codex CLI

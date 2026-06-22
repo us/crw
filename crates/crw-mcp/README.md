@@ -32,6 +32,11 @@ MCP (Model Context Protocol) server for the [CRW](https://github.com/us/crw) web
 ## Installation
 
 ```bash
+# npm — prebuilt binary (Linux builds are static musl, so they run on any
+# distro/glibc; macOS and Windows included)
+npm install -g crw-mcp
+
+# or build from source (Rust)
 cargo install crw-mcp
 ```
 
@@ -43,11 +48,13 @@ No server to run. Just add `crw-mcp` to your AI client:
 # Claude Code
 claude mcp add crw -- crw-mcp
 
-# With custom config via env vars
-claude mcp add \
+# With custom config via env vars.
+# NOTE: the server name (crw) MUST come BEFORE the -e flags — `-e` is variadic
+# and will otherwise swallow the name ("Invalid environment variable: crw").
+claude mcp add crw \
   -e CRW_CRAWLER__MAX_CONCURRENCY=5 \
   -e CRW_RENDERER__LIGHTPANDA__WS_URL=ws://127.0.0.1:9222 \
-  crw -- crw-mcp
+  -- crw-mcp
 ```
 
 ## Proxy Mode (Remote Server)
@@ -55,16 +62,16 @@ claude mcp add \
 Connect to [fastcrw.com](https://fastcrw.com) or any remote CRW instance:
 
 ```bash
-# Cloud server
-claude mcp add \
+# Cloud server (name `crw` comes BEFORE -e, command after `--`)
+claude mcp add crw \
   -e CRW_API_URL=https://api.fastcrw.com \
   -e CRW_API_KEY=crw_live_xxx \
-  crw -- crw-mcp
+  -- crw-mcp
 
 # Local crw-server on custom port
-claude mcp add \
+claude mcp add crw \
   -e CRW_API_URL=http://localhost:4000 \
-  crw -- crw-mcp
+  -- crw-mcp
 ```
 
 Or use the HTTP transport directly (no `crw-mcp` binary needed):

@@ -147,7 +147,7 @@ CRW 提供 Firecrawl 的 API，但资源占用极低。无运行时依赖，无 
 **MCP（AI 代理 — 推荐）：**
 
 ```bash
-claude mcp add crw -- npx crw-mcp
+claude mcp add crw -- npx -y crw-mcp
 ```
 
 > 完成。Claude Code 现在拥有 `crw_scrape`、`crw_crawl`、`crw_check_crawl_status`、`crw_map`、`crw_parse_file` 工具（`crw_search` 在配置 SearXNG 后端后自动出现）。Cursor、Windsurf、Cline 等 MCP 客户端请参见 [MCP 服务器](#mcp-服务器)。
@@ -302,7 +302,7 @@ docker run -i ghcr.io/us/crw crw-mcp
 **Claude Code：**
 
 ```bash
-claude mcp add crw -- npx crw-mcp
+claude mcp add crw -- npx -y crw-mcp
 ```
 
 **其他 MCP 客户端配置：**

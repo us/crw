@@ -137,11 +137,18 @@ jobs:
             os: macos-latest
             platform: darwin
             arch_label: arm64
-          - target: x86_64-unknown-linux-gnu
+          # Linux ships static musl builds so the binaries run on ANY glibc
+          # (old Debian/Ubuntu, Alpine, etc.). A glibc-linked build requires the
+          # builder's glibc (≥2.38) and crashes on older hosts with
+          # "GLIBC_2.xx not found". Safe here: TLS is rustls+ring (no native
+          # openssl), so musl links cleanly. Asset/npm names (linux-x64/arm64)
+          # are unchanged; both built via cross (musl toolchain in its image).
+          - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
             platform: linux
             arch_label: x64
-          - target: aarch64-unknown-linux-gnu
+            cross: true
+          - target: aarch64-unknown-linux-musl
             os: ubuntu-latest
             platform: linux
             arch_label: arm64

@@ -58,16 +58,16 @@ If you only remember one rule, remember this one: local embedded mode is the eas
 ### Local embedded
 
 ```bash
-claude mcp add crw -- npx crw-mcp
+claude mcp add crw -- npx -y crw-mcp
 ```
 
 ### fastcrw.com cloud
 
 ```bash
-claude mcp add \
+claude mcp add crw \
   -e CRW_API_URL=https://api.fastcrw.com \
   -e CRW_API_KEY=YOUR_API_KEY \
-  crw -- npx crw-mcp
+  -- npx -y crw-mcp
 ```
 
 ### Local HTTP transport
@@ -461,9 +461,9 @@ Local embedded mode uses the same config chain as `crw-server`:
 If you need JavaScript rendering in local MCP mode, pass a renderer URL:
 
 ```bash
-claude mcp add \
+claude mcp add crw \
   -e CRW_RENDERER__LIGHTPANDA__WS_URL=ws://127.0.0.1:9222 \
-  crw -- npx crw-mcp
+  -- npx -y crw-mcp
 ```
 
 Without a configured renderer, CRW still works in HTTP-only mode.

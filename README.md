@@ -161,9 +161,10 @@ the `crw-mcp` Node binary both shell to the same Rust core.
 ```bash
 npm install -g crw-mcp          # MCP server (Node wrapper)
 pip install crw                 # Python SDK (auto-downloads binary)
-claude mcp add crw -- npx crw-mcp                                          # Claude Code, embedded
-claude mcp add -e CRW_API_URL=https://api.fastcrw.com -e CRW_API_KEY=… \
-  crw -- npx crw-mcp                                                       # Claude Code, managed
+claude mcp add crw -- npx -y crw-mcp                                       # Claude Code, embedded
+claude mcp add crw \
+  -e CRW_API_URL=https://api.fastcrw.com -e CRW_API_KEY=… \
+  -- npx -y crw-mcp                                                        # Claude Code, managed
 ```
 
 Per-client config recipes (Claude Desktop, Cursor, Windsurf, Cline,

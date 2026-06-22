@@ -15,7 +15,7 @@ This recipe walks from zero to a working Claude Code agent that can search the w
 The MCP binary contains a full scraping engine. No server, no account needed.
 
 ```bash
-claude mcp add crw -- npx crw-mcp
+claude mcp add crw -- npx -y crw-mcp
 ```
 
 Claude Code writes this into your project `.claude/mcp.json` automatically. You are done. Start a new Claude Code session and the tools are available.
@@ -27,10 +27,10 @@ Claude Code writes this into your project `.claude/mcp.json` automatically. You 
 Get a free API key at [fastcrw.com](https://fastcrw.com) — 500 one-time lifetime credits, no monthly reset.
 
 ```bash
-claude mcp add \
+claude mcp add crw \
   -e CRW_API_URL=https://api.fastcrw.com \
   -e CRW_API_KEY=crw_live_xxxxxxxxxxxx \
-  crw -- npx crw-mcp
+  -- npx -y crw-mcp
 ```
 
 This registers the same `crw-mcp` binary in proxy mode. Tool calls are forwarded to `api.fastcrw.com`. All 6 tools are advertised, including `crw_search`.
