@@ -27,6 +27,8 @@
   "files": [
     "bin/crw-mcp.js",
     "bin/init.js",
+    "bin/install.js",
+    "bin/agents.js",
     "skills/SKILL.md"
   ],
   "optionalDependencies": {
