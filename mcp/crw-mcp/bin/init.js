@@ -1,137 +1,78 @@
 #!/usr/bin/env node
 
-const fs = require("fs");
-const path = require("path");
-const os = require("os");
+// `crw-mcp init [--<agent>]` — installs the crw SKILL (SKILL.md) only.
+// For the skill AND the MCP server in one shot, use `crw-mcp install`.
 
-const AGENTS = [
-  { name: "Claude Code", dir: ".claude", flag: "--claude-code" },
-  { name: "Cursor", dir: ".cursor", flag: "--cursor" },
-  { name: "Gemini CLI", dir: ".gemini", flag: "--gemini-cli" },
-  { name: "Codex", dir: ".codex", flag: "--codex" },
-  { name: "OpenCode", dir: ".opencode", flag: "--opencode" },
-  { name: "Windsurf", dir: ".windsurf", flag: "--windsurf" },
-];
+const {
+  AGENTS,
+  detectAgents,
+  getApiKey,
+  readSkill,
+  installSkill,
+  home,
+} = require("./agents.js");
 
-const home = os.homedir();
 const args = process.argv.slice(2);
 
-function hasFlag(flag) {
-  return args.includes(flag);
-}
-
-function getApiKey() {
-  const idx = args.indexOf("--api-key");
-  return idx !== -1 && args[idx + 1] ? args[idx + 1] : null;
-}
-
-function readSkillFile() {
-  const skillPath = path.join(__dirname, "..", "skills", "SKILL.md");
-  return fs.readFileSync(skillPath, "utf-8");
-}
-
-function detectAgents() {
-  const all = hasFlag("--all");
-  const specificFlags = AGENTS.filter((a) => hasFlag(a.flag));
-
-  if (!all && specificFlags.length === 0) {
-    // Auto-detect: install to all agents whose config dirs exist
-    return AGENTS.filter((a) =>
-      fs.existsSync(path.join(home, a.dir))
-    );
-  }
-
-  if (all) {
-    return AGENTS.filter((a) =>
-      fs.existsSync(path.join(home, a.dir))
-    );
-  }
-
-  return specificFlags;
-}
-
-function deploy(agents, skillContent) {
-  const installed = [];
-
-  for (const agent of agents) {
-    const targetDir = path.join(home, agent.dir, "skills", "crw");
-    const targetFile = path.join(targetDir, "SKILL.md");
-
-    try {
-      fs.mkdirSync(targetDir, { recursive: true });
-      fs.writeFileSync(targetFile, skillContent, "utf-8");
-      installed.push({ name: agent.name, path: targetFile });
-    } catch (err) {
-      console.error(`  Failed to install for ${agent.name}: ${err.message}`);
-    }
-  }
-
-  return installed;
-}
-
-function main() {
-  if (hasFlag("--help") || hasFlag("-h")) {
-    console.log(`
-crw-mcp init — Install CRW agent skill to your AI coding agents
+if (args.includes("--help") || args.includes("-h")) {
+  console.log(`
+crw-mcp init — Install the CRW agent SKILL (skill only, no MCP server)
 
 Usage:
-  npx crw-mcp@latest init [options]
+  npx crw-mcp@latest init [options]      # skill only
+  npx crw-mcp@latest install [options]   # skill + MCP server
 
 Options:
   --all            Install to all detected agents
-  --claude-code    Install to Claude Code only
-  --cursor         Install to Cursor only
-  --gemini-cli     Install to Gemini CLI only
-  --codex          Install to Codex only
-  --opencode       Install to OpenCode only
-  --windsurf       Install to Windsurf only
-  --api-key <key>  Set your fastcrw.com API key
-  -h, --help       Show this help message
+  --claude-code    Claude Code      --codex      Codex
+  --cursor         Cursor           --opencode   OpenCode
+  --gemini-cli     Gemini CLI       --windsurf   Windsurf
+  --api-key <key>  Your fastcrw.com API key
+  -h, --help       Show this help
 
-Without flags, auto-detects installed agents and installs to all of them.
+Without flags, auto-detects installed agents.
 `);
-    process.exit(0);
-  }
-
-  const skillContent = readSkillFile();
-  const agents = detectAgents();
-
-  if (agents.length === 0) {
-    console.log("No supported AI agents detected.");
-    console.log("Supported agents: " + AGENTS.map((a) => a.name).join(", "));
-    console.log("\nManually install by copying the skill file to your agent's skills directory.");
-    process.exit(1);
-  }
-
-  const installed = deploy(agents, skillContent);
-
-  if (installed.length === 0) {
-    console.log("Failed to install to any agent.");
-    process.exit(1);
-  }
-
-  console.log("crw skill installed:\n");
-  const maxName = Math.max(...installed.map((i) => i.name.length));
-  for (const i of installed) {
-    console.log(`  ${i.name.padEnd(maxName + 2)} ${i.path}`);
-  }
-
-  const apiKey = getApiKey();
-  if (apiKey) {
-    console.log(`\nAPI key configured: ${apiKey.slice(0, 6)}...`);
-    console.log("Set it in your environment:");
-    console.log(`  export CRW_API_KEY=${apiKey}`);
-  } else {
-    console.log("\nCloud mode (fastcrw.com):");
-    console.log("  500 free one-time credits, managed infra — https://fastcrw.com");
-    console.log("  export CRW_API_KEY=crw_live_xxx");
-    console.log("  export CRW_API_URL=https://api.fastcrw.com");
-    console.log("  Terms of Service: https://fastcrw.com/terms");
-  }
-
-  console.log("\nLocal mode (free, same binary, fully capable):");
-  console.log("  npx crw-mcp");
-  console.log("\nDocs: https://fastcrw.com/docs");
+  process.exit(0);
 }
 
-main();
+const skill = readSkill();
+const agents = detectAgents(args);
+
+if (agents.length === 0) {
+  console.log("No supported AI agents detected.");
+  console.log("Supported: " + AGENTS.map((a) => a.name).join(", "));
+  process.exit(1);
+}
+
+const installed = [];
+for (const agent of agents) {
+  try {
+    installed.push({ name: agent.name, path: installSkill(agent, skill) });
+  } catch (err) {
+    console.error(`  Failed for ${agent.name}: ${err.message}`);
+  }
+}
+if (installed.length === 0) {
+  console.log("Failed to install to any agent.");
+  process.exit(1);
+}
+
+console.log("crw SKILL installed (skill only — this does NOT add the MCP server):\n");
+const maxName = Math.max(...installed.map((i) => i.name.length));
+for (const i of installed) {
+  console.log(`  ${i.name.padEnd(maxName + 2)} ${i.path.replace(home, "~")}`);
+}
+
+console.log("\nWant the MCP tools (crw_scrape / crawl / map / search) too?");
+console.log("  npx crw-mcp@latest install        # same agents, skill + MCP server");
+
+const apiKey = getApiKey(args);
+if (apiKey) {
+  console.log(`\nAPI key set: ${apiKey.slice(0, 10)}… — export it for cloud mode:`);
+  console.log(`  export CRW_API_KEY=${apiKey}`);
+  console.log("  export CRW_API_URL=https://api.fastcrw.com");
+} else {
+  console.log("\nThe skill works in local mode out of the box (free, embedded).");
+  console.log("Cloud mode (managed, 500 free credits): https://fastcrw.com");
+}
+console.log("\nDocs: https://fastcrw.com/docs");

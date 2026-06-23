@@ -1,8 +1,13 @@
 #!/usr/bin/env node
 
-// Handle `init` subcommand before delegating to the Rust binary
+// Handle install/init subcommands before delegating to the Rust binary.
+// `init` = skill only; `install` = skill + MCP server.
 if (process.argv[2] === "init") {
   require("./init.js");
+  process.exit(0);
+}
+if (process.argv[2] === "install") {
+  require("./install.js");
   process.exit(0);
 }
 
