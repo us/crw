@@ -45,7 +45,7 @@ use teardown::{CmdError, finish, install_signal_teardown};
     after_help = "INSTALL:\n  \
         brew install us/crw/crw                                         # macOS / Linux\n  \
         cargo install crw-cli                                           # Any Rust toolchain\n  \
-        curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | sh\n\n\
+        curl -fsSL https://fastcrw.com/install | sh\n\n\
         DOCS:    https://docs.fastcrw.com  ·  https://github.com/us/crw\n\
         CLOUD:   https://fastcrw.com (500 free credits, no monthly reset)\n\
         SEARCH:  `crw setup --local` boots a JSON-enabled SearXNG on 127.0.0.1:8080.\n\

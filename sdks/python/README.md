@@ -6,7 +6,7 @@ Python SDK for [CRW](https://github.com/us/crw) — the open-source web scraper 
 
 ```bash
 # One-line install (auto-detects OS & arch):
-curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | sh
+curl -fsSL https://fastcrw.com/install | sh
 
 # npm (zero install):
 npx crw-mcp

@@ -190,7 +190,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
       <code>pip install crw</code> ·
       <code>npx crw-mcp</code> ·
       <code>brew install us/crw/crw</code> ·
-      <code>curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | sh</code> ·
+      <code>curl -fsSL https://fastcrw.com/install | sh</code> ·
       <code>docker run -p 3000:3000 ghcr.io/us/crw:latest</code>
     </p>
 
@@ -292,12 +292,12 @@ Same Firecrawl-compatible endpoints, zero infrastructure.</p>
   -d '{&quot;url&quot;: &quot;https://example.com&quot;}'</code></pre>
 <h2 id="one-line-install-recommended">One-Line Install (Recommended)</h2>
 <p>The install script auto-detects your OS and architecture, downloads the latest binary, and installs it:</p>
-<pre data-lang="bash"><code class="language-bash">curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | sh</code></pre>
+<pre data-lang="bash"><code class="language-bash">curl -fsSL https://fastcrw.com/install | sh</code></pre>
 <p>Or with <code>wget</code>:</p>
-<pre data-lang="bash"><code class="language-bash">wget -qO- https://raw.githubusercontent.com/us/crw/main/install.sh | sh</code></pre>
+<pre data-lang="bash"><code class="language-bash">wget -qO- https://fastcrw.com/install | sh</code></pre>
 <p><strong>Options:</strong></p>
 <pre data-lang="bash"><code class="language-bash"># Install to a custom directory:
-curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | CRW_INSTALL_DIR=~/.local/bin sh</code></pre>
+curl -fsSL https://fastcrw.com/install | CRW_INSTALL_DIR=~/.local/bin sh</code></pre>
 <p>Supported platforms: macOS (Intel &amp; Apple Silicon), Linux (x64 &amp; ARM64), Windows (via MSYS2/Git Bash).</p>
 <h2 id="from-cratesio">From crates.io</h2>
 <pre data-lang="bash"><code class="language-bash"># CLI tool (no server required)

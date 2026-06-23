@@ -1,8 +1,8 @@
 #!/bin/sh
 # CRW installer — downloads the latest release binary for your platform.
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | sh
-#   wget -qO- https://raw.githubusercontent.com/us/crw/main/install.sh | sh
+#   curl -fsSL https://fastcrw.com/install | sh
+#   wget -qO- https://fastcrw.com/install | sh
 #
 # Options (environment variables):
 #   CRW_VERSION=v0.3.0    Install a specific version instead of latest

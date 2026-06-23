@@ -50,7 +50,7 @@ cargo build --profile release-small --no-default-features -p crw-mcp
 
 ```bash
 brew install us/crw/crw
-curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | CRW_BINARY=crw sh
+curl -fsSL https://fastcrw.com/install | CRW_BINARY=crw sh
 cargo install crw-cli
 
 # APT (Debian/Ubuntu):
@@ -67,7 +67,7 @@ microservice.
 
 ```bash
 brew install us/crw/crw-server
-curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | CRW_BINARY=crw-server sh
+curl -fsSL https://fastcrw.com/install | CRW_BINARY=crw-server sh
 docker run -p 3000:3000 ghcr.io/us/crw
 ```
 
