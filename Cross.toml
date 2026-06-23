@@ -2,14 +2,14 @@
 #
 # The official `cross` musl images are minimal and don't ship cmake/perl, which
 # `aws-lc-sys` (rustls' crypto provider, pulled transitively via reqwest) needs
-# to build for the musl targets. Install them before the build so the static
-# musl release binaries link cleanly.
+# to build for the musl targets. Install them before the build.
 #
-# Verified locally (messense/rust-musl-cross): aws-lc-sys 0.38 builds fine as
-# static-musl once the toolchain is present — no source changes / no ring swap.
+# DEBIAN_FRONTEND=noninteractive is REQUIRED: `cmake` pulls in `tzdata`, whose
+# postinst otherwise blocks on an interactive timezone prompt with no stdin —
+# hanging the job forever (seen on the first v0.18.0 release run).
 
 [target.x86_64-unknown-linux-musl]
-pre-build = ["apt-get update && apt-get install --yes --no-install-recommends cmake perl"]
+pre-build = ["DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends cmake perl"]
 
 [target.aarch64-unknown-linux-musl]
-pre-build = ["apt-get update && apt-get install --yes --no-install-recommends cmake perl"]
+pre-build = ["DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends cmake perl"]
