@@ -458,12 +458,15 @@ impl FallbackRenderer {
 
             if want(RendererMode::Lightpanda) {
                 if let Some(lp) = &config.lightpanda {
-                    js_renderers.push(Arc::new(cdp::CdpRenderer::new(
-                        "lightpanda",
-                        &lp.ws_url,
-                        config.lightpanda_timeout(),
-                        config.pool_size,
-                    )));
+                    js_renderers.push(Arc::new(
+                        cdp::CdpRenderer::new(
+                            "lightpanda",
+                            &lp.ws_url,
+                            config.lightpanda_timeout(),
+                            config.pool_size,
+                        )
+                        .with_user_agent(&effective_ua),
+                    ));
                 } else if matches!(config.mode, RendererMode::Lightpanda) {
                     return Err(CrwError::ConfigError(
                         "renderer.mode = \"lightpanda\" but [renderer.lightpanda] ws_url is not \
@@ -476,12 +479,15 @@ impl FallbackRenderer {
                 if let Some(pw) = &config.playwright {
                     // Playwright is treated as a "chrome-equivalent" tier —
                     // same timeout budget, same kind of work.
-                    js_renderers.push(Arc::new(cdp::CdpRenderer::new(
-                        "playwright",
-                        &pw.ws_url,
-                        config.chrome_timeout(),
-                        config.pool_size,
-                    )));
+                    js_renderers.push(Arc::new(
+                        cdp::CdpRenderer::new(
+                            "playwright",
+                            &pw.ws_url,
+                            config.chrome_timeout(),
+                            config.pool_size,
+                        )
+                        .with_user_agent(&effective_ua),
+                    ));
                 } else if matches!(config.mode, RendererMode::Playwright) {
                     return Err(CrwError::ConfigError(
                         "renderer.mode = \"playwright\" but [renderer.playwright] ws_url is not \
@@ -500,6 +506,7 @@ impl FallbackRenderer {
                         config.chrome_timeout(),
                         config.pool_size,
                     )
+                    .with_user_agent(&effective_ua)
                     .with_nav_budget(config.chrome_nav_budget_ms)
                     .with_challenge_retries(
                         config
@@ -589,6 +596,7 @@ impl FallbackRenderer {
                         config.chrome_proxy_timeout(),
                         config.pool_size,
                     )
+                    .with_user_agent(&effective_ua)
                     .with_nav_budget(config.chrome_nav_budget_ms)
                     .with_challenge_retries(
                         config
