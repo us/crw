@@ -25,12 +25,12 @@ pub async fn run_wizard() -> Result<(), SetupError> {
 
 /// Prompt user to select Cloud or Local setup.
 fn select_setup_mode() -> Result<SetupMode, SetupError> {
-    println!("  How would you like to use CRW?");
+    println!("  How do you want to run CRW?  (you can switch anytime with `crw setup`)");
     println!();
 
     let items = vec![
-        "☁️  Cloud (Recommended for getting started)\n        • 500 free one-time credits, no payment needed\n        • Zero setup, works instantly\n        • Managed infrastructure, always up-to-date",
-        "🏠 Local (Self-hosted)\n        • Unlimited usage, completely free\n        • Full control over your data\n        • Requires: Docker (~1.5GB for images)",
+        "☁️  Cloud — ready in 30 seconds                      ⭐ Recommended\n        • 500 free credits — no card, nothing to pay\n        • No Docker, nothing to run — works instantly\n        • Managed & always up to date\n        • Sign up with GitHub/Google, paste your key, done",
+        "🏠 Local — self-hosted, unlimited & free\n        • Runs fully on your machine — your data never leaves\n        • No limits, no account\n        • Needs Docker (~1.5GB) + a minute to boot the search backend",
     ];
 
     let selection = Select::with_theme(&ui::select_style())

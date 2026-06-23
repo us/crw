@@ -183,8 +183,6 @@ install() {
 
   success "CRW ${VERSION} installed to ${INSTALL_DIR}/${BINARY}"
   echo ""
-  echo "  Run:  ${BINARY} --help"
-  echo ""
 
   # Check if install dir is in PATH
   case ":$PATH:" in
@@ -193,6 +191,31 @@ install() {
        echo "    export PATH=\"${INSTALL_DIR}:\$PATH\""
        echo "" ;;
   esac
+
+  # First-run onboarding (crw CLI only). `crw setup` is interactive — cloud
+  # (sign up, free credits) vs local (self-host). `curl | sh` feeds THIS script
+  # over stdin, so we bind setup to /dev/tty and only auto-launch in a real
+  # interactive terminal ([ -t 1 ] + readable /dev/tty). Non-interactive runs
+  # (CI, logged pipe) just print the next step. Opt out with CRW_NO_SETUP=1.
+  if [ "$BINARY" = "crw" ]; then
+    if [ "${CRW_NO_SETUP:-}" != "1" ] && [ -t 1 ] && [ -e /dev/tty ]; then
+      echo ""
+      info "One step left — let's get you scraping."
+      info "Cloud gives you 500 free credits in ~30s (no card, no Docker), or self-host local:"
+      echo ""
+      "${INSTALL_DIR}/${BINARY}" setup </dev/tty \
+        || info "Setup skipped — run 'crw setup' whenever you're ready."
+    else
+      echo ""
+      echo "  Next:  crw setup        # cloud (free credits) or local self-host"
+      echo "  Help:  crw --help"
+      echo ""
+    fi
+  else
+    echo ""
+    echo "  Run:  ${BINARY} --help"
+    echo ""
+  fi
 }
 
 # --- run --------------------------------------------------------------------
