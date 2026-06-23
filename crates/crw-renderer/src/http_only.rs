@@ -45,9 +45,9 @@ fn is_retriable_status(status: u16) -> bool {
 /// These mimic a real browser's default request headers.
 const STEALTH_ACCEPT: &str =
     "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8";
-/// Chrome 131 client hint — kept in sync with the UA strings in BUILTIN_UA_POOL.
+/// Chrome 150 client hint — kept in sync with the UA strings in BUILTIN_UA_POOL.
 const STEALTH_SEC_CH_UA: &str =
-    r#""Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24""#;
+    r#""Google Chrome";v="150", "Chromium";v="150", "Not_A Brand";v="24""#;
 
 /// Build a configured reqwest client, optionally routed through `proxy`.
 ///
