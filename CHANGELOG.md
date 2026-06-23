@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.18.1](https://github.com/us/crw/compare/v0.18.0...v0.18.1) (2026-06-23)
+
+
+### Bug Fixes
+
+* **npm:** ship bin/install.js + bin/agents.js in the crw-mcp package ([437dbc7](https://github.com/us/crw/commit/437dbc760630e58819cfcb860d84dfb3ba5061b5))
+
 ## [0.18.0](https://github.com/us/crw/compare/v0.17.0...v0.18.0) (2026-06-23)
 
 
