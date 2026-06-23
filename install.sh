@@ -7,6 +7,8 @@
 # Options (environment variables):
 #   CRW_VERSION=v0.3.0    Install a specific version instead of latest
 #   CRW_INSTALL_DIR=~/.local/bin   Custom install directory
+#   CRW_BINARY=crw-mcp    Install crw-mcp (MCP server) or crw-server instead of
+#                         the default crw CLI
 #   GITHUB_TOKEN=ghp_...  Avoid GitHub API rate limits
 
 set -eu
@@ -15,7 +17,7 @@ main() {
 
 REPO="us/crw"
 INSTALL_DIR="${CRW_INSTALL_DIR:-/usr/local/bin}"
-BINARY="${CRW_BINARY:-crw-mcp}"
+BINARY="${CRW_BINARY:-crw}"
 
 # --- helpers ----------------------------------------------------------------
 
@@ -74,12 +76,8 @@ detect_platform() {
     *)             err "Unsupported architecture: $ARCH. Try: cargo install $BINARY" ;;
   esac
 
-  # musl libc detection — pre-built binaries require glibc
-  if [ "$PLATFORM" = "linux" ]; then
-    if command -v ldd >/dev/null 2>&1 && ldd --version 2>&1 | grep -qi musl; then
-      err "musl libc detected (Alpine Linux?). Pre-built binaries require glibc. Try: cargo install $BINARY"
-    fi
-  fi
+  # Linux binaries are static musl builds, so they run on ANY libc (glibc and
+  # musl/Alpine alike) — no libc gate needed.
 
   if [ "$PLATFORM" = "win32" ]; then
     ASSET="${BINARY}-${PLATFORM}-${ARCH_LABEL}.zip"
