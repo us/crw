@@ -694,6 +694,12 @@ async fn connect_chrome_with_retry(
     result
 }
 
+/// Strip "Mozilla/5.0 " so lightpanda accepts the UA — its `validateUserAgent`
+/// rejects any "Mozilla" (`error.Reserved`). The "...Chrome/<ver>..." token survives.
+fn lightpanda_safe_ua(ua: &str) -> &str {
+    ua.strip_prefix("Mozilla/5.0 ").unwrap_or(ua)
+}
+
 async fn connect_chrome_with_retry_inner(
     name: &str,
     configured_ws_url: &str,
@@ -2103,13 +2109,19 @@ impl CdpRenderer {
         // Present a modern UA on the CDP path too (the HTTP fetcher already does,
         // but renderers otherwise send the browser's own — often stale — UA, which
         // trips "your browser is outdated" gates). Session-scoped (so pooled
-        // contexts don't leak it) and best-effort: lightpanda may not implement
-        // this method, and a failure must NOT abort an otherwise-fine render —
-        // hence `.ok()`, not `?`. Empty UA = skip (keep the browser default).
+        // contexts don't leak it) and best-effort: a tier that rejects the method
+        // must NOT abort an otherwise-fine render — hence `.ok()`, not `?`.
+        // lightpanda rejects "Mozilla" UAs (→ `lightpanda_safe_ua`); it routes
+        // Network.* → Emulation.* internally, so the method name is fine. Skip if empty.
         if !self.user_agent.is_empty() {
+            let ua = if self.name == "lightpanda" {
+                lightpanda_safe_ua(&self.user_agent)
+            } else {
+                &self.user_agent
+            };
             conn.send_recv(
                 "Network.setUserAgentOverride",
-                serde_json::json!({ "userAgent": self.user_agent }),
+                serde_json::json!({ "userAgent": ua }),
                 Some(&session_id),
                 self.page_timeout,
             )
@@ -2624,7 +2636,7 @@ fn is_spa_text_ready(text_len: i64) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{CdpRenderer, build_auth_response, is_content_stable};
+    use super::{CdpRenderer, build_auth_response, is_content_stable, lightpanda_safe_ua};
 
     #[test]
     fn auth_response_provides_credentials_when_creds_set() {
@@ -2800,5 +2812,18 @@ mod tests {
                   (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36";
         let r = r.with_user_agent(ua);
         assert_eq!(r.user_agent, ua);
+    }
+
+    #[test]
+    fn lightpanda_safe_ua_strips_mozilla_keeps_chrome() {
+        let full = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 \
+                    (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36";
+        let safe = lightpanda_safe_ua(full);
+        // lightpanda's validateUserAgent rejects ANY "Mozilla" → must be gone.
+        assert!(!safe.to_ascii_lowercase().contains("mozilla"));
+        // ...but the Chrome version token that UA gates check must survive.
+        assert!(safe.contains("Chrome/150"));
+        // A UA without the prefix is returned unchanged (no double-strip).
+        assert_eq!(lightpanda_safe_ua("Chrome/150.0.0.0"), "Chrome/150.0.0.0");
     }
 }
