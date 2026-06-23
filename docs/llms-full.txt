@@ -859,7 +859,7 @@ PyPI (crw):         https://pypi.org/project/crw/
 npm (crw-sdk):      https://www.npmjs.com/package/crw-sdk
 npm (crw-mcp):      https://www.npmjs.com/package/crw-mcp
 
-Install crw binary: curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | sh
+Install crw binary: curl -fsSL https://fastcrw.com/install | sh
 Install crw-mcp:    npx crw-mcp  (zero-install) or cargo install crw-mcp
 Install crw-browse: cargo install crw-browse
 

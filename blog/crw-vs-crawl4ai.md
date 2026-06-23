@@ -422,7 +422,7 @@ Or install the binary directly — CRW ships as a single statically-linked binar
 
 ```
 # Linux / macOS — download and inspect first
-curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh -o install.sh
+curl -fsSL https://fastcrw.com/install -o install.sh
 cat install.sh          # review before running
 sh install.sh
 

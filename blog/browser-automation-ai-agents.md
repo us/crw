@@ -401,7 +401,7 @@ That's it. Your agent now has the same page-reading capability as a full browser
 If you want zero ongoing API costs and full control, CRW ships as a single small static binary that runs on any Linux server:
 
 ```
-curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | bash
+curl -fsSL https://fastcrw.com/install | bash
 crw  # starts on http://localhost:3000
 ```
 

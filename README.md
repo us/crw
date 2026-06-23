@@ -131,7 +131,7 @@ npx crw-mcp                           # zero install — runs the embedded engin
 pip install crw                        # Python SDK (auto-downloads binary)
 brew install us/crw/crw                # Homebrew
 cargo install crw-cli                  # Cargo
-curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | sh
+curl -fsSL https://fastcrw.com/install | sh
 ```
 
 ---
@@ -239,7 +239,7 @@ cargo build --profile release-small --no-default-features -p crw-mcp
 brew install us/crw/crw
 
 # One-line install (auto-detects OS & arch):
-curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | CRW_BINARY=crw sh
+curl -fsSL https://fastcrw.com/install | CRW_BINARY=crw sh
 
 # APT (Debian/Ubuntu):
 curl -fsSL https://apt.fastcrw.com/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/crw.gpg
@@ -259,7 +259,7 @@ shared microservice.
 brew install us/crw/crw-server
 
 # One-line install:
-curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | CRW_BINARY=crw-server sh
+curl -fsSL https://fastcrw.com/install | CRW_BINARY=crw-server sh
 
 # Docker:
 docker run -p 3000:3000 ghcr.io/us/crw

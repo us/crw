@@ -36,7 +36,7 @@ CRW 是为 AI 代理打造的开源网页抓取工具。内置 MCP 服务器（s
 
 ```bash
 # 一键安装（自动检测操作系统和架构）：
-curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | sh
+curl -fsSL https://fastcrw.com/install | sh
 
 # npm（零安装）：
 npx crw-mcp
@@ -284,7 +284,7 @@ CRW 可作为 Claude Code 和 Claude Desktop 的 MCP 工具服务器，支持两
 
 ```bash
 # 一键安装（自动检测操作系统和架构）：
-curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | sh
+curl -fsSL https://fastcrw.com/install | sh
 
 # npm（零安装）：
 npx crw-mcp

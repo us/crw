@@ -271,7 +271,7 @@ That's it. The API is now running at `http://localhost:3000`. All the endpoints 
 
 ```
 # macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | bash
+curl -fsSL https://fastcrw.com/install | bash
 
 # Start the server
 crw

@@ -34,7 +34,7 @@ Pick one:
 
 ```
 # Install and start CRW
-curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | bash
+curl -fsSL https://fastcrw.com/install | bash
 crw  # runs on http://localhost:3000
 
 # Or Docker

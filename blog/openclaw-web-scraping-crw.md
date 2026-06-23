@@ -43,7 +43,7 @@ That's it — cloud is the default. No server to run.
 ### Option B: Self-hosted with binary (free, no limits)
 
 ```
-curl -fsSL https://raw.githubusercontent.com/us/crw/main/install.sh | bash
+curl -fsSL https://fastcrw.com/install | bash
 crw  # starts on http://localhost:3000
 ```
 
