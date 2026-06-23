@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.18.2](https://github.com/us/crw/compare/v0.18.1...v0.18.2) (2026-06-23)
+
+
+### Bug Fixes
+
+* **renderer:** send a modern UA on the CDP path (setUserAgentOverride) ([ffcf564](https://github.com/us/crw/commit/ffcf5640384d49bf5ebe2c72e8ba91001bf2e931))
+
 ## [0.18.1](https://github.com/us/crw/compare/v0.18.0...v0.18.1) (2026-06-23)
 
 
