@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.18.3](https://github.com/us/crw/compare/v0.18.2...v0.18.3) (2026-06-23)
+
+
+### Bug Fixes
+
+* **renderer:** strip "Mozilla" UA prefix for lightpanda (it rejects it) ([fda6139](https://github.com/us/crw/commit/fda6139a74c3c57aa38665d93e5123090bc71a32))
+
 ## [0.18.2](https://github.com/us/crw/compare/v0.18.1...v0.18.2) (2026-06-23)
 
 
