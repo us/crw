@@ -30,7 +30,7 @@ fn select_setup_mode() -> Result<SetupMode, SetupError> {
 
     let items = vec![
         "☁️  Cloud — ready in 30 seconds                      ⭐ Recommended\n        • 500 free credits — no card, nothing to pay\n        • No Docker, nothing to run — works instantly\n        • Managed & always up to date\n        • Sign up with GitHub/Google, paste your key, done",
-        "🏠 Local — self-hosted, unlimited & free\n        • Runs fully on your machine — your data never leaves\n        • No limits, no account\n        • Needs Docker (~1.5GB) + a minute to boot the search backend",
+        "🏠 Local — self-hosted, unlimited & free\n        • Runs fully on your machine — your data never leaves\n        • No limits, no account\n        • Needs Docker + a minute to boot the search backend",
     ];
 
     let selection = Select::with_theme(&ui::select_style())

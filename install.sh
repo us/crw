@@ -207,7 +207,7 @@ install() {
         || info "Setup skipped — run 'crw setup' whenever you're ready."
     else
       echo ""
-      echo "  Next:  crw setup        # cloud (free credits) or local self-host"
+      echo "  Next:  crw setup        # cloud (500 free credits) or local self-host"
       echo "  Help:  crw --help"
       echo ""
     fi
