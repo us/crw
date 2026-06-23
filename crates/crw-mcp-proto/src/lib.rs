@@ -154,7 +154,8 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
                     },
                     "jsonSchema": {
                         "type": "object",
-                        "description": "JSON schema for LLM extraction per page"
+                        "additionalProperties": true,
+                        "description": "Optional. A JSON Schema (draft 2020-12) describing fields to extract from each page via an LLM, e.g. {\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\"}}}. Free-form object. Omit to crawl without structured extraction."
                     },
                     "renderJs": {
                         "type": "boolean",
@@ -360,7 +361,8 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
                 },
                 "jsonSchema": {
                     "type": "object",
-                    "description": "JSON schema for LLM extraction (when formats has json)"
+                    "additionalProperties": true,
+                    "description": "Optional. A JSON Schema (draft 2020-12) describing fields to extract when formats includes \"json\", e.g. {\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\"}}}. Free-form object."
                 },
                 "parsers": {
                     "type": "array",
