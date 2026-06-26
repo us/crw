@@ -41,6 +41,44 @@ fn is_retriable_status(status: u16) -> bool {
     matches!(status, 502..=504)
 }
 
+/// Is `CRW_HTTP_TLS_RELAXED_FALLBACK` enabled? When on, a fetch that fails TLS
+/// certificate verification is retried ONCE with verification disabled (small
+/// orgs frequently misconfigure their chain — e.g. a CA cert served as the leaf,
+/// or an expired/self-signed cert — yet the content is perfectly fetchable).
+/// Cert-errors-only; every other failure mode keeps strict verification.
+fn tls_relaxed_fallback_enabled() -> bool {
+    std::env::var("CRW_HTTP_TLS_RELAXED_FALLBACK")
+        .map(|v| {
+            let v = v.trim().to_ascii_lowercase();
+            v == "true" || v == "1" || v == "yes"
+        })
+        .unwrap_or(false)
+}
+
+/// Returns true if a `reqwest::Error` (or anything in its source chain) is a TLS
+/// certificate verification failure — the ONLY error class the relaxed-TLS
+/// fallback should react to. Detected by message (rustls/openssl surface these
+/// as opaque connect errors, so there is no typed predicate to match on).
+fn is_cert_error(e: &reqwest::Error) -> bool {
+    let mut src: Option<&(dyn std::error::Error + 'static)> = Some(e);
+    while let Some(s) = src {
+        let m = s.to_string().to_ascii_lowercase();
+        if m.contains("certificate")
+            || m.contains("peerfailedverification")
+            || m.contains("sslconnecterror")
+            || m.contains("invalid peer cert")
+            || m.contains("certusedasend")
+            || m.contains("cert verify")
+            || m.contains("tls handshake")
+            || (m.contains("ssl") && (m.contains("verif") || m.contains("cert")))
+        {
+            return true;
+        }
+        src = s.source();
+    }
+    false
+}
+
 /// Stealth headers injected when stealth mode is enabled.
 /// These mimic a real browser's default request headers.
 const STEALTH_ACCEPT: &str =
@@ -60,12 +98,23 @@ fn build_client(
     user_agent: &str,
     proxy: Option<&str>,
     request_timeout: std::time::Duration,
+    relaxed_tls: bool,
 ) -> CrwResult<reqwest::Client> {
     let mut builder = reqwest::Client::builder()
         .user_agent(user_agent)
         .connect_timeout(HTTP_CONNECT_TIMEOUT)
         .timeout(request_timeout)
         .redirect(crw_core::url_safety::safe_redirect_policy());
+
+    // Relaxed client used ONLY as a cert-error fallback (see `is_cert_error`):
+    // disable cert + hostname verification so a broken chain / expired / self-
+    // signed cert no longer blocks an otherwise-fetchable page. SSRF protection
+    // is unaffected (it runs on the resolved URL, not the TLS layer).
+    if relaxed_tls {
+        builder = builder
+            .danger_accept_invalid_certs(true)
+            .danger_accept_invalid_hostnames(true);
+    }
 
     if let Some(proxy_url) = proxy {
         let p = reqwest::Proxy::all(proxy_url)
@@ -81,6 +130,11 @@ fn build_client(
 /// Simple HTTP fetcher using reqwest. No JS rendering.
 pub struct HttpFetcher {
     client: reqwest::Client,
+    /// Cert-verification-disabled client, built only when
+    /// `CRW_HTTP_TLS_RELAXED_FALLBACK` is on. Used solely to retry a fetch that
+    /// failed strict TLS verification (`is_cert_error`); `None` keeps behavior
+    /// identical to before.
+    relaxed_client: Option<reqwest::Client>,
     inject_stealth_headers: bool,
 }
 
@@ -106,12 +160,18 @@ impl HttpFetcher {
         inject_stealth_headers: bool,
         request_timeout: std::time::Duration,
     ) -> Self {
-        let client = build_client(user_agent, proxy, request_timeout).unwrap_or_else(|e| {
+        let client = build_client(user_agent, proxy, request_timeout, false).unwrap_or_else(|e| {
             tracing::error!("{e}, using default client");
             reqwest::Client::new()
         });
+        let relaxed_client = if tls_relaxed_fallback_enabled() {
+            build_client(user_agent, proxy, request_timeout, true).ok()
+        } else {
+            None
+        };
         Self {
             client,
+            relaxed_client,
             inject_stealth_headers,
         }
     }
@@ -126,9 +186,15 @@ impl HttpFetcher {
         inject_stealth_headers: bool,
         request_timeout: std::time::Duration,
     ) -> CrwResult<Self> {
-        let client = build_client(user_agent, Some(proxy_url), request_timeout)?;
+        let client = build_client(user_agent, Some(proxy_url), request_timeout, false)?;
+        let relaxed_client = if tls_relaxed_fallback_enabled() {
+            build_client(user_agent, Some(proxy_url), request_timeout, true).ok()
+        } else {
+            None
+        };
         Ok(Self {
             client,
+            relaxed_client,
             inject_stealth_headers,
         })
     }
@@ -153,8 +219,8 @@ impl PageFetcher for HttpFetcher {
         // Build a fresh, fully-decorated request for each attempt. Closure
         // captures `self`, `url`, and `headers`; called once per attempt so
         // every retry sends an independent (yet identical) request.
-        let build_request = || {
-            let mut req = self.client.get(url);
+        let build_request = |client: &reqwest::Client| {
+            let mut req = client.get(url);
             if self.inject_stealth_headers {
                 req = req
                     .header("Accept", STEALTH_ACCEPT)
@@ -179,6 +245,7 @@ impl PageFetcher for HttpFetcher {
         // idempotent so this is safe. Each attempt is bounded by the caller's
         // remaining deadline so the request cannot exceed the overall budget.
         let mut attempt: u32 = 0;
+        let mut use_relaxed = false;
         let resp = loop {
             let remaining = deadline.remaining();
             if remaining.is_zero() {
@@ -188,7 +255,14 @@ impl PageFetcher for HttpFetcher {
                     (start.elapsed().as_millis().max(1)) as u64,
                 ));
             }
-            let send_fut = build_request().send();
+            // On the cert-error fallback path use the verification-disabled
+            // client; otherwise the strict client.
+            let active_client = if use_relaxed {
+                self.relaxed_client.as_ref().unwrap_or(&self.client)
+            } else {
+                &self.client
+            };
+            let send_fut = build_request(active_client).send();
             let send_result = tokio::time::timeout(remaining, send_fut).await;
             match send_result {
                 Err(_) => {
@@ -210,6 +284,20 @@ impl PageFetcher for HttpFetcher {
                     }
                 }
                 Ok(Ok(r)) => break r,
+                // TLS cert verification failed and relaxed-TLS fallback is armed:
+                // swap to the cert-disabled client and retry once. NOT a transient
+                // retry — does not consume the retry budget or back off. Placed
+                // before the generic retry arm because cert failures are
+                // `is_connect()` and would otherwise be retried on the strict
+                // client (pointless — the cert is still broken).
+                Ok(Err(e))
+                    if !use_relaxed && self.relaxed_client.is_some() && is_cert_error(&e) =>
+                {
+                    tracing::warn!(
+                        "TLS verification failed for {url} ({e}); retrying once with relaxed TLS (tls_unverified)"
+                    );
+                    use_relaxed = true;
+                }
                 Ok(Err(e)) if attempt < HTTP_MAX_RETRIES && is_retriable_error(&e) => {
                     tracing::debug!(
                         "transient HTTP error to {url} ({e}), retrying (attempt {})",
