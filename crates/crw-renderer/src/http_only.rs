@@ -41,6 +41,14 @@ fn is_retriable_status(status: u16) -> bool {
     matches!(status, 502..=504)
 }
 
+/// Returns true if a response status means the origin is rate-limiting the
+/// host's egress IP — a signal that a *different* egress IP (proxy) may clear
+/// it. 429 = Too Many Requests (the explicit rate-limit signal). Retried ONCE
+/// through the configured proxy when armed; every other status is untouched.
+fn is_ratelimit_status(status: u16) -> bool {
+    matches!(status, 429)
+}
+
 /// Is `CRW_HTTP_TLS_RELAXED_FALLBACK` enabled? When on, a fetch that fails TLS
 /// certificate verification is retried ONCE with verification disabled (small
 /// orgs frequently misconfigure their chain — e.g. a CA cert served as the leaf,
@@ -53,6 +61,20 @@ fn tls_relaxed_fallback_enabled() -> bool {
             v == "true" || v == "1" || v == "yes"
         })
         .unwrap_or(false)
+}
+
+/// The proxy URL to retry through when an origin rate-limits the host's egress
+/// IP (`CRW_HTTP_RATELIMIT_PROXY_URL`, e.g. `http://user:pass@gateway:port`).
+/// When set, a fetch that returns 429 is retried ONCE through this proxy — a
+/// different egress IP usually clears the limit, so the engine no longer stalls
+/// behind a single shared IP when a huge proxy pool is available. Unset (or
+/// empty) = behavior identical to before (no proxy retry). SSRF protection is
+/// unaffected (it runs on the resolved target URL, not the proxy hop).
+fn ratelimit_proxy_url() -> Option<String> {
+    std::env::var("CRW_HTTP_RATELIMIT_PROXY_URL")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
 }
 
 /// Returns true if a `reqwest::Error` (or anything in its source chain) is a TLS
@@ -135,6 +157,11 @@ pub struct HttpFetcher {
     /// failed strict TLS verification (`is_cert_error`); `None` keeps behavior
     /// identical to before.
     relaxed_client: Option<reqwest::Client>,
+    /// Proxy-routed client, built only when `CRW_HTTP_RATELIMIT_PROXY_URL` is
+    /// set. Used solely to retry a fetch the origin rate-limited (429) through a
+    /// different egress IP (`is_ratelimit_status`); `None` keeps behavior
+    /// identical to before.
+    ratelimit_proxy_client: Option<reqwest::Client>,
     inject_stealth_headers: bool,
 }
 
@@ -169,9 +196,13 @@ impl HttpFetcher {
         } else {
             None
         };
+        let ratelimit_proxy_client = ratelimit_proxy_url().and_then(|purl| {
+            build_client(user_agent, Some(purl.as_str()), request_timeout, false).ok()
+        });
         Self {
             client,
             relaxed_client,
+            ratelimit_proxy_client,
             inject_stealth_headers,
         }
     }
@@ -192,9 +223,13 @@ impl HttpFetcher {
         } else {
             None
         };
+        let ratelimit_proxy_client = ratelimit_proxy_url().and_then(|purl| {
+            build_client(user_agent, Some(purl.as_str()), request_timeout, false).ok()
+        });
         Ok(Self {
             client,
             relaxed_client,
+            ratelimit_proxy_client,
             inject_stealth_headers,
         })
     }
@@ -246,6 +281,7 @@ impl PageFetcher for HttpFetcher {
         // remaining deadline so the request cannot exceed the overall budget.
         let mut attempt: u32 = 0;
         let mut use_relaxed = false;
+        let mut use_proxy = false;
         let resp = loop {
             let remaining = deadline.remaining();
             if remaining.is_zero() {
@@ -257,7 +293,9 @@ impl PageFetcher for HttpFetcher {
             }
             // On the cert-error fallback path use the verification-disabled
             // client; otherwise the strict client.
-            let active_client = if use_relaxed {
+            let active_client = if use_proxy {
+                self.ratelimit_proxy_client.as_ref().unwrap_or(&self.client)
+            } else if use_relaxed {
                 self.relaxed_client.as_ref().unwrap_or(&self.client)
             } else {
                 &self.client
@@ -282,6 +320,23 @@ impl PageFetcher for HttpFetcher {
                     if !backoff.is_zero() {
                         tokio::time::sleep(backoff).await;
                     }
+                }
+                // Origin rate-limited our egress IP (429) and a fallback proxy
+                // is armed: retry ONCE through the proxy (a different egress IP
+                // usually clears the limit). Not a transient retry — does not
+                // consume the retry budget. Placed before the success arm so the
+                // 429 is not returned before the proxy is tried.
+                Ok(Ok(r))
+                    if !use_proxy
+                        && self.ratelimit_proxy_client.is_some()
+                        && is_ratelimit_status(r.status().as_u16()) =>
+                {
+                    tracing::warn!(
+                        "HTTP {} from {url} (origin rate-limited); retrying once via proxy (ratelimit_bypassed)",
+                        r.status()
+                    );
+                    drop(r);
+                    use_proxy = true;
                 }
                 Ok(Ok(r)) => break r,
                 // TLS cert verification failed and relaxed-TLS fallback is armed:
