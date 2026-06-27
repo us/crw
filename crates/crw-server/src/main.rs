@@ -58,6 +58,13 @@ async fn run_server() {
     // cap) from [document] config before any request can trigger a parse.
     crw_crawl::pdf::configure_limits(&config.document);
 
+    // Bound concurrent HTML extraction (html5ever + htmd). Extraction is moved
+    // off the async reactor onto the blocking pool; this semaphore caps its
+    // parallelism so a burst of concurrent scrapes can't oversubscribe the
+    // cores and stall the runtime. The tokio runtime builder is left at its
+    // defaults — this is the real capacity bound.
+    crw_crawl::extract_pool::configure_extract_limit(config.extraction.max_concurrent_extracts);
+
     let addr = format!("{}:{}", config.server.host, config.server.port);
     tracing::info!("Starting CRW on {addr}");
     tracing::info!("Renderer mode: {:?}", config.renderer.mode);

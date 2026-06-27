@@ -324,19 +324,23 @@ async fn run_crawl_inner(opts: CrawlOptions<'_>) {
                 }
             }
         } else {
-            match crw_extract::extract(crw_extract::ExtractOptions {
-                raw_html: &fetch_result.html,
-                source_url: &fetch_result.url,
+            // Off-reactor, parallelism-bounded extraction (see
+            // `crate::extract_pool`). The owned input lets the CPU-bound
+            // `extract()` run on the blocking pool without starving the crawl's
+            // async fan-out.
+            match crate::extract_pool::extract_offloaded(crw_extract::OwnedExtractInput {
+                raw_html: fetch_result.html.clone(),
+                source_url: fetch_result.url.clone(),
                 status_code: fetch_result.status_code,
                 rendered_with: fetch_result.rendered_with.clone(),
                 elapsed_ms: fetch_result.elapsed_ms,
                 render_decision: fetch_result.render_decision.clone(),
                 credit_cost: fetch_result.credit_cost,
                 warnings: fetch_result.warnings.clone(),
-                formats: &req.formats,
+                formats: req.formats.clone(),
                 only_main_content: req.only_main_content,
-                include_tags: &[],
-                exclude_tags: &[],
+                include_tags: Vec::new(),
+                exclude_tags: Vec::new(),
                 css_selector: None,
                 xpath: None,
                 chunk_strategy: None,
@@ -344,11 +348,12 @@ async fn run_crawl_inner(opts: CrawlOptions<'_>) {
                 filter_mode: None,
                 top_k: None,
                 domain_selectors: None,
-                captured_responses: &fetch_result.captured_responses,
-                llm_fallback: None,
+                captured_responses: fetch_result.captured_responses.clone(),
                 debug: false,
                 debug_sink: None,
-            }) {
+            })
+            .await
+            {
                 Ok(data) => data,
                 Err(err) => {
                     tracing::warn!(url, error = %err, "Crawl: extraction failed");

@@ -140,6 +140,77 @@ pub struct ExtractOptions<'a> {
     pub debug_sink: Option<Arc<Mutex<DebugCollector>>>,
 }
 
+/// Owned counterpart to [`ExtractOptions`], used to ship an extraction job
+/// across the `'static` `spawn_blocking` boundary — the borrowed
+/// [`ExtractOptions`] can't cross it. Build it from the same inputs as a
+/// `build_extract_opts` call site, move it onto the blocking pool, then
+/// reconstruct the borrowed view inside the closure with [`Self::as_opts`].
+///
+/// [`ExtractOptions`] and [`extract`] are intentionally left unchanged so every
+/// existing borrow-caller keeps compiling; this is purely additive.
+pub struct OwnedExtractInput {
+    pub raw_html: String,
+    pub source_url: String,
+    pub status_code: u16,
+    pub rendered_with: Option<String>,
+    pub elapsed_ms: u64,
+    pub render_decision: Option<RenderDecision>,
+    pub credit_cost: u32,
+    pub warnings: Vec<String>,
+    pub formats: Vec<OutputFormat>,
+    pub only_main_content: bool,
+    pub include_tags: Vec<String>,
+    pub exclude_tags: Vec<String>,
+    pub css_selector: Option<String>,
+    pub xpath: Option<String>,
+    pub chunk_strategy: Option<ChunkStrategy>,
+    pub query: Option<String>,
+    pub filter_mode: Option<FilterMode>,
+    pub top_k: Option<usize>,
+    /// Shared host→selector overrides. Held behind an `Arc` so callers can clone
+    /// the (potentially large) map by refcount instead of deep-copying it per
+    /// request.
+    pub domain_selectors: Option<Arc<HashMap<String, String>>>,
+    pub captured_responses: Vec<CapturedNetworkResponse>,
+    pub debug: bool,
+    pub debug_sink: Option<Arc<Mutex<DebugCollector>>>,
+}
+
+impl OwnedExtractInput {
+    /// Reconstruct the borrowed [`ExtractOptions`] view over this owned input.
+    ///
+    /// `llm_fallback` is always `None`: [`extract`] ignores that field (the LLM
+    /// fallback runs as a separate async stage in `crw-crawl`), and no offloaded
+    /// caller sets it — so it does not need to survive the offload boundary.
+    pub fn as_opts(&self) -> ExtractOptions<'_> {
+        ExtractOptions {
+            raw_html: &self.raw_html,
+            source_url: &self.source_url,
+            status_code: self.status_code,
+            rendered_with: self.rendered_with.clone(),
+            elapsed_ms: self.elapsed_ms,
+            render_decision: self.render_decision.clone(),
+            credit_cost: self.credit_cost,
+            warnings: self.warnings.clone(),
+            formats: &self.formats,
+            only_main_content: self.only_main_content,
+            include_tags: &self.include_tags,
+            exclude_tags: &self.exclude_tags,
+            css_selector: self.css_selector.as_deref(),
+            xpath: self.xpath.as_deref(),
+            chunk_strategy: self.chunk_strategy.as_ref(),
+            query: self.query.as_deref(),
+            filter_mode: self.filter_mode.as_ref(),
+            top_k: self.top_k,
+            domain_selectors: self.domain_selectors.as_deref(),
+            captured_responses: &self.captured_responses,
+            llm_fallback: None,
+            debug: self.debug,
+            debug_sink: self.debug_sink.clone(),
+        }
+    }
+}
+
 /// Parameters for the LLM-assisted extraction fallback. See
 /// [`LlmFallbackConfig`](crw_core::config::LlmFallbackConfig).
 #[derive(Debug, Clone)]

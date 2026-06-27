@@ -237,35 +237,39 @@ async fn scrape_url_inner(
     } else {
         None
     };
-    fn build_extract_opts<'a>(
-        fr: &'a FetchResult,
-        req: &'a ScrapeRequest,
-        extraction_cfg: &'a ExtractionConfig,
+    // Build the OWNED extraction input so the CPU-bound `extract()` can run off
+    // the async reactor via `extract_pool::extract_offloaded` (spawn_blocking
+    // needs `'static`, so the borrowed `ExtractOptions` can't cross the
+    // boundary). `domain_selectors` is wrapped in an `Arc` to avoid deep-copying
+    // the host→selector map on every request.
+    fn build_owned_extract_input(
+        fr: &FetchResult,
+        req: &ScrapeRequest,
+        extraction_cfg: &ExtractionConfig,
         debug: bool,
         sink: Option<Arc<Mutex<crw_extract::DebugCollector>>>,
-    ) -> crw_extract::ExtractOptions<'a> {
-        crw_extract::ExtractOptions {
-            raw_html: &fr.html,
-            source_url: &fr.url,
+    ) -> crw_extract::OwnedExtractInput {
+        crw_extract::OwnedExtractInput {
+            raw_html: fr.html.clone(),
+            source_url: fr.url.clone(),
             status_code: fr.status_code,
             rendered_with: fr.rendered_with.clone(),
             elapsed_ms: fr.elapsed_ms,
             render_decision: fr.render_decision.clone(),
             credit_cost: fr.credit_cost,
             warnings: fr.warnings.clone(),
-            formats: &req.formats,
+            formats: req.formats.clone(),
             only_main_content: req.only_main_content,
-            include_tags: &req.include_tags,
-            exclude_tags: &req.exclude_tags,
-            css_selector: req.css_selector.as_deref(),
-            xpath: req.xpath.as_deref(),
-            chunk_strategy: req.chunk_strategy.as_ref(),
-            query: req.query.as_deref(),
-            filter_mode: req.filter_mode.as_ref(),
+            include_tags: req.include_tags.clone(),
+            exclude_tags: req.exclude_tags.clone(),
+            css_selector: req.css_selector.clone(),
+            xpath: req.xpath.clone(),
+            chunk_strategy: req.chunk_strategy.clone(),
+            query: req.query.clone(),
+            filter_mode: req.filter_mode.clone(),
             top_k: req.top_k,
-            domain_selectors: Some(&extraction_cfg.domain_selectors),
-            captured_responses: &fr.captured_responses,
-            llm_fallback: None,
+            domain_selectors: Some(Arc::new(extraction_cfg.domain_selectors.clone())),
+            captured_responses: fr.captured_responses.clone(),
             debug,
             debug_sink: sink,
         }
@@ -296,13 +300,14 @@ async fn scrape_url_inner(
         };
         crate::pdf::convert_pdf_bytes(bytes, req, source).await?
     } else {
-        let mut data = crw_extract::extract(build_extract_opts(
+        let mut data = crate::extract_pool::extract_offloaded(build_owned_extract_input(
             &fetch_result,
             req,
             extraction_cfg,
             debug_enabled,
             debug_sink.clone(),
-        ))?;
+        ))
+        .await?;
         // LLM-assisted re-extraction when DOM result is low-quality and the
         // operator opted in via [extraction.llm_fallback]. Failure paths inside
         // the helper preserve the original markdown.
@@ -429,13 +434,16 @@ async fn scrape_url_inner(
                     // is a soft signal, not a content gate.
                     let js_status = js_fetch.status_code;
                     let js_warning = derive_target_warning(&js_fetch);
-                    if let Ok(js_data) = crw_extract::extract(build_extract_opts(
-                        &js_fetch,
-                        req,
-                        extraction_cfg,
-                        debug_enabled,
-                        debug_sink.clone(),
-                    )) {
+                    if let Ok(js_data) =
+                        crate::extract_pool::extract_offloaded(build_owned_extract_input(
+                            &js_fetch,
+                            req,
+                            extraction_cfg,
+                            debug_enabled,
+                            debug_sink.clone(),
+                        ))
+                        .await
+                    {
                         let js_md_len = js_data
                             .markdown
                             .as_deref()

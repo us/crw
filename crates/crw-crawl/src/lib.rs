@@ -19,6 +19,7 @@
 //! ```
 
 pub mod crawl;
+pub mod extract_pool;
 pub mod pdf;
 pub mod robots;
 pub mod single;
