@@ -1263,6 +1263,13 @@ pub struct ExtractionConfig {
     /// returns SPA husks of 90–500B that pass HTML-shape checks).
     #[serde(default = "default_lightpanda_retry_threshold")]
     pub lightpanda_retry_threshold_bytes: usize,
+    /// Process-wide cap on concurrent HTML → markdown extractions (html5ever +
+    /// htmd). Extraction is CPU-bound and runs on the blocking pool; this bound
+    /// keeps a burst of concurrent scrapes from oversubscribing the cores and
+    /// starving the async reactor. Defaults to ~2/3 of available cores (≈8 on a
+    /// 12-vCPU host), floored at 2.
+    #[serde(default = "default_max_concurrent_extracts")]
+    pub max_concurrent_extracts: usize,
 }
 
 fn default_http_retry_threshold() -> usize {
@@ -1271,6 +1278,13 @@ fn default_http_retry_threshold() -> usize {
 
 fn default_lightpanda_retry_threshold() -> usize {
     2000
+}
+
+fn default_max_concurrent_extracts() -> usize {
+    let cpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4);
+    (cpus * 2 / 3).max(2)
 }
 
 impl Default for ExtractionConfig {
@@ -1283,6 +1297,7 @@ impl Default for ExtractionConfig {
             llm_fallback: LlmFallbackConfig::default(),
             http_retry_threshold_bytes: default_http_retry_threshold(),
             lightpanda_retry_threshold_bytes: default_lightpanda_retry_threshold(),
+            max_concurrent_extracts: default_max_concurrent_extracts(),
         }
     }
 }
