@@ -2,6 +2,19 @@
 
 All notable changes to CRW are documented here.
 
+## [0.19.0](https://github.com/us/crw/compare/v0.18.3...v0.19.0) (2026-06-28)
+
+
+### Features
+
+* **renderer:** proxy-retry on origin rate-limit (429) ([da7ecda](https://github.com/us/crw/commit/da7ecdaff97b6d9aa995f4353afeadae91b328ef))
+* **renderer:** relaxed-TLS fallback for cert-broken origins ([13d39f6](https://github.com/us/crw/commit/13d39f692d42cc64f00389bf55943dd51a6a49ad))
+
+
+### Performance
+
+* **engine:** offload HTML extraction off the async reactor ([1683153](https://github.com/us/crw/commit/16831532dff80047fd9f9039aafc43b284e8dbca))
+
 ## [0.18.3](https://github.com/us/crw/compare/v0.18.2...v0.18.3) (2026-06-23)
 
 
