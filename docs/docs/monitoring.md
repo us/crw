@@ -24,7 +24,9 @@ Reach for `monitoring` instead of polling `/v1/scrape` yourself when you want th
 **Self-hosted users**: the full scheduler + notification control plane is part of the hosted product. The open-core engine ships the **stateless `changeTracking` primitive** (diff one scrape against a snapshot you supply) plus an optional, feature-gated **`monitor` mode** (SQLite scheduler, default OFF). See [self-hosting monitoring](#monitoring) below.
 :::
 
-:::info Two-namespace split
+:::info
+**Two-namespace split**
+
 **Monitor CRUD** (`/v1/monitor` and all sub-resources) is a **SaaS-only control-plane feature** served at `https://fastcrw.com/api`. It is not present in the open-source engine — no `/v1/monitor` route ships in `crw-server`.
 
 **Engine endpoints** (scrape, crawl, map, search, change-tracking) are served at `https://api.fastcrw.com` on the hosted product and at your own origin when self-hosting.

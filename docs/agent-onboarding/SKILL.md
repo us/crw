@@ -1,6 +1,6 @@
 ---
 name: crw
-description: "Scrape, crawl, map, and search the web using fastCRW. Use when the user needs web page content, site-wide extraction, URL discovery, or web search results. Single binary, 6 MB RAM, Firecrawl-compatible API."
+description: "Scrape, crawl, map, and search the web using fastCRW's native /v1 API. Use when the user needs web page content, site-wide extraction, URL discovery, or web search results. Single binary, 6 MB RAM; /v2 exists separately for Firecrawl migration."
 license: AGPL-3.0
 metadata:
   author: us
@@ -19,7 +19,7 @@ Use this skill when:
 - You need to extract content from a URL for context or research
 - The user wants to crawl an entire website or discover its pages
 - You need to search the web and get page content (cloud mode)
-- The user mentions Firecrawl — CRW is a drop-in replacement
+- The user mentions Firecrawl — use native `/v1` for new CRW work; use `/v2` only when migrating existing Firecrawl v2 SDK code
 
 ## Installation
 
@@ -162,4 +162,5 @@ Available fields: `title`, `url`, `description`, `snippet`, `position`,
 - Cloud API: https://fastcrw.com — 500 one-time lifetime free credits (never resets, not monthly)
 - Docs: https://docs.fastcrw.com
 - GitHub: https://github.com/us/crw
-- Firecrawl-compatible: same REST endpoints at `/v1/scrape`, `/v1/crawl`, `/v1/map`, `/v1/search`
+- Native API: `/v1/scrape`, `/v1/crawl`, `/v1/map`, and `/v1/search` are the recommended routes for new CRW integrations
+- Firecrawl migration: `/v2/*` is a compatibility layer, not the default API for new builds

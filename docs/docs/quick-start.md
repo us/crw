@@ -15,7 +15,11 @@
 
 ## Prerequisites
 
-:::info Prerequisites
+> **New to CRW? Use `/v1`.** This quick start uses the native `/v1/scrape` route. The `/v2` routes exist for Firecrawl SDK migration and compatibility-only features.
+
+:::info
+**Prerequisites**
+
 - **Terminal** — macOS Terminal, Linux shell, or Windows [WSL](https://learn.microsoft.com/en-us/windows/wsl/install)
 - **`curl`** — ships with macOS 10.15+ and most Linux distros; Windows users can use WSL or [download curl](https://curl.se/windows/)
 - **A free account** at [fastcrw.com/register](https://fastcrw.com/register) — 500 credits, one-time, no card required

@@ -2,7 +2,7 @@
 
 ## What "Compatible" Means Here
 
-CRW is built around **Firecrawl-compatible workflows**, not a blanket "drop-in replacement" claim. The goal is to preserve the core request mental model so migrations are manageable, while still documenting the places where behavior differs.
+CRW's recommended API for new integrations is native `/v1`. Compatibility means existing Firecrawl v2 SDK projects can target the `/v2` layer with fewer code changes, while still validating documented differences before production traffic moves.
 
 ## Supported alignment
 
@@ -24,6 +24,8 @@ CRW is built around **Firecrawl-compatible workflows**, not a blanket "drop-in r
 | SDKs | Official packages: `crw` (Python 0.16.0) and `crw-sdk` (TypeScript 0.16.0) |
 
 Treat this page as the source of truth during migrations.
+
+If you are not migrating Firecrawl code, start with [Choose Your Endpoint](/docs/choose-endpoint) and the native `/v1` routes instead.
 
 ## Migration Checklist
 
@@ -60,6 +62,7 @@ It is not good enough if your current system depends on features this page alrea
 
 ## Common Mistakes
 
+- Treating `/v2` as the default API for a new CRW build. Use `/v1` unless you are migrating Firecrawl v2 SDK code.
 - Assuming route-name compatibility means output semantics are identical.
 - Migrating a whole workload before testing `warning` handling and failure cases.
 - Ignoring unsupported capabilities such as screenshots and then discovering the gap in production.

@@ -15,6 +15,8 @@
 
 ## Authentication
 
+New integrations should start with the native `/v1` routes below. The `/v2` routes are documented separately as the Firecrawl compatibility surface.
+
 - Hosted API: always send `Authorization: Bearer YOUR_API_KEY`
 - Self-hosted API: auth is only required when `auth.api_keys` is configured
 - `/health` is always public

@@ -1,7 +1,7 @@
 <div class="page-intro">
   <div class="page-kicker">API Reference</div>
-  <h1>v2 API Reference</h1>
-  <p class="page-subtitle">Complete reference for every <code>/v2/*</code> route. v2 is the default surface for the TypeScript SDK and exposes object-format fields, paginated crawl status, batch scraping, file parsing, and a compatibility alias for extract.</p>
+  <h1>Firecrawl v2 Compatibility Reference</h1>
+  <p class="page-subtitle">Reference for CRW's <code>/v2/*</code> compatibility routes. New CRW integrations should start with native <code>/v1</code>; use <code>/v2</code> for Firecrawl SDK migrations, batch scraping, PDF parsing, and deprecated extract compatibility.</p>
   <div class="page-capabilities">
     <div class="page-capability"><strong>Base URL:</strong> <code>https://api.fastcrw.com</code></div>
     <div class="page-capability"><strong>Self-hosted:</strong> <code>http://localhost:3000</code></div>
@@ -14,6 +14,8 @@
 </div>
 
 ## Routes at a glance
+
+`/v2` is a compatibility layer, not the recommended API for new CRW builds. Start with `/v1` unless you are migrating existing Firecrawl v2 SDK code.
 
 | Method | Route | Purpose |
 |---|---|---|

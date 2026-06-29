@@ -1,10 +1,10 @@
 <div class="page-intro">
   <div class="page-kicker">Concepts</div>
   <h1>Choose Your Endpoint</h1>
-  <p class="page-subtitle">CRW has six capabilities. Pick the one that matches your input and output, and you will have less code to write and fewer round-trips to debug.</p>
+  <p class="page-subtitle">CRW has a native /v1 API for new integrations and a /v2 compatibility layer for Firecrawl migrations. Pick the capability that matches your input and output.</p>
   <div class="page-capabilities">
     <div class="page-capability"><strong>Six verbs:</strong> scrape, map, crawl, search, extract, parse</div>
-    <div class="page-capability"><strong>One base URL:</strong> <code>https://api.fastcrw.com</code></div>
+    <div class="page-capability"><strong>Start here:</strong> native <code>/v1</code></div>
     <div class="page-capability"><strong>Extract note:</strong> not a separate route — it is scrape + JSON format</div>
   </div>
   <div class="page-actions">
@@ -14,6 +14,8 @@
 </div>
 
 ## Comparison table
+
+New to CRW? Use `/v1`. Use `/v2` when migrating Firecrawl v2 SDK code or when the feature only exists on the compatibility surface, such as `POST /v2/batch/scrape` or `POST /v2/parse`.
 
 | Verb | Route | Input | Output | Use when | LLM required? |
 |---|---|---|---|---|---|

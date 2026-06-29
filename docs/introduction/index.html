@@ -295,7 +295,10 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
     <a class="page-btn primary" href="/quick-start">Make your first request</a>
     <a class="page-btn secondary" href="/self-hosting">Self-host CRW</a>
   </div>
-</div><div class="playground-panel">
+</div><blockquote>
+<p><strong>New to CRW? Use <code>/v1</code>.</strong> The <code>/v1</code> routes are the native fastCRW API for new integrations. Use <code>/v2</code> when migrating existing Firecrawl v2 SDK code or when you need compatibility-only routes such as batch scrape or PDF parse.</p>
+</blockquote>
+<div class="playground-panel">
   <div class="playground-kicker">30-second example</div>
   <div class="playground-title">The shortest path to a successful response</div>
   <div class="playground-copy">If this request works, you already understand the core CRW model: known URL in, clean content out. Everything else in the docs builds on that.</div>
@@ -390,8 +393,8 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
       </a></div><h2 id="why-teams-switch-to-crw">Why teams switch to CRW</h2>
 <p>CRW is meant to feel easy on day one without closing off the more serious use cases:</p>
 <ul>
-<li>one API surface for single-page scrape, discovery, bounded crawl, and extraction,</li>
-<li>Firecrawl-compatible request shapes where they matter,</li>
+<li>one native <code>/v1</code> API surface for single-page scrape, discovery, bounded crawl, search, and extraction,</li>
+<li>a <code>/v2</code> Firecrawl compatibility layer for migration work,</li>
 <li>low-ops self-hosting when you need infra control,</li>
 <li>and a built-in MCP server for agent workflows.</li>
 </ul>

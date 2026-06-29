@@ -3,46 +3,46 @@
 <head>
 <meta charset="utf-8">
 <title>What is a Firecrawl-compatible API? — fastCRW glossary</title>
-<meta name="description" content="A Firecrawl-compatible API mirrors Firecrawl's REST endpoints, request body, and response shape so client code works against either service unchanged.">
+<meta name="description" content="A Firecrawl-compatible API provides a migration surface for existing Firecrawl integrations, but new fastCRW code should start with the native /v1 API.">
 <link rel="canonical" href="https://docs.fastcrw.com/glossary/web-scraping-apis/firecrawl-compatible-api-explained/">
 </head>
 <body>
 <h1>What is a Firecrawl-compatible API?</h1>
-<p><strong>Short answer:</strong> A Firecrawl-compatible API mirrors Firecrawl's REST surface byte-for-byte: same endpoint paths, same JSON request body keys, and the same <code>{"success": true, "data": {...}}</code> response wrapper. The point is drop-in substitution — swap the base URL and your existing Firecrawl client keeps working with no code changes.</p>
+<p><strong>Short answer:</strong> A Firecrawl-compatible API preserves the core request model enough to migrate existing Firecrawl integrations with limited code changes. For fastCRW, new projects should start with native <code>/v1</code>; existing Firecrawl v2 SDK projects should use the <code>/v2</code> compatibility layer and validate behavior before production traffic moves.</p>
 
 <h2>Which endpoints are covered</h2>
-<p>A complete Firecrawl-compatible surface implements five canonical endpoints:</p>
+<p>A useful migration surface covers the common scrape, crawl, map, search, extract, batch, and parse workflows. In fastCRW, the recommended native routes are <code>/v1/*</code>; Firecrawl v2 SDK compatibility lives under <code>/v2/*</code>.</p>
 <ul>
   <li><code>POST /v1/scrape</code> — single-URL extraction returning markdown, html, links, or structured JSON.</li>
   <li><code>POST /v1/crawl</code> — multi-page crawl, started as a job and polled via <code>GET /v1/crawl/{id}</code>.</li>
-  <li><code>POST /v1/extract</code> — LLM-driven structured extraction (schema or prompt mode).</li>
+  <li><code>POST /v1/scrape</code> with <code>formats:["json"]</code> — CRW-native structured extraction for self-hosted engines.</li>
   <li><code>POST /v1/map</code> — sitemap-style URL discovery for a domain.</li>
   <li><code>POST /v1/search</code> — web search with optional inline scrape of each result.</li>
 </ul>
 
 <h2>What "compatible" really means</h2>
-<p>True compatibility is not just URL parity. It also requires:</p>
+<p>Compatibility is not just URL parity. Before a production migration, validate:</p>
 <ul>
-  <li><strong>Request body parity:</strong> the same field names (<code>url</code>, <code>formats</code>, <code>onlyMainContent</code>, <code>waitFor</code>, <code>limit</code>, <code>search</code>, <code>includeSubdomains</code>) with the same defaults.</li>
-  <li><strong>Response wrapper parity:</strong> a top-level <code>success</code> boolean plus a <code>data</code> object containing <code>markdown</code>, <code>html</code>, <code>links</code>, <code>metadata</code>, etc.</li>
+  <li><strong>Request body mapping:</strong> field names, defaults, aliases, and unsupported options.</li>
+  <li><strong>Response wrapper mapping:</strong> top-level envelopes, warnings, metadata, and error semantics.</li>
   <li><strong>Auth header parity:</strong> the same <code>Authorization: Bearer ...</code> scheme on the hosted variant.</li>
-  <li><strong>Error envelope parity:</strong> the same status codes and error JSON shape so retry logic does not need to branch on provider.</li>
+  <li><strong>Error handling:</strong> status codes and error JSON shape so retry logic behaves correctly.</li>
 </ul>
 
 <h2>How fastCRW does it</h2>
-<p>fastCRW exposes the five endpoints above at <code>https://api.fastcrw.com</code> with identical request and response shapes. See <a href="/compatibility/">the compatibility matrix</a> and the full <a href="/api-reference/">API reference</a>. The Rust binary itself is AGPL-3.0 and runs at ~50 MB RAM idle, so the same surface is available self-hosted at <code>http://localhost:3000</code>.</p>
+<p>fastCRW exposes native <code>/v1</code> routes at <code>https://api.fastcrw.com</code> and a Firecrawl v2 compatibility layer under <code>/v2</code>. See <a href="/compatibility/">the compatibility matrix</a> and the full <a href="/rest-api/">API overview</a>. The Rust binary itself is AGPL-3.0 and runs at ~50 MB RAM idle, so the same engine is available self-hosted at <code>http://localhost:3000</code>.</p>
 
 <h2>Frequently asked</h2>
 <dl>
-  <dt>Can I point an existing Firecrawl SDK at fastCRW?</dt><dd>Yes. Most SDKs accept a base-URL override. Change it from <code>https://api.firecrawl.dev</code> to <code>https://api.fastcrw.com</code>, keep the same API key header, and existing code paths continue to work.</dd>
-  <dt>Are response fields exactly the same?</dt><dd>The shared fields (<code>markdown</code>, <code>html</code>, <code>rawHtml</code>, <code>links</code>, <code>metadata</code>, <code>success</code>, <code>data</code>) are byte-shape compatible. fastCRW adds a few extra fields like <code>renderDecision</code> and <code>creditCost</code> that Firecrawl clients ignore.</dd>
-  <dt>Does compatibility cover the crawl polling pattern?</dt><dd>Yes. <code>POST /v1/crawl</code> returns a job id and <code>GET /v1/crawl/{id}</code> returns status plus accumulated <code>data</code> entries, matching Firecrawl's polling contract.</dd>
+  <dt>Can I point an existing Firecrawl SDK at fastCRW?</dt><dd>For Firecrawl v2 SDK migrations, point the SDK at <code>https://api.fastcrw.com</code> and validate the documented differences on your workload.</dd>
+  <dt>Are response fields exactly the same?</dt><dd>No. The compatibility layer preserves the common shape where practical, but warnings, metadata, unsupported options, and error semantics can differ.</dd>
+  <dt>Does compatibility cover the crawl polling pattern?</dt><dd>Yes for the v2 compatibility surface: <code>POST /v2/crawl</code> returns a job id and <code>GET /v2/crawl/{id}</code> returns status plus paginated results.</dd>
 </dl>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
-  {"@type":"Question","name":"Can I point an existing Firecrawl SDK at fastCRW?","acceptedAnswer":{"@type":"Answer","text":"Yes. Most SDKs accept a base-URL override. Change it from https://api.firecrawl.dev to https://api.fastcrw.com, keep the same API key header, and existing code paths continue to work."}},
-  {"@type":"Question","name":"Are response fields exactly the same?","acceptedAnswer":{"@type":"Answer","text":"The shared fields (markdown, html, rawHtml, links, metadata, success, data) are byte-shape compatible. fastCRW adds a few extra fields like renderDecision and creditCost that Firecrawl clients ignore."}},
-  {"@type":"Question","name":"Does compatibility cover the crawl polling pattern?","acceptedAnswer":{"@type":"Answer","text":"Yes. POST /v1/crawl returns a job id and GET /v1/crawl/{id} returns status plus accumulated data entries, matching Firecrawl's polling contract."}}
+  {"@type":"Question","name":"Can I point an existing Firecrawl SDK at fastCRW?","acceptedAnswer":{"@type":"Answer","text":"For Firecrawl v2 SDK migrations, point the SDK at https://api.fastcrw.com and validate the documented differences on your workload."}},
+  {"@type":"Question","name":"Are response fields exactly the same?","acceptedAnswer":{"@type":"Answer","text":"No. The compatibility layer preserves the common shape where practical, but warnings, metadata, unsupported options, and error semantics can differ."}},
+  {"@type":"Question","name":"Does compatibility cover the crawl polling pattern?","acceptedAnswer":{"@type":"Answer","text":"Yes for the v2 compatibility surface: POST /v2/crawl returns a job id and GET /v2/crawl/{id} returns status plus paginated results."}}
 ]}
 </script>
 <p>← <a href="/">CRW docs home</a></p>
