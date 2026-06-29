@@ -1,6 +1,6 @@
 # Framework Integrations
 
-CRW integrates with popular AI agent frameworks and workflow tools. Since CRW exposes a Firecrawl-compatible REST API, it also works as a drop-in replacement anywhere Firecrawl is used.
+CRW integrates with popular AI agent frameworks and workflow tools. New integrations should use CRW's native `/v1` API. Existing Firecrawl v2 SDK integrations can target the `/v2` compatibility layer after validating the documented differences.
 
 ## CrewAI
 
@@ -146,12 +146,12 @@ CRW includes a built-in MCP server that works with any MCP-compatible platform. 
 | Zapier | Webhooks | Use webhook triggers with the API |
 | GitHub Actions | curl in workflow | Useful for scheduled scraping jobs |
 
-## Firecrawl Drop-in Replacement
+## Firecrawl v2 SDK Migration
 
-CRW is API-compatible with Firecrawl. Any project that uses `FIRECRAWL_BASE_URL` or similar config can switch to CRW with zero code changes:
+For existing Firecrawl v2 SDK projects, point the SDK at a CRW engine and validate the compatibility matrix before switching production traffic:
 
 ```bash
-# Point Firecrawl SDK at your CRW instance
+# Point the Firecrawl SDK at your CRW instance
 export FIRECRAWL_API_URL=http://localhost:3000
 ```
 
@@ -163,7 +163,7 @@ app = FirecrawlApp(api_url="http://localhost:3000")
 result = app.scrape_url("https://example.com")
 ```
 
-> **Note:** The Firecrawl Python SDK has changed its API across versions. The above works with `firecrawl-py` v1.x. Check the [Firecrawl docs](https://docs.firecrawl.dev) for the latest SDK usage.
+> **Note:** This is a migration path, not the default recommendation for new CRW code. New integrations should use the CRW SDKs or direct `/v1` HTTP routes.
 
 ## Python (Direct HTTP)
 
@@ -227,7 +227,7 @@ Not every integration supports every endpoint. Search requires a cloud API backe
 | [Dify](https://github.com/us/dify-plugin-crw) | Yes | Yes | Yes | Yes (cloud) | -- |
 | MCP Server (proxy mode) | Yes | Yes | Yes | Yes | -- |
 | MCP Server (embedded, no SearXNG) | Yes | Yes | Yes | -- | -- |
-| Firecrawl SDK (drop-in) | Yes | Yes | Yes | -- | Yes |
+| Firecrawl v2 SDK migration | Yes | Yes | Yes | -- | Validate compatibility first |
 | Direct HTTP | Yes | Yes | Yes | Yes (cloud) | Yes |
 
 :::note
@@ -246,4 +246,4 @@ In MCP **proxy mode** (`--api-url` / `CRW_API_URL` set), `crw_search` is always 
 | [Agno](https://github.com/agno-agi/agno) | Toolkit | PR pending | [#7183](https://github.com/agno-agi/agno/pull/7183) |
 | [Dify](https://github.com/langgenius/dify) | Plugin | Ready | [`dify-plugin-crw`](https://github.com/us/dify-plugin-crw) |
 | MCP (10+ platforms) | Built-in | **Shipped** | [MCP docs](/docs/mcp) |
-| Firecrawl SDK | Drop-in | **Works now** | API compatible |
+| Firecrawl SDK | Migration via `/v2` | **Works now** | Compatibility layer |

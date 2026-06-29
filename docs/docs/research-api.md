@@ -1,9 +1,9 @@
 # Research API
 
-A Firecrawl-compatible, purpose-built API for scientific-research agents: search
-papers, inspect metadata, read passages, expand the citation graph, and search
-research-related GitHub. The endpoint surface mirrors Firecrawl's research API,
-so the Firecrawl research SDK/CLI works drop-in against `https://api.fastcrw.com`.
+A purpose-built research API for scientific agents: search papers, inspect
+metadata, read passages, expand the citation graph, and search research-related
+GitHub. These routes live on the `/v2` compatibility surface because they mirror
+Firecrawl's research API for migration work.
 
 On the [ArXivQA benchmark](https://fastcrw.com/benchmarks/arxivqa-research-recall)
 this stack reaches **61.0% recall — ahead of Firecrawl's Research Index (53.3%)**.

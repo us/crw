@@ -1,8 +1,8 @@
 # crw-sdk
 
 TypeScript/JavaScript SDK for [CRW](https://github.com/us/crw) — the fast,
-Firecrawl-compatible web scraper. Scrape, crawl, map, search, parse, and extract
-any website from Node.
+Rust-native web data API. Use native `/v1` methods for new CRW integrations;
+Firecrawl v2 compatibility is available separately for migration work.
 
 Zero runtime dependencies (Node 18+ `fetch`). Dual ESM + CommonJS.
 

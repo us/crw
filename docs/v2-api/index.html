@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>v2 API Reference — CRW Docs</title>
-  <meta name="description" content="Complete reference for every /v2/* route. v2 is the default surface for the TypeScript SDK and exposes object-format fields, paginated crawl status, batch scraping, file parsing, and a compatibility a">
+  <title>Firecrawl v2 Compatibility — CRW Docs</title>
+  <meta name="description" content="Reference for CRW's /v2/* compatibility routes. New CRW integrations should start with native /v1 ; use /v2 for Firecrawl SDK migrations, batch scraping, PDF parsing, and deprecated extract compatibil">
   <meta name="keywords" content="web scraper, web crawler, firecrawl alternative, crawl4ai alternative, self-hosted scraper, rust web scraper, mcp server, ai web scraping, rag pipeline, llm extraction, open source crawler, headless browser scraper">
   <link rel="canonical" href="https://docs.fastcrw.com/v2-api">
   <link rel="icon" href="/favicon.png?v=2" type="image/png">
@@ -14,14 +14,14 @@
   <!-- Open Graph -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://docs.fastcrw.com/v2-api">
-  <meta property="og:title" content="v2 API Reference — CRW | Web Scraper in Rust">
-  <meta property="og:description" content="Complete reference for every /v2/* route. v2 is the default surface for the TypeScript SDK and exposes object-format fields, paginated crawl status, batch scraping, file parsing, and a compatibility a">
+  <meta property="og:title" content="Firecrawl v2 Compatibility — CRW | Web Scraper in Rust">
+  <meta property="og:description" content="Reference for CRW's /v2/* compatibility routes. New CRW integrations should start with native /v1 ; use /v2 for Firecrawl SDK migrations, batch scraping, PDF parsing, and deprecated extract compatibil">
   <meta property="og:site_name" content="CRW">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="v2 API Reference — CRW Docs">
-  <meta name="twitter:description" content="Complete reference for every /v2/* route. v2 is the default surface for the TypeScript SDK and exposes object-format fields, paginated crawl status, batch scraping, file parsing, and a compatibility a">
+  <meta name="twitter:title" content="Firecrawl v2 Compatibility — CRW Docs">
+  <meta name="twitter:description" content="Reference for CRW's /v2/* compatibility routes. New CRW integrations should start with native /v1 ; use /v2 for Firecrawl SDK migrations, batch scraping, PDF parsing, and deprecated extract compatibil">
 
   <!-- Structured Data (JSON-LD) -->
   <script type="application/ld+json">
@@ -284,8 +284,8 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
     <main class="content" id="content">
       <article id="article" role="main"><div class="page-intro">
   <div class="page-kicker">API Reference</div>
-  <h1 id="v2-api-reference">v2 API Reference</h1>
-  <p class="page-subtitle">Complete reference for every <code>/v2/*</code> route. v2 is the default surface for the TypeScript SDK and exposes object-format fields, paginated crawl status, batch scraping, file parsing, and a compatibility alias for extract.</p>
+  <h1 id="firecrawl-v2-compatibility-reference">Firecrawl v2 Compatibility Reference</h1>
+  <p class="page-subtitle">Reference for CRW's <code>/v2/*</code> compatibility routes. New CRW integrations should start with native <code>/v1</code>; use <code>/v2</code> for Firecrawl SDK migrations, batch scraping, PDF parsing, and deprecated extract compatibility.</p>
   <div class="page-capabilities">
     <div class="page-capability"><strong>Base URL:</strong> <code>https://api.fastcrw.com</code></div>
     <div class="page-capability"><strong>Self-hosted:</strong> <code>http://localhost:3000</code></div>
@@ -296,6 +296,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
     <a class="page-btn secondary" href="#v2document-response-shape">Response Shape</a>
   </div>
 </div><h2 id="routes-at-a-glance">Routes at a glance</h2>
+<p><code>/v2</code> is a compatibility layer, not the recommended API for new CRW builds. Start with <code>/v1</code> unless you are migrating existing Firecrawl v2 SDK code.</p>
 <table>
 <thead>
 <tr>

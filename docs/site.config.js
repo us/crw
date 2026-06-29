@@ -132,7 +132,7 @@ export default {
         { title: "Error Codes", slug: "error-codes", icon: "info" },
         { title: "Credit Costs", slug: "credit-costs", icon: "list" },
         { title: "Compatibility", slug: "compatibility", icon: "check" },
-        { title: "v2 API Reference", slug: "v2-api", icon: "server" },
+        { title: "Firecrawl v2 Compatibility", slug: "v2-api", icon: "server" },
         { title: "Capabilities", slug: "capabilities", icon: "check" },
         { title: "Glossary", slug: "glossary", icon: "book" },
         { title: "Changelog", slug: "changelog", icon: "list" },

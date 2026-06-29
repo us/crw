@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Research API — CRW Docs</title>
-  <meta name="description" content="A Firecrawl-compatible, purpose-built API for scientific-research agents: search">
+  <meta name="description" content="A purpose-built research API for scientific agents: search papers, inspect">
   <meta name="keywords" content="web scraper, web crawler, firecrawl alternative, crawl4ai alternative, self-hosted scraper, rust web scraper, mcp server, ai web scraping, rag pipeline, llm extraction, open source crawler, headless browser scraper">
   <link rel="canonical" href="https://docs.fastcrw.com/research-api">
   <link rel="icon" href="/favicon.png?v=2" type="image/png">
@@ -15,13 +15,13 @@
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://docs.fastcrw.com/research-api">
   <meta property="og:title" content="Research API — CRW | Web Scraper in Rust">
-  <meta property="og:description" content="A Firecrawl-compatible, purpose-built API for scientific-research agents: search">
+  <meta property="og:description" content="A purpose-built research API for scientific agents: search papers, inspect">
   <meta property="og:site_name" content="CRW">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Research API — CRW Docs">
-  <meta name="twitter:description" content="A Firecrawl-compatible, purpose-built API for scientific-research agents: search">
+  <meta name="twitter:description" content="A purpose-built research API for scientific agents: search papers, inspect">
 
   <!-- Structured Data (JSON-LD) -->
   <script type="application/ld+json">
@@ -283,10 +283,10 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 
     <main class="content" id="content">
       <article id="article" role="main"><h1 id="research-api">Research API</h1>
-<p>A Firecrawl-compatible, purpose-built API for scientific-research agents: search
-papers, inspect metadata, read passages, expand the citation graph, and search
-research-related GitHub. The endpoint surface mirrors Firecrawl&#39;s research API,
-so the Firecrawl research SDK/CLI works drop-in against <code>https://api.fastcrw.com</code>.</p>
+<p>A purpose-built research API for scientific agents: search papers, inspect
+metadata, read passages, expand the citation graph, and search research-related
+GitHub. These routes live on the <code>/v2</code> compatibility surface because they mirror
+Firecrawl&#39;s research API for migration work.</p>
 <p>On the <a href="https://fastcrw.com/benchmarks/arxivqa-research-recall">ArXivQA benchmark</a>
 this stack reaches <strong>61.0% recall — ahead of Firecrawl&#39;s Research Index (53.3%)</strong>.
 It&#39;s <strong>live</strong>: results come from merging our own SearXNG search (web + research
