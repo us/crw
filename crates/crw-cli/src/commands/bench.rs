@@ -64,6 +64,24 @@ pub struct BenchArgs {
     /// RNG seed for the bootstrap CI, so the reported interval is reproducible.
     #[arg(long, default_value_t = 42)]
     pub seed: u64,
+
+    /// Enable adaptive multi-round retrieval (a 2nd evidence-scout round fires
+    /// when round-1 abstains). Off = single-shot floor. The route honors this
+    /// per-request override.
+    #[arg(long)]
+    pub multi_round: bool,
+
+    /// Number of diverse query rewrites fetched + unioned per question (recall
+    /// lever for long multi-hop queries). Omitted = server default (off).
+    #[arg(long, value_name = "N")]
+    pub query_expand: Option<usize>,
+
+    /// How many questions to run concurrently. 1 = sequential. Higher cuts
+    /// wall-clock but the ceiling is the upstream limits — SearXNG engine
+    /// blocks, residential-proxy connection caps, and the synth model's TPM —
+    /// not CPU. Watch the empty/error rate when raising it.
+    #[arg(long, default_value_t = 1)]
+    pub concurrency: usize,
 }
 
 /// One graded question.
@@ -97,6 +115,9 @@ struct Report {
     ci_low: f64,
     ci_high: f64,
     seed: u64,
+    /// Search config under test, so floor vs tuned runs are self-describing.
+    multi_round: bool,
+    query_expand: Option<usize>,
     timestamp_unix: u64,
 }
 
@@ -115,6 +136,8 @@ struct CrwHttp {
     base: String,
     key: Option<String>,
     search_limit: u32,
+    multi_round: bool,
+    query_expand: Option<usize>,
 }
 
 impl SearchProvider for CrwHttp {
@@ -130,14 +153,31 @@ impl SearchProvider for CrwHttp {
             answer: Option<String>,
         }
 
+        // `answer` synthesis is server-gated on `scrapeOptions` being present
+        // (it needs page markdown to synthesize from) — omit it and the server
+        // returns no answer and a "scrapeOptions required" warning. An empty
+        // object is enough; formats defaults to markdown server-side.
+        // `answerTemperature: 0` makes the synthesized answer deterministic so
+        // A/B bench runs are reproducible (the route honors this override).
+        let mut body = serde_json::json!({
+            "query": query,
+            "answer": true,
+            "limit": self.search_limit,
+            "scrapeOptions": {},
+            "answerTemperature": 0,
+        });
+        // Tuned-run levers — omitted entirely on a floor run so the server
+        // applies its (off) defaults.
+        if self.multi_round {
+            body["multiRound"] = serde_json::json!(true);
+        }
+        if let Some(n) = self.query_expand {
+            body["queryExpandVariants"] = serde_json::json!(n);
+        }
         let mut req = self
             .client
             .post(format!("{}/v1/search", self.base.trim_end_matches('/')))
-            .json(&serde_json::json!({
-                "query": query,
-                "answer": true,
-                "limit": self.search_limit,
-            }));
+            .json(&body);
         if let Some(k) = &self.key {
             req = req.bearer_auth(k);
         }
@@ -211,50 +251,104 @@ async fn run_inner(args: BenchArgs) -> Result<(), String> {
         base: args.server.clone(),
         key: args.api_key.clone(),
         search_limit: args.search_limit,
+        multi_round: args.multi_round,
+        query_expand: args.query_expand,
     };
 
-    // ponytail: sequential — one question at a time. A bench run is offline and
-    // correctness/clarity beat wall-clock; add --concurrency if 800 questions
-    // is too slow in practice.
-    let mut results = Vec::with_capacity(items.len());
-    for (i, item) in items.iter().enumerate() {
-        let (prediction, mut err) = match provider.answer(&item.prompt).await {
-            Ok(a) => (a, None),
-            Err(e) => (String::new(), Some(e)),
-        };
-        let passed = if prediction.is_empty() {
-            false
-        } else {
-            match judge(&judge_cfg, &item.prompt, &item.answer, &prediction).await {
-                Ok(p) => p,
-                Err(e) => {
-                    err = Some(format!("judge: {e}"));
+    // Snapshot dir + incremental results sink, opened *before* the loop so a
+    // multi-hour run survives a crash/kill: each verdict is appended and flushed
+    // as it lands, not buffered to the end. write_snapshot() later rewrites a
+    // clean canonical file from the full in-memory vec.
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let run_dir = args.output.join(ts.to_string());
+    std::fs::create_dir_all(&run_dir).map_err(|e| format!("mkdir {}: {e}", run_dir.display()))?;
+    let sink = std::io::BufWriter::new(
+        std::fs::File::create(run_dir.join("frames_results.jsonl"))
+            .map_err(|e| format!("create results file: {e}"))?,
+    );
+
+    // `--concurrency N` keeps N questions in flight (buffer_unordered). The work
+    // is I/O-bound (search + scrape + LLM), so overlapping awaits — not CPU
+    // parallelism — is the win. The real ceiling is upstream (SearXNG engine
+    // blocks, residential-proxy connection caps, synth-model TPM), so the safe N
+    // is empirical: watch the empty/error rate. The sink is a std Mutex locked
+    // only across the sync write, never across an await (no runtime deadlock).
+    use futures::stream::StreamExt;
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let sink = Mutex::new(sink);
+    let done = AtomicUsize::new(0);
+    let pass_count = AtomicUsize::new(0);
+    let total = items.len();
+    let conc = args.concurrency.max(1);
+
+    let results: Vec<ItemResult> = futures::stream::iter(items.iter())
+        .map(|item| {
+            let provider = &provider;
+            let judge_cfg = &judge_cfg;
+            let sink = &sink;
+            let done = &done;
+            let pass_count = &pass_count;
+            async move {
+                let (prediction, mut err) = match provider.answer(&item.prompt).await {
+                    Ok(a) => (a, None),
+                    Err(e) => (String::new(), Some(e)),
+                };
+                let passed = if prediction.is_empty() {
                     false
+                } else {
+                    match judge(judge_cfg, &item.prompt, &item.answer, &prediction).await {
+                        Ok(p) => p,
+                        Err(e) => {
+                            err = Some(format!("judge: {e}"));
+                            false
+                        }
+                    }
+                };
+                let item_result = ItemResult {
+                    prompt: item.prompt.clone(),
+                    truth: item.answer.clone(),
+                    prediction,
+                    passed,
+                    error: err,
+                };
+                // Persist incrementally (crash safety). Lock spans only the sync
+                // write — never an await — so it can't stall the runtime.
+                if let Ok(line) = serde_json::to_string(&item_result) {
+                    use std::io::Write;
+                    if let Ok(mut s) = sink.lock() {
+                        let _ = writeln!(s, "{line}");
+                        let _ = s.flush();
+                    }
                 }
+                if passed {
+                    pass_count.fetch_add(1, Ordering::Relaxed);
+                }
+                let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+                if n.is_multiple_of(10) || n == total {
+                    eprintln!(
+                        "  {n}/{total} done · {} pass",
+                        pass_count.load(Ordering::Relaxed)
+                    );
+                }
+                item_result
             }
-        };
-        results.push(ItemResult {
-            prompt: item.prompt.clone(),
-            truth: item.answer.clone(),
-            prediction,
-            passed,
-            error: err,
-        });
-        if (i + 1) % 10 == 0 || i + 1 == items.len() {
-            let p = results.iter().filter(|r| r.passed).count();
-            eprintln!("  {}/{} done · {} pass", i + 1, items.len(), p);
-        }
-    }
+        })
+        .buffer_unordered(conc)
+        .collect()
+        .await;
+
+    let _ = sink.into_inner(); // flush + close the results file
 
     // ── Aggregate + snapshot ──
     let passed = results.iter().filter(|r| r.passed).count();
     let n = results.len();
     let score = passed as f64 / n as f64;
     let (ci_low, ci_high) = bootstrap_ci(&results, args.seed);
-    let ts = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
 
     let report = Report {
         dataset: args.dataset.clone(),
@@ -267,10 +361,11 @@ async fn run_inner(args: BenchArgs) -> Result<(), String> {
         ci_low,
         ci_high,
         seed: args.seed,
+        multi_round: args.multi_round,
+        query_expand: args.query_expand,
         timestamp_unix: ts,
     };
 
-    let run_dir = args.output.join(ts.to_string());
     write_snapshot(&run_dir, &report, &results)?;
 
     println!(
@@ -464,6 +559,7 @@ fn report_md(r: &Report) -> String {
         "# crw bench — {dataset}\n\n\
          - provider: `{provider}` @ `{server}`\n\
          - judge: `{judge}`\n\
+         - config: multiRound={mr}, queryExpand={qe}\n\
          - questions: {n}\n\
          - **score: {score:.1}%** ({passed}/{n})\n\
          - 95% CI (bootstrap, seed {seed}): {lo:.1}–{hi:.1}%\n\
@@ -472,6 +568,11 @@ fn report_md(r: &Report) -> String {
         provider = r.provider,
         server = r.server,
         judge = r.judge_model,
+        mr = r.multi_round,
+        qe = r
+            .query_expand
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| "off".into()),
         n = r.n,
         score = r.score * 100.0,
         passed = r.passed,
