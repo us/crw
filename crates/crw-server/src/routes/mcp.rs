@@ -91,6 +91,9 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
                 per_host_max_concurrent: state.config.crawler.per_host_max_concurrent,
                 crawl_fallback: req.crawl_fallback,
                 url_filter: state.url_filter.clone(),
+                max_urls: req
+                    .limit
+                    .unwrap_or(crw_crawl::crawl::DEFAULT_MAX_DISCOVERED_URLS),
             })
             .await
             .map_err(|e| format!("{e}"))?;

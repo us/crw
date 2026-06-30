@@ -83,6 +83,12 @@ pub async fn map(
         per_host_max_concurrent: state.config.crawler.per_host_max_concurrent,
         crawl_fallback,
         url_filter: state.url_filter.clone(),
+        // Push the caller's limit INTO discovery so a large `limit` actually
+        // discovers that many URLs. The post-filter `truncate` below stays as a
+        // safety net (and trims when include/exclude/search narrow the set).
+        max_urls: req
+            .limit
+            .unwrap_or(crw_crawl::crawl::DEFAULT_MAX_DISCOVERED_URLS),
     });
 
     let result = match tokio::time::timeout(Duration::from_secs(timeout_secs), fut).await {
@@ -101,7 +107,8 @@ pub async fn map(
         let needle = s.to_lowercase();
         urls.retain(|u| u.to_lowercase().contains(&needle));
     }
-    if let Some(limit) = req.limit {
+    // `0` means unbounded (matches discovery); only truncate for a positive cap.
+    if let Some(limit) = req.limit.filter(|l| *l > 0) {
         urls.truncate(limit);
     }
 

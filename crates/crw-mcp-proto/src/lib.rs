@@ -232,7 +232,7 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
                     "limit": {
                         "type": "integer",
                         "minimum": 0,
-                        "description": "Max URLs returned; 0 = unbounded (default 100)"
+                        "description": "Max URLs to discover AND return; 0 = unbounded (default 100). Raise it (e.g. 50000) to pull deep/large sitemaps."
                     }
                 },
                 "required": ["url"]
@@ -694,18 +694,19 @@ pub fn apply_bounds(tool_name: &str, args: &Value, mut value: Value) -> Value {
     value
 }
 
-/// Remove MCP-only control args (`maxLength`, `crw_map`'s `limit`) before a proxy
-/// forwards the call to a REST endpoint that may reject unknown body fields. These
-/// are applied locally via [`apply_bounds`] on the response instead. Note
-/// `crw_search.limit` is a *real* backend param and is intentionally NOT stripped.
+/// Remove MCP-only control args (`maxLength`) before a proxy forwards the call
+/// to a REST endpoint that may reject unknown body fields. These are applied
+/// locally via [`apply_bounds`] on the response instead.
+///
+/// `crw_map`'s `limit` and `crw_search`'s `limit` are *real* backend params and
+/// are intentionally NOT stripped: `/v1/map` now drives sitemap discovery depth
+/// from `limit`, so forwarding it lets a deliberate large limit actually find
+/// (not just slice) more URLs. `apply_bounds` still caps the response.
 pub fn strip_mcp_only_args(tool_name: &str, mut args: Value) -> Value {
     if let Some(obj) = args.as_object_mut() {
         match tool_name {
             "crw_scrape" | "crw_parse_file" | "crw_check_crawl_status" => {
                 obj.remove("maxLength");
-            }
-            "crw_map" => {
-                obj.remove("limit");
             }
             _ => {}
         }
@@ -1169,8 +1170,9 @@ mod tests {
         assert!(scrape.get("maxLength").is_none());
         assert_eq!(scrape["url"], json!("u"));
 
+        // crw_map.limit now drives backend discovery — must NOT be stripped.
         let map = strip_mcp_only_args("crw_map", json!({ "url": "u", "limit": 50 }));
-        assert!(map.get("limit").is_none());
+        assert_eq!(map["limit"], json!(50));
 
         // crw_search.limit is a real backend param — must NOT be stripped.
         let search = strip_mcp_only_args("crw_search", json!({ "query": "q", "limit": 5 }));

@@ -36,6 +36,10 @@ pub struct MapArgs {
     #[arg(long)]
     pub sitemap_only: bool,
 
+    /// Max URLs to discover (up to 5,000,000). Raise it to dump large sitemaps.
+    #[arg(long, default_value_t = crw_crawl::crawl::DEFAULT_MAX_DISCOVERED_URLS)]
+    pub limit: usize,
+
     /// Enable JavaScript rendering
     #[arg(long)]
     pub js: bool,
@@ -143,6 +147,7 @@ pub async fn run(mut args: MapArgs) -> Result<(), CmdError> {
         deadline_ms_per_page: args.timeout,
         per_host_max_concurrent: 2,
         url_filter: None,
+        max_urls: args.limit,
     };
 
     let result = match discover_urls(opts).await {

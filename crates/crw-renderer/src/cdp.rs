@@ -798,11 +798,19 @@ fn build_auth_response(request_id: &str, creds: Option<(&str, &str)>) -> serde_j
 /// `creds` is composed *per `fetch_inner` call* with the request's country
 /// suffix already applied, captured by move into this future so concurrent
 /// pool slots cannot cross-contaminate credentials.
+///
+/// `continue_paused` controls who owns `Fetch.requestPaused`: in auth-only mode
+/// (no interception pump) this pump must plainly continue every paused request,
+/// because `Fetch.enable` is on with `[*]` patterns and nothing else would
+/// resume them — the page would hang. When the intercept pump runs alongside
+/// (auth + interception) it owns `requestPaused`, so this stays `false` to avoid
+/// two pumps double-continuing the same request.
 async fn run_auth_pump(
     conn: &CdpConnection,
     mut rx: broadcast::Receiver<CdpEvent>,
     creds: Option<(String, String)>,
     session_id: &str,
+    continue_paused: bool,
 ) {
     let cmd_timeout = Duration::from_secs(2);
     loop {
@@ -811,10 +819,27 @@ async fn run_auth_pump(
             Err(broadcast::error::RecvError::Lagged(_)) => continue,
             Err(broadcast::error::RecvError::Closed) => return,
         };
-        if ev.method != "Fetch.authRequired" {
+        if ev.session_id.as_deref() != Some(session_id) {
             continue;
         }
-        if ev.session_id.as_deref() != Some(session_id) {
+        if ev.method == "Fetch.requestPaused" {
+            if !continue_paused {
+                continue;
+            }
+            let Some(request_id) = ev.params.get("requestId").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            let _ = conn
+                .send_recv(
+                    "Fetch.continueRequest",
+                    serde_json::json!({ "requestId": request_id }),
+                    Some(session_id),
+                    cmd_timeout,
+                )
+                .await;
+            continue;
+        }
+        if ev.method != "Fetch.authRequired" {
             continue;
         }
         let request_id = ev
@@ -2164,19 +2189,21 @@ impl CdpRenderer {
         // Optionally enable request interception. Must be done before
         // `Page.navigate` because `Fetch.enable` pauses the document request
         // too — pump must already be consuming `Fetch.requestPaused` by then.
-        // When only auth is active (no interception), pass empty `patterns: []`
-        // — omitting the field defaults CDP to "match all" and would pause
-        // every request without a consumer.
+        //
+        // Patterns are ALWAYS `[*]` when we enable Fetch. Chrome rejects an
+        // empty `patterns` array together with `handleAuthRequests: true`
+        // (`-32602 Can't specify empty patterns with handleAuth set`), which
+        // silently broke every proxy that needs auth — e.g. DataImpulse — on the
+        // Chrome path. With `[*]` Chrome pauses every request via
+        // `Fetch.requestPaused`, so a consumer MUST continue them: the intercept
+        // pump (when interception is on) or the auth pump's `continue_paused`
+        // branch (auth-only). Without that consumer every request would hang.
         let intercept_active = self.intercept_active_for(url);
         if intercept_active || auth_active {
             let mut params = serde_json::Map::new();
             params.insert(
                 "patterns".into(),
-                if intercept_active {
-                    serde_json::json!([{ "urlPattern": "*" }])
-                } else {
-                    serde_json::json!([])
-                },
+                serde_json::json!([{ "urlPattern": "*" }]),
             );
             if auth_active {
                 params.insert("handleAuthRequests".into(), serde_json::json!(true));
@@ -2293,8 +2320,13 @@ impl CdpRenderer {
             (true, true) => {
                 let intercept_pump =
                     run_intercept_pump(conn, conn.subscribe(), &self.blocklist, &session_id);
-                let auth_pump =
-                    run_auth_pump(conn, conn.subscribe(), effective_creds.clone(), &session_id);
+                let auth_pump = run_auth_pump(
+                    conn,
+                    conn.subscribe(),
+                    effective_creds.clone(),
+                    &session_id,
+                    false,
+                );
                 tokio::select! {
                     biased;
                     res = work => res,
@@ -2330,8 +2362,13 @@ impl CdpRenderer {
                 }
             }
             (false, true) => {
-                let auth_pump =
-                    run_auth_pump(conn, conn.subscribe(), effective_creds.clone(), &session_id);
+                let auth_pump = run_auth_pump(
+                    conn,
+                    conn.subscribe(),
+                    effective_creds.clone(),
+                    &session_id,
+                    true,
+                );
                 tokio::select! {
                     biased;
                     res = work => res,
