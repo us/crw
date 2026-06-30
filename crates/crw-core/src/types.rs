@@ -540,6 +540,13 @@ pub struct ChunkResult {
 pub struct ScrapeData {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub markdown: Option<String>,
+    /// Content fingerprint of the canonical markdown: hex SHA-256 of the
+    /// normalized markdown (`crw_diff::snapshot::hash_markdown`). Stable across
+    /// CRLF/whitespace noise, so clients can dedup/cache and evidence offsets
+    /// (highlights, citations) can be tied to an exact source revision. `None`
+    /// when no markdown was produced.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_hash: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub html: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

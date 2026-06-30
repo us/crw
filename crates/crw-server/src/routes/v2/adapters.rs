@@ -281,6 +281,7 @@ mod tests {
     fn fake_doc(url: &str) -> ScrapeData {
         ScrapeData {
             markdown: Some("# hi".to_string()),
+            source_hash: None,
             html: None,
             raw_html: None,
             plain_text: None,

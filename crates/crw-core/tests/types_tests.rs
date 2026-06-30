@@ -147,6 +147,7 @@ fn map_request_defaults() {
 fn scrape_data_skip_serializing_none() {
     let data = ScrapeData {
         markdown: Some("# Hello".into()),
+        source_hash: None,
         html: None,
         raw_html: None,
         plain_text: None,
@@ -259,6 +260,7 @@ fn debug_extraction_camel_case_wire_format() {
 fn scrape_data_serializes_debug_extraction_as_camel_case() {
     let mut data = ScrapeData {
         markdown: None,
+        source_hash: None,
         html: None,
         raw_html: None,
         plain_text: None,

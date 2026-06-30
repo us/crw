@@ -519,6 +519,9 @@ fn build_scrape_data(
         } else {
             None
         },
+        // Filled at the scrape choke point (single::scrape_url) for PDF-URL
+        // scrapes; stays None for the direct /v2/parse upload path.
+        source_hash: None,
         html: None,
         raw_html: None,
         plain_text: if formats.contains(&OutputFormat::PlainText) {
