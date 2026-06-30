@@ -19,6 +19,7 @@
 pub mod config;
 pub mod deadline;
 pub mod error;
+pub mod evidence;
 pub mod mcp;
 pub mod metrics;
 pub mod proxy;
