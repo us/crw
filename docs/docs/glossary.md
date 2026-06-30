@@ -12,7 +12,7 @@ Breadth-first search is the traversal strategy fastCRW uses for the [`/v1/crawl`
 
 ## BYOK (Bring Your Own Key)
 
-BYOK means supplying your own LLM provider API key per request instead of relying on a server-configured default. Pass `llmApiKey`, `llmProvider`, and `llmModel` in the request body when calling `formats: ["json"]` or `formats: ["summary"]` to have fastCRW bill your LLM account directly rather than the server's. On the hosted cloud, BYOK requests pay only a flat infrastructure fee with no token markup. On self-hosted deployments, BYOK is the only option unless you configure `[extraction.llm]` in `config.toml`. See [Output Formats](/docs/output-formats) and [Extract](/docs/extract) for usage.
+BYOK means supplying your own LLM provider API key per request instead of relying on a server-configured default. Pass `llmApiKey`, `llmProvider`, and `llmModel` in the request body when calling `formats: ["json"]` or `formats: ["summary"]` to have fastCRW bill your LLM account directly rather than the server's. On self-hosted deployments, supplying your own key is the only option unless you configure `[extraction.llm]` in `config.toml`. See [Output Formats](/docs/output-formats) and [Extract](/docs/extract) for usage.
 
 ---
 
