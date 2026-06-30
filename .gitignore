@@ -22,3 +22,7 @@ config.local.toml
 bench/secrets/
 *-service-account*.json
 config.local-bench.toml
+
+# crw bench run artifacts + downloaded datasets (not source; contain model names)
+bench/runs/
+bench/datasets/
