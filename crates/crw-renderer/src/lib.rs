@@ -187,23 +187,13 @@ fn tier_timeouts_from(
     m
 }
 
-/// Per-renderer credit cost. Exposed so the routing layer can populate
-/// `FetchResult.credit_cost` and `/v1/scrape` charge accurately.
-fn credit_for(kind: RendererKind) -> u32 {
-    match kind {
-        RendererKind::Http => 1,
-        RendererKind::Lightpanda => 1,
-        RendererKind::Chrome => 2,
-        // Engine-internal cost only. SaaS billing reads request-body
-        // `renderer` string and still charges 1 credit per scrape regardless.
-        RendererKind::ChromeProxy => 2,
-        // Camoufox stealth: a full real-browser render (≈Chrome=2) plus the
-        // REST create-tab/evaluate/destroy-session round-trip and anti-bot
-        // warm-up, ≈1.5× Chrome rounded up. Engine-internal cost only (the same
-        // SaaS-billing note as ChromeProxy applies). Revisit to 2 if operational
-        // metrics show parity with Chrome.
-        RendererKind::Camoufox => 3,
-    }
+/// Credit cost per fetched page. Flat 1 for every renderer: the SaaS bills 1
+/// credit per scrape regardless of renderer, and `data.credit_cost` is the
+/// field docs tell users to audit their charge against — so it must equal that
+/// charge. ponytail: per-renderer pricing removed; re-add a `match kind` here
+/// (e.g. `Chrome => 2`) if a renderer ever needs to cost more than the base.
+fn credit_for(_kind: RendererKind) -> u32 {
+    1
 }
 
 /// Stamp `render_decision` and `credit_cost` for an HTTP-only result.
@@ -2861,7 +2851,7 @@ mod tests {
             "promoted host should hit chrome first, got: {}",
             &result.html[..80.min(result.html.len())]
         );
-        assert_eq!(result.credit_cost, 2, "chrome costs 2 credits");
+        assert_eq!(result.credit_cost, 1, "every renderer costs 1 credit");
         assert!(matches!(
             result.render_decision,
             Some(RenderDecision::AutoPromoted {
@@ -2997,7 +2987,7 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(result.credit_cost, 2);
+        assert_eq!(result.credit_cost, 1);
         assert!(matches!(
             result.render_decision,
             Some(RenderDecision::UserPinned {
