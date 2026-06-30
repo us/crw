@@ -68,7 +68,7 @@ pub async fn scrape_url(
             .then_some(crw_renderer::ScreenshotReq {
                 full_page: req.screenshot_full_page,
             });
-    crw_renderer::REQUEST_COUNTRY
+    let result = crw_renderer::REQUEST_COUNTRY
         .scope(req.country.clone(), async move {
             crw_renderer::REQUEST_PROXY
                 .scope(resolved_proxy, async move {
@@ -90,7 +90,18 @@ pub async fn scrape_url(
                 })
                 .await
         })
-        .await
+        .await;
+    // Single choke point for every scrape (single/crawl/batch all route here):
+    // fingerprint the canonical markdown so clients can dedup/cache and evidence
+    // offsets can be tied to an exact source revision. Computed here (not in
+    // crw-extract) because crw-diff is a crw-crawl dep and MUST NOT be a
+    // crw-extract one (the diff engine stays free of the extractor).
+    result.map(|mut data| {
+        if let Some(md) = data.markdown.as_deref() {
+            data.source_hash = Some(crw_diff::snapshot::hash_markdown(md));
+        }
+        data
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
