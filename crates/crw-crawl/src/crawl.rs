@@ -13,8 +13,12 @@ use uuid::Uuid;
 use crate::robots::RobotsTxt;
 use crate::single::derive_target_warning;
 
-/// Maximum URL discovery limit to prevent memory exhaustion.
-const MAX_DISCOVERED_URLS: usize = 5000;
+/// Default URL discovery limit when a caller doesn't specify one.
+pub const DEFAULT_MAX_DISCOVERED_URLS: usize = 5000;
+/// Hard ceiling on `DiscoverOptions::max_urls` — caps memory even when a caller
+/// asks for "everything" (a site like songsterr.com exposes ~4.3M sitemap URLs;
+/// holding them all is a few hundred MB, which is the most we allow per call).
+pub const MAX_DISCOVERED_URLS_CEILING: usize = 5_000_000;
 
 /// Options for running a BFS crawl job.
 pub struct CrawlOptions<'a> {
@@ -435,6 +439,9 @@ pub struct DiscoverOptions<'a> {
     /// Optional /map URL filter (Tier A drop + Tier B strip). When `None`,
     /// behaviour is the legacy `normalize_url` pass-through.
     pub url_filter: Option<Arc<crate::url_filter::UrlFilterCfg>>,
+    /// Max URLs to discover. Clamped to `[1, MAX_DISCOVERED_URLS_CEILING]`.
+    /// Use `DEFAULT_MAX_DISCOVERED_URLS` for the historical behaviour.
+    pub max_urls: usize,
 }
 
 /// Result of [`discover_urls`]. URLs in `urls` have already passed the
@@ -454,9 +461,10 @@ pub struct DiscoverResult {
 const SITEMAP_SUFFICIENT_THRESHOLD: usize = 50;
 /// Hard ceiling on the BFS crawl phase when sitemap was sufficient.
 const BFS_SHORT_BUDGET_SECS: u64 = 30;
-/// Recursion depth + count caps for the sitemap tree fetch.
+/// Recursion depth for the sitemap tree fetch. The per-call fetch *count* is
+/// derived from `max_urls` (`sitemap_max_fetches`) so a large `<sitemapindex>`
+/// (e.g. ultimate-guitar.com: 84 children; songsterr.com: 854) isn't truncated.
 const SITEMAP_MAX_DEPTH: u32 = 3;
-const SITEMAP_MAX_FETCHES: usize = 25;
 
 /// Discover URLs from a site (map endpoint).
 pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResult> {
@@ -473,7 +481,19 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResul
         deadline_ms_per_page,
         per_host_max_concurrent,
         url_filter,
+        max_urls,
     } = opts;
+    // `0` is the documented "unbounded" sentinel (MCP/Firecrawl) → the ceiling.
+    let max_urls = if max_urls == 0 {
+        MAX_DISCOVERED_URLS_CEILING
+    } else {
+        max_urls.clamp(1, MAX_DISCOVERED_URLS_CEILING)
+    };
+    // Each leaf sitemap holds up to ~50k URLs (spec) but commonly ~5k. To reach
+    // a large `max_urls` the tree walk must be allowed to fetch enough children:
+    // a 4.3M-URL site (songsterr) needs ~900 leaf fetches. Scale the fetch budget
+    // with the requested limit, with a small floor so the default stays cheap.
+    let sitemap_max_fetches = (max_urls / 1000).clamp(200, 50_000);
     let mut dropped_action_count: usize = 0;
     let mut stripped_tracking_count: usize = 0;
     // Helper closures around the optional filter — None ⇒ legacy pass-through
@@ -621,13 +641,13 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResul
             &parsed,
             &client,
             SITEMAP_MAX_DEPTH,
-            SITEMAP_MAX_FETCHES,
-            MAX_DISCOVERED_URLS,
+            sitemap_max_fetches,
+            max_urls,
             per_host_max_concurrent as usize,
         )
         .await;
         for u in sitemap_urls {
-            if all_urls.len() >= MAX_DISCOVERED_URLS {
+            if all_urls.len() >= max_urls {
                 break;
             }
             if let Some(n) = filter_raw(&u, &mut dropped_action_count, &mut stripped_tracking_count)
@@ -672,7 +692,7 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResul
     visited.insert(normalize_url(base_url));
 
     while let Some((url, depth)) = queue.pop_front() {
-        if visited.len() > MAX_DISCOVERED_URLS {
+        if visited.len() > max_urls {
             break;
         }
         if let Some(deadline) = bfs_deadline_at

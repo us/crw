@@ -98,6 +98,9 @@ pub async fn map(
         per_host_max_concurrent: state.config.crawler.per_host_max_concurrent,
         crawl_fallback: req.crawl_fallback,
         url_filter,
+        max_urls: req
+            .limit
+            .unwrap_or(crw_crawl::crawl::DEFAULT_MAX_DISCOVERED_URLS),
     });
 
     let result =

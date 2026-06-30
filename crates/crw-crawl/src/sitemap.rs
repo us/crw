@@ -47,7 +47,7 @@ impl SitemapResult {
 /// Errors are logged but not surfaced — callers iterate over multiple seeds
 /// and a single bad sitemap should not abort discovery.
 pub async fn fetch_sitemap(url: &str, client: &reqwest::Client) -> CrwResult<SitemapResult> {
-    let requested_origin = match url::Url::parse(url).ok().as_ref().and_then(origin_key) {
+    let requested_site = match url::Url::parse(url).ok().as_ref().and_then(site_key) {
         Some(k) => k,
         None => {
             tracing::debug!("sitemap fetch skipped: cannot parse origin for {url}");
@@ -72,10 +72,10 @@ pub async fn fetch_sitemap(url: &str, client: &reqwest::Client) -> CrwResult<Sit
     if final_url.as_str() != url {
         tracing::debug!("sitemap redirect: {} -> {}", url, final_url);
     }
-    match origin_key(&final_url) {
-        Some(ref k) if k == &requested_origin => {}
+    match site_key(&final_url) {
+        Some(ref k) if *k == requested_site => {}
         _ => {
-            tracing::warn!("sitemap {url} redirected cross-origin to {final_url}, dropping");
+            tracing::warn!("sitemap {url} redirected off-site to {final_url}, dropping");
             return Ok(SitemapResult::default());
         }
     }
@@ -254,7 +254,7 @@ pub async fn fetch_sitemap_tree(
     use futures::stream::{self, StreamExt};
     use std::collections::HashSet;
 
-    let target_key = match origin_key(target_origin) {
+    let target_key = match site_key(target_origin) {
         Some(k) => k,
         None => return Vec::new(),
     };
@@ -268,7 +268,7 @@ pub async fn fetch_sitemap_tree(
     let mut all_pages: HashSet<String> = HashSet::new();
     let mut current: Vec<String> = seeds
         .into_iter()
-        .filter(|u| same_origin_url(u, &target_key))
+        .filter(|u| same_site(u, &target_key))
         .collect();
     let mut depth: u32 = 0;
     let mut total_fetched: usize = 0;
@@ -299,19 +299,37 @@ pub async fn fetch_sitemap_tree(
             .await;
 
         let mut next: Vec<String> = Vec::new();
+        // Collect child sitemaps eagerly (BFS frontier for the next level).
+        // Collect page URLs round-robin ACROSS the leaves in this level, not by
+        // draining each leaf fully before the next. Without this, a site whose
+        // index lists `artists` before `tabs` (e.g. songsterr: 75 artist leaves
+        // of 5000 URLs each, then 854 tab leaves) would fill the entire
+        // `max_urls` cap from the first leaf-group — returning 5000 artist-list
+        // pages and zero song tabs. Interleaving makes a capped map representative
+        // of the whole site instead of just its alphabetically-first section.
+        let mut page_lists: Vec<std::vec::IntoIter<String>> = Vec::new();
         for (_parent, res) in results {
-            for page in res.page_urls {
-                if all_pages.len() >= max_urls {
-                    break;
-                }
-                if same_origin_url(&page, &target_key) {
-                    all_pages.insert(page);
-                }
-            }
+            page_lists.push(res.page_urls.into_iter());
             for child in res.child_sitemaps {
-                if same_origin_url(&child, &target_key) && !visited.contains(&child) {
+                if same_site(&child, &target_key) && !visited.contains(&child) {
                     next.push(child);
                 }
+            }
+        }
+        'fill: loop {
+            let mut progressed = false;
+            for it in page_lists.iter_mut() {
+                let Some(page) = it.next() else { continue };
+                progressed = true;
+                if same_site(&page, &target_key) {
+                    all_pages.insert(page);
+                    if all_pages.len() >= max_urls {
+                        break 'fill;
+                    }
+                }
+            }
+            if !progressed {
+                break;
             }
         }
 
@@ -336,47 +354,42 @@ pub async fn fetch_sitemap_tree(
     all_pages.into_iter().collect()
 }
 
-/// Origin tuple: scheme + lowercased host + effective port.
-/// Two URLs match iff all three components match. `http://x` and `https://x`
-/// do not cross over, neither do `:80` vs `:8080`. Subdomains stay distinct
-/// (`cdn.x.com` ≠ `x.com`, and crucially `www.x.com` ≠ `x.com`). The strict
-/// host comparison is the load-bearing security guarantee for the redirect
-/// guard and the sitemap-tree filter — relaxing it (e.g. apex/www equivalence)
-/// would let a redirect or child-sitemap entry escape the requested origin.
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct OriginKey {
-    scheme: String,
-    host: String,
-    port: u16,
-}
-
-fn origin_key(u: &url::Url) -> Option<OriginKey> {
+/// Site identity for sitemap scoping: the lowercased host with a single leading
+/// `www.` removed. Scheme and port are intentionally ignored.
+///
+/// SSRF is *not* this function's job — it is enforced separately at the route
+/// entry (`validate_safe_url_resolved`, blocks private IPs / metadata) and at
+/// the reqwest level (`safe_redirect_policy`). Here the only contract is "stay
+/// on the same site", and real-world sitemaps routinely cross http/https and
+/// apex/www for one site: e.g. an https apex (`https://repertuarim.com`) whose
+/// sitemap index lists `http://www.repertuarim.com/...` children. The old strict
+/// (scheme, host, port) tuple silently dropped every such URL → empty map.
+///
+/// Only `www.` is collapsed; other subdomains stay distinct (`cdn.x.com`,
+/// `blog.x.com` ≠ `x.com`), preserving subdomain isolation.
+fn site_key(u: &url::Url) -> Option<String> {
     let scheme = u.scheme();
     if scheme != "http" && scheme != "https" {
         return None;
     }
     let host = u.host_str()?.to_lowercase();
-    let port = u.port_or_known_default()?;
-    Some(OriginKey {
-        scheme: scheme.to_string(),
-        host,
-        port,
+    let host = host.strip_prefix("www.").unwrap_or(&host);
+    // Ignore scheme, but keep an *explicit non-default* port as part of the
+    // identity: `:80`/`:443` collapse to the bare host (so http↔https match),
+    // while `localhost:3000` vs `localhost:8080` stay distinct services.
+    let default_port = if scheme == "https" { 443 } else { 80 };
+    Some(match u.port() {
+        Some(p) if p != default_port => format!("{host}:{p}"),
+        _ => host.to_string(),
     })
 }
 
-fn same_origin_url(u: &str, target: &OriginKey) -> bool {
-    // SSRF safety is enforced at the route entry (validate_safe_url) and at
-    // the reqwest client level (safe_redirect_policy). Inside the sitemap
-    // tree the security boundary is the origin match — a child URL must not
-    // escape the (scheme, host, port) we were asked to map.
-    let parsed = match url::Url::parse(u) {
-        Ok(p) => p,
-        Err(_) => return false,
-    };
-    match origin_key(&parsed) {
-        Some(k) => &k == target,
-        None => false,
-    }
+fn same_site(u: &str, target: &str) -> bool {
+    url::Url::parse(u)
+        .ok()
+        .as_ref()
+        .and_then(site_key)
+        .is_some_and(|k| k == target)
 }
 
 #[cfg(test)]
@@ -445,49 +458,68 @@ mod tests {
         assert!(r.is_empty());
     }
 
-    fn key(u: &str) -> OriginKey {
-        origin_key(&url::Url::parse(u).unwrap()).unwrap()
+    fn key(u: &str) -> String {
+        site_key(&url::Url::parse(u).unwrap()).unwrap()
     }
 
     #[test]
-    fn origin_key_normalizes_case_and_default_port() {
-        let a = key("https://example.com/x");
-        let b = key("https://example.com:443/y");
-        assert_eq!(a, b, "default port (443) is canonicalized");
-        let c = key("https://Example.COM/");
-        assert_eq!(a, c, "host is lowercased");
+    fn site_key_normalizes_case_www_scheme_and_port() {
+        // scheme, port, case, and a leading www. all collapse to one identity.
+        let base = key("https://example.com/x");
+        assert_eq!(key("https://example.com:443/y"), base);
+        assert_eq!(key("https://Example.COM/"), base);
+        assert_eq!(key("http://example.com/x"), base, "scheme ignored");
+        assert_eq!(
+            key("http://example.com:80/x"),
+            base,
+            "default http port collapses"
+        );
+        assert_eq!(key("https://www.example.com/x"), base, "www. collapsed");
+        // An explicit non-default port is a distinct service, not the same site.
+        assert_ne!(
+            key("https://example.com:8443/x"),
+            base,
+            "explicit port kept"
+        );
     }
 
     #[test]
-    fn same_origin_url_treats_www_as_distinct() {
-        // apex and www are different hosts at the URL-spec level. We do NOT
-        // collapse them — a redirect/child-sitemap that crosses between them
-        // is rejected by design.
-        let apex = key("https://example.com/");
-        assert!(same_origin_url("https://example.com/x", &apex));
-        assert!(!same_origin_url("https://www.example.com/x", &apex));
-        assert!(!same_origin_url("https://evil.com/x", &apex));
-        assert!(!same_origin_url("https://cdn.example.com/x", &apex));
+    fn same_site_collapses_www_and_scheme() {
+        // The repertuarim.com case: apex https seed, sitemap lists http://www.
+        let apex = key("https://repertuarim.com/");
+        assert!(same_site(
+            "http://www.repertuarim.com/akor/x-akor-1.html",
+            &apex
+        ));
+        assert!(same_site(
+            "https://www.repertuarim.com/maps/akor1.xml",
+            &apex
+        ));
+        assert!(same_site("https://repertuarim.com/x", &apex));
 
         let www = key("https://www.example.com/");
-        assert!(same_origin_url("https://www.example.com/x", &www));
-        assert!(!same_origin_url("https://example.com/x", &www));
+        assert!(
+            same_site("https://example.com/x", &www),
+            "apex matches www target"
+        );
+        assert!(same_site("http://example.com/x", &www));
     }
 
     #[test]
-    fn same_origin_url_distinguishes_scheme_and_port() {
-        let https = key("https://example.com/");
-        // Different scheme: http vs https → must NOT match.
-        assert!(!same_origin_url("http://example.com/x", &https));
-        // Different port: explicit :8443 vs default :443 → must NOT match.
-        assert!(!same_origin_url("https://example.com:8443/x", &https));
+    fn same_site_keeps_other_hosts_and_subdomains_distinct() {
+        // Only www. is special-cased; everything else stays isolated.
+        let apex = key("https://example.com/");
+        assert!(!same_site("https://evil.com/x", &apex));
+        assert!(!same_site("https://cdn.example.com/x", &apex));
+        assert!(!same_site("https://blog.example.com/x", &apex));
+        assert!(!same_site("https://example.com.evil.com/x", &apex));
     }
 
     #[test]
-    fn same_origin_url_blocks_non_http_schemes() {
+    fn same_site_blocks_non_http_schemes() {
         let target = key("https://example.com/");
-        assert!(!same_origin_url("ftp://example.com/x", &target));
-        assert!(!same_origin_url("file:///etc/passwd", &target));
+        assert!(!same_site("ftp://example.com/x", &target));
+        assert!(!same_site("file:///etc/passwd", &target));
     }
 
     #[test]

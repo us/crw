@@ -997,6 +997,11 @@ pub struct MapRequest {
     /// Max 64 keys; over-cap → 422.
     #[serde(default)]
     pub preserve_params: Option<Vec<String>>,
+    /// Max URLs to discover. Firecrawl-compatible. Defaults to
+    /// `DEFAULT_MAX_DISCOVERED_URLS`; the engine clamps to its hard ceiling.
+    /// Raise it to dump large/nested sitemaps (e.g. songsterr's ~4.3M URLs).
+    #[serde(default)]
+    pub limit: Option<usize>,
 }
 
 /// POST /v1/map response data — the discovered links plus filter stats.
