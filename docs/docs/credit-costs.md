@@ -8,9 +8,7 @@ Cloud only (fastcrw.com) -- self-hosted instances do not have credit-based billi
 
 | Operation | Credit cost |
 | --- | --- |
-| `scrape` (HTTP or lightpanda render) | 1 credit |
-| `scrape` with Chrome render (`renderer: "chrome"`) | 2 credits |
-| `scrape` with `chrome_proxy` render | 1 credit (SaaS) — engine `data.creditCost` reports 2 (matches `credit_for(ChromeProxy)`) |
+| `scrape` (any render — HTTP, lightpanda, chrome, or `chrome_proxy`) | 1 credit |
 | `scrape` with `playwright` render | SaaS billing only; engine `data.creditCost` is omitted (0) |
 | `scrape` with structured extraction / `formats: ["json"]` | 5 credits |
 | `map` | 1 credit |
@@ -20,7 +18,7 @@ Cloud only (fastcrw.com) -- self-hosted instances do not have credit-based billi
 | `search` + scrape | 1 credit + 1 per scraped result |
 | `browse` session | 1 credit (planned cloud rate; the self-hosted `crw-browse` binary is free) |
 
-Chrome's 2-credit cost is applied by the engine renderer (`crw-renderer/src/lib.rs: credit_for(RendererKind::Chrome) = 2`).
+Every renderer costs 1 credit per page — the engine's `credit_for` returns a flat 1 (`crw-renderer/src/lib.rs`), and `data.creditCost` matches the charge regardless of which renderer (HTTP, lightpanda, Chrome, chrome_proxy) actually served the page.
 The 5-credit cost for LLM-backed extraction (`json`/`summary` formats) is applied by the managed cloud billing layer; the open-source engine itself does not add an extra surcharge beyond the render cost.
 
 :::note
@@ -62,12 +60,12 @@ Every successful scrape response (v1 `/v1/scrape`) includes a `creditCost` field
   "data": {
     "markdown": "...",
     "metadata": { ... },
-    "creditCost": 2
+    "creditCost": 1
   }
 }
 ```
 
-The value reflects the renderer cost only (1 for HTTP/lightpanda, 2 for Chrome). On the managed cloud the SaaS billing layer may charge additional credits for LLM features (extraction, summary), which are tracked separately in `creditsUsed` on v2 responses and in your account billing dashboard.
+The value reflects the renderer cost only (a flat 1 credit for every renderer). On the managed cloud the SaaS billing layer may charge additional credits for LLM features (extraction, summary), which are tracked separately in `creditsUsed` on v2 responses and in your account billing dashboard.
 
 The field is omitted when its value would be 0 (internal paths that have not yet been priced).
 
