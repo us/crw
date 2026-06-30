@@ -86,3 +86,61 @@ jobs:
 
       - name: Test
         run: npm test
+
+  # Firecrawl v2 conformance gate (conformance/, issue #62). Drives the
+  # deterministic corpus against a live `crw serve` and diffs each response's
+  # SHAPE against the committed golden Firecrawl fixtures. `compare.py` only
+  # flags golden keys MISSING from crw's output (additive fields are invisible),
+  # so this catches accidental removal/rename of a contract field — the exact
+  # regression our additive Phase-0/1 work must never introduce.
+  #
+  # Tier-1 cases hard-fail CI; Tier-2 (LLM-dependent extract/json/summary, PDF
+  # parsers) are reported but non-gating, so no LLM key is needed. `search_basic`
+  # is excluded (CONFORMANCE_SKIP): it needs a live SearXNG fanning out to
+  # third-party engines, which rate-limit CI IPs to zero results and flake the
+  # gate on an external dependency, not on crw. The scrape/map/crawl/batch/parse
+  # cases hit stable targets (example.com, firecrawl.dev, a w3.org PDF) and are
+  # deterministic. (Run `compare` locally with a SearXNG up to gate search too.)
+  conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry & build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Build crw
+        run: cargo build --release --bin crw
+
+      - name: Start crw serve
+        run: |
+          ./target/release/crw serve --host 127.0.0.1 --port 3000 &
+          echo $! > /tmp/crw.pid
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/health >/dev/null; then echo "crw up"; break; fi
+            sleep 1
+          done
+
+      - name: Conformance — golden-fixture shape diff
+        working-directory: conformance
+        env:
+          CRW_URL: http://localhost:3000
+          CONFORMANCE_SKIP: search_basic
+        run: uv run ./run.sh compare
+
+      - name: Stop crw serve
+        if: always()
+        run: kill "$(cat /tmp/crw.pid)" 2>/dev/null || true
