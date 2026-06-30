@@ -36,7 +36,7 @@ Chrome DevTools Protocol is the WebSocket-based protocol that lets external prog
 
 ## credit
 
-A credit is the billing unit for the hosted cloud at `fastcrw.com`. One plain scrape costs 1 credit; a Chrome-rendered scrape costs 2; LLM-backed extraction via `POST /v2/extract` costs 5 credits (legacy). When using `formats: ["json"]` on a scrape request, see the [Credit Costs](/docs/credit-costs) table for current billing. Map and search start-calls each cost 1 credit, and crawl jobs charge 1 credit at start plus one additional credit per page as pages are discovered during polling. Self-hosted deployments have no billing layer and are unaffected by credit costs. Check your balance with `GET /api/v1/account/balance` on the SaaS control-plane. See [Credit Costs](/docs/credit-costs) for the full table.
+A credit is the billing unit for the hosted cloud at `fastcrw.com`. Every scrape costs 1 credit regardless of renderer (HTTP, lightpanda, or Chrome); LLM-backed extraction (`formats: ["json"]` / `summary`) costs that 1-credit base render plus the managed-LLM token cost. See the [Credit Costs](/docs/credit-costs) table for current billing. Map and search start-calls each cost 1 credit, and crawl jobs charge 1 credit at start plus one additional credit per page as pages are discovered during polling. Self-hosted deployments have no billing layer and are unaffected by credit costs. Check your balance with `GET /api/v1/account/balance` on the SaaS control-plane. See [Credit Costs](/docs/credit-costs) for the full table.
 
 ---
 

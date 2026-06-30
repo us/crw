@@ -10,7 +10,7 @@ Cloud only (fastcrw.com) -- self-hosted instances do not have credit-based billi
 | --- | --- |
 | `scrape` (any render — HTTP, lightpanda, chrome, or `chrome_proxy`) | 1 credit |
 | `scrape` with `playwright` render | SaaS billing only; engine `data.creditCost` is omitted (0) |
-| `scrape` with structured extraction / `formats: ["json"]` | 5 credits |
+| `scrape` with structured extraction (`formats: ["json"]` / `summary`) | 1 credit + managed-LLM token cost (see note below) |
 | `map` | 1 credit |
 | `crawl` start | 1 credit |
 | `crawl` polling | New pages discovered since the previous poll |
@@ -19,7 +19,7 @@ Cloud only (fastcrw.com) -- self-hosted instances do not have credit-based billi
 | `browse` session | 1 credit (planned cloud rate; the self-hosted `crw-browse` binary is free) |
 
 Every renderer costs 1 credit per page — the engine's `credit_for` returns a flat 1 (`crw-renderer/src/lib.rs`), and `data.creditCost` matches the charge regardless of which renderer (HTTP, lightpanda, Chrome, chrome_proxy) actually served the page.
-The 5-credit cost for LLM-backed extraction (`json`/`summary` formats) is applied by the managed cloud billing layer; the open-source engine itself does not add an extra surcharge beyond the render cost.
+LLM-backed extraction (`json`/`summary` formats) is **not** a flat fee. It costs the 1-credit base render plus the actual managed-LLM token cost (3× provider markup, capped 8 000 — see the note below; BYOK pays only a flat infra fee, no token markup). The open-source engine itself adds no surcharge beyond the 1-credit render cost — the LLM portion is applied entirely by the managed cloud billing layer and tracked separately in `creditsUsed`.
 
 :::note
 **Managed-LLM markup (fastcrw.com cloud only)** — this is a SaaS billing policy enforced by the cloud platform, not by the open-source engine. When you use `answer`, `summarizeResults`, or other managed LLM features on fastcrw.com, token usage is billed at a 3× markup over the provider price, capped at 8 000 credits per request. BYOK requests pay only a flat infra fee with no token markup. Self-hosted deployments have no billing layer and are unaffected.
