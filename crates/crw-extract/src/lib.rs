@@ -26,6 +26,7 @@ pub mod readability;
 pub mod selector;
 pub mod structured;
 pub mod tables;
+pub mod untrusted;
 
 use crw_core::error::{CrwError, CrwResult};
 use crw_core::types::{
@@ -852,6 +853,9 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
 
     Ok(ScrapeData {
         markdown: md,
+        // Set at the scrape choke point (crw-crawl::single::scrape_url) where
+        // crw-diff is available; the extractor stays free of crw-diff.
+        source_hash: None,
         html,
         raw_html: raw,
         plain_text: plain,
