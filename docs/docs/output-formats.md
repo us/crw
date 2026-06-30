@@ -117,7 +117,7 @@ When the content is truncated, the response's `data.warnings` array carries a `c
 
 ### Where the key comes from
 
-- Per-request BYOK: send `llmApiKey` / `llmProvider` / `llmModel` / `baseUrl` in the body.
+- Per-request key: send `llmApiKey` / `llmProvider` / `llmModel` / `baseUrl` in the body.
 - Server default: configure `[extraction.llm]` in `config.toml` (see [Configuration](configuration)).
 
 If neither is set, requesting `formats: ["summary"]` returns a 422.

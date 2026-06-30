@@ -129,7 +129,7 @@ model    = "gpt-4o-mini"
 
 Anyone who can reach your opencore can spend on that key. Front it with auth, network policy, or a private network.
 
-**SaaS / multi-tenant (BYOK, per-request keys):**
+**SaaS / multi-tenant (per-request keys):**
 
 - Set `CRW_DISABLE_SERVER_LLM_KEY=1` in opencore's environment. With this env var set, opencore refuses to boot if `[extraction.llm].api_key` is also configured — the most common operator mistake.
 - Set `[extraction.llm].require_byok_header = "X-CRW-Tenant"` (or similar). CRW rejects LLM-touching requests that lack that header AND do not pass a per-request `llmApiKey`. Your SaaS layer adds the header on every forwarded request; direct public callers cannot.

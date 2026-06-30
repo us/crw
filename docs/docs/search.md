@@ -142,7 +142,7 @@ That is the flat response shape used when `sources` is not set.
 | `sources` | string[] | -- | Result groups such as `"web"`, `"news"`, `"images"` |
 | `categories` | string[] | -- | Curated filters (`"github"`, `"research"`, `"pdf"`) **plus** any native SearXNG category (`"science"`, `"it"`, `"news"`, `"files"`, …) passed straight through. Max 5 entries. See [Curated vs. passthrough categories](#curated-vs-passthrough-categories) |
 | `scrapeOptions` | object | -- | Scrape each result URL after search |
-| `summarizeResults` | boolean | `false` | When `true`, each scraped result is summarized by the LLM and the digest appears in `result.summary`. Needs LLM config (BYOK or server). Fan-out is bounded by `[extraction.llm].max_concurrency`. |
+| `summarizeResults` | boolean | `false` | When `true`, each scraped result is summarized by the LLM and the digest appears in `result.summary`. Needs LLM config (per-request key or server). Fan-out is bounded by `[extraction.llm].max_concurrency`. |
 | `answer` | boolean | `false` | When `true`, after scraping the top results crw synthesizes a single answer over them. The answer + `citations` land on the response wrapper. |
 | `answerTopN` | number | `5` (max `10`) | Number of top-scoring results to feed into the answer pipeline |
 | `maxCharsPerSource` | number | `8192` | Per-source byte cap on markdown fed into the answer prompt. Clamped to 32 KB server-side. |
@@ -153,7 +153,7 @@ That is the flat response shape used when `sources` is not set.
 | `queryExpandVariants` | number | server config | Number of diverse query rewrites fetched and unioned when query expansion is enabled. Overrides `[search].query_expand_variants` for this request. |
 | `multiRound` | boolean | server config | When `true`, fires an adaptive evidence-scout round if the first-round answer abstains. Overrides `[search].multi_round` for this request. |
 | `answerListFormat` | boolean | server config | When `true` (and the query has list intent such as "best/top X"), renders the answer as a ranked list instead of prose. `false` forces prose. Overrides `[search].answer_list_format`. |
-| `llmApiKey` | string | -- | Per-request LLM API key (BYOK) |
+| `llmApiKey` | string | -- | Per-request LLM API key |
 | `llmProvider` | string | server default | `anthropic`, `openai`, `deepseek`, `azure`, or `openai-compatible` |
 | `llmModel` | string | server default | Model override |
 | `baseUrl` | string | -- | OpenAI-compatible endpoint base (e.g. DeepSeek, Azure) |
@@ -288,7 +288,7 @@ If the answer call fails (rate limit, network error, etc.), `answer` is `null`, 
 
 ### Where the key comes from
 
-Same BYOK pattern as `/v1/scrape`: send `llmApiKey` / `llmProvider` / `llmModel` / `baseUrl` in the request body, or configure `[extraction.llm]` in `config.toml`.
+Same per-request key pattern as `/v1/scrape`: send `llmApiKey` / `llmProvider` / `llmModel` / `baseUrl` in the request body, or configure `[extraction.llm]` in `config.toml`.
 
 ## Freshness, sources, and categories
 

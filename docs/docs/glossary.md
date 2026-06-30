@@ -10,12 +10,6 @@ Breadth-first search is the traversal strategy fastCRW uses for the [`/v1/crawl`
 
 ---
 
-## BYOK (Bring Your Own Key)
-
-BYOK means supplying your own LLM provider API key per request instead of relying on a server-configured default. Pass `llmApiKey`, `llmProvider`, and `llmModel` in the request body when calling `formats: ["json"]` or `formats: ["summary"]` to have fastCRW bill your LLM account directly rather than the server's. On self-hosted deployments, supplying your own key is the only option unless you configure `[extraction.llm]` in `config.toml`. See [Output Formats](/docs/output-formats) and [Extract](/docs/extract) for usage.
-
----
-
 ## CDP (Chrome DevTools Protocol)
 
 Chrome DevTools Protocol is the WebSocket-based protocol that lets external programs control a running Chromium browser — navigating pages, waiting for JavaScript to finish, clicking elements, and reading the final DOM. fastCRW uses CDP (via `tokio-tungstenite`) to power its `chrome` and `chrome_proxy` rendering modes. When a page cannot be scraped cleanly by an HTTP request alone, the engine can fall back to CDP to obtain the fully rendered HTML. See [JS Rendering](/docs/js-rendering) for the rendering modes and per-request `renderer` field.
@@ -48,7 +42,7 @@ A credit is the billing unit for the hosted cloud at `fastcrw.com`. Every scrape
 
 ## llmProvider
 
-`llmProvider` is a request field that selects which LLM provider fastCRW routes extraction or summarization calls to. Accepted values are `"anthropic"`, `"openai"`, `"deepseek"`, `"azure"`, and `"openai-compatible"`. Use it together with `llmApiKey` and `llmModel` (BYOK mode) to pin a specific provider per request, or set the server-wide default in `config.toml` under `[extraction.llm]`. When using Azure or a custom OpenAI-compatible endpoint, also supply `baseUrl`. See [Extract](/docs/extract) and [Output Formats](/docs/output-formats) for full field references.
+`llmProvider` is a request field that selects which LLM provider fastCRW routes extraction or summarization calls to. Accepted values are `"anthropic"`, `"openai"`, `"deepseek"`, `"azure"`, and `"openai-compatible"`. Use it together with `llmApiKey` and `llmModel` to pin a specific provider per request, or set the server-wide default in `config.toml` under `[extraction.llm]`. When using Azure or a custom OpenAI-compatible endpoint, also supply `baseUrl`. See [Extract](/docs/extract) and [Output Formats](/docs/output-formats) for full field references.
 
 ---
 

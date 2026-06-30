@@ -52,7 +52,7 @@ You need both to debug real scraping failures.
 | Invalid JSON schema | Schema provided for extraction is malformed |
 | Extraction failure | LLM extraction failed (no LLM configured, or LLM returned an error) |
 | `summary` format requires LLM config | `formats: ["summary"]` sent without a server-side `[extraction.llm]` block and without per-request `llmApiKey` |
-| BYOK header required | Server is in BYOK-only mode (`require_byok_header`) and the request lacks both the header and `llmApiKey` |
+| Key header required | Server is in key-required mode (`require_byok_header`) and the request lacks both the header and `llmApiKey` |
 | No JS renderer available | `renderJs: true` but no CDP browser is configured |
 
 ## Common warnings
