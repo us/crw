@@ -95,11 +95,14 @@ async fn judge_fences_untrusted_diff_in_request() {
         .expect("judge should succeed");
 
     // Inspect what we actually sent: the goal is a trusted instruction, the
-    // diff is fenced inside UNTRUSTED_DIFF markers as data.
+    // diff is fenced inside nonce-bearing UNTRUSTED:DIFF markers as data.
     let requests = server.received_requests().await.unwrap();
     assert_eq!(requests.len(), 1);
     let body = String::from_utf8(requests[0].body.clone()).unwrap();
-    assert!(body.contains("UNTRUSTED_DIFF"), "diff must be fenced");
+    assert!(
+        body.contains("=====UNTRUSTED:DIFF:") && body.contains("=====/UNTRUSTED:DIFF:"),
+        "diff must be fenced"
+    );
     assert!(body.contains("GOAL (trusted instruction):"));
     assert!(body.contains("Track new blog posts"));
     // The malicious string is present but as fenced data, not as an instruction.
