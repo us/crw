@@ -1,5 +1,8 @@
 use crw_core::error::CrwResult;
 use scraper::{Html, Selector};
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Hard cap on a single sitemap response body. The sitemap spec (sitemaps.org,
 /// 2017 revision) raised the per-file limit to 50 MB uncompressed / 50,000
@@ -47,11 +50,30 @@ impl SitemapResult {
 /// Errors are logged but not surfaced — callers iterate over multiple seeds
 /// and a single bad sitemap should not abort discovery.
 pub async fn fetch_sitemap(url: &str, client: &reqwest::Client) -> CrwResult<SitemapResult> {
+    Ok(match fetch_sitemap_raw(url, client).await {
+        SitemapOutcome::Parsed(r) => r,
+        SitemapOutcome::Challenged | SitemapOutcome::Empty => SitemapResult::default(),
+    })
+}
+
+/// Outcome of a single plain-HTTP sitemap fetch. `Challenged` is the signal the
+/// tree walk uses to decide whether a JS-renderer escalation is worth trying.
+enum SitemapOutcome {
+    Parsed(SitemapResult),
+    /// Anti-bot interstitial (Cloudflare "Just a moment", `cf-mitigated`, or a
+    /// 403/503/429). A JS renderer that executes the challenge may recover it.
+    Challenged,
+    /// Nothing usable and not a recoverable block (404, timeout, off-site,
+    /// HTML soft-404, genuinely empty). Escalation would not help.
+    Empty,
+}
+
+async fn fetch_sitemap_raw(url: &str, client: &reqwest::Client) -> SitemapOutcome {
     let requested_site = match url::Url::parse(url).ok().as_ref().and_then(site_key) {
         Some(k) => k,
         None => {
             tracing::debug!("sitemap fetch skipped: cannot parse origin for {url}");
-            return Ok(SitemapResult::default());
+            return SitemapOutcome::Empty;
         }
     };
 
@@ -64,7 +86,7 @@ pub async fn fetch_sitemap(url: &str, client: &reqwest::Client) -> CrwResult<Sit
         Ok(r) => r,
         Err(e) => {
             tracing::debug!("sitemap fetch error for {url}: {e}");
-            return Ok(SitemapResult::default());
+            return SitemapOutcome::Empty;
         }
     };
 
@@ -76,19 +98,27 @@ pub async fn fetch_sitemap(url: &str, client: &reqwest::Client) -> CrwResult<Sit
         Some(ref k) if *k == requested_site => {}
         _ => {
             tracing::warn!("sitemap {url} redirected off-site to {final_url}, dropping");
-            return Ok(SitemapResult::default());
+            return SitemapOutcome::Empty;
         }
     }
-    if !resp.status().is_success() {
-        tracing::debug!("sitemap {url} returned {}", resp.status());
-        return Ok(SitemapResult::default());
+    let status = resp.status();
+    if !status.is_success() {
+        tracing::debug!("sitemap {url} returned {status}");
+        // 403/503/429 from an edge WAF is the classic "blocked" signal — let the
+        // caller try a JS renderer. Other non-2xx (404, 5xx app errors) are not
+        // recoverable that way.
+        return if matches!(status.as_u16(), 403 | 429 | 503) {
+            SitemapOutcome::Challenged
+        } else {
+            SitemapOutcome::Empty
+        };
     }
 
     let bytes = match read_body_capped(resp, MAX_SITEMAP_BYTES).await {
         Ok(b) => b,
         Err(e) => {
             tracing::warn!("sitemap body read failed for {url}: {e}");
-            return Ok(SitemapResult::default());
+            return SitemapOutcome::Empty;
         }
     };
 
@@ -104,7 +134,7 @@ pub async fn fetch_sitemap(url: &str, client: &reqwest::Client) -> CrwResult<Sit
             Ok(d) => d,
             Err(e) => {
                 tracing::warn!("sitemap gzip decode failed for {url}: {e}");
-                return Ok(SitemapResult::default());
+                return SitemapOutcome::Empty;
             }
         }
     } else {
@@ -112,7 +142,18 @@ pub async fn fetch_sitemap(url: &str, client: &reqwest::Client) -> CrwResult<Sit
     };
 
     let text = String::from_utf8_lossy(&xml_bytes);
-    Ok(parse_sitemap_with_sniff(&text))
+    let head = sniff_head(&text);
+    if has_challenge_markers(&head) {
+        // 200 with a Cloudflare interstitial body (managed challenge served as
+        // HTTP 200) — recoverable via a JS renderer.
+        tracing::warn!("sitemap {url} body is an anti-bot challenge; may escalate");
+        return SitemapOutcome::Challenged;
+    }
+    if looks_like_html(&head) {
+        tracing::warn!("sitemap {url} body looks like HTML, not XML; ignoring");
+        return SitemapOutcome::Empty;
+    }
+    SitemapOutcome::Parsed(parse_sitemap(&text))
 }
 
 /// Issue a HEAD request — used by the discover layer to skip body GETs on
@@ -163,28 +204,42 @@ fn decode_gzip_capped(data: &[u8], max: usize) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
-/// Detect HTML masquerading as sitemap (Cloudflare challenge, soft 404 pages
-/// served with HTTP 200). Returns empty if detected, else parses normally.
-fn parse_sitemap_with_sniff(xml: &str) -> SitemapResult {
+/// Lowercased first ≤2048 bytes, split on a UTF-8 char boundary so a multi-byte
+/// sequence straddling the 2048th byte can't panic.
+fn sniff_head(xml: &str) -> String {
     let trimmed = xml.trim_start();
-    // Walk back to the nearest UTF-8 char boundary so a 2048th-byte split in
-    // the middle of a multi-byte sequence doesn't panic. `is_char_boundary`
-    // is true at index 0 and at index `len`, so this loop always terminates.
     let mut head_len = trimmed.len().min(2048);
     while !trimmed.is_char_boundary(head_len) {
         head_len -= 1;
     }
-    let head = trimmed[..head_len].to_lowercase();
-    if head.starts_with("<!doctype html")
-        || head.starts_with("<html")
-        || head.contains("just a moment")
+    trimmed[..head_len].to_lowercase()
+}
+
+/// Anti-bot interstitial markers (Cloudflare managed challenge / JS challenge).
+fn has_challenge_markers(head: &str) -> bool {
+    head.contains("just a moment")
         || head.contains("cf-mitigated")
         || head.contains("cf-chl-")
-    {
-        tracing::warn!("sitemap response looks like HTML, not XML; ignoring");
+        || head.contains("attention required")
+        || head.contains("/cdn-cgi/challenge-platform")
+}
+
+/// HTML masquerading as a sitemap (soft-404 pages served with HTTP 200).
+fn looks_like_html(head: &str) -> bool {
+    head.starts_with("<!doctype html") || head.starts_with("<html")
+}
+
+/// Parse a sitemap that a JS renderer fetched (challenge already solved). Chrome
+/// wraps XML in `<div id="webkit-xml-viewer-source-xml">…</div>`, but the
+/// `<url><loc>` / `<sitemap><loc>` nodes are real DOM elements so the normal
+/// selectors still match. Unlike the plain path we must NOT reject on the
+/// `<html>` prefix (the rendered document is legitimately HTML-wrapped); only a
+/// still-present challenge marker means the renderer failed to clear the wall.
+fn parse_rendered_sitemap(html: &str) -> SitemapResult {
+    if has_challenge_markers(&sniff_head(html)) {
         return SitemapResult::default();
     }
-    parse_sitemap(xml)
+    parse_sitemap(html)
 }
 
 /// Parse sitemap XML and split entries by kind.
@@ -233,6 +288,57 @@ pub fn parse_sitemap(xml: &str) -> SitemapResult {
     result
 }
 
+/// Renders a challenged sitemap URL through a JS renderer (executing a
+/// Cloudflare/JS challenge) and returns the rendered HTML, or `None` if the
+/// render failed. The caller (`discover_urls`) constructs this so this module
+/// stays renderer-agnostic and unit-testable.
+pub type SitemapRenderFn<'a> =
+    dyn Fn(String) -> Pin<Box<dyn Future<Output = Option<String>> + Send>> + Send + Sync + 'a;
+
+/// Escalation arm for anti-bot-gated sitemaps. A `SitemapOutcome::Challenged`
+/// fetch is retried through `render`, bounded by a shared `budget` (chrome
+/// renders cost ~100× a plain GET, so a deeply-gated site can't fan out
+/// unbounded).
+pub struct SitemapEscalator<'a> {
+    render: &'a SitemapRenderFn<'a>,
+    budget: AtomicUsize,
+}
+
+impl<'a> SitemapEscalator<'a> {
+    pub fn new(render: &'a SitemapRenderFn<'a>, budget: usize) -> Self {
+        Self {
+            render,
+            budget: AtomicUsize::new(budget),
+        }
+    }
+
+    /// Claim a budget slot and render. Returns empty if the budget is exhausted,
+    /// the render failed, or the rendered page is still a challenge.
+    async fn try_render(&self, url: &str) -> SitemapResult {
+        // Atomically claim one slot; bail when the budget is spent.
+        let mut cur = self.budget.load(Ordering::Relaxed);
+        loop {
+            if cur == 0 {
+                return SitemapResult::default();
+            }
+            match self.budget.compare_exchange_weak(
+                cur,
+                cur - 1,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(observed) => cur = observed,
+            }
+        }
+        tracing::info!("escalating challenged sitemap via renderer: {url}");
+        match (self.render)(url.to_string()).await {
+            Some(html) => parse_rendered_sitemap(&html),
+            None => SitemapResult::default(),
+        }
+    }
+}
+
 /// BFS over a sitemap tree. Same-origin filter applies to both child sitemaps
 /// and page URLs to prevent the engine from being abused as a sitemap-fetch
 /// proxy (a crafted index could otherwise point us at arbitrary public hosts).
@@ -242,6 +348,7 @@ pub fn parse_sitemap(xml: &str) -> SitemapResult {
 /// roughly 9× latency to discovery, but unbounded `join_all` would also burst
 /// up to `max_sitemaps` concurrent same-host requests, ignoring the operator's
 /// politeness setting.
+#[allow(clippy::too_many_arguments)] // cohesive tuning knobs; a struct adds noise
 pub async fn fetch_sitemap_tree(
     seeds: Vec<String>,
     target_origin: &url::Url,
@@ -250,9 +357,13 @@ pub async fn fetch_sitemap_tree(
     max_sitemaps: usize,
     max_urls: usize,
     max_concurrency: usize,
+    escalator: Option<&SitemapEscalator<'_>>,
+    deadline: Option<std::time::Instant>,
 ) -> Vec<String> {
     use futures::stream::{self, StreamExt};
     use std::collections::HashSet;
+
+    let past_deadline = || deadline.is_some_and(|d| std::time::Instant::now() >= d);
 
     let target_key = match site_key(target_origin) {
         Some(k) => k,
@@ -274,6 +385,10 @@ pub async fn fetch_sitemap_tree(
     let mut total_fetched: usize = 0;
 
     while !current.is_empty() && depth <= max_depth && total_fetched < max_sitemaps {
+        if past_deadline() {
+            tracing::info!("sitemap_tree wall-clock budget spent; returning partial results");
+            break;
+        }
         let remaining_budget = max_sitemaps.saturating_sub(total_fetched);
         let batch: Vec<String> = current
             .drain(..)
@@ -290,7 +405,21 @@ pub async fn fetch_sitemap_tree(
             .map(|u| {
                 let client = client.clone();
                 async move {
-                    let res = fetch_sitemap(&u, &client).await.unwrap_or_default();
+                    let res = match fetch_sitemap_raw(&u, &client).await {
+                        SitemapOutcome::Parsed(r) => r,
+                        // Anti-bot wall: retry through the JS renderer if one was
+                        // supplied (solves Cloudflare and yields the real XML).
+                        // Skip the (expensive) render once the budget is spent so
+                        // a deeply-gated index finishes fast with partial results
+                        // instead of grinding every child to the timeout.
+                        SitemapOutcome::Challenged => match escalator {
+                            Some(esc) if deadline.is_none_or(|d| std::time::Instant::now() < d) => {
+                                esc.try_render(&u).await
+                            }
+                            _ => SitemapResult::default(),
+                        },
+                        SitemapOutcome::Empty => SitemapResult::default(),
+                    };
                     (u, res)
                 }
             })
@@ -421,18 +550,19 @@ mod tests {
     }
 
     #[test]
-    fn html_pretending_to_be_sitemap_returns_empty() {
+    fn html_pretending_to_be_sitemap_is_flagged() {
+        // Soft-404 HTML on the plain path → looks_like_html (not a challenge).
         let html = "<!DOCTYPE html><html><body>Not Found</body></html>";
-        let r = parse_sitemap_with_sniff(html);
-        assert!(r.is_empty());
+        let head = sniff_head(html);
+        assert!(looks_like_html(&head));
+        assert!(!has_challenge_markers(&head));
     }
 
     #[test]
-    fn cloudflare_challenge_returns_empty() {
+    fn cloudflare_challenge_is_flagged_as_challenge() {
         let challenge =
             r#"<html><head><title>Just a moment...</title></head><body>cf-mitigated</body></html>"#;
-        let r = parse_sitemap_with_sniff(challenge);
-        assert!(r.is_empty());
+        assert!(has_challenge_markers(&sniff_head(challenge)));
     }
 
     #[test]
@@ -444,10 +574,11 @@ mod tests {
         s.push_str(&"a".repeat(2047));
         s.push('é');
         s.push_str("<urlset><url><loc>https://x.com/p</loc></url></urlset>");
-        // Should not panic, and should not be flagged as HTML.
-        let r = parse_sitemap_with_sniff(&s);
+        let head = sniff_head(&s); // must not panic
+        assert!(!looks_like_html(&head) && !has_challenge_markers(&head));
         // The body has a urlset deeper than the sniff window, so the parser
-        // still picks up the URL once we get past sniffing.
+        // still picks up the URL.
+        let r = parse_sitemap(&s);
         assert!(r.page_urls.iter().any(|u| u.contains("/p")));
     }
 
@@ -615,6 +746,8 @@ mod tests {
             25,
             5000,
             8,
+            None,
+            None,
         )
         .await;
 
@@ -663,6 +796,8 @@ mod tests {
             25,
             5000,
             8,
+            None,
+            None,
         )
         .await;
 
@@ -707,9 +842,88 @@ mod tests {
             25,
             5000,
             8,
+            None,
+            None,
         )
         .await;
         assert!(urls.is_empty());
+    }
+
+    #[test]
+    fn parse_rendered_sitemap_handles_chrome_xml_viewer_wrapper() {
+        // Exactly the shape Chrome returns for an XML URL once Cloudflare clears:
+        // the real `<sitemap><loc>` nodes live inside a viewer wrapper div.
+        let html = r#"<html><head></head><body>
+            <div id="webkit-xml-viewer-source-xml"><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+              <sitemap><loc>https://www.ultimate-guitar.com/sitemap1.xml</loc></sitemap>
+              <sitemap><loc>https://www.ultimate-guitar.com/sitemap2.xml</loc></sitemap>
+            </sitemapindex></div></body></html>"#;
+        let r = parse_rendered_sitemap(html);
+        assert_eq!(r.child_sitemaps.len(), 2);
+        assert!(r.page_urls.is_empty());
+    }
+
+    #[test]
+    fn parse_rendered_sitemap_rejects_unsolved_challenge() {
+        // Renderer failed to clear the wall — markers still present.
+        let html = r#"<html><head><title>Just a moment...</title></head>
+            <body>cf-mitigated</body></html>"#;
+        assert!(parse_rendered_sitemap(html).is_empty());
+    }
+
+    #[tokio::test]
+    async fn fetch_sitemap_tree_escalates_challenged_sitemap() {
+        // /sitemap.xml is served as a 403 wall; the escalator (standing in for a
+        // JS renderer that solved the challenge) returns the real XML.
+        let mock = wiremock::MockServer::start().await;
+        wiremock::Mock::given(wiremock::matchers::path("/sitemap.xml"))
+            .respond_with(wiremock::ResponseTemplate::new(403).set_body_string("Just a moment..."))
+            .mount(&mock)
+            .await;
+
+        let host = mock.uri();
+        let solved = format!(
+            r#"<html><body><div id="webkit-xml-viewer-source-xml"><urlset>
+              <url><loc>{host}/page-a</loc></url>
+              <url><loc>{host}/page-b</loc></url>
+            </urlset></div></body></html>"#
+        );
+        let render: Box<SitemapRenderFn> = Box::new(move |_u| {
+            let solved = solved.clone();
+            Box::pin(async move { Some(solved) })
+        });
+        let escalator = SitemapEscalator::new(&*render, 8);
+
+        let target = url::Url::parse(&mock.uri()).unwrap();
+        let client = reqwest::Client::new();
+        let seeds = vec![format!("{}/sitemap.xml", mock.uri())];
+
+        // Without an escalator the challenge is dropped → empty.
+        let none =
+            fetch_sitemap_tree(seeds.clone(), &target, &client, 3, 25, 5000, 8, None, None).await;
+        assert!(
+            none.is_empty(),
+            "challenge must be dropped without escalator"
+        );
+
+        // With the escalator the solved XML's page URLs come through.
+        let mut got = fetch_sitemap_tree(
+            seeds,
+            &target,
+            &client,
+            3,
+            25,
+            5000,
+            8,
+            Some(&escalator),
+            None,
+        )
+        .await;
+        got.sort();
+        assert_eq!(
+            got,
+            vec![format!("{host}/page-a"), format!("{host}/page-b")]
+        );
     }
 
     #[tokio::test]

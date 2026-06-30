@@ -762,6 +762,14 @@ impl FallbackRenderer {
             .map(|r| Arc::new(r.pick(host).clone()))
     }
 
+    /// True when a JS renderer (chrome / lightpanda / chrome_proxy) is wired in,
+    /// so a `render_js` request can actually execute a page. The sitemap
+    /// escalation arm uses this to skip pointless re-fetches of a challenged
+    /// sitemap when no renderer could clear the wall anyway.
+    pub fn js_capable(&self) -> bool {
+        !self.js_renderers.is_empty() || self.auto_egress_escalation
+    }
+
     /// Like [`Self::pick_proxy`] but derives the host key from a URL using the
     /// same normalization the HTTP fetcher and host limiter use — so the CDP
     /// `proxyServer` and the HTTP client land on the SAME sticky proxy.
