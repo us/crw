@@ -147,6 +147,9 @@ enum Commands {
     /// Start the REST API server (Firecrawl-compatible)
     Serve(commands::serve::ServeArgs),
 
+    /// Run a search-quality benchmark (FRAMES) against a running server
+    Bench(commands::bench::BenchArgs),
+
     /// Start the MCP (Model Context Protocol) server
     Mcp(commands::mcp::McpArgs),
 
@@ -202,6 +205,7 @@ async fn main() {
             commands::serve::run(args).await;
             Ok(())
         }
+        Some(Commands::Bench(args)) => commands::bench::run(args).await,
         Some(Commands::Mcp(args)) => {
             install_signal_teardown();
             commands::mcp::run(args).await
