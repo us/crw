@@ -147,7 +147,7 @@ That is the default CRW success shape: requested content plus a compact metadata
 | `stealth` | boolean | -- | Override global stealth setting |
 | `jsonSchema` | object | -- | Schema for structured extraction |
 | `extract` | object | -- | Firecrawl-compatible alias wrapper for extraction schema |
-| `llmApiKey` | string | -- | Per-request LLM API key (BYOK) |
+| `llmApiKey` | string | -- | Per-request LLM API key |
 | `llmProvider` | string | server default | `anthropic`, `openai`, `deepseek`, `azure`, or `openai-compatible` |
 | `llmModel` | string | server default | Model override (extraction and summary) |
 | `baseUrl` | string | -- | OpenAI-compatible endpoint base, e.g. `https://api.deepseek.com/v1` (also used by Azure). crw appends `/chat/completions` automatically if you omit it. |
@@ -165,7 +165,7 @@ Use the smallest output shape that solves the job:
 - `markdown` is the default and best first request for most pipelines.
 - `html` or `rawHtml` is useful when downstream systems need original structure.
 - `links` is useful when you want lightweight discovery without page bodies.
-- `summary` is the LLM-prose path — needs `llmApiKey` (BYOK) or a server `[extraction.llm]` config. Optional `summaryPrompt` lets the caller pick language/tone without weakening the safety wrapper.
+- `summary` is the LLM-prose path — needs `llmApiKey` or a server `[extraction.llm]` config. Optional `summaryPrompt` lets the caller pick language/tone without weakening the safety wrapper.
 - `json` is the extraction path and should be paired with `jsonSchema`.
 
 If you ask for multiple formats, only those formats are populated in the response.

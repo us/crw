@@ -60,7 +60,7 @@ All keys use camelCase.
 |-------|------|-------------|
 | `providers` | `string[]` | LLM provider tags the server's dispatch layer supports. Always `["anthropic", "openai", "deepseek", "openai-compatible", "azure"]` — these are compile-time constants. |
 | `supportsBaseUrl` | `boolean` | Always `true`. Any provider can be redirected to a custom base URL per request. |
-| `serverKeyConfigured` | `boolean` | `true` when a server-side `[extraction.llm]` API key is configured. `false` means the instance has no server LLM key and requires callers to supply `llmApiKey` in the request body. Hosted SaaS sets this to `false` and relies on per-request BYOK. |
+| `serverKeyConfigured` | `boolean` | `true` when a server-side `[extraction.llm]` API key is configured. `false` means the instance has no server LLM key and requires callers to supply `llmApiKey` in the request body. Hosted SaaS sets this to `false` and relies on per-request keys. |
 | `maxConcurrency` | `number` | Server-side fan-out cap for LLM calls. `0` when no server LLM config is present. |
 | `requireByokHeader` | `string?` | Present only when the server requires a specific request header on LLM-touching calls. Absent when no header guard is configured. |
 
@@ -97,7 +97,7 @@ The `search` object does not expose whether a SearXNG backend is reachable. A li
 
 On `api.fastcrw.com` you can expect:
 
-- `llm.serverKeyConfigured` — `false` (SaaS relies on per-request BYOK)
+- `llm.serverKeyConfigured` — `false` (SaaS relies on per-request keys)
 - `documents.parsers` — `["pdf"]` (PDF support is enabled)
 - `documents.fileUpload.maxBytes` — `52428800` (50 MiB)
 - `formats.supported` — all 8 formats
@@ -125,7 +125,7 @@ caps = httpx.get(
 if caps["llm"]["serverKeyConfigured"]:
     llm_key_in_body = None          # server has a key
 else:
-    llm_key_in_body = "sk-..."      # caller must supply BYOK
+    llm_key_in_body = "sk-..."      # caller must supply a per-request key
 
 pdf_ok = caps["documents"]["fileUpload"]["supported"]
 ```

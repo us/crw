@@ -84,9 +84,9 @@ Scrape one URL synchronously. Returns immediately with a `V2Document`.
 | `timeout` | `number` | server default | Request deadline in milliseconds |
 | `renderer` | `"auto" \| "lightpanda" \| "chrome" \| "chrome_proxy" \| "playwright"` | — | Pin a renderer tier |
 | `parsers` | `ParserSpec[]` | — | Document parser directives (e.g. `["pdf"]`) |
-| `llmApiKey` | `string` | — | BYOK LLM API key (required for `summary` / `json` if no server key) |
-| `llmProvider` | `"anthropic" \| "openai" \| "deepseek" \| "azure" \| "openai-compatible"` | — | BYOK LLM provider |
-| `llmModel` | `string` | — | BYOK LLM model name |
+| `llmApiKey` | `string` | — | Per-request LLM API key (required for `summary` / `json` if no server key) |
+| `llmProvider` | `"anthropic" \| "openai" \| "deepseek" \| "azure" \| "openai-compatible"` | — | Per-request LLM provider |
+| `llmModel` | `string` | — | Per-request LLM model name |
 | `summaryPrompt` | `string` | — | Custom prompt for the `summary` format |
 
 ### Response

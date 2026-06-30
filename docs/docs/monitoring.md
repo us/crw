@@ -258,7 +258,7 @@ curl -s -X POST "http://localhost:3000/v1/change-tracking/diff" \
 ```
 
 :::note
-The `monitor` feature pulls in SQLite/HMAC dependencies only when enabled — the default engine build stays dependency-light. Self-host monitoring uses UTC schedules and your own LLM key (BYOK) for judging.
+The `monitor` feature pulls in SQLite/HMAC dependencies only when enabled — the default engine build stays dependency-light. Self-host monitoring uses UTC schedules and your own LLM key for judging.
 :::
 
 ## Change Tracking

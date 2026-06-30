@@ -160,7 +160,7 @@ curl -X POST https://api.fastcrw.com/v1/scrape \
 | `formats` | string[] | required | Use `["json"]` for the canonical extraction path |
 | `jsonSchema` | object | required | JSON schema describing the fields you want back |
 | `extract` | object | -- | Firecrawl-compatible wrapper; `extract.schema` is accepted |
-| `llmApiKey` | string | -- | Per-request BYOK credential |
+| `llmApiKey` | string | -- | Per-request LLM API key |
 | `llmProvider` | string | server default | `anthropic`, `openai`, `deepseek`, `azure`, or `openai-compatible` |
 | `llmModel` | string | server default | Extraction model override |
 | `baseUrl` | string | -- | OpenAI-compatible endpoint base, e.g. `https://api.deepseek.com/v1` (also used by Azure). crw appends `/chat/completions` automatically if you omit it. |
@@ -197,16 +197,16 @@ Use this workflow:
 
 If the underlying page scrape is weak, the JSON extraction will also be weak.
 
-## BYOK and provider control
+## Self-hosted LLM and provider control
 
-**Self-hosted / BYOK:** set `[extraction.llm]` in `config.toml` for a server-wide default, or pass `llmApiKey` + `llmProvider` + `llmModel` per request to override it. Supported providers: `anthropic`, `openai`, `deepseek`, `azure`, and `openai-compatible`. Use `baseUrl` for any OpenAI-compatible endpoint (DeepSeek, Azure, local models).
+**Self-hosted:** set `[extraction.llm]` in `config.toml` for a server-wide default, or pass `llmApiKey` + `llmProvider` + `llmModel` per request to override it. Supported providers: `anthropic`, `openai`, `deepseek`, `azure`, and `openai-compatible`. Use `baseUrl` for any OpenAI-compatible endpoint (DeepSeek, Azure, local models).
 
 ## Common production patterns
 
 - Validate the target with markdown first, then add extraction.
 - Keep the schema as small as possible on the first pass.
 - Narrow the page with `cssSelector` only when the default extraction is too noisy.
-- Use BYOK only when you need per-request provider separation.
+- Use a per-request `llmApiKey` only when you need per-request provider separation.
 
 ## Common mistakes
 
