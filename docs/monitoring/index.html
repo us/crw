@@ -529,7 +529,7 @@ curl -s -X POST &quot;http://localhost:3000/v1/change-tracking/diff&quot; \
     &quot;previous&quot;: { &quot;markdown&quot;: &quot;Starter $19&quot;, &quot;contentHash&quot;: &quot;abc&quot; },
     &quot;current&quot;:  { &quot;markdown&quot;: &quot;Starter $24&quot; }
   }'</code></pre>
-<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">The `monitor` feature pulls in SQLite/HMAC dependencies only when enabled — the default engine build stays dependency-light. Self-host monitoring uses UTC schedules and your own LLM key (BYOK) for judging.</div></div><h2 id="change-tracking">Change Tracking</h2>
+<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">The `monitor` feature pulls in SQLite/HMAC dependencies only when enabled — the default engine build stays dependency-light. Self-host monitoring uses UTC schedules and your own LLM key for judging.</div></div><h2 id="change-tracking">Change Tracking</h2>
 <p>Change tracking is a <strong>stateless</strong> primitive: you supply the current scraped content and the previous snapshot; the engine returns the diff and the new snapshot to persist as the next baseline. The engine stores nothing.</p>
 <p>Two entry points exist depending on whether you are running a single-page scrape or driving a custom orchestration loop:</p>
 <table>

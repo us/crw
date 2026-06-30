@@ -434,7 +434,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <p>When the content is truncated, the response&#39;s <code>data.warnings</code> array carries a <code>content truncated to N bytes before summarization</code> notice.</p>
 <h3 id="where-the-key-comes-from">Where the key comes from</h3>
 <ul>
-<li>Per-request BYOK: send <code>llmApiKey</code> / <code>llmProvider</code> / <code>llmModel</code> / <code>baseUrl</code> in the body.</li>
+<li>Per-request key: send <code>llmApiKey</code> / <code>llmProvider</code> / <code>llmModel</code> / <code>baseUrl</code> in the body.</li>
 <li>Server default: configure <code>[extraction.llm]</code> in <code>config.toml</code> (see <a href="configuration">Configuration</a>).</li>
 </ul>
 <p>If neither is set, requesting <code>formats: [&quot;summary&quot;]</code> returns a 422.</p>

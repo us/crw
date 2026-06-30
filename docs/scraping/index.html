@@ -508,7 +508,7 @@ console.log(body.data.markdown);</code></pre></div><div class="code-tab-panel" d
 <td><code>llmApiKey</code></td>
 <td>string</td>
 <td>--</td>
-<td>Per-request LLM API key (BYOK)</td>
+<td>Per-request LLM API key</td>
 </tr>
 <tr>
 <td><code>llmProvider</code></td>
@@ -571,7 +571,7 @@ console.log(body.data.markdown);</code></pre></div><div class="code-tab-panel" d
 <li><code>markdown</code> is the default and best first request for most pipelines.</li>
 <li><code>html</code> or <code>rawHtml</code> is useful when downstream systems need original structure.</li>
 <li><code>links</code> is useful when you want lightweight discovery without page bodies.</li>
-<li><code>summary</code> is the LLM-prose path — needs <code>llmApiKey</code> (BYOK) or a server <code>[extraction.llm]</code> config. Optional <code>summaryPrompt</code> lets the caller pick language/tone without weakening the safety wrapper.</li>
+<li><code>summary</code> is the LLM-prose path — needs <code>llmApiKey</code> or a server <code>[extraction.llm]</code> config. Optional <code>summaryPrompt</code> lets the caller pick language/tone without weakening the safety wrapper.</li>
 <li><code>json</code> is the extraction path and should be paired with <code>jsonSchema</code>.</li>
 </ul>
 <p>If you ask for multiple formats, only those formats are populated in the response.</p>

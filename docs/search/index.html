@@ -433,7 +433,7 @@ under the SearXNG-native name. Pick whichever; both are emitted.</p>
 <td><code>summarizeResults</code></td>
 <td>boolean</td>
 <td><code>false</code></td>
-<td>When <code>true</code>, each scraped result is summarized by the LLM and the digest appears in <code>result.summary</code>. Needs LLM config (BYOK or server). Fan-out is bounded by <code>[extraction.llm].max_concurrency</code>.</td>
+<td>When <code>true</code>, each scraped result is summarized by the LLM and the digest appears in <code>result.summary</code>. Needs LLM config (per-request key or server). Fan-out is bounded by <code>[extraction.llm].max_concurrency</code>.</td>
 </tr>
 <tr>
 <td><code>answer</code></td>
@@ -499,7 +499,7 @@ under the SearXNG-native name. Pick whichever; both are emitted.</p>
 <td><code>llmApiKey</code></td>
 <td>string</td>
 <td>--</td>
-<td>Per-request LLM API key (BYOK)</td>
+<td>Per-request LLM API key</td>
 </tr>
 <tr>
 <td><code>llmProvider</code></td>
@@ -633,7 +633,7 @@ under the SearXNG-native name. Pick whichever; both are emitted.</p>
 <li>Each directive is truncated to 500 chars server-side.</li>
 </ul>
 <h3 id="where-the-key-comes-from">Where the key comes from</h3>
-<p>Same BYOK pattern as <code>/v1/scrape</code>: send <code>llmApiKey</code> / <code>llmProvider</code> / <code>llmModel</code> / <code>baseUrl</code> in the request body, or configure <code>[extraction.llm]</code> in <code>config.toml</code>.</p>
+<p>Same per-request key pattern as <code>/v1/scrape</code>: send <code>llmApiKey</code> / <code>llmProvider</code> / <code>llmModel</code> / <code>baseUrl</code> in the request body, or configure <code>[extraction.llm]</code> in <code>config.toml</code>.</p>
 <h2 id="freshness-sources-and-categories">Freshness, sources, and categories</h2>
 <ul>
 <li>Use <code>tbs</code> when freshness matters more than broad recall.</li>

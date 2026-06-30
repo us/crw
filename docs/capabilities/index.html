@@ -345,7 +345,7 @@ Authorization: Bearer YOUR_API_KEY</code></pre>
 <tr>
 <td><code>serverKeyConfigured</code></td>
 <td><code>boolean</code></td>
-<td><code>true</code> when a server-side <code>[extraction.llm]</code> API key is configured. <code>false</code> means the instance has no server LLM key and requires callers to supply <code>llmApiKey</code> in the request body. Hosted SaaS sets this to <code>false</code> and relies on per-request BYOK.</td>
+<td><code>true</code> when a server-side <code>[extraction.llm]</code> API key is configured. <code>false</code> means the instance has no server LLM key and requires callers to supply <code>llmApiKey</code> in the request body. Hosted SaaS sets this to <code>false</code> and relies on per-request keys.</td>
 </tr>
 <tr>
 <td><code>maxConcurrency</code></td>
@@ -441,7 +441,7 @@ Authorization: Bearer YOUR_API_KEY</code></pre>
 <h2 id="hosted-api-values">Hosted API Values</h2>
 <p>On <code>api.fastcrw.com</code> you can expect:</p>
 <ul>
-<li><code>llm.serverKeyConfigured</code> — <code>false</code> (SaaS relies on per-request BYOK)</li>
+<li><code>llm.serverKeyConfigured</code> — <code>false</code> (SaaS relies on per-request keys)</li>
 <li><code>documents.parsers</code> — <code>[&quot;pdf&quot;]</code> (PDF support is enabled)</li>
 <li><code>documents.fileUpload.maxBytes</code> — <code>52428800</code> (50 MiB)</li>
 <li><code>formats.supported</code> — all 8 formats</li>
@@ -466,7 +466,7 @@ caps = httpx.get(
 if caps[&quot;llm&quot;][&quot;serverKeyConfigured&quot;]:
     llm_key_in_body = None          # server has a key
 else:
-    llm_key_in_body = &quot;sk-...&quot;      # caller must supply BYOK
+    llm_key_in_body = &quot;sk-...&quot;      # caller must supply a per-request key
 
 pdf_ok = caps[&quot;documents&quot;][&quot;fileUpload&quot;][&quot;supported&quot;]</code></pre>
 <h3 id="self-hosted-instances">Self-Hosted Instances</h3>

@@ -442,7 +442,7 @@ console.log(body.data.json);</code></pre></div><div class="code-tab-panel" data-
 <td><code>llmApiKey</code></td>
 <td>string</td>
 <td>--</td>
-<td>Per-request BYOK credential</td>
+<td>Per-request LLM API key</td>
 </tr>
 <tr>
 <td><code>llmProvider</code></td>
@@ -498,14 +498,14 @@ console.log(body.data.json);</code></pre></div><div class="code-tab-panel" data-
 <li>expand the schema only after the first JSON result looks right.</li>
 </ol>
 <p>If the underlying page scrape is weak, the JSON extraction will also be weak.</p>
-<h2 id="byok-and-provider-control">BYOK and provider control</h2>
-<p><strong>Self-hosted / BYOK:</strong> set <code>[extraction.llm]</code> in <code>config.toml</code> for a server-wide default, or pass <code>llmApiKey</code> + <code>llmProvider</code> + <code>llmModel</code> per request to override it. Supported providers: <code>anthropic</code>, <code>openai</code>, <code>deepseek</code>, <code>azure</code>, and <code>openai-compatible</code>. Use <code>baseUrl</code> for any OpenAI-compatible endpoint (DeepSeek, Azure, local models).</p>
+<h2 id="self-hosted-llm-and-provider-control">Self-hosted LLM and provider control</h2>
+<p><strong>Self-hosted:</strong> set <code>[extraction.llm]</code> in <code>config.toml</code> for a server-wide default, or pass <code>llmApiKey</code> + <code>llmProvider</code> + <code>llmModel</code> per request to override it. Supported providers: <code>anthropic</code>, <code>openai</code>, <code>deepseek</code>, <code>azure</code>, and <code>openai-compatible</code>. Use <code>baseUrl</code> for any OpenAI-compatible endpoint (DeepSeek, Azure, local models).</p>
 <h2 id="common-production-patterns">Common production patterns</h2>
 <ul>
 <li>Validate the target with markdown first, then add extraction.</li>
 <li>Keep the schema as small as possible on the first pass.</li>
 <li>Narrow the page with <code>cssSelector</code> only when the default extraction is too noisy.</li>
-<li>Use BYOK only when you need per-request provider separation.</li>
+<li>Use a per-request <code>llmApiKey</code> only when you need per-request provider separation.</li>
 </ul>
 <h2 id="common-mistakes">Common mistakes</h2>
 <ul>

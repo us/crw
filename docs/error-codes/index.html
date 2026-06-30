@@ -419,8 +419,8 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <td><code>formats: [&quot;summary&quot;]</code> sent without a server-side <code>[extraction.llm]</code> block and without per-request <code>llmApiKey</code></td>
 </tr>
 <tr>
-<td>BYOK header required</td>
-<td>Server is in BYOK-only mode (<code>require_byok_header</code>) and the request lacks both the header and <code>llmApiKey</code></td>
+<td>Key header required</td>
+<td>Server is in key-required mode (<code>require_byok_header</code>) and the request lacks both the header and <code>llmApiKey</code></td>
 </tr>
 <tr>
 <td>No JS renderer available</td>

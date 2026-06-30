@@ -292,24 +292,16 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 </tr>
 </thead>
 <tbody><tr>
-<td><code>scrape</code> (HTTP or lightpanda render)</td>
+<td><code>scrape</code> (any render — HTTP, lightpanda, chrome, or <code>chrome_proxy</code>)</td>
 <td>1 credit</td>
-</tr>
-<tr>
-<td><code>scrape</code> with Chrome render (<code>renderer: &quot;chrome&quot;</code>)</td>
-<td>2 credits</td>
-</tr>
-<tr>
-<td><code>scrape</code> with <code>chrome_proxy</code> render</td>
-<td>1 credit (SaaS) — engine <code>data.creditCost</code> reports 2 (matches <code>credit_for(ChromeProxy)</code>)</td>
 </tr>
 <tr>
 <td><code>scrape</code> with <code>playwright</code> render</td>
 <td>SaaS billing only; engine <code>data.creditCost</code> is omitted (0)</td>
 </tr>
 <tr>
-<td><code>scrape</code> with structured extraction / <code>formats: [&quot;json&quot;]</code></td>
-<td>5 credits</td>
+<td><code>scrape</code> with structured extraction (<code>formats: [&quot;json&quot;]</code> / <code>summary</code>)</td>
+<td>1 credit + LLM token cost</td>
 </tr>
 <tr>
 <td><code>map</code></td>
@@ -336,9 +328,9 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <td>1 credit (planned cloud rate; the self-hosted <code>crw-browse</code> binary is free)</td>
 </tr>
 </tbody></table>
-<p>Chrome&#39;s 2-credit cost is applied by the engine renderer (<code>crw-renderer/src/lib.rs: credit_for(RendererKind::Chrome) = 2</code>).
-The 5-credit cost for LLM-backed extraction (<code>json</code>/<code>summary</code> formats) is applied by the managed cloud billing layer; the open-source engine itself does not add an extra surcharge beyond the render cost.</p>
-<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">**Managed-LLM markup (fastcrw.com cloud only)** — this is a SaaS billing policy enforced by the cloud platform, not by the open-source engine. When you use `answer`, `summarizeResults`, or other managed LLM features on fastcrw.com, token usage is billed at a 3× markup over the provider price, capped at 8 000 credits per request. BYOK requests pay only a flat infra fee with no token markup. Self-hosted deployments have no billing layer and are unaffected.</div></div><h2 id="why-crawl-billing-looks-different">Why crawl billing looks different</h2>
+<p>Every renderer costs 1 credit per page — the engine&#39;s <code>credit_for</code> returns a flat 1 (<code>crw-renderer/src/lib.rs</code>), and <code>data.creditCost</code> matches the charge regardless of which renderer (HTTP, lightpanda, Chrome, chrome_proxy) actually served the page.
+LLM-backed extraction (<code>json</code>/<code>summary</code> formats) is <strong>not</strong> a flat fee. It costs the 1-credit base render plus the LLM token cost. The open-source engine itself adds no surcharge beyond the 1-credit render cost — the LLM portion is applied by the managed cloud billing layer and tracked separately in <code>creditsUsed</code>.</p>
+<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">**Managed-LLM billing (fastcrw.com cloud only)** — token usage for managed LLM features (`json`/`summary` extraction, `answer`, `summarizeResults`) is billed on top of the base credit by the cloud platform, not by the open-source engine. Self-hosted deployments have no billing layer and are unaffected.</div></div><h2 id="why-crawl-billing-looks-different">Why crawl billing looks different</h2>
 <p>The crawl start reserves the job. Subsequent polls charge only for newly materialized pages, not for the total accumulated page count each time.</p>
 <p>That prevents the same already-seen pages from being charged again and again just because you are checking progress.</p>
 <h2 id="simple-examples">Simple Examples</h2>
@@ -392,10 +384,10 @@ The 5-credit cost for LLM-backed extraction (<code>json</code>/<code>summary</co
   &quot;data&quot;: {
     &quot;markdown&quot;: &quot;...&quot;,
     &quot;metadata&quot;: { ... },
-    &quot;creditCost&quot;: 2
+    &quot;creditCost&quot;: 1
   }
 }</code></pre>
-<p>The value reflects the renderer cost only (1 for HTTP/lightpanda, 2 for Chrome). On the managed cloud the SaaS billing layer may charge additional credits for LLM features (extraction, summary), which are tracked separately in <code>creditsUsed</code> on v2 responses and in your account billing dashboard.</p>
+<p>The value reflects the renderer cost only (a flat 1 credit for every renderer). On the managed cloud the SaaS billing layer may charge additional credits for LLM features (extraction, summary), which are tracked separately in <code>creditsUsed</code> on v2 responses and in your account billing dashboard.</p>
 <p>The field is omitted when its value would be 0 (internal paths that have not yet been priced).</p>
 <h2 id="balance-check">Balance check</h2>
 <p>Use <code>GET /api/v1/account/balance</code> (cloud only — fastcrw.com) with your API key to inspect included credits, purchased balance, and total available credits.</p>
