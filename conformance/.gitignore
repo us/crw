@@ -1,4 +1,5 @@
 .venv/
+uv.lock
 __pycache__/
 *.pyc
 # NEVER commit the Firecrawl API key or local env.
