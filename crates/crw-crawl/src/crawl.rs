@@ -465,6 +465,17 @@ const BFS_SHORT_BUDGET_SECS: u64 = 30;
 /// derived from `max_urls` (`sitemap_max_fetches`) so a large `<sitemapindex>`
 /// (e.g. ultimate-guitar.com: 84 children; songsterr.com: 854) isn't truncated.
 const SITEMAP_MAX_DEPTH: u32 = 3;
+/// Per-render deadline for the sitemap anti-bot escalation arm. A Cloudflare
+/// managed challenge needs a few seconds of JS execution to clear.
+const SITEMAP_ESCALATE_DEADLINE_MS: u64 = 30_000;
+/// Hard cap on renderer escalations per map call. Chrome renders cost ~100× a
+/// plain GET, so a fully-gated site (every child sitemap behind Cloudflare)
+/// can't fan out unbounded; we recover the first N sections within the timeout.
+const SITEMAP_ESCALATE_BUDGET: usize = 64;
+/// Wall-clock budget for the sitemap phase when escalation is active. Bounds the
+/// total time spent solving challenges so the map returns partial results within
+/// the caller's request timeout instead of being killed with nothing.
+const SITEMAP_PHASE_BUDGET_SECS: u64 = 75;
 
 /// Discover URLs from a site (map endpoint).
 pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResult> {
@@ -636,6 +647,42 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResul
         // is still N requests against the SAME host, and respecting the
         // configured per-host limit is what an operator who set it expects.
         // `fetch_sitemap_tree` clamps to a small ceiling internally.
+        // Anti-bot escalation arm: a sitemap behind a Cloudflare/JS challenge
+        // is re-fetched through the renderer (which executes the challenge and
+        // returns the real XML). Only wired when a JS renderer is available —
+        // otherwise a re-fetch would just hit the same wall. Egress (proxy) is
+        // resolved per-URL, identical to the BFS page-fetch path below.
+        let escalate_render = move |u: String| -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Option<String>> + Send>,
+        > {
+            let renderer = renderer.clone();
+            Box::pin(async move {
+                let empty: HashMap<String, String> = HashMap::new();
+                let deadline = crw_core::Deadline::from_request_ms(SITEMAP_ESCALATE_DEADLINE_MS);
+                let resolved_proxy = renderer.pick_proxy_for_url(&u);
+                let fut = renderer.fetch(&u, &empty, Some(true), None, None, deadline);
+                match crw_renderer::REQUEST_PROXY.scope(resolved_proxy, fut).await {
+                    Ok(r) => Some(r.html),
+                    Err(e) => {
+                        tracing::debug!("sitemap escalation render failed for {u}: {e}");
+                        None
+                    }
+                }
+            })
+        };
+        let escalator = renderer.js_capable().then(|| {
+            crate::sitemap::SitemapEscalator::new(&escalate_render, SITEMAP_ESCALATE_BUDGET)
+        });
+        // Wall-clock budget for the sitemap phase — only meaningful when the
+        // escalation arm is live (plain-HTTP sitemaps finish in well under it).
+        // Without it a fully-gated multi-child index (e.g. UG's 84 children, each
+        // behind its own Cloudflare solve) would grind every child to the outer
+        // request timeout and return nothing; with it the walk stops and returns
+        // whatever it recovered.
+        let sitemap_deadline = escalator.as_ref().map(|_| {
+            std::time::Instant::now() + std::time::Duration::from_secs(SITEMAP_PHASE_BUDGET_SECS)
+        });
+
         let sitemap_urls = crate::sitemap::fetch_sitemap_tree(
             seeds,
             &parsed,
@@ -644,6 +691,8 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResul
             sitemap_max_fetches,
             max_urls,
             per_host_max_concurrent as usize,
+            escalator.as_ref(),
+            sitemap_deadline,
         )
         .await;
         for u in sitemap_urls {
