@@ -2,6 +2,19 @@
 
 All notable changes to CRW are documented here.
 
+## [0.20.0](https://github.com/us/crw/compare/v0.19.0...v0.20.0) (2026-07-01)
+
+
+### Features
+
+* **map:** escalate anti-bot-gated sitemaps through the JS renderer ([2634a7e](https://github.com/us/crw/commit/2634a7e0a5c2670d8075ef1ef5547716e62ad2e3))
+* **map:** fix URL discovery on hard sites + configurable discovery limit ([f5fe1f4](https://github.com/us/crw/commit/f5fe1f4a9487643e7e58ef7d5c29e5d988fcdc42))
+
+
+### Bug Fixes
+
+* **renderer:** flat 1-credit cost for every renderer ([35a604c](https://github.com/us/crw/commit/35a604cabf375d5e956adc0ec18f017e57309e79))
+
 ## [0.19.0](https://github.com/us/crw/compare/v0.18.3...v0.19.0) (2026-06-28)
 
 
