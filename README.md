@@ -61,19 +61,20 @@ Works with: [Claude Code](https://docs.fastcrw.com/mcp-clients/#claude-code) · 
 
 ## Comparison Table
 
-Qualitative positioning vs. the three most-cited alternatives. Numerical
-claims trace to the inline sources noted; everything else is descriptive.
+Qualitative positioning vs. the two most-cited alternatives — the same two in
+the reproducible benchmark below. Numerical claims trace to the inline sources
+noted; everything else is descriptive.
 
-| | **fastCRW** | Firecrawl | Crawl4AI | Spider |
-|---|---|---|---|---|
-| Language | Rust | Node.js + Playwright | Python + Playwright | Rust |
-| License | AGPL-3.0 (commercial avail.) | AGPL-3.0 (commercial avail.) | Apache-2.0 | Source-available / commercial ([spider.cloud](https://spider.cloud)) |
-| Self-host install size | Single static binary (~8 MB) | Multi-container (~500 MB+ image) | ~2 GB image (browser bundled) | Managed-first; self-host via crate |
-| Memory baseline (idle) | ~50 MB | Large (Chromium heap) | Large (Chromium heap) | Light (Rust) |
-| Firecrawl migration | Yes — `/v2/*` compatibility layer; `/v1/*` is native fastCRW | Native | No | No |
-| MCP server | Built-in (`crw-mcp`) | Separate package | Community add-on | No first-party |
-| Hosted option | `api.fastcrw.com` (BYOK or managed) | firecrawl.dev | None official | spider.cloud (primary product) |
-| Reproducible public benchmark | Yes — 63.74% truth-recall on 1,000-URL dataset (`diagnose_3way.py`, 2026-05-08) | Vendor-published only | Vendor-published only | Vendor-published only |
+| | **fastCRW** | Firecrawl | Crawl4AI |
+|---|---|---|---|
+| Language | Rust | Node.js + Playwright | Python + Playwright |
+| License | AGPL-3.0 (commercial avail.) | AGPL-3.0 (commercial avail.) | Apache-2.0 |
+| Self-host install size | Single static binary (~8 MB) | Multi-container (~500 MB+ image) | ~2 GB image (browser bundled) |
+| Memory baseline (idle) | ~50 MB | Large (Chromium heap) | Large (Chromium heap) |
+| Firecrawl migration | Yes — `/v2/*` compatibility layer; `/v1/*` is native fastCRW | Native | No |
+| MCP server | Built-in (`crw-mcp`) | Separate package | Community add-on |
+| Hosted option | `api.fastcrw.com` (BYOK or managed) | firecrawl.dev | None official |
+| Reproducible public benchmark | Yes — 63.74% truth-recall on 1,000-URL dataset (`diagnose_3way.py`, 2026-05-08) | Vendor-published only | Vendor-published only |
 
 Pricing/spec cells where claimed link to the vendor page; everything else
 is the qualitative architectural shape, not a comparison number.
