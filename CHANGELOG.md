@@ -2,6 +2,22 @@
 
 All notable changes to CRW are documented here.
 
+## [0.21.0](https://github.com/us/crw/compare/v0.20.0...v0.21.0) (2026-07-01)
+
+
+### Features
+
+* **cli:** add crw bench FRAMES harness ([fb78bcb](https://github.com/us/crw/commit/fb78bcb57b3add83db28e5ecdbaf39ef39d067fe))
+* **cli:** bench A/B flags, concurrency, crash-safe writes ([7eb059e](https://github.com/us/crw/commit/7eb059edac5ea1f857aca34e97a83145928064ee))
+* **core:** add evidence & provenance primitives ([4a638a0](https://github.com/us/crw/commit/4a638a08e5e1ee3502854e20ae01afd885aa2353))
+* **core:** expose sourceHash on scrape responses ([b0d89f9](https://github.com/us/crw/commit/b0d89f925d98a36bb7ad3cff9b28a7ec1f5a238f))
+
+
+### Bug Fixes
+
+* **cli:** repair clap arg conflict that panicked debug builds ([f2a6b77](https://github.com/us/crw/commit/f2a6b7798fcdb6bd1c1badc420ad8bd517b6ae67))
+* **extract:** unify untrusted-content fencing; nonce-fence the change judge ([192b9d7](https://github.com/us/crw/commit/192b9d742cb4455f70370c737afd29761189018a))
+
 ## [0.20.0](https://github.com/us/crw/compare/v0.19.0...v0.20.0) (2026-07-01)
 
 
