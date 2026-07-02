@@ -1137,6 +1137,7 @@ async fn enrich_with_scrape(
 
     let formats = opts.formats.clone();
     let only_main = opts.only_main_content;
+    let country = opts.country.clone();
     let semaphore = Arc::new(tokio::sync::Semaphore::new(
         state.config.crawler.max_concurrency.max(1),
     ));
@@ -1144,6 +1145,7 @@ async fn enrich_with_scrape(
 
     for (idx, url) in jobs {
         let formats = formats.clone();
+        let country = country.clone();
         let renderer = state.renderer.clone();
         let llm_config = state.config.extraction.llm.clone();
         let extraction_cfg = state.config.extraction.clone();
@@ -1178,7 +1180,7 @@ async fn enrich_with_scrape(
                 proxy: None,
                 proxy_list: Vec::new(),
                 proxy_rotation: None,
-                country: None,
+                country,
                 stealth: None,
                 actions: None,
                 extract: None,
