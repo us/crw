@@ -1157,6 +1157,10 @@ pub struct SearchScrapeOptions {
     pub formats: Vec<OutputFormat>,
     #[serde(default = "default_true")]
     pub only_main_content: bool,
+    /// Residential-proxy exit country (ISO 3166-1 alpha-2) for the per-result page scrape.
+    /// Populated by the SaaS layer from the caller's IP (geo-aware proxy). `None` = engine default.
+    #[serde(default)]
+    pub country: Option<String>,
 }
 
 /// POST /v1/search request body. Mirrors the zod schema in
