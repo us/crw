@@ -1363,23 +1363,52 @@ impl PageFetcher for CdpRenderer {
             ));
         }
 
-        // When a per-request proxy is active, bypass the context pool: each
-        // proxied request needs a fresh browser context created with its own
-        // `proxyServer`, which `fetch_with_ws` builds and disposes. The pool is
-        // reserved for the (common) no-proxy path where contexts are reused.
-        let proxy_active = crate::REQUEST_PROXY
-            .try_with(|p| p.is_some())
-            .unwrap_or(false);
-        let fut = async {
-            if let Some(pool) = self.pool.as_ref().filter(|_| !proxy_active) {
-                self.fetch_with_pool(pool, url, wait_for_ms, deadline).await
-            } else {
-                self.fetch_with_ws(url, wait_for_ms, deadline).await
+        let first = self
+            .fetch_once(url, wait_for_ms, deadline, overall_timeout)
+            .await;
+
+        // On-failure country fallback (residential chrome_proxy tier only).
+        //
+        // The chrome_proxy tier applies the per-request country as a DataImpulse
+        // `{base_user}__cr.{cc}` credential suffix (see `fetch_inner`). When the
+        // requested country has no working exit, DataImpulse rejects the HTTPS
+        // CONNECT tunnel (503 NO_RAY) and Chrome surfaces it as a
+        // `net::ERR_TUNNEL_CONNECTION_FAILED`-class `Page.navigate` error — the
+        // target is NEVER reached, so retrying carries no double-scrape / no
+        // extra-credit risk (credits are assigned per-tier by the caller on the
+        // returned result, not per inner attempt). Retry exactly ONCE with the
+        // tier's default country. Strictly gated (see the two helpers) to:
+        //   - the country-proxy path (base creds set, no BYOP proxy override),
+        //   - a *non-default* country having actually been requested,
+        //   - a proxy-CONNECT-class error only (never a target 4xx/5xx, never a
+        //     timeout — those don't imply a dead country exit).
+        if let Err(e) = &first
+            && is_proxy_tunnel_error(e)
+            && self.should_retry_with_default_country()
+        {
+            let remaining = deadline.remaining();
+            if !remaining.is_zero() {
+                let retry_timeout = internal_timeout.min(remaining);
+                tracing::info!(
+                    renderer = %self.name,
+                    url,
+                    default_country = ?self.default_country,
+                    error = %e,
+                    "country proxy CONNECT tunnel failed; retrying once with default country"
+                );
+                // Re-run the SAME attempt with the country forced to the tier
+                // default. `should_retry_with_default_country` guarantees the
+                // requested country differs from the default, so this cannot
+                // loop: the retry runs under the default and is not retried again.
+                return crate::REQUEST_COUNTRY
+                    .scope(
+                        self.default_country.clone(),
+                        self.fetch_once(url, wait_for_ms, deadline, retry_timeout),
+                    )
+                    .await;
             }
-        };
-        tokio::time::timeout(overall_timeout, fut)
-            .await
-            .map_err(|_| CrwError::Timeout(overall_timeout.as_millis() as u64))?
+        }
+        first
     }
 
     fn name(&self) -> &str {
@@ -1443,7 +1472,95 @@ fn detect_navigation_error(html: &str) -> Option<String> {
     None
 }
 
+/// True for a proxy-egress CONNECT/tunnel failure — the class of error Chrome
+/// raises when the upstream proxy refuses to establish the HTTPS tunnel (e.g.
+/// DataImpulse returning `503 NO_RAY` on CONNECT for a dead country exit).
+///
+/// Deliberately narrow: matches only the two `net::ERR_*` proxy-connect codes
+/// where a *different egress* (a different country exit) could plausibly
+/// succeed. It never matches target HTTP statuses, DNS/name errors, or
+/// timeouts — those don't indicate a dead country exit, so retrying the country
+/// would be pointless (or, worse, mask a genuine target failure).
+fn is_proxy_tunnel_error(err: &CrwError) -> bool {
+    let msg = match err {
+        CrwError::RendererError(m) => m.as_str(),
+        _ => return false,
+    };
+    msg.contains("ERR_TUNNEL_CONNECTION_FAILED") || msg.contains("ERR_PROXY_CONNECTION_FAILED")
+}
+
 impl CdpRenderer {
+    /// Run a single CDP fetch attempt bounded by `overall_timeout`. Factored out
+    /// of the `PageFetcher::fetch` entry point so the country-fallback retry can
+    /// invoke the exact same dispatch a second time under a different
+    /// `REQUEST_COUNTRY` scope.
+    async fn fetch_once(
+        &self,
+        url: &str,
+        wait_for_ms: Option<u64>,
+        deadline: crw_core::Deadline,
+        overall_timeout: Duration,
+    ) -> CrwResult<FetchResult> {
+        // When a per-request proxy is active, bypass the context pool: each
+        // proxied request needs a fresh browser context created with its own
+        // `proxyServer`, which `fetch_with_ws` builds and disposes. The pool is
+        // reserved for the (common) no-proxy path where contexts are reused.
+        let proxy_active = crate::REQUEST_PROXY
+            .try_with(|p| p.is_some())
+            .unwrap_or(false);
+        let fut = async {
+            if let Some(pool) = self.pool.as_ref().filter(|_| !proxy_active) {
+                self.fetch_with_pool(pool, url, wait_for_ms, deadline).await
+            } else {
+                self.fetch_with_ws(url, wait_for_ms, deadline).await
+            }
+        };
+        tokio::time::timeout(overall_timeout, fut)
+            .await
+            .map_err(|_| CrwError::Timeout(overall_timeout.as_millis() as u64))?
+    }
+
+    /// Whether a failed attempt on this tier should be retried once with the
+    /// tier's `default_country`. Requires ALL of:
+    ///   1. base DataImpulse creds set — i.e. this IS the chrome_proxy tier that
+    ///      composes `__cr.<cc>` credentials (plain `chrome` leaves this `None`);
+    ///   2. no per-request BYOP/rotated proxy — a `REQUEST_PROXY` supplies its
+    ///      own auth + egress (it takes precedence over the country credential in
+    ///      `fetch_inner`), so its CONNECT failure is not a country problem;
+    ///   3. a *valid, non-default* country was actually requested — otherwise the
+    ///      first attempt already egressed through the default exit and the retry
+    ///      would be byte-for-byte identical.
+    ///
+    /// Country normalization mirrors `fetch_inner` exactly (trim, lowercase,
+    /// 2-alpha) so an invalid `REQUEST_COUNTRY` (which `fetch_inner` already
+    /// drops to the default) does not trigger a pointless retry.
+    fn should_retry_with_default_country(&self) -> bool {
+        if self.proxy_auth_base.is_none() {
+            return false;
+        }
+        let byop_active = crate::REQUEST_PROXY
+            .try_with(|p| p.is_some())
+            .unwrap_or(false);
+        if byop_active {
+            return false;
+        }
+        let norm = |c: &str| -> Option<String> {
+            let c = c.trim().to_lowercase();
+            (c.len() == 2 && c.chars().all(|ch| ch.is_ascii_alphabetic())).then_some(c)
+        };
+        let requested = crate::REQUEST_COUNTRY
+            .try_with(|c| c.clone())
+            .ok()
+            .flatten()
+            .and_then(|c| norm(&c));
+        let default = self.default_country.as_deref().and_then(norm);
+        match requested {
+            Some(req) => Some(req) != default,
+            // No (valid) country requested → first attempt used the default.
+            None => false,
+        }
+    }
+
     /// Pool-backed fetch path. Acquires a checked-out browser context from
     /// the pool, runs `fetch_inner` with the slot's ctx_id + a recorder that
     /// writes the new target_id into the slot, then `release()`s the slot
@@ -2673,7 +2790,36 @@ fn is_spa_text_ready(text_len: i64) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{CdpRenderer, build_auth_response, is_content_stable, lightpanda_safe_ua};
+    use super::{
+        CdpRenderer, CrwError, build_auth_response, is_content_stable, is_proxy_tunnel_error,
+        lightpanda_safe_ua,
+    };
+
+    #[test]
+    fn proxy_tunnel_error_matches_connect_failures() {
+        // The empirical NO_RAY case: DataImpulse refuses the CONNECT and Chrome
+        // surfaces ERR_TUNNEL_CONNECTION_FAILED on Page.navigate.
+        assert!(is_proxy_tunnel_error(&CrwError::RendererError(
+            "Navigation failed: net::ERR_TUNNEL_CONNECTION_FAILED".into()
+        )));
+        assert!(is_proxy_tunnel_error(&CrwError::RendererError(
+            "Navigation failed: net::ERR_PROXY_CONNECTION_FAILED".into()
+        )));
+    }
+
+    #[test]
+    fn proxy_tunnel_error_ignores_non_connect_failures() {
+        // Target/DNS/timeout errors must NOT trigger the country retry — a
+        // different country exit would not fix them, and matching them would
+        // mask real failures.
+        assert!(!is_proxy_tunnel_error(&CrwError::RendererError(
+            "Navigation failed: net::ERR_NAME_NOT_RESOLVED".into()
+        )));
+        assert!(!is_proxy_tunnel_error(&CrwError::RendererError(
+            "Empty HTML from CDP renderer".into()
+        )));
+        assert!(!is_proxy_tunnel_error(&CrwError::Timeout(30_000)));
+    }
 
     #[test]
     fn auth_response_provides_credentials_when_creds_set() {
