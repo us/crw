@@ -92,6 +92,7 @@ fn page_metadata_skip_serializing_none() {
         elapsed_ms: 100,
         page_count: None,
         source_filename: None,
+        extra: Default::default(),
     };
 
     let json = serde_json::to_value(&meta).unwrap();
@@ -106,6 +107,42 @@ fn page_metadata_skip_serializing_none() {
     // Required fields always present
     assert_eq!(json["sourceURL"], "https://example.com");
     assert_eq!(json["statusCode"], 200);
+}
+
+#[test]
+fn page_metadata_extra_flattens_and_roundtrips() {
+    let mut extra = std::collections::BTreeMap::new();
+    extra.insert(
+        "twitter:creator".to_string(),
+        serde_json::Value::String("@x".into()),
+    );
+    let meta = PageMetadata {
+        title: Some("T".into()),
+        description: None,
+        og_title: None,
+        og_description: None,
+        og_image: None,
+        canonical_url: None,
+        source_url: "https://example.com".into(),
+        language: None,
+        status_code: 200,
+        rendered_with: None,
+        elapsed_ms: 0,
+        page_count: None,
+        source_filename: None,
+        extra,
+    };
+    let json = serde_json::to_value(&meta).unwrap();
+    // Extra meta tags flatten onto the metadata object (Firecrawl-style), not
+    // nested under an "extra" key.
+    assert_eq!(json["twitter:creator"], "@x");
+    assert!(json.get("extra").is_none());
+    // And unknown top-level keys deserialize back into `extra`.
+    let back: PageMetadata = serde_json::from_value(json).unwrap();
+    assert_eq!(
+        back.extra.get("twitter:creator"),
+        Some(&serde_json::Value::String("@x".into()))
+    );
 }
 
 #[test]
@@ -174,6 +211,7 @@ fn scrape_data_skip_serializing_none() {
             elapsed_ms: 50,
             page_count: None,
             source_filename: None,
+            extra: Default::default(),
         },
         debug_extraction: None,
         content_type: None,
@@ -287,6 +325,7 @@ fn scrape_data_serializes_debug_extraction_as_camel_case() {
             elapsed_ms: 0,
             page_count: None,
             source_filename: None,
+            extra: Default::default(),
         },
         debug_extraction: None,
         content_type: None,

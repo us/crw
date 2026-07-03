@@ -532,42 +532,56 @@ async fn scrape_url_inner(
         .json_schema
         .as_ref()
         .or_else(|| req.extract.as_ref().and_then(|e| e.schema.as_ref()));
+    // Optional natural-language extraction instruction (`extract.prompt`). Works
+    // alone — the LLM infers the output shape — or alongside a schema to steer
+    // which fields get filled.
+    let effective_prompt = req
+        .extract
+        .as_ref()
+        .and_then(|e| e.prompt.as_deref())
+        .filter(|p| !p.trim().is_empty());
 
     // Build BYOK LlmConfig once; reused by structured JSON + summary paths.
     let byok_config = build_byok_llm_config(req, llm_config);
     let effective_llm = byok_config.as_ref().or(llm_config);
 
     if formats_include_json(&req.formats) {
-        if let (Some(schema), Some(llm)) = (effective_schema, effective_llm) {
-            let md = data.markdown.as_deref().unwrap_or("");
-            match crw_extract::structured::extract_structured_with_usage(md, schema, llm, None)
-                .await
-            {
-                Ok(result) => {
-                    data.json = Some(result.value);
-                    // Surface per-call LLM token usage so callers (billing,
-                    // dashboards) see the structured-extraction spend.
-                    // Summary may overwrite this slot below; that's fine —
-                    // each route triggers at most one of the two paths in
-                    // the dominant flow, and the "first wins" tiebreak is
-                    // preserved by checking is_none() before assignment.
-                    if data.llm_usage.is_none() {
-                        data.llm_usage = result.usage;
-                    }
-                }
-                Err(e) => {
-                    tracing::error!("Structured extraction failed: {e}");
-                    return Err(e);
-                }
-            }
-        } else if effective_schema.is_some() && effective_llm.is_none() {
+        // A schema OR a prompt is enough to run structured extraction.
+        if effective_schema.is_none() && effective_prompt.is_none() {
+            return Err(crw_core::error::CrwError::InvalidRequest(
+                "Structured extraction (formats: json/extract) requires a 'jsonSchema' field or an extraction 'prompt'.".into()
+            ));
+        }
+        let Some(llm) = effective_llm else {
             return Err(crw_core::error::CrwError::ExtractionError(
                 "JSON extraction requested but no LLM configured. Either set [extraction.llm] in server config, or pass 'llmApiKey' in the request body.".into()
             ));
-        } else if effective_schema.is_none() {
-            return Err(crw_core::error::CrwError::InvalidRequest(
-                "Structured extraction (formats: json/extract) requires a 'jsonSchema' field. Provide a JSON Schema object.".into()
-            ));
+        };
+        let md = data.markdown.as_deref().unwrap_or("");
+        match crw_extract::structured::extract_structured_with_usage(
+            md,
+            effective_schema,
+            effective_prompt,
+            llm,
+            None,
+        )
+        .await
+        {
+            Ok(result) => {
+                data.json = Some(result.value);
+                // Surface per-call LLM token usage so callers (billing,
+                // dashboards) see the structured-extraction spend. Summary may
+                // overwrite this slot below; that's fine — each route triggers
+                // at most one of the two paths in the dominant flow, and the
+                // "first wins" tiebreak is preserved by the is_none() check.
+                if data.llm_usage.is_none() {
+                    data.llm_usage = result.usage;
+                }
+            }
+            Err(e) => {
+                tracing::error!("Structured extraction failed: {e}");
+                return Err(e);
+            }
         }
     }
 
@@ -658,7 +672,11 @@ async fn scrape_url_inner(
                 (Some(schema), Some(llm)) => {
                     let md = data.markdown.as_deref().unwrap_or("");
                     match crw_extract::structured::extract_structured_with_usage(
-                        md, schema, llm, None,
+                        md,
+                        Some(schema),
+                        None,
+                        llm,
+                        None,
                     )
                     .await
                     {

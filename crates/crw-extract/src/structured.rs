@@ -81,9 +81,11 @@ pub async fn extract_structured(
     schema: &serde_json::Value,
     llm: &LlmConfig,
 ) -> CrwResult<serde_json::Value> {
-    Ok(extract_structured_with_usage(markdown, schema, llm, None)
-        .await?
-        .value)
+    Ok(
+        extract_structured_with_usage(markdown, Some(schema), None, llm, None)
+            .await?
+            .value,
+    )
 }
 
 /// Extract structured JSON and return token usage + truncation status.
@@ -96,7 +98,8 @@ pub async fn extract_structured(
 /// downstream billing surfaces can flag pages that were clipped.
 pub async fn extract_structured_with_usage(
     markdown: &str,
-    schema: &serde_json::Value,
+    schema: Option<&serde_json::Value>,
+    user_prompt: Option<&str>,
     llm: &LlmConfig,
     max_input_bytes: Option<usize>,
 ) -> CrwResult<StructuredExtractResult> {
@@ -110,16 +113,32 @@ pub async fn extract_structured_with_usage(
     let max_bytes = max_input_bytes.unwrap_or(DEFAULT_MAX_INPUT_BYTES);
     let (clipped, truncated) = truncate_md(markdown, max_bytes);
 
-    let prompt = format!(
-        "Extract structured data from the following content according to the JSON schema. \
-         Call the extract_data tool with the extracted data.\n\n## Content\n{clipped}"
-    );
+    // When the caller gave only a prompt (no schema), let the LLM shape the
+    // object itself; the tool still needs an input schema, so use a permissive
+    // one that accepts any properties.
+    let permissive_schema = serde_json::json!({ "type": "object", "additionalProperties": true });
+    let tool_schema = schema.unwrap_or(&permissive_schema);
+
+    // The caller-supplied prompt (trusted API input, not scraped content) steers
+    // extraction. Fall back to the generic schema-driven instruction when absent.
+    let user_prompt = user_prompt.map(str::trim).filter(|p| !p.is_empty());
+    let prompt = match user_prompt {
+        Some(p) => format!(
+            "Extract structured data from the following content. \
+             Follow this instruction: {p}\n\
+             Call the extract_data tool with the extracted data.\n\n## Content\n{clipped}"
+        ),
+        None => format!(
+            "Extract structured data from the following content according to the JSON schema. \
+             Call the extract_data tool with the extracted data.\n\n## Content\n{clipped}"
+        ),
+    };
 
     let (value, mut usage) = match llm.provider.as_str() {
         "anthropic" => {
             call_anthropic(
                 &prompt,
-                schema,
+                tool_schema,
                 llm,
                 "extract_data",
                 "Extract structured data from the content",
@@ -129,7 +148,7 @@ pub async fn extract_structured_with_usage(
         "openai" | "deepseek" | "openai-compatible" => {
             call_openai(
                 &prompt,
-                schema,
+                tool_schema,
                 llm,
                 "extract_data",
                 "Extract structured data from the content",
@@ -145,7 +164,11 @@ pub async fn extract_structured_with_usage(
         u.truncated = true;
     }
 
-    validate_against_schema(&value, schema)?;
+    // Only validate against a caller-supplied schema; a prompt-only extraction
+    // has no contract to check the permissive result against.
+    if let Some(schema) = schema {
+        validate_against_schema(&value, schema)?;
+    }
     Ok(StructuredExtractResult {
         value,
         usage,
