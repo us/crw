@@ -746,7 +746,10 @@ fn build_request(
 ) -> ScrapeRequest {
     let extract = extract_schema
         .clone()
-        .map(|s| crw_core::types::ExtractOptions { schema: Some(s) });
+        .map(|s| crw_core::types::ExtractOptions {
+            schema: Some(s),
+            prompt: None,
+        });
     ScrapeRequest {
         url,
         formats,

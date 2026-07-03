@@ -399,6 +399,12 @@ pub struct ExtractedMetadata {
     pub og_description: Option<String>,
     pub og_image: Option<String>,
     pub canonical_url: Option<String>,
+    /// Every other `<meta name|property>` tag on the page, keyed by its raw
+    /// name/property (e.g. `twitter:creator`, `author`). Values are the `content`
+    /// attribute; a tag that repeats becomes an array. Keys already surfaced as
+    /// a named field above (`title`, `description`) are excluded to avoid a
+    /// duplicate key once flattened onto the metadata object.
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 /// Extract metadata (title, description, OG tags, canonical) from HTML.
@@ -418,6 +424,8 @@ pub fn extract_metadata(html: &str) -> ExtractedMetadata {
     // Extract language from <html lang="..."> attribute.
     let language = select_attr(&document, "html", "lang");
 
+    let extra = collect_meta_tags(&document);
+
     ExtractedMetadata {
         title,
         description,
@@ -426,7 +434,52 @@ pub fn extract_metadata(html: &str) -> ExtractedMetadata {
         og_description,
         og_image,
         canonical_url,
+        extra,
     }
+}
+
+/// Collect every `<meta name|property>` tag into a map, mirroring Firecrawl's
+/// flat metadata. `name` wins over `property` when both are present. A tag that
+/// appears more than once (e.g. `viewport`) becomes a JSON array; a single tag
+/// stays a string. `title` / `description` are skipped — they already ship as
+/// named fields and would collide once flattened onto the metadata object.
+fn collect_meta_tags(document: &Html) -> std::collections::BTreeMap<String, serde_json::Value> {
+    use serde_json::Value;
+    use std::collections::BTreeMap;
+
+    const SKIP: [&str; 2] = ["title", "description"];
+    let mut raw: BTreeMap<String, Vec<String>> = BTreeMap::new();
+
+    if let Ok(sel) = Selector::parse("meta") {
+        for el in document.select(&sel) {
+            let attrs = el.value();
+            let Some(key) = attrs.attr("name").or_else(|| attrs.attr("property")) else {
+                continue;
+            };
+            let key = key.trim();
+            let Some(content) = attrs.attr("content") else {
+                continue;
+            };
+            let content = content.trim();
+            if key.is_empty() || content.is_empty() || SKIP.contains(&key) {
+                continue;
+            }
+            raw.entry(key.to_string())
+                .or_default()
+                .push(content.to_string());
+        }
+    }
+
+    raw.into_iter()
+        .map(|(k, mut vals)| {
+            let v = if vals.len() == 1 {
+                Value::String(vals.pop().unwrap())
+            } else {
+                Value::Array(vals.into_iter().map(Value::String).collect())
+            };
+            (k, v)
+        })
+        .collect()
 }
 
 fn select_text(doc: &Html, selector: &str) -> Option<String> {
@@ -496,6 +549,42 @@ mod tests {
         let meta = extract_metadata(html);
         assert_eq!(meta.title.unwrap(), "Test Page");
         assert_eq!(meta.description.unwrap(), "A test");
+    }
+
+    #[test]
+    fn collects_arbitrary_meta_tags() {
+        use serde_json::Value;
+        let html = r#"<html><head>
+            <title>T</title>
+            <meta name="description" content="D">
+            <meta name="twitter:creator" content="@behramcelen">
+            <meta property="og:type" content="blog">
+            <meta name="viewport" content="a">
+            <meta name="viewport" content="b">
+            <meta name="empty" content="">
+        </head><body></body></html>"#;
+        let meta = extract_metadata(html);
+        // Arbitrary name/property tags surface verbatim.
+        assert_eq!(
+            meta.extra.get("twitter:creator"),
+            Some(&Value::String("@behramcelen".into()))
+        );
+        assert_eq!(
+            meta.extra.get("og:type"),
+            Some(&Value::String("blog".into()))
+        );
+        // Repeated tag becomes an array.
+        assert_eq!(
+            meta.extra.get("viewport"),
+            Some(&Value::Array(vec![
+                Value::String("a".into()),
+                Value::String("b".into())
+            ]))
+        );
+        // title/description are named fields — excluded to avoid flatten collision.
+        assert!(!meta.extra.contains_key("description"));
+        // Empty content is dropped.
+        assert!(!meta.extra.contains_key("empty"));
     }
 
     #[test]

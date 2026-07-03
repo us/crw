@@ -149,6 +149,11 @@ impl RequestedRenderer {
 pub struct ExtractOptions {
     #[serde(default)]
     pub schema: Option<serde_json::Value>,
+    /// Natural-language extraction instruction (Firecrawl-compatible
+    /// `extract.prompt`). Used alone — the LLM infers the output shape — or
+    /// alongside `schema` to steer which fields are filled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
 }
 
 /// POST /v1/scrape request body.
@@ -463,6 +468,13 @@ pub struct PageMetadata {
     /// URL-sourced pages.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_filename: Option<String>,
+    /// All raw `<meta>` tags (name/property → content) not already surfaced as
+    /// a named field above, flattened onto the metadata object to match
+    /// Firecrawl (e.g. `twitter:creator`, `author`, `keywords`, `og:type`).
+    /// A tag repeated on the page becomes a JSON array; otherwise a string.
+    /// Empty for sources without HTML meta (PDFs, uploads).
+    #[serde(flatten, default)]
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 /// Token-usage and best-effort cost for one LLM call.

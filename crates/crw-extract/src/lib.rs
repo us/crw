@@ -882,6 +882,7 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
             elapsed_ms,
             page_count: None,
             source_filename: None,
+            extra: meta.extra,
         },
         debug_extraction: None,
         // Populated post-extract by the caller (single.rs / crawl.rs) from

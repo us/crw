@@ -554,6 +554,7 @@ fn build_scrape_data(
             elapsed_ms,
             page_count: Some(extract.page_count),
             source_filename: source.source_filename.clone(),
+            extra: Default::default(),
         },
         debug_extraction: None,
         content_type: Some("application/pdf".to_string()),
@@ -588,9 +589,14 @@ pub async fn apply_llm_formats(
         match (effective_schema, llm_config) {
             (Some(schema), Some(llm)) => {
                 let md = data.markdown.as_deref().unwrap_or("");
-                let result =
-                    crw_extract::structured::extract_structured_with_usage(md, schema, llm, None)
-                        .await?;
+                let result = crw_extract::structured::extract_structured_with_usage(
+                    md,
+                    Some(schema),
+                    None,
+                    llm,
+                    None,
+                )
+                .await?;
                 data.json = Some(result.value);
                 if data.llm_usage.is_none() {
                     data.llm_usage = result.usage;

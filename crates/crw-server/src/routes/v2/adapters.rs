@@ -308,6 +308,7 @@ mod tests {
                 elapsed_ms: 0,
                 page_count: None,
                 source_filename: None,
+                extra: Default::default(),
             },
             debug_extraction: None,
             content_type: Some("text/html".into()),

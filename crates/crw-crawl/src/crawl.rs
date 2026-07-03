@@ -375,8 +375,14 @@ async fn run_crawl_inner(opts: CrawlOptions<'_>) {
         if let (Some(schema), Some(llm)) = (&req.json_schema, llm_config)
             && let Some(md) = &data.markdown
         {
-            match crw_extract::structured::extract_structured_with_usage(md, schema, llm, None)
-                .await
+            match crw_extract::structured::extract_structured_with_usage(
+                md,
+                Some(schema),
+                None,
+                llm,
+                None,
+            )
+            .await
             {
                 Ok(result) => {
                     data.json = Some(result.value);
