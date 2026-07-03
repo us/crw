@@ -336,6 +336,51 @@ for (const { slug, title } of slugMeta) {
   generated++;
 }
 
+// ── Generate redirect stubs for legacy URLs ───────────────────────────────────
+// Google still has pre-flatten docs URLs on record (GSC "Not found (404)"):
+//   • /docs/<slug>      — the old prefixed path; every page now lives at /<slug>
+//   • /scrape, /crawl   — slugs renamed to /scraping, /crawling
+//   • /v1/map           — legacy API-style path, now /map
+// Emit a canonical meta-refresh stub at each old location so the 404s and any
+// external backlinks resolve to the live page. Stubs are noindex.
+function buildRedirectStub(target) {
+  const url = `${BASE_URL}/${target}`;
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Redirecting…</title>
+  <link rel="canonical" href="${url}">
+  <meta name="robots" content="noindex, follow">
+  <meta http-equiv="refresh" content="0; url=${url}">
+  <script>location.replace(${JSON.stringify(url)});</script>
+</head>
+<body>This page moved to <a href="${url}">${url}</a>.</body>
+</html>
+`;
+}
+
+// old path (relative to docs/) → current slug it should resolve to
+const legacyRedirects = {};
+for (const { slug } of slugMeta) legacyRedirects[`docs/${slug}`] = slug;
+const renamedSlugs = { scrape: "scraping", crawl: "crawling", "v1/map": "map" };
+for (const [oldPath, target] of Object.entries(renamedSlugs)) {
+  legacyRedirects[oldPath] = target;
+  legacyRedirects[`docs/${oldPath}`] = target;
+}
+
+let redirectsWritten = 0;
+for (const [oldPath, target] of Object.entries(legacyRedirects)) {
+  const outDir = path.join(DOCS_DIR, oldPath);
+  // Never clobber a real generated page (slugMeta dirs live at docs/<slug>/).
+  if (existsSync(path.join(outDir, "index.html")) && slugTitles[path.basename(oldPath)] && !oldPath.startsWith("docs/") && !(oldPath in renamedSlugs)) {
+    continue;
+  }
+  await mkdir(outDir, { recursive: true });
+  await writeFile(path.join(outDir, "index.html"), buildRedirectStub(target), "utf8");
+  redirectsWritten++;
+}
+
 // ── Regenerate sitemap.xml ────────────────────────────────────────────────────
 const now = new Date().toISOString().split("T")[0];
 
@@ -357,6 +402,7 @@ await writeFile(path.join(DOCS_DIR, "sitemap.xml"), sitemap, "utf8");
 
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log(`\n✓ Generated ${generated}/${slugMeta.length} static pages`);
+console.log(`✓ Wrote ${redirectsWritten} legacy redirect stubs`);
 console.log(`✓ Updated docs/sitemap.xml (${slugMeta.length + 1} URLs)`);
 if (errors.length) {
   console.warn(`\nWarnings:`);
