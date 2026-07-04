@@ -47,6 +47,28 @@ curl -X POST https://api.fastcrw.com/v1/scrape \
 
 **Self-hosted:** if you run your own `crw-server`, replace `https://api.fastcrw.com` with your server's address (e.g. `http://crw:3000`). Authentication is optional on self-hosted; disable it with `[server] auth_required = false` in your `config.toml`.
 
+:::note{title="Keeping the Firecrawl SDK? Just repoint the API URL"}
+You don't have to swap SDKs. fastCRW mirrors Firecrawl's v2 API under a dedicated **`/firecrawl/*`** namespace, so an existing Firecrawl client works once you point its base URL at fastCRW. How you set it differs by language because the two SDKs build request URLs differently:
+
+**TypeScript / JavaScript** (`@mendable/firecrawl-js`) — include `/firecrawl` in `apiUrl`. The SDK concatenates the path, so requests land on `/firecrawl/v2/*`:
+```typescript
+const app = new FirecrawlApp({
+  apiKey: process.env.CRW_API_KEY,
+  apiUrl: "https://api.fastcrw.com/firecrawl",
+});
+```
+
+**Python** (`firecrawl-py`) — use the **bare host**, no `/firecrawl`. The Python SDK resolves endpoint paths against the host root (via `urljoin`), so a `/firecrawl` suffix is silently dropped; you land on the equivalent root `/v2/*` surface, which is the same engine:
+```python
+app = FirecrawlApp(
+    api_key=os.environ["CRW_API_KEY"],
+    api_url="https://api.fastcrw.com",  # resolves to /v2/* — the same compat surface
+)
+```
+
+Both reach the same Firecrawl-compatible engine. The **v2 SDK is the supported drop-in**; the legacy v1 SDK is compatible only for `scrape`.
+:::
+
 ---
 
 ## Step 2 — Swap the SDK package

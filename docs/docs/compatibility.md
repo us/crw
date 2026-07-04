@@ -4,6 +4,8 @@
 
 CRW's recommended API for new integrations is native `/v1`. Compatibility means existing Firecrawl v2 SDK projects can target the `/firecrawl/v2` layer with fewer code changes, while still validating documented differences before production traffic moves.
 
+How you point the SDK depends on the language: the **JS/TS SDK** honours a `/firecrawl` path in `apiUrl` (so it reaches `/firecrawl/v2/*`), while the **Python SDK** drops the path and lands on the equivalent root `/v2/*` — same engine. See [Migrate from Firecrawl](/docs/migrate-from-firecrawl) for the exact `apiUrl` / `api_url` values.
+
 ## Supported alignment
 
 | Area | Status |
