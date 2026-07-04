@@ -1314,6 +1314,11 @@ pub struct SearchResult {
     /// LLM-generated summary; populated when `summarizeResults: true`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
+    /// Set when this result's enrichment scrape failed (P3-4), so a partial
+    /// success is observable: distinguishes "scrape failed" from "page simply
+    /// had no markdown". Absent on success — backward-compatible.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 /// A single image result. Mirrors `ImageResult` in

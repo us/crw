@@ -627,8 +627,11 @@ pub async fn search_inner(
                             return Ok(resp);
                         }
                         Err(msg) => {
+                            // Log the raw upstream error server-side, but never
+                            // surface it to the client: `{msg}` can carry the
+                            // managed-LLM provider name + raw HTTP status (P1-2).
                             tracing::warn!(error = %msg, "answer synthesis failed");
-                            warnings.push(format!("answer synthesis failed: {msg}"));
+                            warnings.push("answer synthesis unavailable".to_string());
                         }
                     }
                 }
@@ -1231,6 +1234,9 @@ async fn enrich_with_scrape(
             Ok(scrape) => apply_scrape_to_result(slot, scrape, &opts.formats),
             Err(msg) => {
                 tracing::debug!(url = %slot.url, error = %msg, "scrape enrichment skipped");
+                // P3-4: mark the result so a partial scrape is observable to the
+                // caller instead of looking identical to "no markdown found".
+                slot.error = Some(msg);
             }
         }
     }
