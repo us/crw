@@ -238,7 +238,7 @@ async fn search_disabled_returns_503_with_search_disabled_code() {
     resp.assert_status(axum::http::StatusCode::SERVICE_UNAVAILABLE);
     let body: Value = resp.json();
     assert_eq!(body["success"], false);
-    assert_eq!(body["error_code"], "search_disabled");
+    assert_eq!(body["errorCode"], "search_disabled");
     let err = body["error"].as_str().unwrap();
     assert!(
         err.contains("Search is disabled"),
