@@ -648,14 +648,19 @@ fn is_zero_u32(v: &u32) -> bool {
 }
 
 /// Generic API response wrapper.
+///
+/// Serializes camelCase like every other public type; the `error_code` field
+/// therefore ships as `errorCode`. A deserialization `alias` keeps the legacy
+/// snake_case key readable for any client still sending it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ApiResponse<T: Serialize> {
     pub success: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<T>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", alias = "error_code")]
     pub error_code: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub warning: Option<String>,

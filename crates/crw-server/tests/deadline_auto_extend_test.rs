@@ -134,10 +134,10 @@ async fn auto_extend_disabled_strict_deadline_times_out() {
         }))
         .await;
     // Handler-side timeout, not Tower outer cancellation. CrwError::Timeout
-    // serializes to error_code = "timeout".
+    // serializes to errorCode = "timeout".
     let body: serde_json::Value = resp.json();
     assert_eq!(
-        body["error_code"], "timeout",
+        body["errorCode"], "timeout",
         "strict deadline should produce handler-side timeout, not tower cancel: {body:?}"
     );
 }
@@ -165,7 +165,7 @@ async fn explicit_deadline_bypasses_auto_extend() {
         .await;
     let body: serde_json::Value = resp.json();
     assert_eq!(
-        body["error_code"], "timeout",
+        body["errorCode"], "timeout",
         "explicit 3s deadline should cut the 12s response: {body:?}"
     );
 }
