@@ -10,7 +10,7 @@
 
 The open-source alternative to Firecrawl. One static binary, ~50 MB RAM idle,
 a native fastCRW REST API under **`/v1/*`** (scrape, crawl, map, search,
-structured extraction, and change tracking), plus a **`/v2/*` Firecrawl
+structured extraction, and change tracking), plus a **`/firecrawl/v2/*` Firecrawl
 compatibility layer** for migrations, batch scrape, and PDF parse. Self-host free under
 AGPL-3.0, or hit our managed API at `api.fastcrw.com`. Reproducible 63.74%
 truth-recall on the public 1,000-URL dataset (`diagnose_3way.py`,
@@ -53,7 +53,7 @@ Works with: [Claude Code](https://docs.fastcrw.com/mcp-clients/#claude-code) · 
 
 - **Rust-native, single static binary** — no Redis, no Node.js, no Python venv, no headless-browser sidecar in the request path. One binary, one config file, one process.
 - **~50 MB RAM idle** — leaves headroom on a $5 VPS. Browser-render-first stacks (Firecrawl, Crawl4AI) carry a Chromium heap baseline measured in hundreds of MB before a single request lands.
-- **Native `/v1`, compatibility `/v2`** — new fastCRW projects should use `/v1/scrape`, `/v1/crawl`, `/v1/map`, and `/v1/search`. Existing Firecrawl v2 SDK projects can use the `/v2/*` compatibility layer (`FirecrawlApp(api_url="https://api.fastcrw.com")`) and validate the documented differences before switching production traffic.
+- **Native `/v1`, compatibility `/firecrawl/v2`** — new fastCRW projects should use `/v1/scrape`, `/v1/crawl`, `/v1/map`, and `/v1/search`. Existing Firecrawl v2 SDK projects can use the `/firecrawl/v2/*` compatibility layer (`FirecrawlApp(api_url="https://api.fastcrw.com")`) and validate the documented differences before switching production traffic.
 - **Change tracking & monitoring** — diff a page against a prior snapshot (markdown git-diff, per-field JSON, or both) with an optional LLM "meaningful-change" judge. Stateless `changeTracking` primitive in the engine; scheduled monitors + signed-webhook/email alerts on the managed platform. See the [Monitoring docs](https://us.github.io/crw/monitoring).
 - **AGPL-3.0 open core + managed option** — self-host free, or point at `api.fastcrw.com` for managed proxy network, dashboard, and SLA without the AGPL obligations on your application code.
 
@@ -71,7 +71,7 @@ noted; everything else is descriptive.
 | License | AGPL-3.0 (commercial avail.) | AGPL-3.0 (commercial avail.) | Apache-2.0 |
 | Self-host install size | Single static binary (~8 MB) | Multi-container (~500 MB+ image) | ~2 GB image (browser bundled) |
 | Memory baseline (idle) | ~50 MB | Large (Chromium heap) | Large (Chromium heap) |
-| Firecrawl migration | Yes — `/v2/*` compatibility layer; `/v1/*` is native fastCRW | Native | No |
+| Firecrawl migration | Yes — `/firecrawl/v2/*` compatibility layer; `/v1/*` is native fastCRW | Native | No |
 | MCP server | Built-in (`crw-mcp`) | Separate package | Community add-on |
 | Hosted option | `api.fastcrw.com` (BYOK or managed) | firecrawl.dev | None official |
 | Reproducible public benchmark | Yes — 63.74% truth-recall on 1,000-URL dataset (`diagnose_3way.py`, 2026-05-08) | Vendor-published only | Vendor-published only |
@@ -300,7 +300,7 @@ production hardening, auth, reverse proxy, and resource tuning.
 | `GET` | `/health` | Health check (no auth required) |
 | `POST` | `/mcp` | Streamable HTTP MCP transport |
 
-**Firecrawl v2 compatibility surface** — `scrape`, `crawl`, `map`, and `search` are also served under `/v2/*` with Firecrawl v2 request/response shapes, plus compatibility-only `POST /v2/batch/scrape`, `POST /v2/parse` (PDF → markdown), and `GET /v2/crawl/active`. Use this when migrating existing Firecrawl v2 SDK code; new fastCRW integrations should start with `/v1`.
+**Firecrawl v2 compatibility surface** — `scrape`, `crawl`, `map`, and `search` are also served under `/firecrawl/v2/*` with Firecrawl v2 request/response shapes, plus compatibility-only `POST /firecrawl/v2/batch/scrape`, `POST /firecrawl/v2/parse` (PDF → markdown), and `GET /firecrawl/v2/crawl/active`. Use this when migrating existing Firecrawl v2 SDK code; new fastCRW integrations should start with `/v1`.
 
 Full reference at [docs.fastcrw.com/#rest-api](https://docs.fastcrw.com/#rest-api).
 The Firecrawl compatibility matrix (field-by-field diff) lives in
@@ -428,7 +428,7 @@ npm install crw-sdk
 | [`crw-renderer`](crates/crw-renderer) | HTTP + CDP browser rendering engine |
 | [`crw-extract`](crates/crw-extract) | HTML → markdown/plaintext extraction |
 | [`crw-crawl`](crates/crw-crawl) | Async BFS crawler with robots.txt & sitemap |
-| [`crw-server`](crates/crw-server) | Axum API server (native `/v1` plus Firecrawl `/v2` compatibility) |
+| [`crw-server`](crates/crw-server) | Axum API server (native `/v1` plus Firecrawl `/firecrawl/v2` compatibility) |
 | [`crw-mcp`](crates/crw-mcp) | MCP stdio server (embedded + proxy mode) |
 | [`crw-cli`](crates/crw-cli) | Standalone CLI (`crw` binary, no server) |
 

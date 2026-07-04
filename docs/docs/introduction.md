@@ -15,7 +15,7 @@
   </div>
 </div>
 
-> **New to CRW? Use `/v1`.** The `/v1` routes are the native fastCRW API for new integrations. Use `/v2` when migrating existing Firecrawl v2 SDK code or when you need compatibility-only routes such as batch scrape or PDF parse.
+> **New to CRW? Use `/v1`.** The `/v1` routes are the native fastCRW API for new integrations. Use `/firecrawl/v2` when migrating existing Firecrawl v2 SDK code or when you need compatibility-only routes such as batch scrape or PDF parse.
 
 <div class="playground-panel">
   <div class="playground-kicker">30-second example</div>
@@ -85,7 +85,7 @@ curl -X POST https://api.fastcrw.com/v1/scrape \
 CRW is meant to feel easy on day one without closing off the more serious use cases:
 
 - one native `/v1` API surface for single-page scrape, discovery, bounded crawl, search, and extraction,
-- a `/v2` Firecrawl compatibility layer for migration work,
+- a `/firecrawl/v2` Firecrawl compatibility layer for migration work,
 - low-ops self-hosting when you need infra control,
 - and a built-in MCP server for agent workflows.
 

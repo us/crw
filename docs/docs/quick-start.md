@@ -15,7 +15,7 @@
 
 ## Prerequisites
 
-> **New to CRW? Use `/v1`.** This quick start uses the native `/v1/scrape` route. The `/v2` routes exist for Firecrawl SDK migration and compatibility-only features.
+> **New to CRW? Use `/v1`.** This quick start uses the native `/v1/scrape` route. The `/firecrawl/v2` routes exist for Firecrawl SDK migration and compatibility-only features.
 
 :::info
 **Prerequisites**

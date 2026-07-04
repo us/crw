@@ -318,14 +318,14 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <td><strong>Batch</strong></td>
 </tr>
 </tbody></table>
-<p>Batch (<code>POST /v2/batch/scrape</code>) and crawl (<code>POST /v2/crawl</code>) share the same async job machinery and identical status/response envelopes. The difference is the input: batch takes an explicit <code>urls</code> array, crawl takes a single seed URL and discovers the rest itself.</p>
+<p>Batch (<code>POST /firecrawl/v2/batch/scrape</code>) and crawl (<code>POST /firecrawl/v2/crawl</code>) share the same async job machinery and identical status/response envelopes. The difference is the input: batch takes an explicit <code>urls</code> array, crawl takes a single seed URL and discovers the rest itself.</p>
 <hr>
 <h2 id="how-it-works">How It Works</h2>
-<pre><code>POST /v2/batch/scrape        →  { id, url, invalidURLs }
-GET  /v2/batch/scrape/{id}   →  { status, total, completed, data[], next }
-GET  /v2/batch/scrape/{id}?skip=100   (paginate large results)
-DELETE /v2/batch/scrape/{id}  (cancel)
-GET  /v2/batch/scrape/{id}/errors</code></pre>
+<pre><code>POST /firecrawl/v2/batch/scrape        →  { id, url, invalidURLs }
+GET  /firecrawl/v2/batch/scrape/{id}   →  { status, total, completed, data[], next }
+GET  /firecrawl/v2/batch/scrape/{id}?skip=100   (paginate large results)
+DELETE /firecrawl/v2/batch/scrape/{id}  (cancel)
+GET  /firecrawl/v2/batch/scrape/{id}/errors</code></pre>
 <p><strong>Status values:</strong> <code>scraping</code> → <code>completed</code> | <code>failed</code></p>
 <p>The response is paginated (100 documents per page, max ~10 MB per page). While <code>status</code> is <code>scraping</code>, the <code>next</code> cursor is set even if the current page is empty — keep polling forward until <code>next</code> is <code>null</code> and <code>status</code> is <code>completed</code>.</p>
 <hr>
@@ -338,7 +338,7 @@ https://lobste.rs/</code></pre>
 <hr>
 <h3 id="curl">cURL</h3>
 <p><strong>Step 1 — Start the job</strong></p>
-<pre data-lang="bash"><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v2/batch/scrape \
+<pre data-lang="bash"><code class="language-bash">curl -s -X POST https://api.fastcrw.com/firecrawl/v2/batch/scrape \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
   -d '{
@@ -353,7 +353,7 @@ https://lobste.rs/</code></pre>
 <pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;id&quot;: &quot;a1b2c3d4-e5f6-7890-abcd-ef1234567890&quot;,
-  &quot;url&quot;: &quot;https://api.fastcrw.com/v2/batch/scrape/a1b2c3d4-e5f6-7890-abcd-ef1234567890&quot;,
+  &quot;url&quot;: &quot;https://api.fastcrw.com/firecrawl/v2/batch/scrape/a1b2c3d4-e5f6-7890-abcd-ef1234567890&quot;,
   &quot;invalidURLs&quot;: []
 }</code></pre>
 <p>Save the <code>id</code> value.</p>
@@ -361,7 +361,7 @@ https://lobste.rs/</code></pre>
 <p><strong>Step 2 — Poll for status</strong></p>
 <pre data-lang="bash"><code class="language-bash">JOB_ID=&quot;a1b2c3d4-e5f6-7890-abcd-ef1234567890&quot;
 
-curl -s &quot;https://api.fastcrw.com/v2/batch/scrape/$JOB_ID&quot; \
+curl -s &quot;https://api.fastcrw.com/firecrawl/v2/batch/scrape/$JOB_ID&quot; \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot;</code></pre>
 <p>Repeat every 2–3 seconds until <code>&quot;status&quot;: &quot;completed&quot;</code>. While still running:</p>
 <pre data-lang="json"><code class="language-json">{
@@ -371,7 +371,7 @@ curl -s &quot;https://api.fastcrw.com/v2/batch/scrape/$JOB_ID&quot; \
   &quot;completed&quot;: 1,
   &quot;creditsUsed&quot;: 1,
   &quot;expiresAt&quot;: &quot;2026-06-16T10:00:00.000Z&quot;,
-  &quot;next&quot;: &quot;https://api.fastcrw.com/v2/batch/scrape/a1b2c3d4-e5f6-7890-abcd-ef1234567890?skip=0&quot;,
+  &quot;next&quot;: &quot;https://api.fastcrw.com/firecrawl/v2/batch/scrape/a1b2c3d4-e5f6-7890-abcd-ef1234567890?skip=0&quot;,
   &quot;data&quot;: [
     {
       &quot;markdown&quot;: &quot;# Hacker News\n...&quot;,
@@ -405,7 +405,7 @@ curl -s &quot;https://api.fastcrw.com/v2/batch/scrape/$JOB_ID&quot; \
 <p><strong>Step 3 — Paginate large results (optional)</strong></p>
 <p>For jobs with many URLs, use <code>?skip=N</code> to page through results. <code>next</code> always contains the ready-to-use URL:</p>
 <pre data-lang="bash"><code class="language-bash"># Page 2 (skip the first 100 docs)
-curl -s &quot;https://api.fastcrw.com/v2/batch/scrape/$JOB_ID?skip=100&quot; \
+curl -s &quot;https://api.fastcrw.com/firecrawl/v2/batch/scrape/$JOB_ID?skip=100&quot; \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot;</code></pre>
 <p>Follow <code>next</code> until it is <code>null</code>.</p>
 <hr>
@@ -482,7 +482,7 @@ def _call(method: str, path: str, body: dict | None = None) -&gt; dict:
         return json.loads(r.read())
 
 # 1. Start batch job
-start = _call(&quot;POST&quot;, &quot;/v2/batch/scrape&quot;, {
+start = _call(&quot;POST&quot;, &quot;/firecrawl/v2/batch/scrape&quot;, {
     &quot;urls&quot;: [
         &quot;https://news.ycombinator.com/&quot;,
         &quot;https://github.com/trending&quot;,
@@ -495,7 +495,7 @@ print(f&quot;Job started: {job_id}&quot;)
 
 # 2. Poll until completed
 while True:
-    status = _call(&quot;GET&quot;, f&quot;/v2/batch/scrape/{job_id}&quot;)
+    status = _call(&quot;GET&quot;, f&quot;/firecrawl/v2/batch/scrape/{job_id}&quot;)
     print(f&quot;  {status['completed']}/{status['total']} completed ({status['status']})&quot;)
     if status[&quot;status&quot;] == &quot;completed&quot;:
         break
@@ -507,7 +507,7 @@ while True:
 all_docs = []
 skip = 0
 while True:
-    page = _call(&quot;GET&quot;, f&quot;/v2/batch/scrape/{job_id}?skip={skip}&quot;)
+    page = _call(&quot;GET&quot;, f&quot;/firecrawl/v2/batch/scrape/{job_id}?skip={skip}&quot;)
     all_docs.extend(page[&quot;data&quot;])
     next_url = page.get(&quot;next&quot;)
     if not next_url or page[&quot;status&quot;] != &quot;completed&quot;:
@@ -606,11 +606,11 @@ Collected 3 documents
 <p>Invalid URLs (SSRF-blocked, unparseable) are returned in <code>invalidURLs</code> on the start response and skipped from the job unless <code>ignoreInvalidURLs</code> is <code>false</code>.</p>
 <hr>
 <h2 id="key-response-fields">Key Response Fields</h2>
-<p><strong>Start response</strong> (<code>POST /v2/batch/scrape</code>):</p>
+<p><strong>Start response</strong> (<code>POST /firecrawl/v2/batch/scrape</code>):</p>
 <pre><code>id           — UUID for polling/cancellation
 url          — ready-to-use status URL
 invalidURLs  — URLs that were skipped</code></pre>
-<p><strong>Status response</strong> (<code>GET /v2/batch/scrape/{id}</code>):</p>
+<p><strong>Status response</strong> (<code>GET /firecrawl/v2/batch/scrape/{id}</code>):</p>
 <pre><code>status        — &quot;scraping&quot; | &quot;completed&quot; | &quot;failed&quot;
 total         — total URLs in the job
 completed     — URLs finished so far
@@ -628,13 +628,13 @@ data[]        — Document objects for this page
     .scrapeId       — per-document UUID</code></pre>
 <hr>
 <h2 id="cancelling-a-job">Cancelling a Job</h2>
-<pre data-lang="bash"><code class="language-bash">curl -s -X DELETE &quot;https://api.fastcrw.com/v2/batch/scrape/$JOB_ID&quot; \
+<pre data-lang="bash"><code class="language-bash">curl -s -X DELETE &quot;https://api.fastcrw.com/firecrawl/v2/batch/scrape/$JOB_ID&quot; \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot;</code></pre>
 <p>Returns <code>{ &quot;success&quot;: true, &quot;status&quot;: &quot;cancelled&quot;, &quot;message&quot;: &quot;...&quot; }</code>.</p>
 <hr>
 <h2 id="checking-errors">Checking Errors</h2>
 <p>URLs that fail mid-job are recorded but don&#39;t fail the entire batch. Retrieve them after the job completes:</p>
-<pre data-lang="bash"><code class="language-bash">curl -s &quot;https://api.fastcrw.com/v2/batch/scrape/$JOB_ID/errors&quot; \
+<pre data-lang="bash"><code class="language-bash">curl -s &quot;https://api.fastcrw.com/firecrawl/v2/batch/scrape/$JOB_ID/errors&quot; \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot;</code></pre>
 <p>Returns <code>{ &quot;success&quot;: true, &quot;errors&quot;: [...], &quot;robotsBlocked&quot;: [] }</code>.</p>
 </article>

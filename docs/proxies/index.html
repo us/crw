@@ -286,7 +286,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <p>crw can route requests through your own pool of proxies and <strong>rotate across them</strong>
 — so each request egresses from a different IP. This works across the <strong>HTTP fetch
 path and the JS/Chrome (CDP) path</strong>, for <strong>scrape, crawl, and map</strong>, on both the
-<code>/v1</code> and <code>/v2</code> APIs, and from the CLI.</p>
+<code>/v1</code> and <code>/firecrawl/v2</code> APIs, and from the CLI.</p>
 <p>There are two ways to use proxies:</p>
 <ol>
 <li><strong>Bring your own pool (BYOP)</strong> — give crw a list of proxy URLs and it rotates.</li>
@@ -337,7 +337,7 @@ a TOML array in the config file.</p>
 </tbody></table>
 <h2 id="per-request-bring-your-own-proxy">Per-request (bring your own proxy)</h2>
 <p>Any scrape/crawl request can carry its own pool, which <strong>takes precedence</strong> over
-the server config. Supported on <code>/v1</code> and <code>/v2</code> (camelCase or snake_case):</p>
+the server config. Supported on <code>/v1</code> and <code>/firecrawl/v2</code> (camelCase or snake_case):</p>
 <pre data-lang="bash"><code class="language-bash">curl -X POST https://your-host/v1/scrape \
   -H &quot;Content-Type: application/json&quot; \
   -d '{

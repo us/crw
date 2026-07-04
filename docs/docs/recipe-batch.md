@@ -15,18 +15,18 @@ Scrape dozens (or hundreds) of unrelated URLs in one async job — no crawling, 
 | You want all pages under one site section | Crawl |
 | Processing a CSV export, sitemap, or search results list | **Batch** |
 
-Batch (`POST /v2/batch/scrape`) and crawl (`POST /v2/crawl`) share the same async job machinery and identical status/response envelopes. The difference is the input: batch takes an explicit `urls` array, crawl takes a single seed URL and discovers the rest itself.
+Batch (`POST /firecrawl/v2/batch/scrape`) and crawl (`POST /firecrawl/v2/crawl`) share the same async job machinery and identical status/response envelopes. The difference is the input: batch takes an explicit `urls` array, crawl takes a single seed URL and discovers the rest itself.
 
 ---
 
 ## How It Works
 
 ```
-POST /v2/batch/scrape        →  { id, url, invalidURLs }
-GET  /v2/batch/scrape/{id}   →  { status, total, completed, data[], next }
-GET  /v2/batch/scrape/{id}?skip=100   (paginate large results)
-DELETE /v2/batch/scrape/{id}  (cancel)
-GET  /v2/batch/scrape/{id}/errors
+POST /firecrawl/v2/batch/scrape        →  { id, url, invalidURLs }
+GET  /firecrawl/v2/batch/scrape/{id}   →  { status, total, completed, data[], next }
+GET  /firecrawl/v2/batch/scrape/{id}?skip=100   (paginate large results)
+DELETE /firecrawl/v2/batch/scrape/{id}  (cancel)
+GET  /firecrawl/v2/batch/scrape/{id}/errors
 ```
 
 **Status values:** `scraping` → `completed` | `failed`
@@ -54,7 +54,7 @@ https://lobste.rs/
 **Step 1 — Start the job**
 
 ```bash
-curl -s -X POST https://api.fastcrw.com/v2/batch/scrape \
+curl -s -X POST https://api.fastcrw.com/firecrawl/v2/batch/scrape \
   -H "Authorization: Bearer $CRW_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -73,7 +73,7 @@ Expected response:
 {
   "success": true,
   "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "url": "https://api.fastcrw.com/v2/batch/scrape/a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "url": "https://api.fastcrw.com/firecrawl/v2/batch/scrape/a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "invalidURLs": []
 }
 ```
@@ -87,7 +87,7 @@ Save the `id` value.
 ```bash
 JOB_ID="a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 
-curl -s "https://api.fastcrw.com/v2/batch/scrape/$JOB_ID" \
+curl -s "https://api.fastcrw.com/firecrawl/v2/batch/scrape/$JOB_ID" \
   -H "Authorization: Bearer $CRW_API_KEY"
 ```
 
@@ -101,7 +101,7 @@ Repeat every 2–3 seconds until `"status": "completed"`. While still running:
   "completed": 1,
   "creditsUsed": 1,
   "expiresAt": "2026-06-16T10:00:00.000Z",
-  "next": "https://api.fastcrw.com/v2/batch/scrape/a1b2c3d4-e5f6-7890-abcd-ef1234567890?skip=0",
+  "next": "https://api.fastcrw.com/firecrawl/v2/batch/scrape/a1b2c3d4-e5f6-7890-abcd-ef1234567890?skip=0",
   "data": [
     {
       "markdown": "# Hacker News\n...",
@@ -145,7 +145,7 @@ For jobs with many URLs, use `?skip=N` to page through results. `next` always co
 
 ```bash
 # Page 2 (skip the first 100 docs)
-curl -s "https://api.fastcrw.com/v2/batch/scrape/$JOB_ID?skip=100" \
+curl -s "https://api.fastcrw.com/firecrawl/v2/batch/scrape/$JOB_ID?skip=100" \
   -H "Authorization: Bearer $CRW_API_KEY"
 ```
 
@@ -239,7 +239,7 @@ def _call(method: str, path: str, body: dict | None = None) -> dict:
         return json.loads(r.read())
 
 # 1. Start batch job
-start = _call("POST", "/v2/batch/scrape", {
+start = _call("POST", "/firecrawl/v2/batch/scrape", {
     "urls": [
         "https://news.ycombinator.com/",
         "https://github.com/trending",
@@ -252,7 +252,7 @@ print(f"Job started: {job_id}")
 
 # 2. Poll until completed
 while True:
-    status = _call("GET", f"/v2/batch/scrape/{job_id}")
+    status = _call("GET", f"/firecrawl/v2/batch/scrape/{job_id}")
     print(f"  {status['completed']}/{status['total']} completed ({status['status']})")
     if status["status"] == "completed":
         break
@@ -264,7 +264,7 @@ while True:
 all_docs = []
 skip = 0
 while True:
-    page = _call("GET", f"/v2/batch/scrape/{job_id}?skip={skip}")
+    page = _call("GET", f"/firecrawl/v2/batch/scrape/{job_id}?skip={skip}")
     all_docs.extend(page["data"])
     next_url = page.get("next")
     if not next_url or page["status"] != "completed":
@@ -318,7 +318,7 @@ Invalid URLs (SSRF-blocked, unparseable) are returned in `invalidURLs` on the st
 
 ## Key Response Fields
 
-**Start response** (`POST /v2/batch/scrape`):
+**Start response** (`POST /firecrawl/v2/batch/scrape`):
 
 ```
 id           — UUID for polling/cancellation
@@ -326,7 +326,7 @@ url          — ready-to-use status URL
 invalidURLs  — URLs that were skipped
 ```
 
-**Status response** (`GET /v2/batch/scrape/{id}`):
+**Status response** (`GET /firecrawl/v2/batch/scrape/{id}`):
 
 ```
 status        — "scraping" | "completed" | "failed"
@@ -351,7 +351,7 @@ data[]        — Document objects for this page
 ## Cancelling a Job
 
 ```bash
-curl -s -X DELETE "https://api.fastcrw.com/v2/batch/scrape/$JOB_ID" \
+curl -s -X DELETE "https://api.fastcrw.com/firecrawl/v2/batch/scrape/$JOB_ID" \
   -H "Authorization: Bearer $CRW_API_KEY"
 ```
 
@@ -364,7 +364,7 @@ Returns `{ "success": true, "status": "cancelled", "message": "..." }`.
 URLs that fail mid-job are recorded but don't fail the entire batch. Retrieve them after the job completes:
 
 ```bash
-curl -s "https://api.fastcrw.com/v2/batch/scrape/$JOB_ID/errors" \
+curl -s "https://api.fastcrw.com/firecrawl/v2/batch/scrape/$JOB_ID/errors" \
   -H "Authorization: Bearer $CRW_API_KEY"
 ```
 

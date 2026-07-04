@@ -23,14 +23,14 @@ This is a **capability matrix**, not an API-shape compatibility matrix (which th
 | `/v1/search` (web search → grounded results) | ✅ | ⚠️ (no Fire-engine; Cloud has stronger anti-bot) | ✅ (SearXNG-backed) |
 | `/v1/extract` (LLM extraction) | ✅ (standalone route) | ⚠️ (requires LLM provider key + manual `.env`) | ⚠️ **No standalone `/v1/extract` route.** LLM extraction is exposed via `/v1/scrape` with `formats: ["json"]` + a JSON schema. Firecrawl `/extract` callers must port to `/v1/scrape` (single-URL only — multi-URL `/extract` is not matched). |
 | `/v1/deep-research` | ✅ | ❌ (Cloud-only) | ❌ |
-| `/v2/parse` (file upload → markdown) | ✅ (PDF/DOCX/XLSX/HTML/…) | ⚠️ (rolling out) | ✅ **PDF only** (multipart `file` + `options`; pure-Rust `pdf-inspector`, no OCR) |
+| `/firecrawl/v2/parse` (file upload → markdown) | ✅ (PDF/DOCX/XLSX/HTML/…) | ⚠️ (rolling out) | ✅ **PDF only** (multipart `file` + `options`; pure-Rust `pdf-inspector`, no OCR) |
 | `/v1/agent` (Spark models) | ✅ | ❌ | ❌ |
 
 **Source:** `github.com/firecrawl/firecrawl/blob/main/SELF_HOST.md`. Capture commit hash and pin per page citing this row before publish.
 
-### Document parsing (`parsers` + `/v2/parse`)
+### Document parsing (`parsers` + `/firecrawl/v2/parse`)
 
-- **`parsers` on `/v2/scrape`** — Firecrawl-compatible. A URL returning
+- **`parsers` on `/firecrawl/v2/scrape`** — Firecrawl-compatible. A URL returning
   `application/pdf` is auto-converted to markdown by default (no field needed,
   matches Firecrawl). Accepts both `parsers: ["pdf"]` and
   `parsers: [{ "type": "pdf", "mode": "auto"|"fast"|"ocr", "maxPages": N }]`.
@@ -39,10 +39,10 @@ This is a **capability matrix**, not an API-shape compatibility matrix (which th
   `mode: "ocr"` (and the OCR-fallback half of `auto`) degrades to text-layer
   extraction with a `pdf_ocr_unsupported` / `pdf_scanned` warning rather than an
   error. `fast` (text-only) is the native behavior.
-- **`POST /v2/parse`** — multipart `file` + `options` (JSON string), same
-  response envelope as `/v2/scrape`. fastCRW supports **PDF only** (the
+- **`POST /firecrawl/v2/parse`** — multipart `file` + `options` (JSON string), same
+  response envelope as `/firecrawl/v2/scrape`. fastCRW supports **PDF only** (the
   `pdf-inspector` engine); Firecrawl additionally parses DOCX/XLSX/RTF/ODT.
-  Advertised at `GET /v2/capabilities` → `documents.parsers` / `fileUpload` so
+  Advertised at `GET /firecrawl/v2/capabilities` → `documents.parsers` / `fileUpload` so
   callers can detect support before sending.
 
 ---
@@ -87,7 +87,7 @@ This is a **capability matrix**, not an API-shape compatibility matrix (which th
 | Self-host constructor | `Client::new_selfhosted(api_url, api_key)` per docs.firecrawl.dev/sdks/rust (verify in v1 — v2 split documented; constructor naming differs across doc versions) | N/A |
 | Crate version pin (lock before any page cites) | **TODO** — capture exact crate version + verify constructor in that version + commit a CI demo before T8 spoke ships Path 1 copy. If unverifiable, T8 ships Path-2-only. | N/A |
 
-**Plan iter-3 critical:** the `Client::new_selfhosted` signature is documented but the v1/v2 split means the Rust SDK lags v2 features. Before the T8 spoke claims "official Rust SDK works against self-hosted Firecrawl," a CI demo must succeed against the locked crate version. If CI infra isn't stood up (Firecrawl Docker stack: Postgres + Redis + workers), T8 collapses Path 1 to "official Rust SDK exists; CI demo TODO" pointer and ships Path 2 (fastCRW Rust-native alternative) as primary intent.
+**Plan iter-3 critical:** the `Client::new_selfhosted` signature is documented but the v1/firecrawl/v2 split means the Rust SDK lags v2 features. Before the T8 spoke claims "official Rust SDK works against self-hosted Firecrawl," a CI demo must succeed against the locked crate version. If CI infra isn't stood up (Firecrawl Docker stack: Postgres + Redis + workers), T8 collapses Path 1 to "official Rust SDK exists; CI demo TODO" pointer and ships Path 2 (fastCRW Rust-native alternative) as primary intent.
 
 ---
 

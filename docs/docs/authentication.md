@@ -8,7 +8,7 @@ fastCRW exposes two distinct base URLs with different scopes. Always use the cor
 
 | Namespace | Base URL | What lives here |
 |-----------|----------|-----------------|
-| **Engine** | `https://api.fastcrw.com` | Scrape, crawl, map, search, extract, parse — all content-fetching endpoints (`/v1/*`, `/v2/*`, `/mcp`) |
+| **Engine** | `https://api.fastcrw.com` | Scrape, crawl, map, search, extract, parse — all content-fetching endpoints (`/v1/*`, `/firecrawl/v2/*`, `/mcp`) |
 | **SaaS control-plane** | `https://fastcrw.com/api` | Account balance, monitor CRUD, billing — management operations tied to your account |
 
 **Self-hosted deployments expose the engine namespace only.** There is no control-plane on a self-hosted instance; account/billing APIs are SaaS-exclusive.
@@ -46,12 +46,12 @@ Set one or more keys in config:
 api_keys = ["fc-key-1234", "fc-key-5678"]
 ```
 
-Once keys are configured, every route under `/v1/*`, `/v2/*`, and `/mcp` requires the same Bearer header.
+Once keys are configured, every route under `/v1/*`, `/firecrawl/v2/*`, and `/mcp` requires the same Bearer header.
 
 ## Behavior
 
 - No keys configured: self-hosted API routes are open
-- Keys configured: `/v1/*`, `/v2/*`, and `/mcp` require `Authorization: Bearer ...`
+- Keys configured: `/v1/*`, `/firecrawl/v2/*`, and `/mcp` require `Authorization: Bearer ...`
 - `/health` always stays public
 
 ## Error Cases

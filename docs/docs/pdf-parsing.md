@@ -4,7 +4,7 @@
   <p class="page-subtitle">Upload a PDF and get clean markdown, plain text, or structured JSON back. One multipart request, no third-party OCR pipeline needed.</p>
   <div class="page-capabilities">
     <div class="page-capability"><strong>Best for:</strong> research papers, reports, contracts</div>
-    <div class="page-capability"><strong>Route:</strong> <code>POST /v2/parse</code></div>
+    <div class="page-capability"><strong>Route:</strong> <code>POST /firecrawl/v2/parse</code></div>
     <div class="page-capability"><strong>Max upload:</strong> 50 MiB</div>
   </div>
   <div class="page-actions">
@@ -15,10 +15,10 @@
 
 ## PDF Parsing with CRW
 
-### /v2/parse
+### /firecrawl/v2/parse
 
 ```http
-POST /v2/parse
+POST /firecrawl/v2/parse
 Content-Type: multipart/form-data
 ```
 
@@ -41,7 +41,7 @@ The file must be a valid PDF. Binary files with other content types are rejected
 :::tabs
 ::tab{title="cURL"}
 ```bash
-curl -X POST https://api.fastcrw.com/v2/parse \
+curl -X POST https://api.fastcrw.com/firecrawl/v2/parse \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -F "file=@/path/to/document.pdf;type=application/pdf"
 ```
@@ -69,7 +69,7 @@ import requests
 
 with open("/path/to/document.pdf", "rb") as f:
     resp = requests.post(
-        "https://api.fastcrw.com/v2/parse",
+        "https://api.fastcrw.com/firecrawl/v2/parse",
         headers={"Authorization": "Bearer YOUR_API_KEY"},
         files={"file": ("document.pdf", f, "application/pdf")},
     )
@@ -110,7 +110,7 @@ Key metadata fields for PDF responses:
 
 ## Options
 
-Pass options as a JSON string in the `options` multipart field. All fields are optional; defaults match `/v2/scrape`.
+Pass options as a JSON string in the `options` multipart field. All fields are optional; defaults match `/firecrawl/v2/scrape`.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -123,7 +123,7 @@ Pass options as a JSON string in the `options` multipart field. All fields are o
 ### Example with options
 
 ```bash
-curl -X POST https://api.fastcrw.com/v2/parse \
+curl -X POST https://api.fastcrw.com/firecrawl/v2/parse \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -F "file=@/path/to/document.pdf;type=application/pdf" \
   -F 'options={"formats":["markdown","plainText"],"parsers":[{"type":"pdf","maxPages":5}]}'
@@ -131,7 +131,7 @@ curl -X POST https://api.fastcrw.com/v2/parse \
 
 ### Formats {#formats}
 
-`/v2/parse` supports a subset of the scrape formats. Formats that require a renderer (`html`, `rawHtml`, `changeTracking`) are not applicable to uploaded documents and return a warning if requested.
+`/firecrawl/v2/parse` supports a subset of the scrape formats. Formats that require a renderer (`html`, `rawHtml`, `changeTracking`) are not applicable to uploaded documents and return a warning if requested.
 
 | Format | Description |
 |---|---|
@@ -367,10 +367,10 @@ for url in pdf_urls[:5]:  # start small
 
 ## Structured extraction from PDFs
 
-Combine `/v2/parse` with `formats: ["json"]` and a `jsonSchema` to extract structured data from a PDF in one step. Requires an LLM configured on the engine.
+Combine `/firecrawl/v2/parse` with `formats: ["json"]` and a `jsonSchema` to extract structured data from a PDF in one step. Requires an LLM configured on the engine.
 
 ```bash
-curl -X POST https://api.fastcrw.com/v2/parse \
+curl -X POST https://api.fastcrw.com/firecrawl/v2/parse \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -F "file=@/path/to/contract.pdf;type=application/pdf" \
   -F 'options={

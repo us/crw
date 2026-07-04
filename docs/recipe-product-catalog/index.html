@@ -455,7 +455,7 @@ link to attach to each product record.</p>
 <code>batch_scrape</code> is HTTP mode only — it starts a job, polls until completion, and
 returns a list of per-URL results.</p>
 <blockquote>
-<p><strong>How schema works in <code>/v2/batch/scrape</code>:</strong> The batch endpoint parses its body
+<p><strong>How schema works in <code>/firecrawl/v2/batch/scrape</code>:</strong> The batch endpoint parses its body
 into a <code>V2ScrapeRequest</code>, which has no top-level <code>jsonSchema</code> field — a bare
 <code>&quot;jsonSchema&quot;: {...}</code> key is silently ignored by serde. The correct way to pass
 a schema is to <strong>embed it inside the <code>formats</code> array</strong> using the v2 object format:
@@ -495,7 +495,7 @@ product_urls = [
 print(f&quot;Discovered {len(product_urls)} products&quot;)
 
 # --- Step 2: batch scrape — embed schema inside the formats object ---
-# NOTE: Do NOT pass jsonSchema= as a separate kwarg. The /v2/batch/scrape
+# NOTE: Do NOT pass jsonSchema= as a separate kwarg. The /firecrawl/v2/batch/scrape
 # handler has no top-level jsonSchema field; it is silently dropped.
 # Instead, use the v2 object format: {&quot;type&quot;: &quot;json&quot;, &quot;schema&quot;: &lt;schema&gt;}.
 pages = client.batch_scrape(
@@ -519,7 +519,7 @@ print(f&quot;Extracted {len(catalog)} products&quot;)
 print(json.dumps(catalog[:2], indent=2, ensure_ascii=False))</code></pre><p>::</div><div class="code-tab-panel" data-panel="1"><pre data-lang="bash"><code class="language-bash"># Step 4a: start the batch scrape job
 # Schema goes inside the formats array as {&quot;type&quot;:&quot;json&quot;,&quot;schema&quot;:{...}},
 # NOT as a top-level &quot;jsonSchema&quot; field (which is silently ignored by the server).
-curl -s -X POST https://api.fastcrw.com/v2/batch/scrape \
+curl -s -X POST https://api.fastcrw.com/firecrawl/v2/batch/scrape \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
   -d '{
@@ -551,7 +551,7 @@ curl -s -X POST https://api.fastcrw.com/v2/batch/scrape \
 <p>::</div><div class="code-tab-panel" data-panel="2"><pre data-lang="bash"><code class="language-bash"># Step 4b: poll until status == &quot;completed&quot;
 JOB_ID=&quot;7c9e6679-7425-40de-944b-e07fc1f90ae7&quot;
 
-curl -s &quot;https://api.fastcrw.com/v2/batch/scrape/$JOB_ID&quot; \
+curl -s &quot;https://api.fastcrw.com/firecrawl/v2/batch/scrape/$JOB_ID&quot; \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   | python3 -c &quot;
 import sys, json
@@ -635,7 +635,7 @@ product_urls = [u for u in all_urls if &quot;/catalogue/&quot; in u and &quot;/c
 print(f&quot;Discovered {len(product_urls)} products&quot;)
 
 # 2. Batch scrape — embed schema inside the formats object (v2 format)
-# A top-level jsonSchema= kwarg is NOT supported by /v2/batch/scrape and
+# A top-level jsonSchema= kwarg is NOT supported by /firecrawl/v2/batch/scrape and
 # would be silently dropped. Use {&quot;type&quot;:&quot;json&quot;,&quot;schema&quot;:&lt;schema&gt;} instead.
 pages = client.batch_scrape(
     urls=product_urls,
@@ -681,7 +681,7 @@ print(&quot;Saved catalog.json&quot;)</code></pre>
 <tr>
 <td><code>formats=[{&quot;type&quot;:&quot;json&quot;,&quot;schema&quot;:{...}}]</code></td>
 <td><code>formats</code></td>
-<td><code>/v2/batch/scrape</code></td>
+<td><code>/firecrawl/v2/batch/scrape</code></td>
 <td>v2 object format — embeds the schema inside the formats array entry; the only correct way to pass a schema to the batch endpoint</td>
 </tr>
 <tr>
@@ -706,7 +706,7 @@ print(&quot;Saved catalog.json&quot;)</code></pre>
 <blockquote>
 <p><strong>Important — schema delivery differs between v1 and v2 batch:</strong>
 <code>client.scrape()</code> sends <code>jsonSchema</code> as a top-level field to <code>/v1/scrape</code>, where
-<code>ScrapeRequest</code> has that field. <code>/v2/batch/scrape</code> parses the body into
+<code>ScrapeRequest</code> has that field. <code>/firecrawl/v2/batch/scrape</code> parses the body into
 <code>V2ScrapeRequest</code>, which has <strong>no</strong> top-level <code>jsonSchema</code> field — a bare
 <code>&quot;jsonSchema&quot;: {...}</code> key is silently ignored by serde. Always embed the schema
 inside the <code>formats</code> array using the object form shown above for batch jobs.</p>
@@ -728,7 +728,7 @@ LLM could not fill any required fields. Filter these out and inspect the
 <hr>
 <h2 id="scaling-tips">Scaling tips</h2>
 <ul>
-<li><strong>Large catalogs (&gt; 100 pages):</strong> The <code>/v2/batch/scrape/{id}</code> poll response
+<li><strong>Large catalogs (&gt; 100 pages):</strong> The <code>/firecrawl/v2/batch/scrape/{id}</code> poll response
 paginates results via a <code>next</code> cursor when results exceed the page limit —
 <strong>the SDK does not follow the cursor; it returns only the first page (up to
 100 URLs)</strong>. For catalogs with more than 100 product URLs, use the raw-HTTP

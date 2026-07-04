@@ -11,7 +11,7 @@ fastCRW exposes two distinct base URLs. Always pick the correct one.
 
 | Namespace         | Base URL                    | What lives here                                      |
 |-------------------|-----------------------------|------------------------------------------------------|
-| Engine            | https://api.fastcrw.com     | Scrape, crawl, map, search, extract, parse (/v1, /v2, /mcp) |
+| Engine            | https://api.fastcrw.com     | Scrape, crawl, map, search, extract, parse (/v1, /firecrawl/v2, /mcp) |
 | SaaS control-plane| https://fastcrw.com/api     | Account balance, monitor CRUD, billing               |
 
 RULES:
@@ -38,7 +38,7 @@ All routes on the engine namespace (https://api.fastcrw.com or self-hosted base)
 | DELETE | /v1/crawl/{id}         | Cancel a running crawl job                               |
 | POST   | /v1/map                | URL discovery without scraping page bodies               |
 | POST   | /v1/search             | Web search (SearXNG-backed), returns ranked results      |
-| POST   | /v2/parse              | Parse a file (PDF) into markdown/structured output       |
+| POST   | /firecrawl/v2/parse              | Parse a file (PDF) into markdown/structured output       |
 | POST   | /v1/change-tracking/diff | Stateless per-page diff; accepts single item or batch  |
 | GET    | /v1/capabilities       | Surface what this instance supports (renderers, search)  |
 | GET/POST | /mcp               | HTTP MCP transport endpoint (crw-server built-in)        |
@@ -72,7 +72,7 @@ Self-hosted (no auth by default):
 Self-hosted with auth enabled (config.toml):
   [auth]
   api_keys = ["fc-key-1234", "fc-key-5678"]
-  # Then: Authorization: Bearer fc-key-1234 is required on /v1/*, /v2/*, /mcp
+  # Then: Authorization: Bearer fc-key-1234 is required on /v1/*, /firecrawl/v2/*, /mcp
 
 Free tier: 500 one-time lifetime credits (never resets, not monthly).
 
@@ -310,7 +310,7 @@ Grouped response (when sources:["web","news"] set): data.results is a keyed obje
   {"web": [...], "news": [...]}
 
 ────────────────────────────────────────────────────────────────────────────────
-### 4.5  POST /v2/parse
+### 4.5  POST /firecrawl/v2/parse
 ────────────────────────────────────────────────────────────────────────────────
 
 Parse a local file (PDF) into markdown or structured output. Does not fetch from the web.
@@ -518,7 +518,7 @@ Example:
   crw_search(query="renewable energy 2025", limit=5)
 
 ────────────────────────────────────────────────────────────────────────────────
-### Tool: crw_parse_file  →  POST /v2/parse
+### Tool: crw_parse_file  →  POST /firecrawl/v2/parse
 ────────────────────────────────────────────────────────────────────────────────
 Parse a local file (PDF) into markdown or structured output. No web fetch.
 

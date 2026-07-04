@@ -394,7 +394,7 @@ max_concurrency = 4          # bounded fan-out for per-result summaries in /v1/s
 # enabled = true
 # max_pages = 0              # 0 = no limit
 # attempt_scanned = false    # best-effort text from image PDFs (no OCR)
-# max_upload_bytes = 52428800   # 50 MiB — POST /v2/parse upload cap
+# max_upload_bytes = 52428800   # 50 MiB — POST /firecrawl/v2/parse upload cap
 # max_concurrent_parses = 4    # process-wide cap on concurrent PDF parses (primary DoS guard)
 # upload_concurrency = 4        # max concurrent upload-body buffers (each up to max_upload_bytes)
 # parse_timeout_ms = 30000      # wall-clock timeout per parse; 0 disables

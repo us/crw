@@ -1,7 +1,7 @@
 <div class="page-intro">
   <div class="page-kicker">API Reference</div>
   <h1>Firecrawl v2 Compatibility Reference</h1>
-  <p class="page-subtitle">Reference for CRW's <code>/v2/*</code> compatibility routes. New CRW integrations should start with native <code>/v1</code>; use <code>/v2</code> for Firecrawl SDK migrations, batch scraping, PDF parsing, and deprecated extract compatibility.</p>
+  <p class="page-subtitle">Reference for CRW's <code>/firecrawl/v2/*</code> compatibility routes. New CRW integrations should start with native <code>/v1</code>; use <code>/firecrawl/v2</code> for Firecrawl SDK migrations, batch scraping, PDF parsing, and deprecated extract compatibility.</p>
   <div class="page-capabilities">
     <div class="page-capability"><strong>Base URL:</strong> <code>https://api.fastcrw.com</code></div>
     <div class="page-capability"><strong>Self-hosted:</strong> <code>http://localhost:3000</code></div>
@@ -15,27 +15,27 @@
 
 ## Routes at a glance
 
-`/v2` is a compatibility layer, not the recommended API for new CRW builds. Start with `/v1` unless you are migrating existing Firecrawl v2 SDK code.
+`/firecrawl/v2` is a compatibility layer, not the recommended API for new CRW builds. Start with `/v1` unless you are migrating existing Firecrawl v2 SDK code.
 
 | Method | Route | Purpose |
 |---|---|---|
-| `POST` | `/v2/scrape` | Scrape one URL synchronously |
-| `GET` | `/v2/scrape/{job_id}` | Stub — always 404 (scrape is synchronous) |
-| `POST` | `/v2/crawl` | Start an async recursive crawl |
-| `GET` | `/v2/crawl/active` | List in-progress crawl job IDs |
-| `GET` | `/v2/crawl/{id}` | Poll crawl status and paginated results |
-| `DELETE` | `/v2/crawl/{id}` | Cancel a running crawl |
-| `GET` | `/v2/crawl/{id}/errors` | Fetch per-URL errors for a crawl job |
-| `POST` | `/v2/map` | Discover URLs, returns link objects |
-| `POST` | `/v2/search` | Web search with optional per-result scrape |
-| `POST` | `/v2/parse` | Upload a PDF, get markdown or structured JSON |
-| `POST` | `/v2/batch/scrape` | Start an async batch scrape over a URL list |
-| `GET` | `/v2/batch/scrape/{id}` | Poll batch status and paginated results |
-| `DELETE` | `/v2/batch/scrape/{id}` | Cancel a running batch |
-| `GET` | `/v2/batch/scrape/{id}/errors` | Fetch per-URL errors for a batch job |
-| `POST` | `/v2/extract` | **DEPRECATED** — async multi-URL LLM extraction |
-| `GET` | `/v2/extract/{id}` | **DEPRECATED** — poll extract job status |
-| `GET` | `/v2/capabilities` | Alias of `/v1/capabilities` |
+| `POST` | `/firecrawl/v2/scrape` | Scrape one URL synchronously |
+| `GET` | `/firecrawl/v2/scrape/{job_id}` | Stub — always 404 (scrape is synchronous) |
+| `POST` | `/firecrawl/v2/crawl` | Start an async recursive crawl |
+| `GET` | `/firecrawl/v2/crawl/active` | List in-progress crawl job IDs |
+| `GET` | `/firecrawl/v2/crawl/{id}` | Poll crawl status and paginated results |
+| `DELETE` | `/firecrawl/v2/crawl/{id}` | Cancel a running crawl |
+| `GET` | `/firecrawl/v2/crawl/{id}/errors` | Fetch per-URL errors for a crawl job |
+| `POST` | `/firecrawl/v2/map` | Discover URLs, returns link objects |
+| `POST` | `/firecrawl/v2/search` | Web search with optional per-result scrape |
+| `POST` | `/firecrawl/v2/parse` | Upload a PDF, get markdown or structured JSON |
+| `POST` | `/firecrawl/v2/batch/scrape` | Start an async batch scrape over a URL list |
+| `GET` | `/firecrawl/v2/batch/scrape/{id}` | Poll batch status and paginated results |
+| `DELETE` | `/firecrawl/v2/batch/scrape/{id}` | Cancel a running batch |
+| `GET` | `/firecrawl/v2/batch/scrape/{id}/errors` | Fetch per-URL errors for a batch job |
+| `POST` | `/firecrawl/v2/extract` | **DEPRECATED** — async multi-URL LLM extraction |
+| `GET` | `/firecrawl/v2/extract/{id}` | **DEPRECATED** — poll extract job status |
+| `GET` | `/firecrawl/v2/capabilities` | Alias of `/v1/capabilities` |
 
 ## v2 vs v1: key differences
 
@@ -47,8 +47,8 @@
 | Document shape | engine-internal | `V2Document` with `metadata.proxyUsed`, `cacheState`, `creditsUsed`, `scrapeId` |
 | Crawl status strings | varies | `"scraping"` \| `"completed"` \| `"failed"` |
 | `scrapeOptions` in crawl | not present | nested object accepted |
-| File parsing | not present | `POST /v2/parse` multipart |
-| Batch scrape | not present | `POST /v2/batch/scrape` |
+| File parsing | not present | `POST /firecrawl/v2/parse` multipart |
+| Batch scrape | not present | `POST /firecrawl/v2/batch/scrape` |
 
 ## Authentication
 
@@ -62,7 +62,7 @@ Authorization: Bearer YOUR_API_KEY
 
 ---
 
-## `POST /v2/scrape`
+## `POST /firecrawl/v2/scrape`
 
 Scrape one URL synchronously. Returns immediately with a `V2Document`.
 
@@ -104,7 +104,7 @@ See [V2Document Response Shape](#v2document-response-shape) below.
 ### Example
 
 ```bash
-curl -X POST https://api.fastcrw.com/v2/scrape \
+curl -X POST https://api.fastcrw.com/firecrawl/v2/scrape \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -116,7 +116,7 @@ curl -X POST https://api.fastcrw.com/v2/scrape \
 Structured extraction with an object format:
 
 ```bash
-curl -X POST https://api.fastcrw.com/v2/scrape \
+curl -X POST https://api.fastcrw.com/firecrawl/v2/scrape \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -149,19 +149,19 @@ const data = await crw.scrape("https://example.com/product", {
 });
 ```
 
-Note: the TypeScript SDK's `scrape()` method calls `/v1/scrape` under the hood; use `batchScrape()` or direct `fetch` to reach the v2 routes explicitly. The `parseFile()` method calls `POST /v2/parse`.
+Note: the TypeScript SDK's `scrape()` method calls `/v1/scrape` under the hood; use `batchScrape()` or direct `fetch` to reach the v2 routes explicitly. The `parseFile()` method calls `POST /firecrawl/v2/parse`.
 
 ---
 
-## `GET /v2/scrape/{job_id}`
+## `GET /firecrawl/v2/scrape/{job_id}`
 
-Always returns HTTP 404. CRW scrape is synchronous — there is no deferred job to poll. The endpoint exists only for SDK compatibility; use `POST /v2/scrape` and read the response directly.
+Always returns HTTP 404. CRW scrape is synchronous — there is no deferred job to poll. The endpoint exists only for SDK compatibility; use `POST /firecrawl/v2/scrape` and read the response directly.
 
 ---
 
-## `POST /v2/crawl`
+## `POST /firecrawl/v2/crawl`
 
-Start an asynchronous recursive crawl. Returns a job ID immediately; poll `GET /v2/crawl/{id}` until `status` is `"completed"` or `"failed"`.
+Start an asynchronous recursive crawl. Returns a job ID immediately; poll `GET /firecrawl/v2/crawl/{id}` until `status` is `"completed"` or `"failed"`.
 
 ### Request body
 
@@ -182,7 +182,7 @@ Start an asynchronous recursive crawl. Returns a job ID immediately; poll `GET /
 {
   "success": true,
   "id": "550e8400-e29b-41d4-a716-446655440000",
-  "url": "https://api.fastcrw.com/v2/crawl/550e8400-e29b-41d4-a716-446655440000"
+  "url": "https://api.fastcrw.com/firecrawl/v2/crawl/550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
@@ -190,7 +190,7 @@ Start an asynchronous recursive crawl. Returns a job ID immediately; poll `GET /
 
 ```bash
 # Start the crawl
-curl -X POST https://api.fastcrw.com/v2/crawl \
+curl -X POST https://api.fastcrw.com/firecrawl/v2/crawl \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -203,7 +203,7 @@ curl -X POST https://api.fastcrw.com/v2/crawl \
 
 ---
 
-## `GET /v2/crawl/{id}`
+## `GET /firecrawl/v2/crawl/{id}`
 
 Poll crawl status and retrieve completed documents. Supports cursor-based pagination for large crawls.
 
@@ -224,7 +224,7 @@ Poll crawl status and retrieve completed documents. Supports cursor-based pagina
   "completed": 12,
   "creditsUsed": 12,
   "expiresAt": "2026-06-16T10:00:00.000Z",
-  "next": "https://api.fastcrw.com/v2/crawl/JOB_ID?skip=100",
+  "next": "https://api.fastcrw.com/firecrawl/v2/crawl/JOB_ID?skip=100",
   "data": [ { "...V2Document..." } ]
 }
 ```
@@ -240,7 +240,7 @@ Poll crawl status and retrieve completed documents. Supports cursor-based pagina
 JOB_ID="550e8400-e29b-41d4-a716-446655440000"
 
 while true; do
-  RESP=$(curl -s https://api.fastcrw.com/v2/crawl/$JOB_ID \
+  RESP=$(curl -s https://api.fastcrw.com/firecrawl/v2/crawl/$JOB_ID \
     -H "Authorization: Bearer YOUR_API_KEY")
   STATUS=$(echo $RESP | jq -r '.status')
   echo "Status: $STATUS, completed: $(echo $RESP | jq '.completed')"
@@ -251,7 +251,7 @@ done
 
 ---
 
-## `DELETE /v2/crawl/{id}`
+## `DELETE /firecrawl/v2/crawl/{id}`
 
 Cancel a running crawl. Returns an error if the job has already finished.
 
@@ -261,7 +261,7 @@ Cancel a running crawl. Returns an error if the job has already finished.
 
 ---
 
-## `GET /v2/crawl/active`
+## `GET /firecrawl/v2/crawl/active`
 
 List the IDs of all currently in-progress crawl jobs on this engine instance.
 
@@ -271,7 +271,7 @@ List the IDs of all currently in-progress crawl jobs on this engine instance.
 
 ---
 
-## `GET /v2/crawl/{id}/errors`
+## `GET /firecrawl/v2/crawl/{id}/errors`
 
 Return per-URL errors accumulated during a crawl.
 
@@ -287,7 +287,7 @@ Return per-URL errors accumulated during a crawl.
 
 ---
 
-## `POST /v2/map`
+## `POST /firecrawl/v2/map`
 
 Discover URLs under a domain without scraping their content. The key v2 change from v1: `links` is an array of **objects** (`{url, title?, description?}`), not bare strings.
 
@@ -321,7 +321,7 @@ Note: `title` and `description` are always `null` in the current engine version 
 ### Example
 
 ```bash
-curl -X POST https://api.fastcrw.com/v2/map \
+curl -X POST https://api.fastcrw.com/firecrawl/v2/map \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -333,7 +333,7 @@ curl -X POST https://api.fastcrw.com/v2/map \
 
 ---
 
-## `POST /v2/search`
+## `POST /firecrawl/v2/search`
 
 Web search returning grouped results (`web`, `news`, `images`). Reuses the same engine as `/v1/search` with a different response envelope.
 
@@ -368,7 +368,7 @@ Accepts the same fields as `POST /v1/search`. `scrapeOptions.formats` may be obj
 ### Example
 
 ```bash
-curl -X POST https://api.fastcrw.com/v2/search \
+curl -X POST https://api.fastcrw.com/firecrawl/v2/search \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"query": "fastCRW web scraper", "limit": 5}'
@@ -376,7 +376,7 @@ curl -X POST https://api.fastcrw.com/v2/search \
 
 ---
 
-## `POST /v2/parse`
+## `POST /firecrawl/v2/parse`
 
 Upload a PDF file and receive its content as markdown, plain text, or structured JSON. Accepts `multipart/form-data`.
 
@@ -402,7 +402,7 @@ Upload a PDF file and receive its content as markdown, plain text, or structured
 
 ### Response
 
-Same `{ success, data, warning? }` envelope as `POST /v2/scrape`. The `data.metadata.sourceFilename` field carries the original filename; `data.metadata.numPages` carries the page count.
+Same `{ success, data, warning? }` envelope as `POST /firecrawl/v2/scrape`. The `data.metadata.sourceFilename` field carries the original filename; `data.metadata.numPages` carries the page count.
 
 ```json
 {
@@ -428,7 +428,7 @@ Same `{ success, data, warning? }` envelope as `POST /v2/scrape`. The `data.meta
 ### Example
 
 ```bash
-curl -X POST https://api.fastcrw.com/v2/parse \
+curl -X POST https://api.fastcrw.com/firecrawl/v2/parse \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -F "file=@report.pdf" \
   -F 'options={"formats":["markdown"]}'
@@ -448,9 +448,9 @@ console.log(result.markdown);
 
 ---
 
-## `POST /v2/batch/scrape`
+## `POST /firecrawl/v2/batch/scrape`
 
-Start an async job that scrapes a list of URLs with the same scrape options. The job uses the same crawl-job machinery as `/v2/crawl`; the status envelope is identical.
+Start an async job that scrapes a list of URLs with the same scrape options. The job uses the same crawl-job machinery as `/firecrawl/v2/crawl`; the status envelope is identical.
 
 ### Request body
 
@@ -467,7 +467,7 @@ Start an async job that scrapes a list of URLs with the same scrape options. The
 {
   "success": true,
   "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-  "url": "https://api.fastcrw.com/v2/batch/scrape/7c9e6679-...",
+  "url": "https://api.fastcrw.com/firecrawl/v2/batch/scrape/7c9e6679-...",
   "invalidURLs": []
 }
 ```
@@ -476,7 +476,7 @@ Start an async job that scrapes a list of URLs with the same scrape options. The
 
 ```bash
 # Start the batch
-curl -X POST https://api.fastcrw.com/v2/batch/scrape \
+curl -X POST https://api.fastcrw.com/firecrawl/v2/batch/scrape \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -505,46 +505,46 @@ const results = await crw.batchScrape(
 
 ---
 
-## `GET /v2/batch/scrape/{id}`
+## `GET /firecrawl/v2/batch/scrape/{id}`
 
-Poll batch status. Identical envelope to `GET /v2/crawl/{id}` — same `skip`/`limit` query parameters and same `next` cursor pattern.
-
----
-
-## `DELETE /v2/batch/scrape/{id}`
-
-Cancel a running batch. Delegates to the same handler as `DELETE /v2/crawl/{id}`.
+Poll batch status. Identical envelope to `GET /firecrawl/v2/crawl/{id}` — same `skip`/`limit` query parameters and same `next` cursor pattern.
 
 ---
 
-## `GET /v2/batch/scrape/{id}/errors`
+## `DELETE /firecrawl/v2/batch/scrape/{id}`
 
-Fetch per-URL errors. Same response shape as `GET /v2/crawl/{id}/errors`.
+Cancel a running batch. Delegates to the same handler as `DELETE /firecrawl/v2/crawl/{id}`.
+
+---
+
+## `GET /firecrawl/v2/batch/scrape/{id}/errors`
+
+Fetch per-URL errors. Same response shape as `GET /firecrawl/v2/crawl/{id}/errors`.
 
 ---
 
 ## Batch start → poll → collect pattern
 
 ```
-POST /v2/batch/scrape          →  { id }
-GET  /v2/batch/scrape/{id}     →  { status, data[], next }
-GET  /v2/batch/scrape/{id}?skip=100  →  { status, data[], next }
+POST /firecrawl/v2/batch/scrape          →  { id }
+GET  /firecrawl/v2/batch/scrape/{id}     →  { status, data[], next }
+GET  /firecrawl/v2/batch/scrape/{id}?skip=100  →  { status, data[], next }
 ... (follow `next` until null and status = "completed")
 ```
 
 The SDK's `batchScrape()` handles this loop automatically. When driving it manually:
 
 1. Start the job, record `id`.
-2. Poll `GET /v2/batch/scrape/{id}` every 2–5 seconds.
+2. Poll `GET /firecrawl/v2/batch/scrape/{id}` every 2–5 seconds.
 3. Accumulate `data[]` from each page.
 4. If `next` is non-null, follow it; if `next` is null and `status` is `"completed"`, stop.
 5. On `status: "failed"`, inspect `/errors`.
 
 ---
 
-## `POST /v2/extract` (DEPRECATED)
+## `POST /firecrawl/v2/extract` (DEPRECATED)
 
-> **Deprecated.** Use `POST /v2/scrape` with `formats: [{"type": "json", "schema": {...}}]` instead. `/v2/extract` will remain available but the engine emits a `warnings` entry on every response advising the replacement.
+> **Deprecated.** Use `POST /firecrawl/v2/scrape` with `formats: [{"type": "json", "schema": {...}}]` instead. `/firecrawl/v2/extract` will remain available but the engine emits a `warnings` entry on every response advising the replacement.
 
 Async multi-URL LLM extraction. Starts a job that scrapes each URL with `formats: ["json"]` and the supplied schema, then merges per-URL JSON objects.
 
@@ -565,7 +565,7 @@ Async multi-URL LLM extraction. Starts a job that scrapes each URL with `formats
   "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
   "urlTrace": [],
   "warnings": ["/v2/extract is deprecated. Use /v2/scrape with formats including a 'json' format object."],
-  "replacement": "/v2/scrape"
+  "replacement": "/firecrawl/v2/scrape"
 }
 ```
 
@@ -584,7 +584,7 @@ const result = await crw.extract({
 
 ---
 
-## `GET /v2/extract/{id}` (DEPRECATED)
+## `GET /firecrawl/v2/extract/{id}` (DEPRECATED)
 
 Poll an extract job.
 
@@ -634,7 +634,7 @@ Every v2 scrape and batch/crawl document follows this shape. Fields are omitted 
 }
 ```
 
-> **Note on `numPages` and `sourceFilename`:** These fields carry `skip_serializing_if = "Option::is_none"` in the engine source, so they are **omitted entirely** from web-scrape responses — they never appear as `null`. They only appear in `/v2/parse` PDF upload responses, and only when the value is actually known.
+> **Note on `numPages` and `sourceFilename`:** These fields carry `skip_serializing_if = "Option::is_none"` in the engine source, so they are **omitted entirely** from web-scrape responses — they never appear as `null`. They only appear in `/firecrawl/v2/parse` PDF upload responses, and only when the value is actually known.
 
 ### V2Document vs v1 ScrapeData
 
@@ -646,7 +646,7 @@ Every v2 scrape and batch/crawl document follows this shape. Fields are omitted 
 | `metadata.creditsUsed` | not present | integer (≥ 1) |
 | `metadata.scrapeId` | not present | per-document UUID |
 | `metadata.numPages` | not present | page count for PDFs |
-| `metadata.sourceFilename` | not present | filename for `/v2/parse` uploads |
+| `metadata.sourceFilename` | not present | filename for `/firecrawl/v2/parse` uploads |
 | `links` | `string[]` flat | `string[]` inside Document (Map uses objects) |
 
 ### `proxyUsed` values
@@ -717,7 +717,7 @@ The following formats are recognized but not yet produced by this engine. The re
   "completed": 12,
   "creditsUsed": 12,
   "expiresAt": "2026-06-16T10:00:00.000Z",
-  "next": "https://api.fastcrw.com/v2/crawl/JOB_ID?skip=100",
+  "next": "https://api.fastcrw.com/firecrawl/v2/crawl/JOB_ID?skip=100",
   "data": [ { "...V2Document..." } ],
   "error": null
 }
@@ -742,11 +742,11 @@ The **TypeScript SDK (`crw-sdk`)** uses v2 by default for the routes it covers:
 
 | SDK method | Underlying route |
 |---|---|
-| `crw.parseFile()` | `POST /v2/parse` |
-| `crw.batchScrape()` | `POST /v2/batch/scrape` + poll |
-| `crw.extract()` | `POST /v2/extract` + poll *(deprecated)* |
+| `crw.parseFile()` | `POST /firecrawl/v2/parse` |
+| `crw.batchScrape()` | `POST /firecrawl/v2/batch/scrape` + poll |
+| `crw.extract()` | `POST /firecrawl/v2/extract` + poll *(deprecated)* |
 
-Other methods (`scrape`, `crawl`, `map`, `search`) call v1 routes. Use direct `fetch` or pass `apiUrl` to target `/v2/scrape` explicitly.
+Other methods (`scrape`, `crawl`, `map`, `search`) call v1 routes. Use direct `fetch` or pass `apiUrl` to target `/firecrawl/v2/scrape` explicitly.
 
 The **Python SDK** exposes the same surface. Pass `base_url="https://api.fastcrw.com"` to the client constructor.
 
@@ -754,15 +754,15 @@ The **Python SDK** exposes the same surface. Pass `base_url="https://api.fastcrw
 
 ## Common mistakes
 
-**Forgetting to poll.** `POST /v2/crawl` and `POST /v2/batch/scrape` return a job ID, not results. The results live in `GET .../{ id }`.
+**Forgetting to poll.** `POST /firecrawl/v2/crawl` and `POST /firecrawl/v2/batch/scrape` return a job ID, not results. The results live in `GET .../{ id }`.
 
 **Expecting `next` to be absent on the last page while the job is running.** `next` is always emitted while `status` is `"scraping"`, even when all buffered pages have been returned. Stop only when `status` is `"completed"` (or `"failed"`) AND `next` is null.
 
 **Sending `formats: ["screenshot"]`.** Screenshots are not yet produced. The request succeeds but `warning` explains the skip. Use `formats: ["markdown"]` instead.
 
-**Using `/v2/extract`.** It works, but the engine warns you to use `POST /v2/scrape` with a `json` format object. Switch over to avoid future breakage.
+**Using `/firecrawl/v2/extract`.** It works, but the engine warns you to use `POST /firecrawl/v2/scrape` with a `json` format object. Switch over to avoid future breakage.
 
-**Missing `Content-Type: application/json`.** All JSON endpoints require it. `/v2/parse` is multipart — do not set `Content-Type` manually; let the HTTP client set it with the boundary.
+**Missing `Content-Type: application/json`.** All JSON endpoints require it. `/firecrawl/v2/parse` is multipart — do not set `Content-Type` manually; let the HTTP client set it with the boundary.
 
 ---
 

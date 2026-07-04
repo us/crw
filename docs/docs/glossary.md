@@ -36,7 +36,7 @@ A credit is the billing unit for the hosted cloud at `fastcrw.com`. Every scrape
 
 ## Firecrawl-compatible
 
-"Firecrawl-compatible" means fastCRW exposes a `/v2` compatibility layer for existing Firecrawl v2 SDK integrations. It is intentionally close enough for migration work, but it is not the recommended API for new fastCRW builds. New projects should start with `/v1`; migration projects should validate the documented differences before switching production traffic. See [Migrate from Firecrawl](/docs/migrate-from-firecrawl) for the exact list of changes and [Compatibility](/docs/compatibility) for the behavior matrix.
+"Firecrawl-compatible" means fastCRW exposes a `/firecrawl/v2` compatibility layer for existing Firecrawl v2 SDK integrations. It is intentionally close enough for migration work, but it is not the recommended API for new fastCRW builds. New projects should start with `/v1`; migration projects should validate the documented differences before switching production traffic. See [Migrate from Firecrawl](/docs/migrate-from-firecrawl) for the exact list of changes and [Compatibility](/docs/compatibility) for the behavior matrix.
 
 ---
 
@@ -66,4 +66,4 @@ SearXNG is an open-source, self-hostable meta-search engine that aggregates resu
 
 ## v1 vs v2 API
 
-fastCRW exposes two route families at `https://api.fastcrw.com`. **v1** (`/v1/*`) is the native, recommended API for new integrations: scrape, crawl, map, search, structured extraction through scrape, and change tracking. **v2** (`/v2/*`) is a Firecrawl v2 compatibility layer with object-format fields, paginated crawl/batch status, a V2Document response shape, batch scraping (`POST /v2/batch/scrape`), file parsing (`POST /v2/parse`), and deprecated extract compatibility. Both route families are served by the same engine, but `/v2` should be treated as migration compatibility rather than the default API. See [v2 API Reference](/docs/v2-api) for the full route table and [Choose an Endpoint](/docs/choose-endpoint) for guidance on which route to start with.
+fastCRW exposes two route families at `https://api.fastcrw.com`. **v1** (`/v1/*`) is the native, recommended API for new integrations: scrape, crawl, map, search, structured extraction through scrape, and change tracking. **v2** (`/firecrawl/v2/*`) is a Firecrawl v2 compatibility layer with object-format fields, paginated crawl/batch status, a V2Document response shape, batch scraping (`POST /firecrawl/v2/batch/scrape`), file parsing (`POST /firecrawl/v2/parse`), and deprecated extract compatibility. Both route families are served by the same engine, but `/firecrawl/v2` should be treated as migration compatibility rather than the default API. See [v2 API Reference](/docs/v2-api) for the full route table and [Choose an Endpoint](/docs/choose-endpoint) for guidance on which route to start with.
