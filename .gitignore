@@ -26,3 +26,48 @@ config.local-bench.toml
 # crw bench run artifacts + downloaded datasets (not source; contain model names)
 bench/runs/
 bench/datasets/
+
+# Internal planning / review docs (keep local, never publish)
+plans/
+REVIEW-FIXES.md
+
+# ── Secrets / credentials (defense-in-depth; none tracked today) ──
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+id_rsa*
+.netrc
+
+# ── IDE / editor junk ──
+.vscode/
+.idea/
+*.iml
+.zed/
+.fleet/
+*.swp
+*.swo
+*~
+*.orig
+
+# ── OS junk ──
+Thumbs.db
+Desktop.ini
+
+# ── Logs / temp / caches ──
+*.log
+logs/
+*.tmp
+.cache/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.py[cod]
+*.profraw
+
+# ── Internal design/planning notes (keep local) ──
+futures-plans.md
