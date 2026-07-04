@@ -300,7 +300,7 @@ const doc2 = await crw.parseFile(pdfBytes, {
 console.log(doc2.json);
 ```
 
-Under the hood, HTTP mode sends a `multipart/form-data` POST to `POST /v2/parse`;
+Under the hood, HTTP mode sends a `multipart/form-data` POST to `POST /firecrawl/v2/parse`;
 local (subprocess) mode base64-encodes the bytes and calls `crw_parse_file` over
 JSON-RPC. The same method works in both modes — the SDK handles the encoding difference.
 

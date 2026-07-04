@@ -79,7 +79,7 @@ A `503 Service Unavailable` response means the server is up but a dependency is 
 | Source | `error_code` | Meaning |
 | --- | --- | --- |
 | `/ready` readiness probe | JSON body: `{"status":"degraded","renderers":{...}}` | A JS renderer (Lightpanda / Chrome) is down. The liveness endpoint `/health` still returns `200`. |
-| `/v1/search` or `/v2/search` | `"search_disabled"` | Search is enabled in config but `searxng_url` is not configured, or SearXNG is unreachable. |
+| `/v1/search` or `/firecrawl/v2/search` | `"search_disabled"` | Search is enabled in config but `searxng_url` is not configured, or SearXNG is unreachable. |
 
 **Action for 503:** retry with exponential backoff; this is a transient condition. If it persists beyond a few minutes, check renderer health at `/ready` or your SearXNG container.
 

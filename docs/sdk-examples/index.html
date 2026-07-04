@@ -458,7 +458,7 @@ const pdf = new Uint8Array(readFileSync(&quot;report.pdf&quot;));
 const result = await client.parseFile(pdf, { filename: &quot;report.pdf&quot;, formats: [&quot;markdown&quot;] });
 console.log(result.markdown);</code></pre>
 <h3 id="curl-fallback-3">curl (fallback)</h3>
-<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v2/parse \
+<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/firecrawl/v2/parse \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -F &quot;file=@report.pdf&quot; \
   -F 'options={&quot;formats&quot;:[&quot;markdown&quot;]}'</code></pre>

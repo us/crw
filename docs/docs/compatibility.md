@@ -2,7 +2,7 @@
 
 ## What "Compatible" Means Here
 
-CRW's recommended API for new integrations is native `/v1`. Compatibility means existing Firecrawl v2 SDK projects can target the `/v2` layer with fewer code changes, while still validating documented differences before production traffic moves.
+CRW's recommended API for new integrations is native `/v1`. Compatibility means existing Firecrawl v2 SDK projects can target the `/firecrawl/v2` layer with fewer code changes, while still validating documented differences before production traffic moves.
 
 ## Supported alignment
 
@@ -62,7 +62,7 @@ It is not good enough if your current system depends on features this page alrea
 
 ## Common Mistakes
 
-- Treating `/v2` as the default API for a new CRW build. Use `/v1` unless you are migrating Firecrawl v2 SDK code.
+- Treating `/firecrawl/v2` as the default API for a new CRW build. Use `/v1` unless you are migrating Firecrawl v2 SDK code.
 - Assuming route-name compatibility means output semantics are identical.
 - Migrating a whole workload before testing `warning` handling and failure cases.
 - Ignoring unsupported capabilities such as screenshots and then discovering the gap in production.

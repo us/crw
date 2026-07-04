@@ -153,7 +153,7 @@ This yields a ~4.2 MB binary (vs ~17 MB for the default embedded build) because 
 | `crw_check_crawl_status` | Poll crawl status and get results | `GET /v1/crawl/:id` | All modes |
 | `crw_map` | Discover all URLs on a site | `POST /v1/map` | All modes |
 | `crw_search` | Search the web → titles, URLs, descriptions | `POST /v1/search` | Always in proxy mode; embedded only when a SearXNG backend is configured |
-| `crw_parse_file` | Parse a local PDF (base64) → markdown | `POST /v2/parse` (multipart) | All modes |
+| `crw_parse_file` | Parse a local PDF (base64) → markdown | `POST /firecrawl/v2/parse` (multipart) | All modes |
 
 > **Output bounding:** Tool results are bounded by default to keep agent context small. Content fields (markdown/html/etc.) are truncated to ~15 000 chars; `crw_map` returns at most 100 URLs. Truncated responses include `truncated: true` and `totalDiscovered` markers. Pass `maxLength: 0` (scrape / check_status / parse_file) or `limit: 0` (map) to opt out.
 

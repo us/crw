@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Choose Your Endpoint — CRW Docs</title>
-  <meta name="description" content="CRW has a native /v1 API for new integrations and a /v2 compatibility layer for Firecrawl migrations. Pick the capability that matches your input and output.">
+  <meta name="description" content="CRW has a native /v1 API for new integrations and a /firecrawl/v2 compatibility layer for Firecrawl migrations. Pick the capability that matches your input and output.">
   <meta name="keywords" content="web scraper, web crawler, firecrawl alternative, crawl4ai alternative, self-hosted scraper, rust web scraper, mcp server, ai web scraping, rag pipeline, llm extraction, open source crawler, headless browser scraper">
   <link rel="canonical" href="https://docs.fastcrw.com/choose-endpoint">
   <link rel="icon" href="/favicon.png?v=2" type="image/png">
@@ -15,13 +15,13 @@
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://docs.fastcrw.com/choose-endpoint">
   <meta property="og:title" content="Choose Your Endpoint — CRW | Web Scraper in Rust">
-  <meta property="og:description" content="CRW has a native /v1 API for new integrations and a /v2 compatibility layer for Firecrawl migrations. Pick the capability that matches your input and output.">
+  <meta property="og:description" content="CRW has a native /v1 API for new integrations and a /firecrawl/v2 compatibility layer for Firecrawl migrations. Pick the capability that matches your input and output.">
   <meta property="og:site_name" content="CRW">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Choose Your Endpoint — CRW Docs">
-  <meta name="twitter:description" content="CRW has a native /v1 API for new integrations and a /v2 compatibility layer for Firecrawl migrations. Pick the capability that matches your input and output.">
+  <meta name="twitter:description" content="CRW has a native /v1 API for new integrations and a /firecrawl/v2 compatibility layer for Firecrawl migrations. Pick the capability that matches your input and output.">
 
   <!-- Structured Data (JSON-LD) -->
   <script type="application/ld+json">
@@ -285,7 +285,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
       <article id="article" role="main"><div class="page-intro">
   <div class="page-kicker">Concepts</div>
   <h1 id="choose-your-endpoint">Choose Your Endpoint</h1>
-  <p class="page-subtitle">CRW has a native /v1 API for new integrations and a /v2 compatibility layer for Firecrawl migrations. Pick the capability that matches your input and output.</p>
+  <p class="page-subtitle">CRW has a native /v1 API for new integrations and a /firecrawl/v2 compatibility layer for Firecrawl migrations. Pick the capability that matches your input and output.</p>
   <div class="page-capabilities">
     <div class="page-capability"><strong>Six verbs:</strong> scrape, map, crawl, search, extract, parse</div>
     <div class="page-capability"><strong>Start here:</strong> native <code>/v1</code></div>
@@ -296,7 +296,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
     <a class="page-btn secondary" href="#comparison-table">View comparison table</a>
   </div>
 </div><h2 id="comparison-table">Comparison table</h2>
-<p>New to CRW? Use <code>/v1</code>. Use <code>/v2</code> when migrating Firecrawl v2 SDK code or when the feature only exists on the compatibility surface, such as <code>POST /v2/batch/scrape</code> or <code>POST /v2/parse</code>.</p>
+<p>New to CRW? Use <code>/v1</code>. Use <code>/firecrawl/v2</code> when migrating Firecrawl v2 SDK code or when the feature only exists on the compatibility surface, such as <code>POST /firecrawl/v2/batch/scrape</code> or <code>POST /firecrawl/v2/parse</code>.</p>
 <table>
 <thead>
 <tr>
@@ -350,7 +350,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 </tr>
 <tr>
 <td><strong>parse</strong></td>
-<td><code>POST /v2/parse</code></td>
+<td><code>POST /firecrawl/v2/parse</code></td>
 <td>A PDF file upload</td>
 <td>Markdown (or JSON/summary with schema) from the document</td>
 <td>You have a local file, not a URL</td>
@@ -364,7 +364,7 @@ the content to an LLM alongside your schema to fill it in.</p>
 </blockquote>
 <h2 id="decision-tree">Decision tree</h2>
 <pre><code>Do you have a file (PDF) to parse?
-  └─ Yes ──► Parse   POST /v2/parse
+  └─ Yes ──► Parse   POST /firecrawl/v2/parse
 
 Do you know the exact URL of the page you want?
   ├─ Yes ──► Do you need structured fields (price, date, …)?
@@ -438,7 +438,7 @@ curl https://api.fastcrw.com/v1/crawl/{id} \
     }
   }'</code></pre>
 <p><strong>Parse a PDF:</strong></p>
-<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v2/parse \
+<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/firecrawl/v2/parse \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
   -F &quot;file=@/path/to/document.pdf&quot;</code></pre>
 <h2 id="what-to-read-next">What to read next</h2>

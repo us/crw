@@ -2,7 +2,7 @@
 
 A purpose-built research API for scientific agents: search papers, inspect
 metadata, read passages, expand the citation graph, and search research-related
-GitHub. These routes live on the `/v2` compatibility surface because they mirror
+GitHub. These routes live on the `/firecrawl/v2` compatibility surface because they mirror
 Firecrawl's research API for migration work.
 
 On the [ArXivQA benchmark](https://fastcrw.com/benchmarks/arxivqa-research-recall)
@@ -21,18 +21,18 @@ the engine path `/v1/search/research/*`.
 
 | Task | Endpoint |
 |------|----------|
-| Search papers | `GET /v2/search/research/papers` |
-| Inspect metadata / read passages | `GET /v2/search/research/papers/{id}` |
-| Find related papers | `GET /v2/search/research/papers/{id}/similar` |
-| Search GitHub | `GET /v2/search/research/github` |
+| Search papers | `GET /firecrawl/v2/search/research/papers` |
+| Inspect metadata / read passages | `GET /firecrawl/v2/search/research/papers/{id}` |
+| Find related papers | `GET /firecrawl/v2/search/research/papers/{id}/similar` |
+| Search GitHub | `GET /firecrawl/v2/search/research/github` |
 
 ## Search papers
 
-`GET /v2/search/research/papers?query=&k=&authors=&categories=&from=&to=`
+`GET /firecrawl/v2/search/research/papers?query=&k=&authors=&categories=&from=&to=`
 
 ```bash
 curl -s -H "Authorization: Bearer $FASTCRW_API_KEY" \
-  "https://api.fastcrw.com/v2/search/research/papers?query=diffusion%20image%20synthesis&k=20"
+  "https://api.fastcrw.com/firecrawl/v2/search/research/papers?query=diffusion%20image%20synthesis&k=20"
 ```
 
 Returns ranked papers. `paperId` is the canonical id (a stable work id when
@@ -51,25 +51,25 @@ Filters: `authors` (substring), `categories`, `from` / `to` (`YYYY-MM-DD`).
 
 ## Inspect a paper / read passages
 
-`GET /v2/search/research/papers/{id}` returns metadata (`authors`, `categories`,
+`GET /firecrawl/v2/search/research/papers/{id}` returns metadata (`authors`, `categories`,
 `createdDate`, …). Accepts an arXiv id, a work id, or a DOI. Add `?query=` to
 return the top passages answering a question:
 
 ```bash
 curl -s -H "Authorization: Bearer $FASTCRW_API_KEY" \
-  "https://api.fastcrw.com/v2/search/research/papers/arxiv:1706.03762?query=what%20is%20the%20attention%20mechanism&k=4"
+  "https://api.fastcrw.com/firecrawl/v2/search/research/papers/arxiv:1706.03762?query=what%20is%20the%20attention%20mechanism&k=4"
 ```
 
 ## Find related papers
 
-`GET /v2/search/research/papers/{id}/similar?intent=&mode=similar|citers|references&k=`
+`GET /firecrawl/v2/search/research/papers/{id}/similar?intent=&mode=similar|citers|references&k=`
 
 `intent` is required. `mode` selects the expansion: `similar` (recommendations),
 `citers` (papers that cite the seed), `references` (papers the seed cites).
 
 ## Search GitHub
 
-`GET /v2/search/research/github?query=&k=` returns repository/README hits for
+`GET /firecrawl/v2/search/research/github?query=&k=` returns repository/README hits for
 implementation notes and engineering prior art.
 
 ## SDK

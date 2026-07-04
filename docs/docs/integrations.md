@@ -1,6 +1,6 @@
 # Framework Integrations
 
-CRW integrates with popular AI agent frameworks and workflow tools. New integrations should use CRW's native `/v1` API. Existing Firecrawl v2 SDK integrations can target the `/v2` compatibility layer after validating the documented differences.
+CRW integrates with popular AI agent frameworks and workflow tools. New integrations should use CRW's native `/v1` API. Existing Firecrawl v2 SDK integrations can target the `/firecrawl/v2` compatibility layer after validating the documented differences.
 
 ## CrewAI
 
@@ -246,4 +246,4 @@ In MCP **proxy mode** (`--api-url` / `CRW_API_URL` set), `crw_search` is always 
 | [Agno](https://github.com/agno-agi/agno) | Toolkit | PR pending | [#7183](https://github.com/agno-agi/agno/pull/7183) |
 | [Dify](https://github.com/langgenius/dify) | Plugin | Ready | [`dify-plugin-crw`](https://github.com/us/dify-plugin-crw) |
 | MCP (10+ platforms) | Built-in | **Shipped** | [MCP docs](/docs/mcp) |
-| Firecrawl SDK | Migration via `/v2` | **Works now** | Compatibility layer |
+| Firecrawl SDK | Migration via `/firecrawl/v2` | **Works now** | Compatibility layer |

@@ -285,7 +285,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
       <article id="article" role="main"><h1 id="research-api">Research API</h1>
 <p>A purpose-built research API for scientific agents: search papers, inspect
 metadata, read passages, expand the citation graph, and search research-related
-GitHub. These routes live on the <code>/v2</code> compatibility surface because they mirror
+GitHub. These routes live on the <code>/firecrawl/v2</code> compatibility surface because they mirror
 Firecrawl&#39;s research API for migration work.</p>
 <p>On the <a href="https://fastcrw.com/benchmarks/arxivqa-research-recall">ArXivQA benchmark</a>
 this stack reaches <strong>61.0% recall — ahead of Firecrawl&#39;s Research Index (53.3%)</strong>.
@@ -306,25 +306,25 @@ the engine path <code>/v1/search/research/*</code>.</p>
 </thead>
 <tbody><tr>
 <td>Search papers</td>
-<td><code>GET /v2/search/research/papers</code></td>
+<td><code>GET /firecrawl/v2/search/research/papers</code></td>
 </tr>
 <tr>
 <td>Inspect metadata / read passages</td>
-<td><code>GET /v2/search/research/papers/{id}</code></td>
+<td><code>GET /firecrawl/v2/search/research/papers/{id}</code></td>
 </tr>
 <tr>
 <td>Find related papers</td>
-<td><code>GET /v2/search/research/papers/{id}/similar</code></td>
+<td><code>GET /firecrawl/v2/search/research/papers/{id}/similar</code></td>
 </tr>
 <tr>
 <td>Search GitHub</td>
-<td><code>GET /v2/search/research/github</code></td>
+<td><code>GET /firecrawl/v2/search/research/github</code></td>
 </tr>
 </tbody></table>
 <h2 id="search-papers">Search papers</h2>
-<p><code>GET /v2/search/research/papers?query=&amp;k=&amp;authors=&amp;categories=&amp;from=&amp;to=</code></p>
+<p><code>GET /firecrawl/v2/search/research/papers?query=&amp;k=&amp;authors=&amp;categories=&amp;from=&amp;to=</code></p>
 <pre data-lang="bash"><code class="language-bash">curl -s -H &quot;Authorization: Bearer $FASTCRW_API_KEY&quot; \
-  &quot;https://api.fastcrw.com/v2/search/research/papers?query=diffusion%20image%20synthesis&amp;k=20&quot;</code></pre>
+  &quot;https://api.fastcrw.com/firecrawl/v2/search/research/papers?query=diffusion%20image%20synthesis&amp;k=20&quot;</code></pre>
 <p>Returns ranked papers. <code>paperId</code> is the canonical id (a stable work id when
 known, else <code>arxiv:&lt;id&gt;</code>); <code>primaryId</code> is the preferred source id
 (<code>arxiv:2105.05233</code>); <code>ids</code> holds the prefix-less source ids.</p>
@@ -335,17 +335,17 @@ known, else <code>arxiv:&lt;id&gt;</code>); <code>primaryId</code> is the prefer
 ] }</code></pre>
 <p>Filters: <code>authors</code> (substring), <code>categories</code>, <code>from</code> / <code>to</code> (<code>YYYY-MM-DD</code>).</p>
 <h2 id="inspect-a-paper-read-passages">Inspect a paper / read passages</h2>
-<p><code>GET /v2/search/research/papers/{id}</code> returns metadata (<code>authors</code>, <code>categories</code>,
+<p><code>GET /firecrawl/v2/search/research/papers/{id}</code> returns metadata (<code>authors</code>, <code>categories</code>,
 <code>createdDate</code>, …). Accepts an arXiv id, a work id, or a DOI. Add <code>?query=</code> to
 return the top passages answering a question:</p>
 <pre data-lang="bash"><code class="language-bash">curl -s -H &quot;Authorization: Bearer $FASTCRW_API_KEY&quot; \
-  &quot;https://api.fastcrw.com/v2/search/research/papers/arxiv:1706.03762?query=what%20is%20the%20attention%20mechanism&amp;k=4&quot;</code></pre>
+  &quot;https://api.fastcrw.com/firecrawl/v2/search/research/papers/arxiv:1706.03762?query=what%20is%20the%20attention%20mechanism&amp;k=4&quot;</code></pre>
 <h2 id="find-related-papers">Find related papers</h2>
-<p><code>GET /v2/search/research/papers/{id}/similar?intent=&amp;mode=similar|citers|references&amp;k=</code></p>
+<p><code>GET /firecrawl/v2/search/research/papers/{id}/similar?intent=&amp;mode=similar|citers|references&amp;k=</code></p>
 <p><code>intent</code> is required. <code>mode</code> selects the expansion: <code>similar</code> (recommendations),
 <code>citers</code> (papers that cite the seed), <code>references</code> (papers the seed cites).</p>
 <h2 id="search-github">Search GitHub</h2>
-<p><code>GET /v2/search/research/github?query=&amp;k=</code> returns repository/README hits for
+<p><code>GET /firecrawl/v2/search/research/github?query=&amp;k=</code> returns repository/README hits for
 implementation notes and engineering prior art.</p>
 <h2 id="sdk">SDK</h2>
 <p>The Firecrawl research SDK works unchanged — set the base URL to

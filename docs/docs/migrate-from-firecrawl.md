@@ -254,7 +254,7 @@ The following table lists the gaps documented in [COMPATIBILITY-firecrawl.md](..
 | **Multi-URL `/extract`** | One call → N URLs | Not supported | Iterate URLs in your code or use `/v1/crawl`. |
 | **`/v1/deep-research`** | Cloud-only Firecrawl feature | Not implemented | No equivalent path — remove or redesign. |
 | **`/v1/agent` (Spark models)** | Cloud-only Firecrawl feature | Not implemented | No equivalent path. |
-| **`/v2/parse` file types** | PDF, DOCX, XLSX, ODT, RTF | PDF only (pure-Rust `pdf-inspector`, no OCR) | If you upload non-PDF files or rely on OCR, keep Firecrawl for those calls. |
+| **`/firecrawl/v2/parse` file types** | PDF, DOCX, XLSX, ODT, RTF | PDF only (pure-Rust `pdf-inspector`, no OCR) | If you upload non-PDF files or rely on OCR, keep Firecrawl for those calls. |
 | **OCR mode on PDF** | `mode: "ocr"` supported | Accepted for wire-compat; falls back to text-layer extraction with `pdf_scanned` warning | Scanned-only PDFs won't extract text. |
 | **Fire-engine anti-bot** | Firecrawl Cloud only | Not available (same as Firecrawl self-host) | For heavy bot-protected pages, compare output quality on real targets. |
 | **Screenshot format** | Supported | Not supported — `/v1/scrape` rejects `"screenshot"` with HTTP 400 (`"Unknown format 'screenshot'"`) | Remove `"screenshot"` from your `formats` array. |

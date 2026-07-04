@@ -297,7 +297,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <tbody><tr>
 <td><strong>Engine</strong></td>
 <td><code>https://api.fastcrw.com</code></td>
-<td>Scrape, crawl, map, search, extract, parse — all content-fetching endpoints (<code>/v1/*</code>, <code>/v2/*</code>, <code>/mcp</code>)</td>
+<td>Scrape, crawl, map, search, extract, parse — all content-fetching endpoints (<code>/v1/*</code>, <code>/firecrawl/v2/*</code>, <code>/mcp</code>)</td>
 </tr>
 <tr>
 <td><strong>SaaS control-plane</strong></td>
@@ -325,11 +325,11 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <p>Set one or more keys in config:</p>
 <pre data-lang="toml"><code class="language-toml">[auth]
 api_keys = [&quot;fc-key-1234&quot;, &quot;fc-key-5678&quot;]</code></pre>
-<p>Once keys are configured, every route under <code>/v1/*</code>, <code>/v2/*</code>, and <code>/mcp</code> requires the same Bearer header.</p>
+<p>Once keys are configured, every route under <code>/v1/*</code>, <code>/firecrawl/v2/*</code>, and <code>/mcp</code> requires the same Bearer header.</p>
 <h2 id="behavior">Behavior</h2>
 <ul>
 <li>No keys configured: self-hosted API routes are open</li>
-<li>Keys configured: <code>/v1/*</code>, <code>/v2/*</code>, and <code>/mcp</code> require <code>Authorization: Bearer ...</code></li>
+<li>Keys configured: <code>/v1/*</code>, <code>/firecrawl/v2/*</code>, and <code>/mcp</code> require <code>Authorization: Bearer ...</code></li>
 <li><code>/health</code> always stays public</li>
 </ul>
 <h2 id="error-cases">Error Cases</h2>

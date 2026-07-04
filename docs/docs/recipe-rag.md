@@ -90,7 +90,7 @@ Scrape each discovered URL with `POST /v1/scrape`, passing `chunkStrategy` to
 split the page server-side (one chunk per heading section). The engine returns a
 `chunks` array on each result — no text-splitting library needed.
 
-> **Why not batch_scrape?** `POST /v2/batch/scrape` does not forward
+> **Why not batch_scrape?** `POST /firecrawl/v2/batch/scrape` does not forward
 > `chunkStrategy` to the engine and never returns a `chunks` field. Use
 > individual `/v1/scrape` calls (looped) to get chunked output.
 
@@ -421,9 +421,9 @@ for doc, meta, dist in zip(results["documents"][0], results["metadatas"][0], res
 | `chunkStrategy.maxChars` | `POST /v1/scrape` only | Hard cap per chunk in characters |
 | `chunkStrategy.dedupe` | `POST /v1/scrape` only | Drop near-duplicate chunks (Jaccard similarity > 85%) |
 | `query` + `filterMode` | `POST /v1/scrape` only | Server-side BM25/cosine ranking — useful for one-shot QA; skip when indexing all chunks |
-| `onlyMainContent` | `POST /v1/scrape`, `/v2/batch/scrape` | Strip nav/footer before chunking — strongly recommended |
+| `onlyMainContent` | `POST /v1/scrape`, `/firecrawl/v2/batch/scrape` | Strip nav/footer before chunking — strongly recommended |
 
-> **`chunkStrategy` on batch/crawl:** `POST /v2/batch/scrape` and `POST /v1/crawl` do
+> **`chunkStrategy` on batch/crawl:** `POST /firecrawl/v2/batch/scrape` and `POST /v1/crawl` do
 > not forward `chunkStrategy` to the engine and never return a `chunks` field.
 > Always use `client.scrape()` (looped) when you need per-page chunks, as shown above.
 

@@ -288,7 +288,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
   <p class="page-subtitle">Upload a PDF and get clean markdown, plain text, or structured JSON back. One multipart request, no third-party OCR pipeline needed.</p>
   <div class="page-capabilities">
     <div class="page-capability"><strong>Best for:</strong> research papers, reports, contracts</div>
-    <div class="page-capability"><strong>Route:</strong> <code>POST /v2/parse</code></div>
+    <div class="page-capability"><strong>Route:</strong> <code>POST /firecrawl/v2/parse</code></div>
     <div class="page-capability"><strong>Max upload:</strong> 50 MiB</div>
   </div>
   <div class="page-actions">
@@ -296,8 +296,8 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
     <a class="page-btn secondary" href="#crawl-parse-workflow">Crawl → Parse Workflow</a>
   </div>
 </div><h2 id="pdf-parsing-with-crw">PDF Parsing with CRW</h2>
-<h3 id="v2parse">/v2/parse</h3>
-<pre data-lang="http"><code class="language-http">POST /v2/parse
+<h3 id="firecrawlv2parse">/firecrawl/v2/parse</h3>
+<pre data-lang="http"><code class="language-http">POST /firecrawl/v2/parse
 Content-Type: multipart/form-data</code></pre>
 <p>Authentication:</p>
 <ul>
@@ -328,7 +328,7 @@ Content-Type: multipart/form-data</code></pre>
 <h3 id="quick-start-quick-start">Quick start {#quick-start}</h3>
 <div class="code-tabs">
       <div class="code-tabs-header"><button class="code-tab active" data-tab="0">cURL</button><button class="code-tab" data-tab="1">Python (SDK)</button><button class="code-tab" data-tab="2">TypeScript (SDK)</button><button class="code-tab" data-tab="3">Python (requests)</button></div>
-      <div class="code-tab-panel active" data-panel="0"><pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v2/parse \
+      <div class="code-tab-panel active" data-panel="0"><pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/firecrawl/v2/parse \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
   -F &quot;file=@/path/to/document.pdf;type=application/pdf&quot;</code></pre></div><div class="code-tab-panel" data-panel="1"><pre data-lang="python"><code class="language-python">from crw import CrwClient
 
@@ -344,7 +344,7 @@ console.log(result.markdown);</code></pre></div><div class="code-tab-panel" data
 
 with open(&quot;/path/to/document.pdf&quot;, &quot;rb&quot;) as f:
     resp = requests.post(
-        &quot;https://api.fastcrw.com/v2/parse&quot;,
+        &quot;https://api.fastcrw.com/firecrawl/v2/parse&quot;,
         headers={&quot;Authorization&quot;: &quot;Bearer YOUR_API_KEY&quot;},
         files={&quot;file&quot;: (&quot;document.pdf&quot;, f, &quot;application/pdf&quot;)},
     )
@@ -390,7 +390,7 @@ print(resp.json()[&quot;data&quot;][&quot;markdown&quot;])</code></pre></div>
 </tr>
 </tbody></table>
 <h2 id="options">Options</h2>
-<p>Pass options as a JSON string in the <code>options</code> multipart field. All fields are optional; defaults match <code>/v2/scrape</code>.</p>
+<p>Pass options as a JSON string in the <code>options</code> multipart field. All fields are optional; defaults match <code>/firecrawl/v2/scrape</code>.</p>
 <table>
 <thead>
 <tr>
@@ -432,12 +432,12 @@ print(resp.json()[&quot;data&quot;][&quot;markdown&quot;])</code></pre></div>
 </tr>
 </tbody></table>
 <h3 id="example-with-options">Example with options</h3>
-<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v2/parse \
+<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/firecrawl/v2/parse \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
   -F &quot;file=@/path/to/document.pdf;type=application/pdf&quot; \
   -F 'options={&quot;formats&quot;:[&quot;markdown&quot;,&quot;plainText&quot;],&quot;parsers&quot;:[{&quot;type&quot;:&quot;pdf&quot;,&quot;maxPages&quot;:5}]}'</code></pre>
 <h3 id="formats-formats">Formats {#formats}</h3>
-<p><code>/v2/parse</code> supports a subset of the scrape formats. Formats that require a renderer (<code>html</code>, <code>rawHtml</code>, <code>changeTracking</code>) are not applicable to uploaded documents and return a warning if requested.</p>
+<p><code>/firecrawl/v2/parse</code> supports a subset of the scrape formats. Formats that require a renderer (<code>html</code>, <code>rawHtml</code>, <code>changeTracking</code>) are not applicable to uploaded documents and return a warning if requested.</p>
 <table>
 <thead>
 <tr>
@@ -665,8 +665,8 @@ for url in pdf_urls[:5]:  # start small
     print(f&quot;\n--- {url} ({result['metadata']['numPages']} pages) ---&quot;)
     print(result[&quot;markdown&quot;][:500])</code></pre>
 <h2 id="structured-extraction-from-pdfs">Structured extraction from PDFs</h2>
-<p>Combine <code>/v2/parse</code> with <code>formats: [&quot;json&quot;]</code> and a <code>jsonSchema</code> to extract structured data from a PDF in one step. Requires an LLM configured on the engine.</p>
-<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v2/parse \
+<p>Combine <code>/firecrawl/v2/parse</code> with <code>formats: [&quot;json&quot;]</code> and a <code>jsonSchema</code> to extract structured data from a PDF in one step. Requires an LLM configured on the engine.</p>
+<pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/firecrawl/v2/parse \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
   -F &quot;file=@/path/to/contract.pdf;type=application/pdf&quot; \
   -F 'options={

@@ -230,7 +230,7 @@ Once the schema is verified, scrape all products in a single async batch job.
 `batch_scrape` is HTTP mode only — it starts a job, polls until completion, and
 returns a list of per-URL results.
 
-> **How schema works in `/v2/batch/scrape`:** The batch endpoint parses its body
+> **How schema works in `/firecrawl/v2/batch/scrape`:** The batch endpoint parses its body
 > into a `V2ScrapeRequest`, which has no top-level `jsonSchema` field — a bare
 > `"jsonSchema": {...}` key is silently ignored by serde. The correct way to pass
 > a schema is to **embed it inside the `formats` array** using the v2 object format:
@@ -271,7 +271,7 @@ product_urls = [
 print(f"Discovered {len(product_urls)} products")
 
 # --- Step 2: batch scrape — embed schema inside the formats object ---
-# NOTE: Do NOT pass jsonSchema= as a separate kwarg. The /v2/batch/scrape
+# NOTE: Do NOT pass jsonSchema= as a separate kwarg. The /firecrawl/v2/batch/scrape
 # handler has no top-level jsonSchema field; it is silently dropped.
 # Instead, use the v2 object format: {"type": "json", "schema": <schema>}.
 pages = client.batch_scrape(
@@ -301,7 +301,7 @@ print(json.dumps(catalog[:2], indent=2, ensure_ascii=False))
 # Step 4a: start the batch scrape job
 # Schema goes inside the formats array as {"type":"json","schema":{...}},
 # NOT as a top-level "jsonSchema" field (which is silently ignored by the server).
-curl -s -X POST https://api.fastcrw.com/v2/batch/scrape \
+curl -s -X POST https://api.fastcrw.com/firecrawl/v2/batch/scrape \
   -H "Authorization: Bearer $CRW_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -338,7 +338,7 @@ curl -s -X POST https://api.fastcrw.com/v2/batch/scrape \
 # Step 4b: poll until status == "completed"
 JOB_ID="7c9e6679-7425-40de-944b-e07fc1f90ae7"
 
-curl -s "https://api.fastcrw.com/v2/batch/scrape/$JOB_ID" \
+curl -s "https://api.fastcrw.com/firecrawl/v2/batch/scrape/$JOB_ID" \
   -H "Authorization: Bearer $CRW_API_KEY" \
   | python3 -c "
 import sys, json
@@ -432,7 +432,7 @@ product_urls = [u for u in all_urls if "/catalogue/" in u and "/category/" not i
 print(f"Discovered {len(product_urls)} products")
 
 # 2. Batch scrape — embed schema inside the formats object (v2 format)
-# A top-level jsonSchema= kwarg is NOT supported by /v2/batch/scrape and
+# A top-level jsonSchema= kwarg is NOT supported by /firecrawl/v2/batch/scrape and
 # would be silently dropped. Use {"type":"json","schema":<schema>} instead.
 pages = client.batch_scrape(
     urls=product_urls,
@@ -467,14 +467,14 @@ print("Saved catalog.json")
 | Parameter | Wire name | Where | Effect |
 |-----------|-----------|-------|--------|
 | `formats=["json"]` | `formats` | `/v1/scrape` | Activates structured extraction on the v1 endpoint; pair with `jsonSchema` |
-| `formats=[{"type":"json","schema":{...}}]` | `formats` | `/v2/batch/scrape` | v2 object format — embeds the schema inside the formats array entry; the only correct way to pass a schema to the batch endpoint |
+| `formats=[{"type":"json","schema":{...}}]` | `formats` | `/firecrawl/v2/batch/scrape` | v2 object format — embeds the schema inside the formats array entry; the only correct way to pass a schema to the batch endpoint |
 | `json_schema=...` | `jsonSchema` | `/v1/scrape` (Python SDK) | Named param; auto-adds `"json"` to formats; sends `jsonSchema` as a top-level field (valid only on `/v1/scrape`) |
 | `only_main_content=True` | `onlyMainContent` | both | Strip nav/footer before extraction — strongly recommended |
 | `max_depth=1` | `maxDepth` | `/v1/map` | Stay on the category page; set higher to follow pagination |
 
 > **Important — schema delivery differs between v1 and v2 batch:**
 > `client.scrape()` sends `jsonSchema` as a top-level field to `/v1/scrape`, where
-> `ScrapeRequest` has that field. `/v2/batch/scrape` parses the body into
+> `ScrapeRequest` has that field. `/firecrawl/v2/batch/scrape` parses the body into
 > `V2ScrapeRequest`, which has **no** top-level `jsonSchema` field — a bare
 > `"jsonSchema": {...}` key is silently ignored by serde. Always embed the schema
 > inside the `formats` array using the object form shown above for batch jobs.
@@ -498,7 +498,7 @@ print("Saved catalog.json")
 
 ## Scaling tips
 
-- **Large catalogs (> 100 pages):** The `/v2/batch/scrape/{id}` poll response
+- **Large catalogs (> 100 pages):** The `/firecrawl/v2/batch/scrape/{id}` poll response
   paginates results via a `next` cursor when results exceed the page limit —
   **the SDK does not follow the cursor; it returns only the first page (up to
   100 URLs)**. For catalogs with more than 100 product URLs, use the raw-HTTP

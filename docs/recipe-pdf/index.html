@@ -291,7 +291,7 @@ from the same PDF in one request — no extra OCR pipeline, no intermediate file
 — but any PDF on disk works. The examples use a local file
 <code>annual_report.pdf</code> (replace with your own path).</p>
 <p><strong>What you will build:</strong></p>
-<pre><code>annual_report.pdf  →  POST /v2/parse  →  { markdown, json, metadata }</code></pre>
+<pre><code>annual_report.pdf  →  POST /firecrawl/v2/parse  →  { markdown, json, metadata }</code></pre>
 <p><strong>Prerequisites:</strong></p>
 <pre data-lang="bash"><code class="language-bash">pip install crw
 export CRW_API_KEY=&quot;crw-...&quot;</code></pre>
@@ -315,7 +315,7 @@ meta = result[&quot;metadata&quot;]
 print(f&quot;Pages : {meta['numPages']}&quot;)
 print(f&quot;Source: {meta['sourceFilename']}&quot;)
 print()
-print(md[:600])</code></pre></div><div class="code-tab-panel" data-panel="1"><pre data-lang="bash"><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v2/parse \
+print(md[:600])</code></pre></div><div class="code-tab-panel" data-panel="1"><pre data-lang="bash"><code class="language-bash">curl -s -X POST https://api.fastcrw.com/firecrawl/v2/parse \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -F &quot;file=@annual_report.pdf;type=application/pdf&quot; \
   | jq '{ pages: .data.metadata.numPages, preview: .data.markdown[:300] }'</code></pre></div>
@@ -396,7 +396,7 @@ print(f&quot;Company : {fields.get('companyName')}&quot;)
 print(f&quot;FY      : {fields.get('fiscalYear')}&quot;)
 print(f&quot;Revenue : {fields.get('totalRevenue')}&quot;)
 print(f&quot;Net Inc : {fields.get('netIncome')}&quot;)
-print(f&quot;Auditor : {fields.get('auditor')}&quot;)</code></pre></div><div class="code-tab-panel" data-panel="1"><pre data-lang="bash"><code class="language-bash">curl -s -X POST https://api.fastcrw.com/v2/parse \
+print(f&quot;Auditor : {fields.get('auditor')}&quot;)</code></pre></div><div class="code-tab-panel" data-panel="1"><pre data-lang="bash"><code class="language-bash">curl -s -X POST https://api.fastcrw.com/firecrawl/v2/parse \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -F &quot;file=@annual_report.pdf;type=application/pdf&quot; \
   -F 'options={
@@ -435,7 +435,7 @@ print(f&quot;Auditor : {fields.get('auditor')}&quot;)</code></pre></div><div cla
 <p>For large documents where you only need the executive summary (first N pages),
 pass a <code>parsers</code> directive with <code>maxPages</code>. To get whitespace-stripped prose
 (e.g. as token-efficient LLM context), request <code>markdown</code> and strip the
-Markdown syntax client-side — <code>/v2/parse</code> does not return a <code>plainText</code> field
+Markdown syntax client-side — <code>/firecrawl/v2/parse</code> does not return a <code>plainText</code> field
 (that field exists in the internal engine type but is not included in the
 <code>V2Document</code> response shape).</p>
 <div class="code-tabs">
@@ -464,9 +464,9 @@ plain = re.sub(r&quot;`{1,3}[^`]*`{1,3}&quot;, &quot;&quot;, plain)        # inl
 plain = re.sub(r&quot;\[([^\]]+)\]\([^)]+\)&quot;, r&quot;\1&quot;, plain) # links
 plain = re.sub(r&quot;\n{3,}&quot;, &quot;\n\n&quot;, plain).strip()        # excess blank lines
 
-print(plain[:400])</code></pre></div><div class="code-tab-panel" data-panel="1"><pre data-lang="bash"><code class="language-bash"># /v2/parse does not return a plainText field — request markdown and
+print(plain[:400])</code></pre></div><div class="code-tab-panel" data-panel="1"><pre data-lang="bash"><code class="language-bash"># /firecrawl/v2/parse does not return a plainText field — request markdown and
 # post-process with jq or sed to remove Markdown syntax.
-curl -s -X POST https://api.fastcrw.com/v2/parse \
+curl -s -X POST https://api.fastcrw.com/firecrawl/v2/parse \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot; \
   -F &quot;file=@annual_report.pdf;type=application/pdf&quot; \
   -F 'options={&quot;formats&quot;:[&quot;markdown&quot;],&quot;parsers&quot;:[{&quot;type&quot;:&quot;pdf&quot;,&quot;maxPages&quot;:10}]}' \
@@ -591,7 +591,7 @@ print(result[&quot;markdown&quot;][:500])</code></pre>
 <td>Truncate each content field to this many characters.</td>
 </tr>
 </tbody></table>
-<p><strong>Supported formats for <code>/v2/parse</code>:</strong></p>
+<p><strong>Supported formats for <code>/firecrawl/v2/parse</code>:</strong></p>
 <table>
 <thead>
 <tr>
@@ -616,7 +616,7 @@ print(result[&quot;markdown&quot;][:500])</code></pre>
 <td>LLM-generated prose summary</td>
 </tr>
 </tbody></table>
-<p><code>plainText</code> is not returned by <code>/v2/parse</code> — the <code>V2Document</code> response shape
+<p><code>plainText</code> is not returned by <code>/firecrawl/v2/parse</code> — the <code>V2Document</code> response shape
 does not include that field. Strip Markdown syntax client-side if you need
 plain text (see Part 3 above).</p>
 <p>Renderer-dependent formats (<code>html</code>, <code>rawHtml</code>, <code>changeTracking</code>) are not

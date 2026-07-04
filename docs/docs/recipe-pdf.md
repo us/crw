@@ -12,7 +12,7 @@ from the same PDF in one request — no extra OCR pipeline, no intermediate file
 **What you will build:**
 
 ```
-annual_report.pdf  →  POST /v2/parse  →  { markdown, json, metadata }
+annual_report.pdf  →  POST /firecrawl/v2/parse  →  { markdown, json, metadata }
 ```
 
 **Prerequisites:**
@@ -50,7 +50,7 @@ print(md[:600])
 ```
 ::tab{title="cURL"}
 ```bash
-curl -s -X POST https://api.fastcrw.com/v2/parse \
+curl -s -X POST https://api.fastcrw.com/firecrawl/v2/parse \
   -H "Authorization: Bearer $CRW_API_KEY" \
   -F "file=@annual_report.pdf;type=application/pdf" \
   | jq '{ pages: .data.metadata.numPages, preview: .data.markdown[:300] }'
@@ -133,7 +133,7 @@ print(f"Auditor : {fields.get('auditor')}")
 ```
 ::tab{title="cURL"}
 ```bash
-curl -s -X POST https://api.fastcrw.com/v2/parse \
+curl -s -X POST https://api.fastcrw.com/firecrawl/v2/parse \
   -H "Authorization: Bearer $CRW_API_KEY" \
   -F "file=@annual_report.pdf;type=application/pdf" \
   -F 'options={
@@ -181,7 +181,7 @@ curl -s -X POST https://api.fastcrw.com/v2/parse \
 For large documents where you only need the executive summary (first N pages),
 pass a `parsers` directive with `maxPages`. To get whitespace-stripped prose
 (e.g. as token-efficient LLM context), request `markdown` and strip the
-Markdown syntax client-side — `/v2/parse` does not return a `plainText` field
+Markdown syntax client-side — `/firecrawl/v2/parse` does not return a `plainText` field
 (that field exists in the internal engine type but is not included in the
 `V2Document` response shape).
 
@@ -216,9 +216,9 @@ print(plain[:400])
 ```
 ::tab{title="cURL"}
 ```bash
-# /v2/parse does not return a plainText field — request markdown and
+# /firecrawl/v2/parse does not return a plainText field — request markdown and
 # post-process with jq or sed to remove Markdown syntax.
-curl -s -X POST https://api.fastcrw.com/v2/parse \
+curl -s -X POST https://api.fastcrw.com/firecrawl/v2/parse \
   -H "Authorization: Bearer $CRW_API_KEY" \
   -F "file=@annual_report.pdf;type=application/pdf" \
   -F 'options={"formats":["markdown"],"parsers":[{"type":"pdf","maxPages":10}]}' \
@@ -327,7 +327,7 @@ The `options` multipart field accepts a JSON string with these keys:
 | `summaryPrompt` | `string` | — | Custom prompt for `"summary"` format. |
 | `maxContentChars` | `number` | — | Truncate each content field to this many characters. |
 
-**Supported formats for `/v2/parse`:**
+**Supported formats for `/firecrawl/v2/parse`:**
 
 | Format | Description |
 |---|---|
@@ -336,7 +336,7 @@ The `options` multipart field accepts a JSON string with these keys:
 | `json` | Structured fields via LLM + `jsonSchema` |
 | `summary` | LLM-generated prose summary |
 
-`plainText` is not returned by `/v2/parse` — the `V2Document` response shape
+`plainText` is not returned by `/firecrawl/v2/parse` — the `V2Document` response shape
 does not include that field. Strip Markdown syntax client-side if you need
 plain text (see Part 3 above).
 

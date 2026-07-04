@@ -3,7 +3,7 @@
 ## Cloud (no installation needed)
 
 Sign up at [fastcrw.com](https://fastcrw.com) and start using the API immediately.
-Native `/v1` endpoints for new CRW integrations, with `/v2` compatibility available for Firecrawl migrations.
+Native `/v1` endpoints for new CRW integrations, with `/firecrawl/v2` compatibility available for Firecrawl migrations.
 
 ```bash
 curl -X POST https://api.fastcrw.com/v1/scrape \

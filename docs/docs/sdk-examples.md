@@ -257,7 +257,7 @@ console.log(result.markdown);
 ### curl (fallback)
 
 ```bash
-curl -X POST https://api.fastcrw.com/v2/parse \
+curl -X POST https://api.fastcrw.com/firecrawl/v2/parse \
   -H "Authorization: Bearer $CRW_API_KEY" \
   -F "file=@report.pdf" \
   -F 'options={"formats":["markdown"]}'

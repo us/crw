@@ -3,7 +3,7 @@
 crw can route requests through your own pool of proxies and **rotate across them**
 — so each request egresses from a different IP. This works across the **HTTP fetch
 path and the JS/Chrome (CDP) path**, for **scrape, crawl, and map**, on both the
-`/v1` and `/v2` APIs, and from the CLI.
+`/v1` and `/firecrawl/v2` APIs, and from the CLI.
 
 There are two ways to use proxies:
 
@@ -51,7 +51,7 @@ Set `proxy_rotation` (or per request, see below) to one of:
 ## Per-request (bring your own proxy)
 
 Any scrape/crawl request can carry its own pool, which **takes precedence** over
-the server config. Supported on `/v1` and `/v2` (camelCase or snake_case):
+the server config. Supported on `/v1` and `/firecrawl/v2` (camelCase or snake_case):
 
 ```bash
 curl -X POST https://your-host/v1/scrape \

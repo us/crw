@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Framework Integrations — CRW Docs</title>
-  <meta name="description" content="CRW integrates with popular AI agent frameworks and workflow tools. New integrations should use CRW's native `/v1` API. Existing Firecrawl v2 SDK integrations can target the `/v2` compatibility layer ">
+  <meta name="description" content="CRW integrates with popular AI agent frameworks and workflow tools. New integrations should use CRW's native `/v1` API. Existing Firecrawl v2 SDK integrations can target the `/firecrawl/v2` compatibil">
   <meta name="keywords" content="web scraper, web crawler, firecrawl alternative, crawl4ai alternative, self-hosted scraper, rust web scraper, mcp server, ai web scraping, rag pipeline, llm extraction, open source crawler, headless browser scraper">
   <link rel="canonical" href="https://docs.fastcrw.com/integrations">
   <link rel="icon" href="/favicon.png?v=2" type="image/png">
@@ -15,13 +15,13 @@
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://docs.fastcrw.com/integrations">
   <meta property="og:title" content="Framework Integrations — CRW | Web Scraper in Rust">
-  <meta property="og:description" content="CRW integrates with popular AI agent frameworks and workflow tools. New integrations should use CRW's native `/v1` API. Existing Firecrawl v2 SDK integrations can target the `/v2` compatibility layer ">
+  <meta property="og:description" content="CRW integrates with popular AI agent frameworks and workflow tools. New integrations should use CRW's native `/v1` API. Existing Firecrawl v2 SDK integrations can target the `/firecrawl/v2` compatibil">
   <meta property="og:site_name" content="CRW">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Framework Integrations — CRW Docs">
-  <meta name="twitter:description" content="CRW integrates with popular AI agent frameworks and workflow tools. New integrations should use CRW's native `/v1` API. Existing Firecrawl v2 SDK integrations can target the `/v2` compatibility layer ">
+  <meta name="twitter:description" content="CRW integrates with popular AI agent frameworks and workflow tools. New integrations should use CRW's native `/v1` API. Existing Firecrawl v2 SDK integrations can target the `/firecrawl/v2` compatibil">
 
   <!-- Structured Data (JSON-LD) -->
   <script type="application/ld+json">
@@ -283,7 +283,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 
     <main class="content" id="content">
       <article id="article" role="main"><h1 id="framework-integrations">Framework Integrations</h1>
-<p>CRW integrates with popular AI agent frameworks and workflow tools. New integrations should use CRW&#39;s native <code>/v1</code> API. Existing Firecrawl v2 SDK integrations can target the <code>/v2</code> compatibility layer after validating the documented differences.</p>
+<p>CRW integrates with popular AI agent frameworks and workflow tools. New integrations should use CRW&#39;s native <code>/v1</code> API. Existing Firecrawl v2 SDK integrations can target the <code>/firecrawl/v2</code> compatibility layer after validating the documented differences.</p>
 <h2 id="crewai">CrewAI</h2>
 <p>CrewAI support is bundled as an <strong>extra</strong> in the <code>crw</code> Python package — no separate package needed.</p>
 <pre data-lang="bash"><code class="language-bash">pip install &quot;crw[crewai]&quot;</code></pre>
@@ -626,7 +626,7 @@ console.log(data.markdown);</code></pre>
 </tr>
 <tr>
 <td>Firecrawl SDK</td>
-<td>Migration via <code>/v2</code></td>
+<td>Migration via <code>/firecrawl/v2</code></td>
 <td><strong>Works now</strong></td>
 <td>Compatibility layer</td>
 </tr>

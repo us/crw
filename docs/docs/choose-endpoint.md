@@ -1,7 +1,7 @@
 <div class="page-intro">
   <div class="page-kicker">Concepts</div>
   <h1>Choose Your Endpoint</h1>
-  <p class="page-subtitle">CRW has a native /v1 API for new integrations and a /v2 compatibility layer for Firecrawl migrations. Pick the capability that matches your input and output.</p>
+  <p class="page-subtitle">CRW has a native /v1 API for new integrations and a /firecrawl/v2 compatibility layer for Firecrawl migrations. Pick the capability that matches your input and output.</p>
   <div class="page-capabilities">
     <div class="page-capability"><strong>Six verbs:</strong> scrape, map, crawl, search, extract, parse</div>
     <div class="page-capability"><strong>Start here:</strong> native <code>/v1</code></div>
@@ -15,7 +15,7 @@
 
 ## Comparison table
 
-New to CRW? Use `/v1`. Use `/v2` when migrating Firecrawl v2 SDK code or when the feature only exists on the compatibility surface, such as `POST /v2/batch/scrape` or `POST /v2/parse`.
+New to CRW? Use `/v1`. Use `/firecrawl/v2` when migrating Firecrawl v2 SDK code or when the feature only exists on the compatibility surface, such as `POST /firecrawl/v2/batch/scrape` or `POST /firecrawl/v2/parse`.
 
 | Verb | Route | Input | Output | Use when | LLM required? |
 |---|---|---|---|---|---|
@@ -24,7 +24,7 @@ New to CRW? Use `/v1`. Use `/v2` when migrating Firecrawl v2 SDK code or when th
 | **crawl** | `POST /v1/crawl` | A start URL | Async job — poll `GET /v1/crawl/{id}` for all pages | You want every page under a URL scraped in one background job | No (yes if you add `summary` to `scrapeOptions`) |
 | **search** | `POST /v1/search` | A query string | Ranked web search results, optionally with scraped content | You do not have a URL — you want the web to find relevant pages | No (yes for `answer`/`summarize_results` options) |
 | **extract** | `POST /v1/scrape` | A URL + JSON schema | `data.json` — a filled-in object matching your schema | You need structured fields (price, title, date…) not prose | **Yes** |
-| **parse** | `POST /v2/parse` | A PDF file upload | Markdown (or JSON/summary with schema) from the document | You have a local file, not a URL | No (yes for `summary`/`json` formats) |
+| **parse** | `POST /firecrawl/v2/parse` | A PDF file upload | Markdown (or JSON/summary with schema) from the document | You have a local file, not a URL | No (yes for `summary`/`json` formats) |
 
 > **Extract is not a separate route.** It is the same `POST /v1/scrape` endpoint with
 > `formats: ["json"]` and a `jsonSchema` field. The engine scrapes the page, then passes
@@ -34,7 +34,7 @@ New to CRW? Use `/v1`. Use `/v2` when migrating Firecrawl v2 SDK code or when th
 
 ```
 Do you have a file (PDF) to parse?
-  └─ Yes ──► Parse   POST /v2/parse
+  └─ Yes ──► Parse   POST /firecrawl/v2/parse
 
 Do you know the exact URL of the page you want?
   ├─ Yes ──► Do you need structured fields (price, date, …)?
@@ -140,7 +140,7 @@ curl -X POST https://api.fastcrw.com/v1/scrape \
 **Parse a PDF:**
 
 ```bash
-curl -X POST https://api.fastcrw.com/v2/parse \
+curl -X POST https://api.fastcrw.com/firecrawl/v2/parse \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -F "file=@/path/to/document.pdf"
 ```

@@ -25,7 +25,7 @@ On self-hosted instances, authentication is configured via your server settings.
 | `/v1/crawl/:id` | GET | Poll status of a crawl job |
 | `/v1/map` | POST | Discover all reachable URLs on a domain |
 | `/v1/search` | POST | Search the web and return results with content |
-| `/v2/parse` | POST | Parse a file (PDF) into markdown or structured output |
+| `/firecrawl/v2/parse` | POST | Parse a file (PDF) into markdown or structured output |
 
 ## Quick Start Pattern
 

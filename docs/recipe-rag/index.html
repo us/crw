@@ -345,7 +345,7 @@ print(f&quot;Found {len(doc_urls)} documentation pages&quot;)
 split the page server-side (one chunk per heading section). The engine returns a
 <code>chunks</code> array on each result — no text-splitting library needed.</p>
 <blockquote>
-<p><strong>Why not batch_scrape?</strong> <code>POST /v2/batch/scrape</code> does not forward
+<p><strong>Why not batch_scrape?</strong> <code>POST /firecrawl/v2/batch/scrape</code> does not forward
 <code>chunkStrategy</code> to the engine and never returns a <code>chunks</code> field. Use
 individual <code>/v1/scrape</code> calls (looped) to get chunked output.</p>
 </blockquote>
@@ -673,12 +673,12 @@ for doc, meta, dist in zip(results[&quot;documents&quot;][0], results[&quot;meta
 </tr>
 <tr>
 <td><code>onlyMainContent</code></td>
-<td><code>POST /v1/scrape</code>, <code>/v2/batch/scrape</code></td>
+<td><code>POST /v1/scrape</code>, <code>/firecrawl/v2/batch/scrape</code></td>
 <td>Strip nav/footer before chunking — strongly recommended</td>
 </tr>
 </tbody></table>
 <blockquote>
-<p><strong><code>chunkStrategy</code> on batch/crawl:</strong> <code>POST /v2/batch/scrape</code> and <code>POST /v1/crawl</code> do
+<p><strong><code>chunkStrategy</code> on batch/crawl:</strong> <code>POST /firecrawl/v2/batch/scrape</code> and <code>POST /v1/crawl</code> do
 not forward <code>chunkStrategy</code> to the engine and never return a <code>chunks</code> field.
 Always use <code>client.scrape()</code> (looped) when you need per-page chunks, as shown above.</p>
 </blockquote>
