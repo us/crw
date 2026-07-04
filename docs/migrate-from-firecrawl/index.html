@@ -314,6 +314,20 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
     &quot;formats&quot;: [&quot;markdown&quot;]
   }'</code></pre></div>
     </div><p><strong>Self-hosted:</strong> if you run your own <code>crw-server</code>, replace <code>https://api.fastcrw.com</code> with your server&#39;s address (e.g. <code>http://crw:3000</code>). Authentication is optional on self-hosted; disable it with <code>[server] auth_required = false</code> in your <code>config.toml</code>.</p>
+<p>:::note{title=&quot;Keeping the Firecrawl SDK? Just repoint the API URL&quot;}
+You don&#39;t have to swap SDKs. fastCRW mirrors Firecrawl&#39;s v2 API under a dedicated <strong><code>/firecrawl/*</code></strong> namespace, so an existing Firecrawl client works once you point its base URL at fastCRW. How you set it differs by language because the two SDKs build request URLs differently:</p>
+<p><strong>TypeScript / JavaScript</strong> (<code>@mendable/firecrawl-js</code>) — include <code>/firecrawl</code> in <code>apiUrl</code>. The SDK concatenates the path, so requests land on <code>/firecrawl/v2/*</code>:</p>
+<pre data-lang="typescript"><code class="language-typescript">const app = new FirecrawlApp({
+  apiKey: process.env.CRW_API_KEY,
+  apiUrl: &quot;https://api.fastcrw.com/firecrawl&quot;,
+});</code></pre>
+<p><strong>Python</strong> (<code>firecrawl-py</code>) — use the <strong>bare host</strong>, no <code>/firecrawl</code>. The Python SDK resolves endpoint paths against the host root (via <code>urljoin</code>), so a <code>/firecrawl</code> suffix is silently dropped; you land on the equivalent root <code>/v2/*</code> surface, which is the same engine:</p>
+<pre data-lang="python"><code class="language-python">app = FirecrawlApp(
+    api_key=os.environ[&quot;CRW_API_KEY&quot;],
+    api_url=&quot;https://api.fastcrw.com&quot;,  # resolves to /v2/* — the same compat surface
+)</code></pre>
+<p>Both reach the same Firecrawl-compatible engine. The <strong>v2 SDK is the supported drop-in</strong>; the legacy v1 SDK is compatible only for <code>scrape</code>.
+:::</p>
 <hr>
 <h2 id="step-2-swap-the-sdk-package">Step 2 — Swap the SDK package</h2>
 <h3 id="python">Python</h3>

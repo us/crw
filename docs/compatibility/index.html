@@ -285,6 +285,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
       <article id="article" role="main"><h1 id="compatibility-matrix">Compatibility Matrix</h1>
 <h2 id="what-compatible-means-here">What &quot;Compatible&quot; Means Here</h2>
 <p>CRW&#39;s recommended API for new integrations is native <code>/v1</code>. Compatibility means existing Firecrawl v2 SDK projects can target the <code>/firecrawl/v2</code> layer with fewer code changes, while still validating documented differences before production traffic moves.</p>
+<p>How you point the SDK depends on the language: the <strong>JS/TS SDK</strong> honours a <code>/firecrawl</code> path in <code>apiUrl</code> (so it reaches <code>/firecrawl/v2/*</code>), while the <strong>Python SDK</strong> drops the path and lands on the equivalent root <code>/v2/*</code> — same engine. See <a href="/docs/migrate-from-firecrawl">Migrate from Firecrawl</a> for the exact <code>apiUrl</code> / <code>api_url</code> values.</p>
 <h2 id="supported-alignment">Supported alignment</h2>
 <table>
 <thead>
