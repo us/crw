@@ -9,6 +9,8 @@ This is a **capability matrix**, not an API-shape compatibility matrix (which th
 
 > **Honest framing:** Firecrawl is a feature-richer cloud-first product with an OSS self-host story that has documented gaps. fastCRW is a single-binary Rust-native alternative with narrower scope but better self-host ergonomics and a Tavily-style search API on top. These products overlap on `/scrape`, `/crawl`, `/map`, `/search`; they diverge on LLM extraction, deep research, anti-bot depth, and deployment surface. We do NOT claim drop-in equivalence — claim is "Rust-native alternative for the overlap surface."
 
+> **Supported compat target — Firecrawl v2 only (as of 2026-07-04):** Firecrawl drop-in compatibility is served under the dedicated **`/firecrawl/*`** namespace and targets **Firecrawl's v2 API/SDK**. `/firecrawl/v2/*` is verified drop-in for `scrape`, `search`, `extract`, `map`, `crawl`, and `batch` (end-to-end against the official `firecrawl-py` SDK). The **legacy v1 Firecrawl SDK is not a supported drop-in**: several v1 responses (`search`, `map`, crawl-status, `extract`) use fastCRW's own response shapes and don't deserialize under the strict v1 SDK models — `scrape` is the only fully v1-SDK-compatible route. fastCRW's own native API remains `/v1/*` at the root (what the public docs center on); root `/v2/*` is a deprecated alias of `/firecrawl/v2/*`, kept for backward-compat.
+
 ---
 
 ## 1. Endpoint coverage (high-level)
