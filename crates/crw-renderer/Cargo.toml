@@ -37,6 +37,7 @@ dirs = { version = "6", optional = true }
 moka = { workspace = true }
 publicsuffix = { workspace = true }
 regex = { workspace = true }
+encoding_rs = "0.8"
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }

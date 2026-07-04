@@ -384,11 +384,20 @@ impl PageFetcher for HttpFetcher {
             )));
         }
 
-        let content_type = resp
+        let content_type_header = resp
             .headers()
             .get("content-type")
             .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string());
+        let content_type = content_type_header
+            .as_deref()
             .map(|s| s.split(';').next().unwrap_or(s).trim().to_lowercase());
+        // Charset from the Content-Type header (P1-1): pages served as Latin-1 /
+        // Windows-1252 would otherwise be UTF-8-lossy'd, turning each 0x80–0xFF
+        // byte into U+FFFD. Kept separately since `content_type` drops it.
+        let header_charset = content_type_header
+            .as_deref()
+            .and_then(charset_from_content_type);
 
         let cf_mitigated = resp
             .headers()
@@ -416,7 +425,7 @@ impl PageFetcher for HttpFetcher {
         let (html, raw_bytes) = if is_pdf {
             (String::new(), Some(bytes.to_vec()))
         } else {
-            (String::from_utf8_lossy(&bytes).into_owned(), None)
+            (decode_html_bytes(&bytes, header_charset.as_deref()), None)
         };
 
         let final_url = if final_url_str != url {
@@ -471,9 +480,112 @@ impl PageFetcher for HttpFetcher {
     }
 }
 
+/// Extract the `charset` label from a `Content-Type` header value
+/// (e.g. `text/html; charset=ISO-8859-1` → `ISO-8859-1`).
+fn charset_from_content_type(ct: &str) -> Option<String> {
+    let lower = ct.to_ascii_lowercase();
+    let idx = lower.find("charset")?;
+    let after = ct[idx + "charset".len()..].trim_start();
+    let after = after.strip_prefix('=')?.trim_start();
+    let after = after.trim_start_matches(['"', '\'']);
+    let end = after
+        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':'))
+        .unwrap_or(after.len());
+    let label = after[..end].trim();
+    (!label.is_empty()).then(|| label.to_string())
+}
+
+/// Sniff a `<meta charset>` / `<meta http-equiv=content-type … charset=…>`
+/// declaration from the first ~2KB of an HTML document.
+fn sniff_meta_charset(bytes: &[u8]) -> Option<String> {
+    let head = &bytes[..bytes.len().min(2048)];
+    let text = String::from_utf8_lossy(head).to_ascii_lowercase();
+    let idx = text.find("charset")?;
+    let after = text[idx + "charset".len()..].trim_start();
+    let after = after.strip_prefix('=')?.trim_start();
+    let after = after.trim_start_matches(['"', '\'']);
+    let end = after
+        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_'))
+        .unwrap_or(after.len());
+    let label = &after[..end];
+    (!label.is_empty()).then(|| label.to_string())
+}
+
+/// Decode fetched HTML bytes to a `String` honoring the declared charset
+/// (P1-1): HTTP `Content-Type` charset first, then a `<meta charset>` sniff,
+/// then UTF-8. Without this, a Latin-1 / Windows-1252 page has every 0x80–0xFF
+/// byte replaced with U+FFFD.
+fn decode_html_bytes(bytes: &[u8], header_charset: Option<&str>) -> String {
+    // Header charset wins, but a bogus/unknown header label must still fall
+    // through to a <meta charset> sniff before giving up on UTF-8.
+    let enc = header_charset
+        .and_then(|l| encoding_rs::Encoding::for_label(l.as_bytes()))
+        .or_else(|| {
+            sniff_meta_charset(bytes).and_then(|l| encoding_rs::Encoding::for_label(l.as_bytes()))
+        });
+    match enc {
+        Some(enc) => enc.decode(bytes).0.into_owned(),
+        None => String::from_utf8_lossy(bytes).into_owned(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn charset_from_content_type_parses_label() {
+        assert_eq!(
+            charset_from_content_type("text/html; charset=ISO-8859-1").as_deref(),
+            Some("ISO-8859-1")
+        );
+        assert_eq!(
+            charset_from_content_type("text/html;charset=\"utf-8\"").as_deref(),
+            Some("utf-8")
+        );
+        assert_eq!(charset_from_content_type("text/html").as_deref(), None);
+    }
+
+    #[test]
+    fn decode_latin1_via_header_no_replacement_char() {
+        // "café ûber" in ISO-8859-1: é=0xE9, û=0xFB.
+        let bytes = b"caf\xE9 \xFBber";
+        let out = decode_html_bytes(bytes, Some("iso-8859-1"));
+        assert_eq!(out, "café ûber");
+        assert!(!out.contains('\u{FFFD}'));
+    }
+
+    #[test]
+    fn decode_windows1254_via_meta_sniff() {
+        // Turkish "için" in Windows-1254: i=0x69, ç=0xE7, i=0x69, n=0x6E.
+        let bytes = b"<meta charset=windows-1254><p>i\xE7in</p>";
+        let out = decode_html_bytes(bytes, None);
+        assert!(out.contains("için"), "got: {out}");
+        assert!(!out.contains('\u{FFFD}'));
+    }
+
+    #[test]
+    fn decode_bogus_header_falls_through_to_meta_then_utf8() {
+        // Bogus header label must NOT short-circuit to UTF-8 — a valid <meta>
+        // charset should still win. Turkish "için" in Windows-1254.
+        let bytes = b"<meta charset=windows-1254><p>i\xE7in</p>";
+        let out = decode_html_bytes(bytes, Some("x-bogus-nonsense"));
+        assert!(out.contains("için"), "got: {out}");
+        // Bogus header + no meta → UTF-8 lossy fallback (no panic).
+        let plain = decode_html_bytes(b"plain ascii", Some("x-bogus"));
+        assert_eq!(plain, "plain ascii");
+    }
+
+    #[test]
+    fn decode_utf8_unchanged() {
+        let bytes = "café İstanbul 東京".as_bytes();
+        assert_eq!(
+            decode_html_bytes(bytes, Some("utf-8")),
+            "café İstanbul 東京"
+        );
+        // No charset info → still UTF-8 by default.
+        assert_eq!(decode_html_bytes(bytes, None), "café İstanbul 東京");
+    }
 
     #[test]
     fn with_proxy_is_fail_closed_on_bad_url() {
