@@ -29,13 +29,32 @@ pub fn create_app(state: AppState) -> Router {
     let timeout = Duration::from_secs(state.config.effective_request_timeout_secs());
     let rate_limit_rps = state.config.server.rate_limit_rps;
 
-    // v1 + v2 routers merged before the shared auth + rate-limit layers, so the
-    // /v2/* surface (issue #62) inherits auth, rate-limiting, body-limit and the
-    // timeout layer identically to v1. `/mcp` is version-less.
-    let api_routes = routes::v1::router().merge(routes::v2::router()).route(
-        "/mcp",
-        post(routes::mcp::mcp_handler).fallback(method_not_allowed),
+    // Native vs Firecrawl-compat surface split.
+    //
+    // `/v1` (and, transitionally, `/v2`) are fastCRW's own API — free to evolve;
+    // staying Firecrawl-compatible is a bonus, not a contract.
+    //
+    // The SAME handlers are ALSO mounted under `/firecrawl/*`, which is the
+    // canonical, frozen Firecrawl drop-in surface (`/firecrawl/v1/*`,
+    // `/firecrawl/v2/*`). New callers who want guaranteed Firecrawl-shape should
+    // target `/firecrawl/*`; `/v2/*` at the root is a deprecated alias kept for
+    // backward-compat. Nesting reuses the v1/v2 routers verbatim, so both
+    // surfaces share request parsing, error envelopes, and body limits.
+    //
+    // All merged before the shared auth + rate-limit layers, so every surface
+    // inherits auth, rate-limiting, body-limit and the timeout layer identically.
+    // `/mcp` is version-less.
+    let firecrawl_compat = Router::new().nest(
+        "/firecrawl",
+        routes::v1::router().merge(routes::v2::router()),
     );
+    let api_routes = routes::v1::router()
+        .merge(routes::v2::router())
+        .merge(firecrawl_compat)
+        .route(
+            "/mcp",
+            post(routes::mcp::mcp_handler).fallback(method_not_allowed),
+        );
 
     let api_routes = if api_keys.is_empty() {
         api_routes.with_state(state.clone())

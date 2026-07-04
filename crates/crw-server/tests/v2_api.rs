@@ -167,3 +167,38 @@ async fn v2_scrape_auth_ok_reaches_handler() {
     // Passed auth, hit the handler, which 400s on the bad URL.
     assert_ne!(r.status_code(), StatusCode::UNAUTHORIZED);
 }
+
+// --- Firecrawl-compat namespace (`/firecrawl/*`) ---
+// The frozen Firecrawl drop-in surface re-mounts the same v1/v2 handlers under
+// a `/firecrawl` prefix, leaving root `/v1` (native) and `/v2` (deprecated
+// alias) untouched. These tests prove the prefix routes to the same handlers.
+
+#[tokio::test]
+async fn firecrawl_v2_scrape_routes_to_handler() {
+    let s = test_app();
+    let r = s
+        .post("/firecrawl/v2/scrape")
+        .json(&json!({"url": "not-a-url", "formats": ["markdown"]}))
+        .await;
+    // Reached the v2 handler (400 on bad URL), not a 404 from a missing route.
+    r.assert_status(StatusCode::BAD_REQUEST);
+    let body: Value = r.json();
+    assert_eq!(body["success"], false);
+}
+
+#[tokio::test]
+async fn firecrawl_v1_scrape_routes_to_handler() {
+    let s = test_app();
+    let r = s
+        .post("/firecrawl/v1/scrape")
+        .json(&json!({"url": "not-a-url"}))
+        .await;
+    r.assert_status(StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn firecrawl_prefix_unknown_route_404() {
+    let s = test_app();
+    let r = s.post("/firecrawl/v2/nope").json(&json!({})).await;
+    r.assert_status(StatusCode::NOT_FOUND);
+}
