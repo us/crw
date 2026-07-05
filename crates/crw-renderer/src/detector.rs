@@ -208,6 +208,55 @@ pub fn looks_like_thin_html(html: &str) -> bool {
     extract_body_text_len(&lower) < 200
 }
 
+/// Would a headless browser plausibly reveal MORE content than the raw HTTP
+/// body? True when the page ships executable JS (an external `<script src=…>`
+/// bundle or a non-trivial inline script) OR performs a client-side
+/// `<meta http-equiv="refresh">` redirect (which HTTP clients don't follow but
+/// a browser does). A thin page with none of these is already complete over
+/// HTTP — a headless render reveals nothing and just adds seconds — so the
+/// thin-content escalation is gated on this signal.
+///
+/// Pure-data script blocks (`application/json`, `application/ld+json`,
+/// `importmap`, `speculationrules`) never execute, so they do NOT count.
+pub fn warrants_browser_retry(html: &str) -> bool {
+    let check_len = html.len().min(500_000);
+    let lower = html[..check_len].to_lowercase();
+
+    // Client-side redirect a browser would follow to real content. Matched per
+    // <meta> tag (http-equiv refresh + a url target in the SAME tag) so an
+    // unrelated string elsewhere can't false-positive.
+    for frag in lower.split("<meta").skip(1) {
+        let tag = frag.split('>').next().unwrap_or("");
+        if tag.contains("http-equiv") && tag.contains("refresh") && tag.contains("url=") {
+            return true;
+        }
+    }
+
+    for frag in lower.split("<script").skip(1) {
+        let mut parts = frag.splitn(2, '>');
+        let tag = parts.next().unwrap_or("");
+        let after = parts.next().unwrap_or("");
+        // External bundle → could inject content.
+        if tag.contains("src=") {
+            return true;
+        }
+        // Pure-data blocks never execute.
+        let is_data = tag.contains("application/json")
+            || tag.contains("application/ld+json")
+            || tag.contains("importmap")
+            || tag.contains("speculationrules");
+        if is_data {
+            continue;
+        }
+        // Inline executable script with a non-trivial body.
+        let inline = after.split("</script>").next().unwrap_or("");
+        if inline.trim().len() > 8 {
+            return true;
+        }
+    }
+    false
+}
+
 /// Returns true when an extracted markdown is below the floor used by the
 /// renderer to decide a fetch produced effectively no extractable content.
 /// Pair with [`looks_like_thin_html`] for a full thin-content judgment.
@@ -500,6 +549,52 @@ pub fn is_cloudflare_mitigated_header(header_value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn thin_static_page_does_not_warrant_browser() {
+        // example.com: a genuinely small static doc, zero scripts. Thin, but a
+        // browser render would reveal nothing — must NOT be treated as needing JS.
+        let html = "<html><head><title>Example Domain</title></head><body>\
+            <div><h1>Example Domain</h1><p>This domain is for use in illustrative \
+            examples.</p></div></body></html>";
+        assert!(looks_like_thin_html(html));
+        assert!(!warrants_browser_retry(html));
+    }
+
+    #[test]
+    fn thin_shell_with_script_bundle_warrants_browser() {
+        // Unrecognized-shell case (espn/seattletimes bucket): thin body but ships
+        // a JS bundle → still escalates.
+        let html =
+            r#"<html><body><div id="app"></div><script src="/bundle.js"></script></body></html>"#;
+        assert!(looks_like_thin_html(html));
+        assert!(warrants_browser_retry(html));
+    }
+
+    #[test]
+    fn inline_executable_script_warrants_browser() {
+        let html =
+            r#"<html><body><div></div><script>window.__DATA__={};main();</script></body></html>"#;
+        assert!(warrants_browser_retry(html));
+    }
+
+    #[test]
+    fn json_ld_only_does_not_warrant_browser() {
+        // Structured-data blocks don't execute — a static page carrying only
+        // JSON-LD must not be pushed to a browser.
+        let html = r#"<html><body><p>hi</p><script type="application/ld+json">{"@type":"Thing"}</script></body></html>"#;
+        assert!(!warrants_browser_retry(html));
+    }
+
+    #[test]
+    fn thin_meta_refresh_redirect_warrants_browser() {
+        // A thin stub whose only mechanism is a client-side meta-refresh redirect
+        // (no script). HTTP clients don't follow it; a browser would, then reach
+        // real content — so escalate.
+        let html = r#"<html><head><meta http-equiv="refresh" content="0; url=https://example.org/real"></head><body>Redirecting...</body></html>"#;
+        assert!(looks_like_thin_html(html));
+        assert!(warrants_browser_retry(html));
+    }
 
     #[test]
     fn detects_spa_shell() {

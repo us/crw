@@ -1082,8 +1082,16 @@ impl FallbackRenderer {
                 // `__next_data__`) yet still return a near-empty HTML shell.
                 // Bench analysis showed 23/147 failures fall in this bucket
                 // (seattletimes, espn, ionos, huduser, …).
+                // Escalate a thin 2xx body ONLY when a browser would plausibly
+                // reveal more (executable JS, or a meta-refresh redirect). A
+                // script-less static doc (e.g. example.com) is already complete,
+                // so a headless render just adds seconds for nothing. The
+                // recognized-shell sites this bucket targets (seattletimes, espn,
+                // …) all ship script bundles, so they still escalate.
                 let is_2xx = (200..300).contains(&result.status_code);
-                let is_thin_content = is_2xx && detector::looks_like_thin_html(&result.html);
+                let is_thin_content = is_2xx
+                    && detector::looks_like_thin_html(&result.html)
+                    && detector::warrants_browser_retry(&result.html);
 
                 if !self.js_renderers.is_empty()
                     && (needs_js || is_blocked || is_auth_blocked || is_thin_content)
