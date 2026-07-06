@@ -954,6 +954,35 @@ fn classify_block(
     if content_type.map(|c| c.contains("pdf")).unwrap_or(false) {
         return None;
     }
+    // Modern Cloudflare Turnstile / managed challenge is frequently served with
+    // HTTP 200 and a LARGE (>80KB) body (e.g. barcodelookup.com ~118KB). Both
+    // antibot::classify (size-capped, challenge-form-era patterns) and
+    // detector::looks_like_cloudflare_challenge (bails at 80KB) miss it, so the
+    // interstitial leaks through as success:true. These "strong" markers live in
+    // the challenge <head> script and appear ONLY on the interstitial, so scan a
+    // bounded, char-boundary-safe prefix regardless of status/size or how much
+    // markdown got extracted (a challenge is a block even if it yields text).
+    // ponytail: strong-markers-only keeps false positives ~nil; a real page that
+    // cleared the challenge no longer carries _cf_chl_opt.
+    const CF_SCAN_PREFIX: usize = 80_000;
+    const CF_STRONG_MARKERS: [&str; 5] = [
+        "/cdn-cgi/challenge-platform/",
+        "_cf_chl_opt",
+        "cf-challenge-running",
+        "cf-browser-verification",
+        "__cf_chl_managed_tk__",
+    ];
+    let mut end = html.len().min(CF_SCAN_PREFIX);
+    while end < html.len() && !html.is_char_boundary(end) {
+        end += 1;
+    }
+    let head = html[..end].to_ascii_lowercase();
+    if CF_STRONG_MARKERS.iter().any(|m| head.contains(m)) {
+        return Some(BlockOutcome {
+            vendor: "cloudflare".to_string(),
+            reason: "cloudflare challenge interstitial".to_string(),
+        });
+    }
     if markdown.map(|m| m.trim().len()).unwrap_or(0) >= threshold {
         return None;
     }
@@ -1014,6 +1043,25 @@ mod tests {
         let html = r#"<html><body><form id="challenge-form" action="/cdn-cgi/?__cf_chl_f_tk=abc"></form></body></html>"#;
         let b = classify_block(200, Some("text/html"), html, None, false, THRESH)
             .expect("CF challenge must be flagged");
+        assert_eq!(b.vendor, "cloudflare");
+    }
+
+    #[test]
+    fn classify_block_turnstile_200_large_body() {
+        // Real prod regression (#350, barcodelookup.com): modern CF Turnstile
+        // served at HTTP 200 in a ~118KB body with NO old `challenge-form` markup
+        // — antibot::classify misses it and it leaked as success:true. The strong
+        // marker `_cf_chl_opt` sits in the <head> script; it must be detected even
+        // past the 80KB scan cap AND even when substantial markdown was extracted.
+        let mut html = String::from(
+            r#"<html><head><script>window._cf_chl_opt={cvId:"3"};</script></head><body>"#,
+        );
+        html.push_str(&"<p>filler</p>".repeat(10_000)); // push total well past 80KB
+        html.push_str("</body></html>");
+        assert!(html.len() > 80_000, "fixture must exceed the scan prefix");
+        let md = "recovered looking text ".repeat(50); // > THRESH, must NOT suppress
+        let b = classify_block(200, Some("text/html"), &html, Some(&md), false, THRESH)
+            .expect("Turnstile 200 interstitial must be flagged");
         assert_eq!(b.vendor, "cloudflare");
     }
 
