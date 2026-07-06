@@ -87,6 +87,7 @@ fn sample_scrape_data() -> ScrapeData {
         content_type: Some("text/html".into()),
         change_tracking: None,
         screenshot: Some("data:image/png;base64,AAAA".into()),
+        block: None,
     }
 }
 

@@ -103,6 +103,9 @@ pub struct V2ScrapeResponse {
     pub data: V2Document,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub warning: Option<String>,
+    /// Anti-bot block message (vendor + reason); present iff `success == false`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 /// Resolved proxy tier reported in `metadata.proxyUsed`.
@@ -210,11 +213,44 @@ pub async fn scrape(
     .await?;
 
     let warning = formats::unsupported_warning(&decomposed.unsupported);
+    // HTTP-error-first gate (mirrors v1 scrape.rs): a genuine tiny 4xx/5xx page
+    // is a plain HTTP error, not an anti-bot block. It must short-circuit before
+    // the block check so classify()'s StructuralFailure can't mislabel it, and
+    // so both API surfaces label the identical page the same way.
+    let status_code = data.metadata.status_code;
+    let http_error = if status_code >= 400 {
+        let body_len = [
+            data.markdown.as_deref(),
+            data.plain_text.as_deref(),
+            data.html.as_deref(),
+            data.raw_html.as_deref(),
+        ]
+        .iter()
+        .filter_map(|opt| opt.map(|t| t.len()))
+        .max()
+        .unwrap_or(0);
+        (body_len < 200).then(|| {
+            data.warning
+                .clone()
+                .unwrap_or_else(|| format!("Target returned HTTP {status_code}"))
+        })
+    } else {
+        None
+    };
+    // Anti-bot verdict from the choke: a blocked page is `success:false` with an
+    // error string, matching v1's behaviour. Read before `to_v2_document`
+    // consumes `data`.
+    let (success, error) = match (http_error, data.block.as_ref()) {
+        (Some(msg), _) => (false, Some(msg)),
+        (None, Some(b)) => (false, Some(b.message())),
+        (None, None) => (true, None),
+    };
     let doc = to_v2_document(data, &tier, Uuid::new_v4().to_string());
     Ok(Json(V2ScrapeResponse {
-        success: true,
+        success,
         data: doc,
         warning,
+        error,
     }))
 }
 
@@ -257,6 +293,74 @@ mod tests {
             req.proxy_rotation,
             Some(crw_core::proxy::ProxyRotation::RoundRobin)
         );
+    }
+
+    fn minimal_doc() -> V2Document {
+        use crw_core::types::{PageMetadata, ScrapeData};
+        let data = ScrapeData {
+            markdown: Some("# hi".into()),
+            source_hash: None,
+            html: None,
+            raw_html: None,
+            plain_text: None,
+            links: None,
+            json: None,
+            summary: None,
+            llm_usage: None,
+            chunks: None,
+            warning: None,
+            warnings: vec![],
+            render_decision: None,
+            credit_cost: 1,
+            metadata: PageMetadata {
+                title: None,
+                description: None,
+                og_title: None,
+                og_description: None,
+                og_image: None,
+                canonical_url: None,
+                source_url: "https://example.com".into(),
+                language: None,
+                status_code: 200,
+                rendered_with: None,
+                elapsed_ms: 0,
+                page_count: None,
+                source_filename: None,
+                extra: Default::default(),
+            },
+            debug_extraction: None,
+            content_type: Some("text/html".into()),
+            change_tracking: None,
+            screenshot: None,
+            block: None,
+        };
+        to_v2_document(data, "basic", "id".into())
+    }
+
+    #[test]
+    fn v2_response_blocked_serializes_success_false_with_error() {
+        let resp = V2ScrapeResponse {
+            success: false,
+            data: minimal_doc(),
+            warning: None,
+            error: Some("Blocked by anti-bot (cloudflare): CF challenge".into()),
+        };
+        let v = serde_json::to_value(&resp).unwrap();
+        assert_eq!(v["success"], false);
+        assert_eq!(v["error"], "Blocked by anti-bot (cloudflare): CF challenge");
+    }
+
+    #[test]
+    fn v2_response_clean_omits_error_key() {
+        let resp = V2ScrapeResponse {
+            success: true,
+            data: minimal_doc(),
+            warning: None,
+            error: None,
+        };
+        let v = serde_json::to_value(&resp).unwrap();
+        assert_eq!(v["success"], true);
+        assert!(v.get("error").is_none(), "error omitted on success");
     }
 
     #[test]

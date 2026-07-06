@@ -890,6 +890,8 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
         content_type: None,
         change_tracking: None,
         screenshot: None,
+        // Anti-bot verdict is stamped post-extract at the scrape choke.
+        block: None,
     })
 }
 

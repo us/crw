@@ -314,6 +314,7 @@ mod tests {
             content_type: Some("text/html".into()),
             change_tracking: None,
             screenshot: None,
+            block: None,
         }
     }
 

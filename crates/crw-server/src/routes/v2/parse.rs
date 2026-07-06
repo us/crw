@@ -170,6 +170,8 @@ pub async fn parse(
         success: true,
         data: doc,
         warning,
+        // PDF upload path is the content itself, never an anti-bot shell.
+        error: None,
     }))
 }
 

@@ -49,6 +49,14 @@ fn is_ratelimit_status(status: u16) -> bool {
     matches!(status, 429)
 }
 
+/// Should the fetch retry once through the fallback proxy? True on an explicit
+/// rate-limit status (429) OR when the `cf-mitigated` response header flags a
+/// Cloudflare challenge/block — the header is a positive signal, so a different
+/// egress IP may clear it even when served as 200/403/503. Pure for unit test.
+fn should_arm_proxy(status: u16, cf_mitigated: bool) -> bool {
+    is_ratelimit_status(status) || cf_mitigated
+}
+
 /// Is `CRW_HTTP_TLS_RELAXED_FALLBACK` enabled? When on, a fetch that fails TLS
 /// certificate verification is retried ONCE with verification disabled (small
 /// orgs frequently misconfigure their chain — e.g. a CA cert served as the leaf,
@@ -329,10 +337,17 @@ impl PageFetcher for HttpFetcher {
                 Ok(Ok(r))
                     if !use_proxy
                         && self.ratelimit_proxy_client.is_some()
-                        && is_ratelimit_status(r.status().as_u16()) =>
+                        && should_arm_proxy(
+                            r.status().as_u16(),
+                            r.headers()
+                                .get("cf-mitigated")
+                                .and_then(|v| v.to_str().ok())
+                                .map(crate::detector::is_cloudflare_mitigated_header)
+                                .unwrap_or(false),
+                        ) =>
                 {
                     tracing::warn!(
-                        "HTTP {} from {url} (origin rate-limited); retrying once via proxy (ratelimit_bypassed)",
+                        "HTTP {} from {url} (origin rate-limited or cf-mitigated); retrying once via proxy (ratelimit_bypassed)",
                         r.status()
                     );
                     drop(r);
@@ -532,6 +547,18 @@ fn decode_html_bytes(bytes: &[u8], header_charset: Option<&str>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn should_arm_proxy_truth_table() {
+        assert!(should_arm_proxy(429, false), "429 arms on its own");
+        assert!(
+            !should_arm_proxy(403, false),
+            "403 without header does not arm"
+        );
+        assert!(should_arm_proxy(403, true), "403 + cf-mitigated arms");
+        assert!(should_arm_proxy(200, true), "challenge served as 200 arms");
+        assert!(!should_arm_proxy(200, false), "clean 200 does not arm");
+    }
 
     #[test]
     fn charset_from_content_type_parses_label() {

@@ -102,61 +102,19 @@ pub async fn scrape(
         }
     }
 
-    // Anti-bot interstitial detection: if extraction produced no real content,
-    // classify the response (crw-extract::antibot, ported from crawl4ai's
-    // 3-tier model). Replaces the prior `warning.starts_with("Blocked by
-    // anti-bot")` string-match with a typed signal that surfaces the protection
-    // class (cloudflare/datadome/perimeterx/...) in the error_code.
-    let md_empty = data
-        .markdown
-        .as_deref()
-        .map(|s| s.trim().len() < 100)
-        .unwrap_or(true);
-    if md_empty {
-        let warning_blocked = data
-            .warning
-            .as_deref()
-            .map(|w| w.starts_with("Blocked by anti-bot"))
-            .unwrap_or(false);
-        let typed = if state.config.renderer.antibot.enabled {
-            let html = data
-                .raw_html
-                .as_deref()
-                .or(data.html.as_deref())
-                .unwrap_or("");
-            crw_extract::antibot::classify(Some(status_code), html)
-        } else {
-            crw_extract::antibot::AntibotResult::none()
-        };
-        // A successful screenshot is real content even when no text was requested
-        // (screenshot-only scrape has empty markdown by design). It may ONLY
-        // suppress the generic near-empty `StructuralFailure` heuristic — never a
-        // positive vendor block (Cloudflare/Datadome/GenericBlock/…), which is a
-        // real block that must still fail (and drive anti_bot credit refunds)
-        // even when we captured a screenshot of the challenge page.
-        let suppressed_by_screenshot = data.screenshot.is_some()
-            && !warning_blocked
-            && typed.signal == crw_extract::antibot::AntibotSignal::StructuralFailure;
-        if (typed.signal.is_blocked() || warning_blocked) && !suppressed_by_screenshot {
-            let error_msg = if typed.signal.is_blocked() {
-                format!(
-                    "Blocked by anti-bot ({}): {}",
-                    typed.signal.class_name(),
-                    typed.reason
-                )
-            } else {
-                data.warning
-                    .clone()
-                    .unwrap_or_else(|| "Blocked by anti-bot protection".into())
-            };
-            return Ok(Json(ApiResponse {
-                success: false,
-                data: Some(data),
-                error: Some(error_msg),
-                error_code: Some("anti_bot".into()),
-                warning: None,
-            }));
-        }
+    // Anti-bot block: the verdict is now classified ONCE at the scrape choke
+    // (`single::classify_block`) and stamped onto `data.block`, so v1/v2/crawl
+    // share one decision. `error_code` stays "anti_bot" (identical to the prior
+    // md_empty path) so credit-refund logic is unchanged.
+    if let Some(b) = data.block.clone() {
+        let error_msg = b.message();
+        return Ok(Json(ApiResponse {
+            success: false,
+            data: Some(data),
+            error: Some(error_msg),
+            error_code: Some("anti_bot".into()),
+            warning: None,
+        }));
     }
 
     // Promote data.warning to ApiResponse.warning so it's visible at top level
