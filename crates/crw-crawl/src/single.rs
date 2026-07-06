@@ -955,16 +955,18 @@ fn classify_block(
         return None;
     }
     // Modern Cloudflare Turnstile / managed challenge is frequently served with
-    // HTTP 200 and a LARGE (>80KB) body (e.g. barcodelookup.com ~118KB). Both
+    // HTTP 200 and a LARGE (~118KB) body (e.g. barcodelookup.com). Both
     // antibot::classify (size-capped, challenge-form-era patterns) and
     // detector::looks_like_cloudflare_challenge (bails at 80KB) miss it, so the
-    // interstitial leaks through as success:true. These "strong" markers live in
-    // the challenge <head> script and appear ONLY on the interstitial, so scan a
-    // bounded, char-boundary-safe prefix regardless of status/size or how much
-    // markdown got extracted (a challenge is a block even if it yields text).
+    // interstitial leaks through as success:true. These markers appear ONLY on
+    // the interstitial and the challenge script is injected near the END of the
+    // body (measured at byte ~114k of a 118k page — NOT the <head>), so scan the
+    // FULL html, not a prefix. They are fixed-case CF tokens, so a case-sensitive
+    // substring search avoids allocating a lowercased copy on every scrape.
+    // Runs before the markdown-substantial guard: a challenge is a block even if
+    // it yields boilerplate text.
     // ponytail: strong-markers-only keeps false positives ~nil; a real page that
-    // cleared the challenge no longer carries _cf_chl_opt.
-    const CF_SCAN_PREFIX: usize = 80_000;
+    // cleared the challenge no longer carries _cf_chl_opt / challenge-platform.
     const CF_STRONG_MARKERS: [&str; 5] = [
         "/cdn-cgi/challenge-platform/",
         "_cf_chl_opt",
@@ -972,12 +974,7 @@ fn classify_block(
         "cf-browser-verification",
         "__cf_chl_managed_tk__",
     ];
-    let mut end = html.len().min(CF_SCAN_PREFIX);
-    while end < html.len() && !html.is_char_boundary(end) {
-        end += 1;
-    }
-    let head = html[..end].to_ascii_lowercase();
-    if CF_STRONG_MARKERS.iter().any(|m| head.contains(m)) {
+    if CF_STRONG_MARKERS.iter().any(|m| html.contains(m)) {
         return Some(BlockOutcome {
             vendor: "cloudflare".to_string(),
             reason: "cloudflare challenge interstitial".to_string(),
@@ -1053,12 +1050,16 @@ mod tests {
         // — antibot::classify misses it and it leaked as success:true. The strong
         // marker `_cf_chl_opt` sits in the <head> script; it must be detected even
         // past the 80KB scan cap AND even when substantial markdown was extracted.
-        let mut html = String::from(
-            r#"<html><head><script>window._cf_chl_opt={cvId:"3"};</script></head><body>"#,
+        // The challenge script is injected near the END of the body (measured at
+        // byte ~114k of the real 118k page), so the marker MUST be found past any
+        // prefix cap — put it after 100KB of filler to lock in a full-html scan.
+        let mut html = String::from("<html><body>");
+        html.push_str(&"<p>filler</p>".repeat(10_000)); // ~120KB of leading filler
+        html.push_str(r#"<script>window._cf_chl_opt={cvId:"3"};</script></body></html>"#);
+        assert!(
+            html.find("_cf_chl_opt").unwrap() > 80_000,
+            "marker must sit past the old 80KB prefix to guard the regression"
         );
-        html.push_str(&"<p>filler</p>".repeat(10_000)); // push total well past 80KB
-        html.push_str("</body></html>");
-        assert!(html.len() > 80_000, "fixture must exceed the scan prefix");
         let md = "recovered looking text ".repeat(50); // > THRESH, must NOT suppress
         let b = classify_block(200, Some("text/html"), &html, Some(&md), false, THRESH)
             .expect("Turnstile 200 interstitial must be flagged");
