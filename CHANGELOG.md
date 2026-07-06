@@ -2,6 +2,36 @@
 
 All notable changes to CRW are documented here.
 
+## [0.21.0](https://github.com/us/crw/compare/v0.20.0...v0.21.0) (2026-07-06)
+
+
+### ⚠ BREAKING CHANGES
+
+* **api:** error responses now use `errorCode` instead of `error_code`. The managed API already strips the field, so managed clients are unaffected; self-hosted clients parsing `error_code` should read `errorCode`.
+
+### Features
+
+* **cli:** add crw bench FRAMES harness ([fb78bcb](https://github.com/us/crw/commit/fb78bcb57b3add83db28e5ecdbaf39ef39d067fe))
+* **cli:** bench A/B flags, concurrency, crash-safe writes ([7eb059e](https://github.com/us/crw/commit/7eb059edac5ea1f857aca34e97a83145928064ee))
+* **core:** add evidence & provenance primitives ([4a638a0](https://github.com/us/crw/commit/4a638a08e5e1ee3502854e20ae01afd885aa2353))
+* **core:** expose sourceHash on scrape responses ([b0d89f9](https://github.com/us/crw/commit/b0d89f925d98a36bb7ad3cff9b28a7ec1f5a238f))
+* **extract:** prompt-based extraction and full meta-tag metadata ([6453204](https://github.com/us/crw/commit/645320407c254768f91e75f391350035a11342ba))
+* **proxy:** retry with default country on residential CONNECT tunnel failure ([8aafdc8](https://github.com/us/crw/commit/8aafdc8a598d3e3aca0ef714749382a926f8a32a))
+* **search:** thread per-request country to result-page scraping ([be3b0d1](https://github.com/us/crw/commit/be3b0d1797d7559adc4e459b89aa23bf1c4f3832))
+* **server:** add /firecrawl/* compat namespace, own /v1 as native API ([d9cb3b8](https://github.com/us/crw/commit/d9cb3b87a8ad36c75788793b236a822596370875))
+
+
+### Bug Fixes
+
+* **api:** rename error_code response field to errorCode ([e4df682](https://github.com/us/crw/commit/e4df682b863821ab4c71752881ca7304e5a718ad))
+* **cli:** repair clap arg conflict that panicked debug builds ([f2a6b77](https://github.com/us/crw/commit/f2a6b7798fcdb6bd1c1badc420ad8bd517b6ae67))
+* **docs:** add redirect stubs for pre-flatten legacy doc URLs ([a1f29dc](https://github.com/us/crw/commit/a1f29dc9b3f4573bef96a7a4724846477aa7ab6c))
+* **extract:** unify untrusted-content fencing; nonce-fence the change judge ([192b9d7](https://github.com/us/crw/commit/192b9d742cb4455f70370c737afd29761189018a))
+* **renderer:** cap full-page screenshot height to avoid OOM ([c5f555d](https://github.com/us/crw/commit/c5f555de54b41a088e2be66fa7c2be6333c7ac5d)), closes [#161](https://github.com/us/crw/issues/161)
+* **renderer:** don't browser-render thin pages that ship no JS ([f42f14a](https://github.com/us/crw/commit/f42f14acfdde646ec2223832b138f3cf2952531c))
+* **scrape:** report anti-bot/challenge pages as blocked, not success ([d06f051](https://github.com/us/crw/commit/d06f05189f8bec911c63dada4c27d1b5daf8e478))
+* **search:** charset-aware scrape decode + per-result error + neutral answer warnings ([a9870e2](https://github.com/us/crw/commit/a9870e2faa25a23de0d004054c37a7f04f026fa8))
+
 ## [0.20.0](https://github.com/us/crw/compare/v0.19.0...v0.20.0) (2026-07-01)
 
 
