@@ -108,6 +108,21 @@ const NET_CAPTURE_MIN_BODY_SIZE: usize = 512;
 /// Per-getResponseBody command timeout.
 const NET_CAPTURE_GETBODY_TIMEOUT: Duration = Duration::from_millis(800);
 
+/// Hard ceiling (CSS px) on full-page screenshot height. `captureBeyondViewport`
+/// makes Chrome rasterize the ENTIRE scroll height into one bitmap; a very tall
+/// page (endless feed, huge article) spikes memory and OOMs a 2GB Chrome (#161).
+/// Above this we clip instead of relying on captureBeyondViewport. Same spirit as
+/// NET_CAPTURE_MAX_TOTAL_BYTES. Override: CRW_RENDERER__SCREENSHOT_MAX_HEIGHT_PX.
+const SCREENSHOT_MAX_HEIGHT_PX: f64 = 15_000.0;
+
+fn screenshot_max_height_px() -> f64 {
+    std::env::var("CRW_RENDERER__SCREENSHOT_MAX_HEIGHT_PX")
+        .ok()
+        .and_then(|v| v.trim().parse::<f64>().ok())
+        .filter(|v| *v > 0.0)
+        .unwrap_or(SCREENSHOT_MAX_HEIGHT_PX)
+}
+
 /// JavaScript injected via `Page.addScriptToEvaluateOnNewDocument` before every
 /// navigation to prevent headless browser detection by anti-bot systems.
 const STEALTH_JS: &str = r#"
@@ -2726,6 +2741,36 @@ impl CdpRenderer {
         Ok(html)
     }
 
+    /// Measure the content box (Page.getLayoutMetrics) and decide whether a
+    /// full-page capture must be clipped. `None` => page fits, take the plain
+    /// full-page shot. `Some((w,h))` => clip to these CSS-px dims. On measure
+    /// failure returns None (degrade to today's behavior).
+    // ponytail: getLayoutMetrics-fail => plain full-page path (rare; unmeasurable pages behave exactly as before the fix)
+    async fn full_page_clip(&self, conn: &CdpConnection, session_id: &str) -> Option<(f64, f64)> {
+        let m = conn
+            .send_recv(
+                "Page.getLayoutMetrics",
+                serde_json::json!({}),
+                Some(session_id),
+                self.page_timeout,
+            )
+            .await
+            .ok()?;
+        // clip coords are CSS px => prefer cssContentSize; contentSize is the older-Chrome fallback.
+        let size = m.get("cssContentSize").or_else(|| m.get("contentSize"))?;
+        let w = size.get("width").and_then(|v| v.as_f64())?;
+        let h = size.get("height").and_then(|v| v.as_f64())?;
+        let clip = screenshot_clip(w, h, screenshot_max_height_px());
+        if clip.is_some() {
+            tracing::warn!(
+                content_height = h,
+                cap = screenshot_max_height_px(),
+                "full-page screenshot clipped to height cap (#161 OOM guard)"
+            );
+        }
+        clip
+    }
+
     /// Capture a PNG via CDP `Page.captureScreenshot` with its OWN timeout,
     /// independent of the page-load `nav_budget`. This MUST run outside the
     /// nav-budget race: a full-page capture of a heavy/tall page can take
@@ -2740,14 +2785,31 @@ impl CdpRenderer {
         session_id: &str,
         full_page: bool,
     ) -> Option<String> {
+        let params = if full_page {
+            match self.full_page_clip(conn, session_id).await {
+                Some((w, h)) => serde_json::json!({
+                    "format": "png",
+                    "fromSurface": true,
+                    "captureBeyondViewport": true,
+                    "clip": { "x": 0, "y": 0, "width": w, "height": h, "scale": 1 },
+                }),
+                None => serde_json::json!({
+                    "format": "png",
+                    "captureBeyondViewport": true,
+                    "fromSurface": true,
+                }),
+            }
+        } else {
+            serde_json::json!({
+                "format": "png",
+                "captureBeyondViewport": false,
+                "fromSurface": true,
+            })
+        };
         match conn
             .send_recv(
                 "Page.captureScreenshot",
-                serde_json::json!({
-                    "format": "png",
-                    "captureBeyondViewport": full_page,
-                    "fromSurface": true,
-                }),
+                params,
                 Some(session_id),
                 self.page_timeout,
             )
@@ -2780,6 +2842,18 @@ fn is_content_stable(prev_len: u64, curr_len: u64, placeholder_gone: bool) -> bo
     curr_len.abs_diff(prev_len) <= tolerance
 }
 
+/// Pure decision for a full-page capture: given the page content box and the
+/// height cap, return `Some((width, cap))` when the page is TALLER than the cap
+/// (=> must clip to avoid OOMing Chrome) or `None` when it fits (=> keep the
+/// plain captureBeyondViewport shot, byte-identical to before).
+fn screenshot_clip(content_w: f64, content_h: f64, max_h: f64) -> Option<(f64, f64)> {
+    if content_h > max_h {
+        Some((content_w, max_h))
+    } else {
+        None
+    }
+}
+
 /// Pure decision: does the SPA poll tick indicate the page is ready to
 /// snapshot? `text_len` is the body innerText length returned from the JS
 /// eval, with `-1` signaling "selector not yet mounted". Threshold matches
@@ -2792,7 +2866,7 @@ fn is_spa_text_ready(text_len: i64) -> bool {
 mod tests {
     use super::{
         CdpRenderer, CrwError, build_auth_response, is_content_stable, is_proxy_tunnel_error,
-        lightpanda_safe_ua,
+        lightpanda_safe_ua, screenshot_clip,
     };
 
     #[test]
@@ -3008,5 +3082,16 @@ mod tests {
         assert!(safe.contains("Chrome/150"));
         // A UA without the prefix is returned unchanged (no double-strip).
         assert_eq!(lightpanda_safe_ua("Chrome/150.0.0.0"), "Chrome/150.0.0.0");
+    }
+
+    #[test]
+    fn screenshot_clip_caps_only_when_taller() {
+        // Fits under the cap => no clip, plain full-page shot is byte-identical.
+        assert_eq!(screenshot_clip(1280.0, 5000.0, 15000.0), None);
+        // Over the cap => clip to the cap height, width preserved.
+        assert_eq!(
+            screenshot_clip(1280.0, 40000.0, 15000.0),
+            Some((1280.0, 15000.0))
+        );
     }
 }
