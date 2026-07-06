@@ -2,7 +2,7 @@ use crw_core::Deadline;
 use crw_core::config::{BUILTIN_UA_POOL, ExtractionConfig, LlmConfig};
 use crw_core::error::CrwResult;
 use crw_core::types::{
-    ChangeTrackingMode, FetchResult, OutputFormat, ScrapeData, ScrapeRequest,
+    BlockOutcome, ChangeTrackingMode, FetchResult, OutputFormat, ScrapeData, ScrapeRequest,
     resolve_pinned_renderer, resolve_render_js,
 };
 use crw_renderer::FallbackRenderer;
@@ -507,6 +507,18 @@ async fn scrape_url_inner(
         }
         data
     };
+    // ROOT-CAUSE: classify the anti-bot outcome ONCE here, at the shared choke,
+    // and stamp a typed verdict onto ScrapeData so v1/v2/crawl/batch inherit one
+    // decision. Runs before the summary-mode markdown strip below (~L620) so the
+    // recovered markdown is still populated for the anti-over-trigger guard.
+    data.block = classify_block(
+        fetch_result.status_code,
+        fetch_result.content_type.as_deref(),
+        &fetch_result.html,
+        data.markdown.as_deref(),
+        fetch_result.screenshot.is_some(),
+        extraction_cfg.http_retry_threshold_bytes,
+    );
     // Surface redirect mismatch as warning. Helps detect cases like
     // northernair.ca/history.htm silently 302'ing to the homepage — extraction
     // looks "successful" but the user got the wrong page.
@@ -919,6 +931,45 @@ fn detect_block_interstitial(html: &str) -> Option<String> {
     }
 }
 
+/// Classify whether a fetched page is an anti-bot block/challenge shell. Runs
+/// ONCE at the scrape choke so every consumer (v1/v2/crawl/batch) inherits one
+/// verdict. Returns `None` for real content; `Some(BlockOutcome)` for a block.
+///
+/// Guard ordering matters:
+/// 1. PDF branch has empty `html` → would false-positive as StructuralFailure.
+/// 2. Substantial markdown is authoritative even under a soft-block status
+///    (anti-over-trigger): an accepted JS escalation guarantees markdown >=
+///    `threshold`, so a stale block-shell `html` cannot mislabel it.
+/// 3. Reuse the trusted `crw_extract::antibot::classify` detector.
+/// 4. A captured screenshot may suppress ONLY the generic near-empty
+///    StructuralFailure heuristic — never a positive vendor block.
+fn classify_block(
+    status: u16,
+    content_type: Option<&str>,
+    html: &str,
+    markdown: Option<&str>,
+    screenshot_present: bool,
+    threshold: usize,
+) -> Option<BlockOutcome> {
+    if content_type.map(|c| c.contains("pdf")).unwrap_or(false) {
+        return None;
+    }
+    if markdown.map(|m| m.trim().len()).unwrap_or(0) >= threshold {
+        return None;
+    }
+    let r = crw_extract::antibot::classify(Some(status), html);
+    if !r.signal.is_blocked() {
+        return None;
+    }
+    if screenshot_present && r.signal == crw_extract::antibot::AntibotSignal::StructuralFailure {
+        return None;
+    }
+    Some(BlockOutcome {
+        vendor: r.signal.class_name().to_string(),
+        reason: r.reason,
+    })
+}
+
 fn formats_include_json(formats: &[OutputFormat]) -> bool {
     formats.contains(&OutputFormat::Json)
 }
@@ -952,6 +1003,69 @@ fn build_byok_llm_config(req: &ScrapeRequest, server_cfg: Option<&LlmConfig>) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const THRESH: usize = 100;
+
+    #[test]
+    fn classify_block_challenge_on_cf_200() {
+        // Ticket headline: a CF challenge served with HTTP 200. TIER2 "Just a
+        // moment" does NOT run on 200, so a real TIER1 token (__cf_chl_f_tk=) is
+        // required to reach vendor=cloudflare.
+        let html = r#"<html><body><form id="challenge-form" action="/cdn-cgi/?__cf_chl_f_tk=abc"></form></body></html>"#;
+        let b = classify_block(200, Some("text/html"), html, None, false, THRESH)
+            .expect("CF challenge must be flagged");
+        assert_eq!(b.vendor, "cloudflare");
+    }
+
+    #[test]
+    fn classify_block_hard_block_on_datadome_403() {
+        let html = r#"<html><body><script src="https://captcha-delivery.com/c.js"></script></body></html>"#;
+        let b = classify_block(403, Some("text/html"), html, None, false, THRESH)
+            .expect("DataDome block must be flagged");
+        assert_eq!(b.vendor, "datadome");
+    }
+
+    #[test]
+    fn classify_block_no_block_when_markdown_substantial() {
+        // Anti-over-trigger: real recovered content is authoritative even under a
+        // soft-block status with CF markers in the (stale) html.
+        let html = r#"<html><body><form id="challenge-form" action="/cdn-cgi/?__cf_chl_f_tk=abc"></form></body></html>"#;
+        let md = "x".repeat(500);
+        assert!(classify_block(403, Some("text/html"), html, Some(&md), false, THRESH).is_none());
+    }
+
+    #[test]
+    fn classify_block_no_block_on_clean_200() {
+        let html = "<!doctype html><html><head><title>Article</title></head><body>\
+            <article><h1>Hello</h1><p>This is a normal article with plenty of \
+            meaningful text content describing something at length.</p></article></body></html>";
+        assert!(
+            classify_block(
+                200,
+                Some("text/html"),
+                html,
+                Some("# Hello\n\nreal body"),
+                false,
+                THRESH
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn classify_block_screenshot_suppresses_structural_only() {
+        // Near-empty 200 shell + screenshot => structural failure suppressed.
+        assert!(classify_block(200, Some("text/html"), "", None, true, THRESH).is_none());
+        // Positive vendor block is NOT suppressed by a screenshot.
+        let html = r#"<html><body><script src="https://captcha-delivery.com/c.js"></script></body></html>"#;
+        assert!(classify_block(403, Some("text/html"), html, None, true, THRESH).is_some());
+    }
+
+    #[test]
+    fn classify_block_pdf_skipped() {
+        // PDF branch has empty html — must not false-flag as StructuralFailure.
+        assert!(classify_block(200, Some("application/pdf"), "", None, false, THRESH).is_none());
+    }
 
     fn sample_fetch(status_code: u16, html: &str) -> FetchResult {
         FetchResult {

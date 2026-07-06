@@ -761,7 +761,12 @@ fn default_proxy_country() -> String {
 /// `escalate_on_signal = true` AND `escalation.enabled = true`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct AntibotConfig {
-    /// Run the classifier on every fetch result. Cheap; default on.
+    /// Run the classifier inside the renderer failover loop on every fetch
+    /// result. Cheap; default on. NOTE: this gates only the in-loop classifier
+    /// (see `crw-renderer`); the API-surface block verdict is classified
+    /// separately and unconditionally at the scrape choke
+    /// (`crw_crawl::single::classify_block`) and is not suppressed by this flag.
+    /// To disable in-loop escalation, use `escalate_in_failover`.
     #[serde(default = "default_true")]
     pub enabled: bool,
     /// When the classifier returns a non-`None` signal, advance to the next

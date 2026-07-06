@@ -561,6 +561,8 @@ fn build_scrape_data(
         change_tracking: None,
         // PDFs are never screenshotted (binary doc path).
         screenshot: None,
+        // PDFs are the content, never an anti-bot shell.
+        block: None,
     }
 }
 
