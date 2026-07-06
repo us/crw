@@ -605,3 +605,143 @@ async fn ss_capture_screenshot_returns_png() {
     guard.release().await.expect("release");
     pool.shutdown(Duration::from_secs(5)).await;
 }
+
+// ---------------------------------------------------------------------------
+// SS — tall full-page screenshot smoke: proves the #161 OOM-guard params
+// (clip derived from Page.getLayoutMetrics) are accepted by Chrome and still
+// return a PNG, for a page whose scroll height exceeds the 15000px cap that
+// would otherwise make `captureBeyondViewport` rasterize the entire page.
+// Mirrors `ss_capture_screenshot_returns_png`; drives the raw CDP calls since
+// `capture_screenshot`/`full_page_clip` are private methods on `CdpRenderer`.
+// ---------------------------------------------------------------------------
+#[tokio::test]
+#[ignore]
+async fn ss_full_page_tall_returns_png() {
+    let Some(base) = require_real_chrome() else {
+        return;
+    };
+    let ws = resolve_ws(&base).await;
+    let pool = build_pool(ws, 1);
+
+    let guard = pool.acquire().await.expect("acquire");
+    let create = guard
+        .conn
+        .send_recv(
+            "Target.createTarget",
+            json!({ "url": "about:blank", "browserContextId": guard.ctx_id }),
+            None,
+            CDP_TIMEOUT,
+        )
+        .await
+        .expect("createTarget");
+    let target_id = create
+        .get("targetId")
+        .and_then(|v| v.as_str())
+        .expect("targetId")
+        .to_string();
+    guard.record_target(target_id.clone());
+
+    let attach = guard
+        .conn
+        .send_recv(
+            "Target.attachToTarget",
+            json!({ "targetId": target_id, "flatten": true }),
+            None,
+            CDP_TIMEOUT,
+        )
+        .await
+        .expect("attachToTarget");
+    let sid = attach
+        .get("sessionId")
+        .and_then(|v| v.as_str())
+        .expect("sessionId")
+        .to_string();
+
+    guard
+        .conn
+        .send_recv("Page.enable", json!({}), Some(&sid), CDP_TIMEOUT)
+        .await
+        .expect("Page.enable");
+    let events_rx = guard.conn.subscribe();
+    guard
+        .conn
+        .send_recv(
+            "Page.navigate",
+            json!({
+                "url": "data:text/html,<body style=\"margin:0\"><div style=\"height:40000px;background:linear-gradient(red,blue)\"></div></body>"
+            }),
+            Some(&sid),
+            CDP_TIMEOUT,
+        )
+        .await
+        .expect("Page.navigate");
+
+    let mut rx = events_rx;
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            panic!("loadEventFired timeout");
+        }
+        match tokio::time::timeout(remaining, rx.recv()).await {
+            Err(_) => panic!("loadEventFired timeout"),
+            Ok(Err(_)) => continue,
+            Ok(Ok(ev)) => {
+                if ev.method == "Page.loadEventFired" && ev.session_id.as_deref() == Some(&sid) {
+                    break;
+                }
+            }
+        }
+    }
+
+    let metrics = guard
+        .conn
+        .send_recv("Page.getLayoutMetrics", json!({}), Some(&sid), CDP_TIMEOUT)
+        .await
+        .expect("Page.getLayoutMetrics");
+    let content_size = metrics
+        .get("cssContentSize")
+        .or_else(|| metrics.get("contentSize"))
+        .expect("cssContentSize/contentSize");
+    let width = content_size
+        .get("width")
+        .and_then(|v| v.as_f64())
+        .expect("width");
+    let height = content_size
+        .get("height")
+        .and_then(|v| v.as_f64())
+        .expect("height");
+    assert!(
+        height > 15000.0,
+        "test page must exceed the 15000px cap, got {height}"
+    );
+
+    let resp = guard
+        .conn
+        .send_recv(
+            "Page.captureScreenshot",
+            json!({
+                "format": "png",
+                "fromSurface": true,
+                "captureBeyondViewport": true,
+                "clip": { "x": 0, "y": 0, "width": width, "height": 15000.0, "scale": 1 },
+            }),
+            Some(&sid),
+            CDP_TIMEOUT,
+        )
+        .await
+        .expect("Page.captureScreenshot");
+    let b64 = resp
+        .get("data")
+        .and_then(|v| v.as_str())
+        .expect("captureScreenshot returned `data`");
+    assert!(!b64.is_empty(), "screenshot base64 must be non-empty");
+    assert!(
+        b64.starts_with("iVBORw0KGgo"),
+        "screenshot must be a PNG (base64 PNG magic prefix), got {:?}",
+        &b64[..b64.len().min(16)]
+    );
+
+    guard.release().await.expect("release");
+    pool.shutdown(Duration::from_secs(5)).await;
+}
