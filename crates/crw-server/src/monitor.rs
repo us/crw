@@ -4,6 +4,12 @@
 //! from the already-built [`AppState`], then spawns the background scheduler.
 //! All monitor endpoints/scheduling live behind `#[cfg(feature = "monitor")]`
 //! so the default open-core build never links the SQLite/HMAC/cron stack.
+//!
+//! ponytail: `boot()` is NOT called from server startup today — it is the
+//! wiring stub for a deferred self-host feature (no HTTP/CLI surface, email is
+//! an `EmailStub`). A `--features monitor` build links the library but does not
+//! run a scheduler until something calls this. Wire it to a config toggle +
+//! a minimal `/v1/monitor` route only when a self-hoster actually asks. See #142.
 
 use crate::state::AppState;
 use crw_monitor::config::MonitorConfig;
