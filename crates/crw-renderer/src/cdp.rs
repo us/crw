@@ -2448,10 +2448,22 @@ impl CdpRenderer {
         // traffic settles before body innerText hits the threshold.
         let idle_pump = run_network_idle_pump(conn.subscribe(), net_tracker.clone(), &session_id);
 
+        // A screenshot must render images/media/fonts; the default blocklist
+        // strips them (fine for markdown, but leaves broken-image placeholders
+        // in the capture). Relax resource-type blocking for screenshot
+        // requests; host blocks (analytics/trackers) still apply.
+        let screenshot_blocklist;
+        let blocklist: &Blocklist = if crate::current_screenshot_req().is_some() {
+            screenshot_blocklist = self.blocklist.for_screenshot();
+            &screenshot_blocklist
+        } else {
+            &self.blocklist
+        };
+
         let outcome = match (intercept_active, auth_active) {
             (true, true) => {
                 let intercept_pump =
-                    run_intercept_pump(conn, conn.subscribe(), &self.blocklist, &session_id);
+                    run_intercept_pump(conn, conn.subscribe(), blocklist, &session_id);
                 let auth_pump = run_auth_pump(
                     conn,
                     conn.subscribe(),
@@ -2478,7 +2490,7 @@ impl CdpRenderer {
             }
             (true, false) => {
                 let intercept_pump =
-                    run_intercept_pump(conn, conn.subscribe(), &self.blocklist, &session_id);
+                    run_intercept_pump(conn, conn.subscribe(), blocklist, &session_id);
                 tokio::select! {
                     biased;
                     res = work => res,
