@@ -73,8 +73,12 @@ pub fn router() -> Router<AppState> {
             post(search::search).fallback(method_not_allowed),
         )
         .route(
+            // Batch submits carry up to `max_batch_urls` URLs — needs more
+            // than the global 1 MB JSON cap (innermost DefaultBodyLimit wins).
             "/v2/batch/scrape",
-            post(batch::start_batch).fallback(method_not_allowed),
+            post(batch::start_batch)
+                .layer(DefaultBodyLimit::max(batch::MAX_BATCH_BODY_BYTES))
+                .fallback(method_not_allowed),
         )
         .route(
             "/v2/batch/scrape/{id}",

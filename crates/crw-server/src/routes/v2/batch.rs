@@ -6,6 +6,7 @@ use axum::Json;
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{Path, Query, State};
 use axum::http::HeaderMap;
+use futures::StreamExt;
 use serde::Serialize;
 use serde_json::Value;
 use uuid::Uuid;
@@ -17,6 +18,11 @@ use super::crawl::{PageQuery, base_url};
 use super::scrape::{V2ScrapeRequest, to_internal};
 use crate::error::AppError;
 use crate::state::AppState;
+
+/// Per-route body cap for batch submits: a 10k-URL list at a few hundred
+/// bytes per URL overflows the global 1 MB JSON cap; 8 MB keeps 10k long
+/// URLs submittable while staying DoS-bounded.
+pub const MAX_BATCH_BODY_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -50,6 +56,13 @@ pub async fn start_batch(
             "`urls` must contain at least one URL".into(),
         )));
     }
+    let max_urls = state.config.crawler.max_batch_urls;
+    if urls.len() > max_urls {
+        return Err(AppError::from(CrwError::InvalidRequest(format!(
+            "`urls` exceeds the maximum of {max_urls} URLs per batch (got {})",
+            urls.len()
+        ))));
+    }
     let ignore_invalid = obj
         .get("ignoreInvalidURLs")
         .and_then(Value::as_bool)
@@ -68,22 +81,26 @@ pub async fn start_batch(
     template.url = String::new();
 
     // Partition URLs into valid / invalid (SSRF-checked, same as v1 scrape).
+    // Validation resolves DNS per URL — run it with bounded concurrency so a
+    // 10k-URL batch submits in seconds instead of minutes, preserving input
+    // order via `buffered`.
+    const VALIDATE_CONCURRENCY: usize = 64;
+    let checks = futures::stream::iter(urls.into_iter().map(|u| async move {
+        let ok = match url::Url::parse(&u) {
+            Ok(parsed) => crw_core::url_safety::validate_safe_url_resolved(&parsed)
+                .await
+                .is_ok(),
+            Err(_) => false,
+        };
+        (u, ok)
+    }))
+    .buffered(VALIDATE_CONCURRENCY)
+    .collect::<Vec<_>>()
+    .await;
     let mut valid = Vec::new();
     let mut invalid = Vec::new();
-    for u in urls {
-        match url::Url::parse(&u) {
-            Ok(parsed) => {
-                if crw_core::url_safety::validate_safe_url_resolved(&parsed)
-                    .await
-                    .is_ok()
-                {
-                    valid.push(u);
-                } else {
-                    invalid.push(u);
-                }
-            }
-            Err(_) => invalid.push(u),
-        }
+    for (u, ok) in checks {
+        if ok { valid.push(u) } else { invalid.push(u) }
     }
     if valid.is_empty() {
         return Err(AppError::from(CrwError::InvalidRequest(
