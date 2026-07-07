@@ -184,14 +184,20 @@ pub async fn cancel_crawl(
         .get_mut(&id)
         .ok_or_else(|| CrwError::NotFound(format!("Crawl job {id} not found")))?;
     let status = job.rx.borrow().status;
-    if matches!(status, CrawlStatus::Completed | CrawlStatus::Failed) {
+    if matches!(
+        status,
+        CrawlStatus::Completed | CrawlStatus::Failed | CrawlStatus::Cancelled
+    ) {
         return Err(AppError(CrwError::InvalidRequest(
             "Crawl job already finished".into(),
         )));
     }
+    // Abort, then mark terminal — otherwise polls return "scraping" until
+    // TTL eviction and SDK waiters hang.
     if let Some(handle) = job.abort_handle.take() {
         handle.abort();
     }
+    job.tx.send_modify(|st| st.status = CrawlStatus::Cancelled);
     Ok(Json(serde_json::json!({
         "success": true,
         "status": "cancelled",

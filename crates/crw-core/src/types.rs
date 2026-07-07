@@ -978,6 +978,11 @@ pub enum CrawlStatus {
     Completed,
     #[serde(rename = "failed")]
     Failed,
+    /// Job was cancelled via DELETE. Terminal: pollers must stop and TTL
+    /// cleanup must evict — keep every `matches!(.., Completed | Failed)`
+    /// terminal-state check in sync when touching this enum.
+    #[serde(rename = "cancelled")]
+    Cancelled,
 }
 
 /// GET /v1/crawl/:id response body.

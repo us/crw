@@ -231,6 +231,10 @@ pub async fn run(mut args: CrawlArgs) -> Result<(), CmdError> {
                 }
                 return Err(CmdError::code_only(1));
             }
+            CrawlStatus::Cancelled => {
+                eprintln!("Crawl cancelled after {} pages", state.completed);
+                break;
+            }
             CrawlStatus::InProgress => {}
         }
     }
