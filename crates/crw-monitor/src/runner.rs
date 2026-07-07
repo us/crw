@@ -422,7 +422,10 @@ impl EngineSource {
         loop {
             {
                 let state = rx.borrow();
-                if matches!(state.status, CrawlStatus::Completed | CrawlStatus::Failed) {
+                if matches!(
+                    state.status,
+                    CrawlStatus::Completed | CrawlStatus::Failed | CrawlStatus::Cancelled
+                ) {
                     let data = state.data.clone();
                     let failed = state.status == CrawlStatus::Failed;
                     let err = state.error.clone();
