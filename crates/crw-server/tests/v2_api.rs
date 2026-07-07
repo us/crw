@@ -202,3 +202,59 @@ async fn firecrawl_prefix_unknown_route_404() {
     let r = s.post("/firecrawl/v2/nope").json(&json!({})).await;
     r.assert_status(StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn v2_batch_url_cap_400() {
+    // Sanity cap: max_batch_urls rejects oversized lists BEFORE any
+    // per-URL validation work (the check is O(1) on the list length).
+    let config: AppConfig = toml::from_str("[crawler]\nmax_batch_urls = 5").unwrap();
+    let state = AppState::new(config).expect("AppState::new failed");
+    let s = TestServer::new(create_app(state));
+    let urls: Vec<String> = (0..6).map(|i| format!("https://example.com/{i}")).collect();
+    let r = s
+        .post("/v2/batch/scrape")
+        .json(&json!({ "urls": urls }))
+        .await;
+    r.assert_status(StatusCode::BAD_REQUEST);
+    let body: Value = r.json();
+    assert_eq!(body["success"], false);
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap_or("")
+            .contains("maximum of 5"),
+        "error should name the cap: {body}"
+    );
+}
+
+#[tokio::test]
+async fn v2_batch_cancel_flips_status_to_cancelled() {
+    // Cancel must move the job to a terminal "cancelled" state — previously it
+    // only aborted the task, leaving polls at "scraping" until TTL eviction
+    // (SDK waiters hung). Start the job at the state layer with a TEST-NET-1
+    // blackhole IP so it deterministically stays InProgress until we cancel.
+    let config: AppConfig = toml::from_str("").unwrap();
+    let state = AppState::new(config).expect("AppState::new failed");
+    let s = TestServer::new(create_app(state.clone()));
+
+    let template = crw_core::types::ScrapeRequest::default();
+    let id = state
+        .start_batch_job(vec!["http://192.0.2.1/".into()], template)
+        .await;
+
+    // Cancel via the public route.
+    let r = s.delete(&format!("/v2/batch/scrape/{id}")).await;
+    r.assert_status_ok();
+    let body: Value = r.json();
+    assert_eq!(body["status"], "cancelled");
+
+    // Status poll now reports the terminal state (not "scraping").
+    let g = s.get(&format!("/v2/batch/scrape/{id}")).await;
+    g.assert_status_ok();
+    let gb: Value = g.json();
+    assert_eq!(gb["status"], "cancelled");
+
+    // Re-cancel is rejected as already finished.
+    let r2 = s.delete(&format!("/v2/batch/scrape/{id}")).await;
+    r2.assert_status(StatusCode::BAD_REQUEST);
+}
