@@ -88,6 +88,19 @@ impl Blocklist {
         }
     }
 
+    /// Screenshot-safe variant: drop resource-type blocking (Image/Media/Font
+    /// etc.) so the capture renders images, web fonts, and video posters —
+    /// blocking them is fine for markdown extraction but leaves broken-image
+    /// placeholders in a screenshot. Keeps host_substrings (analytics/tracker
+    /// hosts serve no visible pixels) and never blocks stylesheets.
+    pub fn for_screenshot(&self) -> Self {
+        Self {
+            resource_types: Vec::new(),
+            host_substrings: self.host_substrings.clone(),
+            block_stylesheets: false,
+        }
+    }
+
     /// Decide whether a request should be blocked. `resource_type` and `url`
     /// are the values reported by `Fetch.requestPaused`.
     pub fn should_block(&self, resource_type: &str, url: &str) -> Option<BlockReason> {
@@ -135,6 +148,23 @@ mod tests {
         assert_eq!(
             bl.should_block("Font", "https://example.com/x.woff2"),
             Some(BlockReason::ResourceType),
+        );
+    }
+
+    #[test]
+    fn for_screenshot_allows_images_but_keeps_host_blocks() {
+        let bl = Blocklist::defaults().for_screenshot();
+        // Visual resources must load so the capture isn't full of broken images.
+        assert_eq!(
+            bl.should_block("Image", "https://example.com/cat.jpg"),
+            None
+        );
+        assert_eq!(bl.should_block("Font", "https://example.com/x.woff2"), None);
+        assert_eq!(bl.should_block("Media", "https://example.com/v.mp4"), None);
+        // Tracker hosts still get blocked (they render nothing visible).
+        assert_eq!(
+            bl.should_block("Script", "https://www.google-analytics.com/g/collect"),
+            Some(BlockReason::Host),
         );
     }
 
