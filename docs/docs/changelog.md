@@ -8,6 +8,14 @@ The source of truth is the repository root changelog. Do not edit this docs page
 
 All notable changes to CRW are documented here.
 
+## [0.21.1](https://github.com/us/crw/compare/v0.21.0...v0.21.1) (2026-07-07)
+
+
+### Bug Fixes
+
+* **scrape:** detect modern Cloudflare Turnstile 200 interstitial ([ce3771f](https://github.com/us/crw/commit/ce3771fbbe5f7fd3da1ea90761594ba3a2032633)), closes [#350](https://github.com/us/crw/issues/350)
+* **scrape:** scan full html for CF challenge markers, not an 80KB prefix ([99fe2b2](https://github.com/us/crw/commit/99fe2b2d6dd3d998d9e3a3d8c30f91b032b43671)), closes [#350](https://github.com/us/crw/issues/350)
+
 ## [0.21.0](https://github.com/us/crw/compare/v0.20.0...v0.21.0) (2026-07-06)
 
 
