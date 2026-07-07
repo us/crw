@@ -5,7 +5,7 @@
 # under QEMU for linux/arm64, which emulated the *entire* Rust compile and took
 # ~2h per release. Cross-compiling on the native runner brings arm64 back to
 # minutes; only the tiny runtime layer (ca-certificates) still touches QEMU.
-FROM --platform=$BUILDPLATFORM rust:1.93-bookworm AS builder
+FROM --platform=$BUILDPLATFORM rust:1.93-bookworm@sha256:7c4ae649a84014c467d79319bbf17ce2632ae8b8be123ac2fb2ea5be46823f31 AS builder
 
 # Provided automatically by buildx: amd64 | arm64.
 ARG TARGETARCH
@@ -51,7 +51,7 @@ RUN set -eux; \
        "target/${RUST_TARGET}/release/crw-server" \
        "target/${RUST_TARGET}/release/crw-mcp" /out/
 
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df
 
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
