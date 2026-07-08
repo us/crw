@@ -36,7 +36,9 @@ API; pick accuracy or latency per workload.
 ## Reproduce it yourself
 
 The canonical harness is `bench/diagnose_3way.py` — it matches truth text against
-`md + strip_md_links(md)`, applied identically to all three tools (a fairness control).
+`md + strip_md_links(md)`, applied identically to all three tools (a fairness control). It runs
+crw locally; the competitor steps below assume you have Crawl4AI and Firecrawl running locally
+too (adjust the paths/containers to your setup — they reflect ours).
 
 ```bash
 cd ~/coding/crw/crw-opencore
