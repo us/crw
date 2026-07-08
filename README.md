@@ -15,9 +15,16 @@
 </p>
 
 <p align="center">
+  <b>Beats Firecrawl and Crawl4AI on truth-recall and tail latency — measured on Firecrawl's own public dataset.</b>
+</p>
+
+<p align="center">
   <a href="https://fastcrw.com/register"><img src="https://img.shields.io/badge/Start%20free-500%20credits%2C%20no%20card-7c3aed?style=for-the-badge" alt="Start free"></a>
-  &nbsp;
-  <a href="https://docs.fastcrw.com"><img src="https://img.shields.io/badge/Docs-docs.fastcrw.com-24292f?style=for-the-badge" alt="Docs"></a>
+</p>
+<p align="center">
+  <a href="https://docs.fastcrw.com/quickstart/">Quickstart</a> ·
+  <a href="https://docs.fastcrw.com">Docs</a> ·
+  <a href="https://fastcrw.com/pricing">Pricing</a>
 </p>
 
 <p align="center">
@@ -42,21 +49,6 @@
 </p>
 
 ---
-
-## What you get
-
-- **Any URL → LLM-ready output.** Clean markdown, HTML, links, or schema-validated JSON — no HTML soup, no boilerplate.
-- **One API, six operations.** `search` the web and `scrape` a page, or `map` / `crawl` / `extract` / `monitor` a whole site — [see below](#core-operations).
-- **Drop-in Firecrawl compatibility.** Migrate existing Firecrawl code by changing one base URL.
-- **Managed or self-hosted, same API.** No exit cost — develop against the free open-source binary, ship to the cloud, or the reverse. Nothing changes but the base URL.
-
-## Why fastCRW?
-
-- **Better** — the highest **truth-recall** (how much of the real page content it captures): **63.7%** on the 819 labeled URLs in Firecrawl's public 1,000-URL dataset, vs Firecrawl **56.0%** and Crawl4AI **60.0%** — and it recovers **34 pages both miss**.
-- **Faster** — the lowest **p90 tail latency** (the slowest 10% of requests) of the three: **4348 ms** in fast mode, vs 4754 / 6937 ms.
-- **Lighter** — one static binary, **~50 MB RAM idle**. No Redis, no Node, no Chromium heap in the request path — it runs on a $5 VPS.
-
-Two modes, one config toggle: *recall mode* maximizes accuracy, *fast mode* minimizes the latency tail. Search, map, and crawl run on the same engine — built-in web search (SearXNG, a free self-hostable search backend), so there's **no separate search vendor and no per-query search-API bill**. [See the full run →](BENCHMARKS.md)
 
 ## Quickstart — your first scrape in 30 seconds
 
@@ -119,7 +111,25 @@ This domain is for use in documentation examples without needing permission. Avo
 Over cURL you get the same fields wrapped in `{"success": true, "data": { … }}`.
 
 Prefer no SDK? Every example works over plain HTTP against `https://api.fastcrw.com`.
+That first scrape spent 1 of your 500 free credits — [see plans →](https://fastcrw.com/pricing) when you need more.
 Next: [Quickstart docs →](https://docs.fastcrw.com/quickstart/) · [API reference →](https://docs.fastcrw.com/#rest-api)
+
+## Why fastCRW?
+
+- **Better** — the highest **truth-recall** (how much of the real page content it captures): **63.7%** on the 819 labeled URLs in Firecrawl's public 1,000-URL dataset, vs Firecrawl **56.0%** and Crawl4AI **60.0%** — and it recovers **34 pages both miss**.
+- **Faster** — the lowest **p90 tail latency** (the slowest 10% of requests) of the three: **4348 ms** in fast mode, vs 4754 / 6937 ms.
+- **Lighter** — one static binary, **~50 MB RAM idle**. No Redis, no Node, no Chromium heap in the request path — it runs on a $5 VPS.
+
+Two modes, one config toggle: *recall mode* maximizes accuracy, *fast mode* minimizes the latency tail. Search, map, and crawl run on the same engine — built-in web search (SearXNG, a free self-hostable search backend), so there's **no separate search vendor and no per-query search-API bill**. [See the full run →](BENCHMARKS.md)
+
+Open source (AGPL-3.0), passing [OpenSSF Best Practices](https://www.bestpractices.dev/projects/13533), and published on PyPI · npm · crates.io · Homebrew · APT — with a benchmark you can rerun yourself, not marketing math.
+
+## What you get
+
+- **Any URL → LLM-ready output.** Clean markdown, HTML, links, or schema-validated JSON — no HTML soup, no boilerplate.
+- **One API, six operations.** `search` the web and `scrape` a page, or `map` / `crawl` / `extract` / `monitor` a whole site — [see below](#core-operations).
+- **Drop-in Firecrawl compatibility.** Migrate existing Firecrawl code by changing one base URL.
+- **Managed or self-hosted, same API.** No exit cost — develop against the free open-source binary, ship to the cloud, or the reverse. Nothing changes but the base URL.
 
 ## Use it in your AI agent (MCP)
 
@@ -164,6 +174,7 @@ npx skills add -g us/crw         # global (user-level)
 | **Extract** | `POST /v1/scrape` `formats:["json"]` | Structured fields from a JSON Schema |
 | **Monitor** | `POST /v1/change-tracking/diff` | Diff a page vs a snapshot — the change-tracking primitive behind scheduled [monitoring](https://docs.fastcrw.com/monitoring/) |
 
+SDK return shapes: `scrape` / `extract` → one object · `map` → list of URLs · `crawl` / `search` → list of result objects.
 Full reference: [docs.fastcrw.com/#rest-api](https://docs.fastcrw.com/#rest-api).
 
 ## SDKs & integrations
@@ -181,8 +192,17 @@ client.scrape("https://example.com", formats=["markdown", "links"])
 # .search() .map() .crawl() .extract() — one method per operation in the table above
 ```
 
-The TypeScript client (`crw-sdk`) exposes the same methods — typed and zero-dependency. The
-cloud client is pure `fetch`, so it runs on Node 18+, Bun, Deno, and edge runtimes.
+```typescript
+import { CrwClient } from "crw-sdk";
+
+const crw = new CrwClient();  // reads CRW_API_KEY; new CrwClient({ apiUrl }) for self-host
+await crw.scrape("https://example.com", { formats: ["markdown", "links"] });
+// .search() .map() .crawl() .extract() — same methods, all typed
+```
+
+The TypeScript client is **typed and zero-dependency**; its cloud path is pure `fetch`, so it runs
+on Node 18+, Bun, Deno, and edge runtimes. The Python client is **synchronous** — wrap long calls
+like `crawl()` / `extract()` in `asyncio.to_thread` inside async code.
 
 LangChain and CrewAI integrations ship in the package:
 
@@ -197,12 +217,12 @@ from crw.integrations.crewai import CrwScrapeWebsiteTool   # pip install crw[cre
 
 Same binary, same API in both modes — pick a lane, switch anytime by changing the base URL.
 
-| | **Managed — `api.fastcrw.com`** | **Self-host (free)** |
+| | **Managed — `api.fastcrw.com`** &nbsp;·&nbsp; _most teams start here_ | **Self-host (free)** |
 |---|---|---|
-| Best when | You want zero infra, a global proxy network, a dashboard, and usage metering | You want full data residency, your own proxy strategy, and AGPL is fine |
+| Best when | You want zero infra, a global proxy network, a dashboard, and usage metering | You have data-residency / compliance needs, want your own proxy strategy, and can operate the service |
 | Start | [Sign up](https://fastcrw.com/register) — 500 free credits, no card | `docker run -p 3000:3000 ghcr.io/us/crw` |
 | Search | Managed backend | Bundled SearXNG sidecar |
-| Cost | Free tier, then paid plans from **$11/mo** — [pricing](https://fastcrw.com/pricing) | $0 + your hosting bill |
+| Cost | Free tier, then paid plans from **$11/mo** — [pricing](https://fastcrw.com/pricing) | $0 license — you run and pay for the infra |
 | License | You call an API over the network — no copyleft on your code | AGPL-3.0 — copyleft applies if you modify and expose the service, or embed the engine in-process |
 
 ### Self-host in one command
@@ -231,13 +251,14 @@ strips process-spawn, JIT-warmup, and browser-navigation overhead out of every o
 
 The numbers above come from Firecrawl's own public 1,000-URL dataset, run identically across all
 three tools with the same matcher — a fairness control, not a looser number. Reproducible, not
-marketing math. Full table, methodology, and one-command repro: **[BENCHMARKS.md](BENCHMARKS.md)** ·
+marketing math. Full table, methodology, and the repro harness: **[BENCHMARKS.md](BENCHMARKS.md)** ·
 [fastcrw.com/benchmarks](https://fastcrw.com/benchmarks).
 
 ## Migrating from Firecrawl
 
 New projects use native `/v1`. Existing Firecrawl v2 SDK code works against the
-`/firecrawl/v2/*` compatibility layer — often just a base-URL swap:
+`/firecrawl/v2/*` compatibility layer — often just a base-URL swap (point your existing
+Firecrawl client at `api.fastcrw.com`, the address it sends requests to):
 
 ```python
 from firecrawl import FirecrawlApp
