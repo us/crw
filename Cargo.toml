@@ -127,7 +127,7 @@ phf = { version = "0.11", features = ["macros"] }
 # Test dependencies
 tokio-test = "0.4"
 wiremock = "0.6"
-axum-test = "19"
+axum-test = "21"
 proptest = "1"
 insta = { version = "1", features = ["json"] }
 
