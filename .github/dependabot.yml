@@ -8,6 +8,17 @@ updates:
     groups:
       cargo-minor-patch:
         update-types: ["minor", "patch"]
+    # Direct bumps that can never resolve: a parent crate pins the old major and
+    # its API type flows into our code. The real fix arrives when the PARENT
+    # ships a new release, so watch for a `scraper` / `pdf-inspector` bump PR and
+    # remove the matching ignore entry then.
+    ignore:
+      # scraper 0.25 (latest) pins ego-tree 0.10; NodeId comes from scraper's
+      # ElementRef, so a direct ego-tree 0.11 bump is a type mismatch.
+      - dependency-name: "ego-tree"
+      # pdf-inspector 0.1.3 (latest, github.com/firecrawl/pdf-inspector) pins
+      # lopdf 0.41; a direct bump leaves 0.41 in the tree anyway.
+      - dependency-name: "lopdf"
 
   - package-ecosystem: "github-actions"
     directory: "/"
