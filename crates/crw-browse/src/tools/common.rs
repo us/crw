@@ -5,7 +5,7 @@
 
 use std::time::Duration;
 
-use rmcp::model::{CallToolResult, Content};
+use rmcp::model::{CallToolResult, ContentBlock};
 use serde_json::Value;
 
 use crate::errors::{ErrorCode, ErrorResponse, RetryHint};
@@ -123,11 +123,11 @@ pub(crate) async fn resolve_ref(
 }
 
 pub(crate) fn ok_result<T: serde::Serialize>(resp: &ToolResponse<T>) -> CallToolResult {
-    CallToolResult::success(vec![Content::text(resp.to_json())])
+    CallToolResult::success(vec![ContentBlock::text(resp.to_json())])
 }
 
 pub(crate) fn err_result(err: &ErrorResponse) -> CallToolResult {
-    let mut result = CallToolResult::success(vec![Content::text(err.to_json())]);
+    let mut result = CallToolResult::success(vec![ContentBlock::text(err.to_json())]);
     result.is_error = Some(true);
     result
 }

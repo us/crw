@@ -288,7 +288,7 @@ fn parse_call_result(result: &CallToolResult) -> (bool, Option<Value>, Option<Va
     let ok = !is_error;
     let mut payload: Option<Value> = None;
     if let Some(first) = result.content.first()
-        && let Some(text) = first.raw.as_text().map(|t| &t.text)
+        && let Some(text) = first.as_text().map(|t| &t.text)
     {
         payload = serde_json::from_str::<Value>(text).ok();
     }
@@ -310,7 +310,7 @@ mod tests {
         result
             .content
             .first()
-            .and_then(|c| c.raw.as_text().map(|t| t.text.clone()))
+            .and_then(|c| c.as_text().map(|t| t.text.clone()))
             .unwrap_or_default()
     }
 

@@ -163,7 +163,7 @@ async fn get_api_key() -> Result<String, SetupError> {
 
                 let choice = Select::with_theme(&ui::select_style())
                     .with_prompt("  What would you like to do?")
-                    .items(&[
+                    .items([
                         "Try again",
                         "Get a new key (opens browser)",
                         "Continue anyway (key not verified)",
@@ -191,7 +191,7 @@ async fn get_api_key() -> Result<String, SetupError> {
 
                 let choice = Select::with_theme(&ui::select_style())
                     .with_prompt("  What would you like to do?")
-                    .items(&["Retry verification", "Continue anyway (key not verified)"])
+                    .items(["Retry verification", "Continue anyway (key not verified)"])
                     .default(0)
                     .interact()
                     .map_err(ui::handle_dialoguer_error)?;
