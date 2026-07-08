@@ -14,7 +14,7 @@ use crate::pricing;
 use crw_core::config::LlmConfig;
 use crw_core::error::{CrwError, CrwResult};
 use crw_core::types::LlmUsage;
-use rand::Rng;
+use rand::RngExt;
 use std::sync::OnceLock;
 use std::time::Duration;
 

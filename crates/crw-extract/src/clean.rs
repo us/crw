@@ -210,14 +210,15 @@ pub fn clean_html(
         }));
     }
 
-    let mut result = rewrite_str(
-        html,
-        RewriteStrSettings {
-            element_content_handlers: handlers,
-            ..Default::default()
-        },
-    )
-    .map_err(|e| e.to_string())?;
+    // lol_html 3 made RewriteStrSettings fields private; build via the
+    // append builder. strict/enable_esi_tags keep their `true` defaults, same
+    // as lol_html 2's Default.
+    let settings = handlers
+        .into_iter()
+        .fold(RewriteStrSettings::new(), |s, h| {
+            s.append_element_content_handler(h)
+        });
+    let mut result = rewrite_str(html, settings).map_err(|e| e.to_string())?;
 
     // Phase 2: If include_tags specified, only keep content matching those selectors.
     if !include_tags.is_empty() {
