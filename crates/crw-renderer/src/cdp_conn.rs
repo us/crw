@@ -76,6 +76,40 @@ fn classify_ws_error(e: &tokio_tungstenite::tungstenite::Error) -> &'static str 
     }
 }
 
+/// Rewrite a `ws://host:port/...` URL so its host is an IP literal.
+///
+/// Chromium 148+ guards the DevTools WebSocket against DNS-rebinding by
+/// validating the `Host` header: only `localhost` and IP literals pass, so a
+/// connect over a docker service name (`ws://chrome:9222/...`) is rejected with
+/// an HTTP handshake error. tungstenite derives the Host header from the URL
+/// authority, so resolving the hostname to an IP here makes the header an IP
+/// literal Chromium accepts. Best-effort: on any parse/DNS failure (or a host
+/// that is already an IP), the input is returned unchanged.
+async fn resolve_ws_host_to_ip(ws_url: &str) -> String {
+    let Ok(parsed) = url::Url::parse(ws_url) else {
+        return ws_url.to_string();
+    };
+    let Some(host) = parsed.host_str().map(str::to_string) else {
+        return ws_url.to_string();
+    };
+    // Already an IP literal (v4, or v6 which url reports without brackets).
+    if host.parse::<std::net::IpAddr>().is_ok() {
+        return ws_url.to_string();
+    }
+    let port = parsed.port().unwrap_or(9222);
+    let Ok(mut addrs) = tokio::net::lookup_host((host.as_str(), port)).await else {
+        return ws_url.to_string();
+    };
+    let Some(addr) = addrs.next() else {
+        return ws_url.to_string();
+    };
+    let mut out = parsed;
+    if out.set_ip_host(addr.ip()).is_err() {
+        return ws_url.to_string();
+    }
+    out.to_string()
+}
+
 type WsStream =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 type WsWrite = futures::stream::SplitSink<WsStream, Message>;
@@ -104,7 +138,14 @@ pub struct CdpConnection {
 impl CdpConnection {
     /// Open a WebSocket to the given CDP endpoint and spawn the reader loop.
     pub async fn connect(ws_url: &str, connect_timeout: Duration) -> CrwResult<Self> {
-        let (ws, _) = tokio::time::timeout(connect_timeout, connect_async(ws_url))
+        // Chromium 148+ rejects the CDP WebSocket upgrade when the `Host` header
+        // is a bare hostname (a DNS-rebinding guard: only localhost / IP literals
+        // pass). The managed stack connects via a static IP so it's unaffected,
+        // but a self-host compose points the engine at the `chrome` service name,
+        // which then fails with "http handshake rejected". Resolve the host to an
+        // IP so the handshake Host header is an IP literal Chromium accepts.
+        let ws_url = resolve_ws_host_to_ip(ws_url).await;
+        let (ws, _) = tokio::time::timeout(connect_timeout, connect_async(ws_url.as_str()))
             .await
             .map_err(|_| CrwError::Timeout(connect_timeout.as_millis() as u64))?
             .map_err(|e| {
@@ -366,6 +407,27 @@ mod tests {
 
     fn parse(json: &str) -> RawCdpMessage {
         serde_json::from_str(json).expect("valid RawCdpMessage")
+    }
+
+    #[tokio::test]
+    async fn resolve_ws_host_ip_is_noop() {
+        // Already an IP literal → unchanged (the managed stack's path).
+        let u = "ws://172.30.40.31:9222/devtools/browser/abc";
+        assert_eq!(resolve_ws_host_to_ip(u).await, u);
+        // Unparseable → returned as-is, never panics.
+        assert_eq!(resolve_ws_host_to_ip("not a url").await, "not a url");
+    }
+
+    #[tokio::test]
+    async fn resolve_ws_host_localhost_becomes_ip() {
+        // A resolvable hostname is rewritten to an IP literal so Chromium's
+        // Host-header rebinding guard accepts the handshake.
+        let out = resolve_ws_host_to_ip("ws://localhost:9222/devtools/browser/x").await;
+        assert!(
+            out.starts_with("ws://127.0.0.1:9222/") || out.starts_with("ws://[::1]:9222/"),
+            "localhost should resolve to a loopback IP literal, got {out}"
+        );
+        assert!(out.ends_with("/devtools/browser/x"));
     }
 
     #[tokio::test]
