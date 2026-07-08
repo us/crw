@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <b>Beats Firecrawl and Crawl4AI on truth-recall and tail latency — measured on Firecrawl's own public dataset.</b>
+  <b>Beats Firecrawl and Crawl4AI on truth-recall — measured on Firecrawl's own public dataset.</b>
 </p>
 
 <p align="center">
@@ -112,15 +112,16 @@ Over cURL you get the same fields wrapped in `{"success": true, "data": { … }}
 
 Prefer no SDK? Every example works over plain HTTP against `https://api.fastcrw.com`.
 That first scrape spent 1 of your 500 free credits — [see plans →](https://fastcrw.com/pricing) when you need more.
-Next: [Quickstart docs →](https://docs.fastcrw.com/quickstart/) · [API reference →](https://docs.fastcrw.com/#rest-api)
+
+**Got one page? Crawl the whole site:** `crw.crawl("https://docs.example.com")` returns every page — then `search`, `map`, and `extract` in [Core operations](#core-operations). Full docs: [Quickstart →](https://docs.fastcrw.com/quickstart/) · [API reference →](https://docs.fastcrw.com/#rest-api)
 
 ## Why fastCRW?
 
-- **Better** — the highest **truth-recall** (how much of the real page content it captures): **63.7%** on the 819 labeled URLs in Firecrawl's public 1,000-URL dataset, vs Firecrawl **56.0%** and Crawl4AI **60.0%** — and it recovers **34 pages both miss**.
-- **Faster** — the lowest **p90 tail latency** (the slowest 10% of requests) of the three: **4348 ms** in fast mode, vs 4754 / 6937 ms.
+- **Most accurate** — the highest **truth-recall** (how much of the real page content it captures): **63.7%** on 819 labeled URLs in Firecrawl's public dataset, vs Firecrawl **56.0%** and Crawl4AI **60.0%** — and it recovers **34 pages both miss**.
+- **Fast median, tunable tail** — the fastest median latency (p50 **1914 ms**, vs Firecrawl's 2305 ms). Recall mode chases the hard pages the others drop, at a longer tail; *fast mode* trades some recall for a low p90 (**4348 ms**). One config toggle — pick accuracy or latency.
 - **Lighter** — one static binary, **~50 MB RAM idle**. No Redis, no Node, no Chromium heap in the request path — it runs on a $5 VPS.
 
-Two modes, one config toggle: *recall mode* maximizes accuracy, *fast mode* minimizes the latency tail. Search, map, and crawl run on the same engine — built-in web search (SearXNG, a free self-hostable search backend), so there's **no separate search vendor and no per-query search-API bill**. [See the full run →](BENCHMARKS.md)
+Search, map, and crawl run on the same engine — built-in web search (SearXNG, a free self-hostable search backend), so there's **no separate search vendor and no per-query search-API bill**. [See the honest full run — tail latency and all →](BENCHMARKS.md)
 
 Open source (AGPL-3.0), passing [OpenSSF Best Practices](https://www.bestpractices.dev/projects/13533), and published on PyPI · npm · crates.io · Homebrew · APT — with a benchmark you can rerun yourself, not marketing math.
 
@@ -141,7 +142,7 @@ claude mcp add crw \
   -e CRW_API_URL=https://api.fastcrw.com -e CRW_API_KEY=$CRW_API_KEY \
   -- npx -y crw-mcp
 
-# Claude Code — embedded (no server, no key, runs the engine in-process)
+# Claude Code — embedded (no server, no key — runs the engine locally, on your machine)
 claude mcp add crw -- npx -y crw-mcp
 ```
 
@@ -170,18 +171,18 @@ npx skills add -g us/crw         # global (user-level)
 | **Search** | `POST /v1/search` | Web search (SearXNG), optionally scrape each result |
 | **Scrape** | `POST /v1/scrape` | One URL → markdown / HTML / links / schema JSON |
 | **Map** | `POST /v1/map` | Discover every URL on a site, fast |
-| **Crawl** | `POST /v1/crawl` | Async BFS crawl of a whole site (returns a job id) |
+| **Crawl** | `POST /v1/crawl` | Async crawl of a whole site (returns a job id you poll) |
 | **Extract** | `POST /v1/scrape` `formats:["json"]` | Structured fields from a JSON Schema |
-| **Monitor** | `POST /v1/change-tracking/diff` | Diff a page vs a snapshot — the change-tracking primitive behind scheduled [monitoring](https://docs.fastcrw.com/monitoring/) |
+| **Monitor** | `POST /v1/change-tracking/diff` | Diff a page vs a snapshot — the change-tracking building block behind scheduled [monitoring](https://docs.fastcrw.com/monitoring/) |
 
-SDK return shapes: `scrape` / `extract` → one object · `map` → list of URLs · `crawl` / `search` → list of result objects.
+SDK return shapes: `scrape` / `extract` → one object · `map` → list of URLs · `crawl` → list of result objects · `search` → list, or a dict grouped by source when `sources=[...]` is set.
 Full reference: [docs.fastcrw.com/#rest-api](https://docs.fastcrw.com/#rest-api).
 
 ## SDKs & integrations
 
 ```bash
-pip install crw          # Python 3.10+
-npm install crw-sdk      # TypeScript / Node.js
+pip install crw          # Python package: crw
+npm install crw-sdk      # Node / TypeScript package: crw-sdk (not crw)
 ```
 
 ```python
@@ -202,7 +203,8 @@ await crw.scrape("https://example.com", { formats: ["markdown", "links"] });
 
 The TypeScript client is **typed and zero-dependency**; its cloud path is pure `fetch`, so it runs
 on Node 18+, Bun, Deno, and edge runtimes. The Python client is **synchronous** — wrap long calls
-like `crawl()` / `extract()` in `asyncio.to_thread` inside async code.
+like `crawl()` / `extract()` in `asyncio.to_thread` inside async code. Both client SDKs (`crw`,
+`crw-sdk`) are **MIT-licensed** — installing them imposes nothing on your code; AGPL-3.0 covers only the engine.
 
 LangChain and CrewAI integrations ship in the package:
 
@@ -217,7 +219,7 @@ from crw.integrations.crewai import CrwScrapeWebsiteTool   # pip install crw[cre
 
 Same binary, same API in both modes — pick a lane, switch anytime by changing the base URL.
 
-| | **Managed — `api.fastcrw.com`** &nbsp;·&nbsp; _most teams start here_ | **Self-host (free)** |
+| | **Managed — `api.fastcrw.com`** &nbsp;·&nbsp; _most teams start here_ | **Self-host** |
 |---|---|---|
 | Best when | You want zero infra, a global proxy network, a dashboard, and usage metering | You have data-residency / compliance needs, want your own proxy strategy, and can operate the service |
 | Start | [Sign up](https://fastcrw.com/register) — 500 free credits, no card | `docker run -p 3000:3000 ghcr.io/us/crw` |
@@ -237,6 +239,11 @@ curl http://localhost:3000/v1/scrape \
 Prefer CLI, Homebrew, Cargo, APT, or Docker Compose with a stealth tier? All install paths and
 production hardening: [docs.fastcrw.com/installation/](https://docs.fastcrw.com/installation/) ·
 [self-hosting guide →](https://docs.fastcrw.com/#self-hosting)
+
+<p align="center">
+  <a href="https://fastcrw.com/register"><img src="https://img.shields.io/badge/Start%20free-500%20credits%2C%20no%20card-7c3aed?style=for-the-badge" alt="Start free"></a>
+  <br><sub>Skip the setup — 500 free credits on the managed cloud, no card.</sub>
+</p>
 
 ## Why it's fast (built in Rust)
 

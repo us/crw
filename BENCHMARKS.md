@@ -1,24 +1,36 @@
 # Benchmarks
 
 3-way scrape benchmark on [Firecrawl's own public 1,000-URL dataset](https://huggingface.co/datasets/firecrawl/scrape-content-dataset-v1)
-(`diagnose_3way.py`, 2026-05-08, concurrency 5, timeout 120s).
+(`diagnose_3way.py`, 2026-05-08, concurrency 5, timeout 120s, **recall mode** unless noted).
 
 | Metric | **fastCRW** | crawl4ai | Firecrawl |
 |---|---|---|---|
-| Truth-recall (522/819 labeled URLs) <sup>recall mode</sup> | **63.74%** | 59.95% | 56.04% |
+| **Truth-recall** (522/819 labeled URLs) | **63.74%** | 59.95% | 56.04% |
+| Scrape-success (of 1,000) | 87.7% | 83.5% | **89.7%** |
 | p50 latency | **1914 ms** | 1916 ms | 2305 ms |
-| p90 latency <sup>fast mode</sup> | **4348 ms** | 4754 ms | 6937 ms |
-| Thrown errors (3,000 requests) | **0** | 0 | 0 |
+| p90 latency | 14157 ms | **4754 ms** | 6937 ms |
+| p99 latency | 15012 ms | **13749 ms** | 21107 ms |
+| Thrown errors (3,000 requests) | 0 | 0 | 0 |
 
-fastCRW leads on every axis — top truth-recall, fastest median, lowest p90 tail — with
-**0 thrown errors** across all 3,000 requests, and it uniquely recovers **34 URLs the other
-two miss** (70% more than crawl4ai and Firecrawl combined). The 63.74% denominator is 819
-labeled/matchable URLs, not 3,000 requests.
+**Where fastCRW wins — and where it doesn't.** fastCRW leads on the accuracy metric that
+matters for agents: **truth-recall (63.74%, +3.79pp over crawl4ai, +7.7pp over Firecrawl)**,
+and it uniquely recovers **34 URLs the other two miss** (70% more than crawl4ai and Firecrawl
+combined). Its p50 is the fastest of the three (tied with crawl4ai, ahead of Firecrawl). The
+63.74% denominator is 819 labeled/matchable URLs, not 3,000 requests.
 
-**Two modes, one engine, one config toggle.** *Recall mode* (the full ladder) maximizes
-truth-recall, recovering the long tail of hard pages. *Fast mode* (LightPanda-only, no Chrome
-tier) optimizes the latency tail — p90 4348 ms, the lowest of the three. Same binary, same
-API; pick accuracy or latency per workload.
+It does **not** win everywhere, and we won't pretend otherwise: **Firecrawl has the highest raw
+scrape-success (89.7% vs our 87.7%)**, and **fastCRW has the worst p90/p99 tail (14157 ms)**.
+That tail is causal, not incidental — the chrome-stealth fallback that recovers the hard pages
+the others drop is exactly what lengthens the tail. The recall is worth the tail.
+
+And "0 thrown errors" is true for all three, but it doesn't mean 100% usable — **12.3% of
+fastCRW's responses returned no usable content without throwing**. Read it next to the 87.7%
+scrape-success, not alone.
+
+**Two modes, one config toggle.** *Recall mode* (the full renderer ladder — the numbers above)
+maximizes truth-recall. *Fast mode* (LightPanda-only, no Chrome tier) trades some recall for a
+much shorter tail — **p90 ~4348 ms** — for latency-sensitive workloads. Same binary, same API;
+pick accuracy or latency per workload.
 
 ## How the two most-cited alternatives compare
 
