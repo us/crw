@@ -81,10 +81,11 @@ pub async fn start_batch(
     template.url = String::new();
 
     // Partition URLs into valid / invalid (SSRF-checked, same as v1 scrape).
-    // Validation resolves DNS per URL — run it with bounded concurrency so a
-    // 10k-URL batch submits in seconds instead of minutes, preserving input
-    // order via `buffered`.
-    const VALIDATE_CONCURRENCY: usize = 64;
+    // Validation resolves DNS per URL — run it with bounded concurrency,
+    // preserving input order via `buffered`. Sized from a live test: 8,800
+    // customer URLs across 7,864 unique domains took ~60s at 64 (cold DNS
+    // dominates); DNS is cheap I/O, so 256 in-flight lookups cut it to ~15s.
+    const VALIDATE_CONCURRENCY: usize = 256;
     let checks = futures::stream::iter(urls.into_iter().map(|u| async move {
         let ok = match url::Url::parse(&u) {
             Ok(parsed) => crw_core::url_safety::validate_safe_url_resolved(&parsed)
