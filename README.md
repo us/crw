@@ -11,8 +11,7 @@
 
 <p align="center">
   Use the managed cloud for zero infra, or self-host the same open-source engine.
-  Drop-in <strong>Firecrawl-compatible</strong>. Start with Python, cURL, or MCP —
-  you never touch Rust.
+  Start with Python, cURL, or MCP — you never touch Rust.
 </p>
 
 <p align="center">
