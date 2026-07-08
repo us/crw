@@ -50,6 +50,14 @@
 - **Drop-in Firecrawl compatibility.** Migrate existing Firecrawl code by changing one base URL.
 - **Managed or self-hosted, same API.** No exit cost — develop against the free open-source binary, ship to the cloud, or the reverse. Nothing changes but the base URL.
 
+## Why fastCRW?
+
+- **Better** — #1 truth-recall (**63.74%**) on Firecrawl's own 1,000-URL dataset, ahead of Firecrawl (56%) and Crawl4AI (60%), recovering **34 pages both miss**.
+- **Faster** — lowest median latency (**1914 ms**) and lowest p90 tail (**4348 ms**) of the three, with **0 errors** across 3,000 requests.
+- **Lighter** — one static binary, **~50 MB RAM idle**. No Redis, no Node, no Chromium heap in the request path — it runs on a $5 VPS.
+
+Search, map, and crawl run on that same engine — built-in web search (SearXNG), so there's **no separate search vendor and no per-query search-API bill**.
+
 ## Quickstart — your first scrape in 30 seconds
 
 **[Get a free API key → fastcrw.com/register](https://fastcrw.com/register)** — 500 credits, no card.
@@ -215,11 +223,9 @@ strips process-spawn, JIT-warmup, and browser-navigation overhead out of every o
 
 ## Benchmark
 
-On Firecrawl's own public 1,000-URL dataset, fastCRW leads on **truth-recall (63.74%)**,
-**median latency (1914 ms)**, and **p90 tail (4348 ms)** with **0 thrown errors** across 3,000
-requests — and recovers 34 URLs the other two miss. Reproducible, not marketing math.
-
-Full numbers, comparison table, and one-command repro: **[BENCHMARKS.md](BENCHMARKS.md)** ·
+The numbers above come from Firecrawl's own public 1,000-URL dataset, run identically across all
+three tools with the same matcher — a fairness control, not a looser number. Reproducible, not
+marketing math. Full table, methodology, and one-command repro: **[BENCHMARKS.md](BENCHMARKS.md)** ·
 [fastcrw.com/benchmarks](https://fastcrw.com/benchmarks).
 
 ## Migrating from Firecrawl
