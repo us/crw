@@ -252,9 +252,8 @@ and standalone commercial licenses are available — **hello@fastcrw.com**.
 [Benchmarks](https://fastcrw.com/benchmarks) ·
 [Pricing](https://fastcrw.com/pricing) ·
 [Changelog](CHANGELOG.md) ·
-[X](https://x.com/fast_crw) ·
-[LinkedIn](https://www.linkedin.com/company/fastcrw) ·
-[Discord](https://discord.gg/kkFh2SC8)
+[Discord](https://discord.gg/kkFh2SC8) ·
+[X](https://x.com/fast_crw)
 
 <a href="https://www.star-history.com/?repos=us%2Fcrw&type=timeline&legend=bottom-right">
  <picture>
