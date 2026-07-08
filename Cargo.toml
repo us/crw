@@ -32,7 +32,7 @@ tokio = { version = "1", features = ["full"] }
 # Web framework
 axum = { version = "0.8", features = ["macros", "multipart"] }
 tower = "0.5"
-tower-http = { version = "0.6", features = ["cors", "trace", "timeout", "set-header"] }
+tower-http = { version = "0.7", features = ["cors", "trace", "timeout", "set-header"] }
 
 # HTTP client
 # Phase B (latency-qn): `hickory-dns` makes hickory the default resolver, which
