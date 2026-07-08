@@ -122,7 +122,7 @@ hmac = "0.13"
 libc = "0.2"
 
 # Compile-time perfect-hash sets (url_filter deny-lists)
-phf = { version = "0.13", features = ["macros"] }
+phf = { version = "0.14", features = ["macros"] }
 
 # Test dependencies
 tokio-test = "0.4"
