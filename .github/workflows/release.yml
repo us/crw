@@ -123,6 +123,7 @@ jobs:
     needs: [release-context, check]
     permissions:
       contents: write
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -180,7 +181,7 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
-            if cargo install cross --git https://github.com/cross-rs/cross; then
+            if cargo install cross --git https://github.com/cross-rs/cross --rev 64b5bb4d3d34de062552b9a2093affe77b4ad16a --locked; then
               exit 0
             fi
             echo "::warning::cross install attempt ${attempt}/3 failed (transient network); retrying in $((attempt * 20))s"
@@ -228,6 +229,26 @@ jobs:
           for bin in crw crw-server crw-mcp; do
             gh release upload "$RELEASE_TAG" \
               "${bin}-${{ matrix.platform }}-${{ matrix.arch_label }}.${ext}" --clobber
+          done
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
+
+      - name: Sign artifacts (keyless)
+        continue-on-error: true
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ needs.release-context.outputs.release_tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "${{ runner.os }}" = "Windows" ]; then ext="zip"; else ext="tar.gz"; fi
+          for bin in crw crw-server crw-mcp; do
+            f="${bin}-${{ matrix.platform }}-${{ matrix.arch_label }}.${ext}"
+            cosign sign-blob --yes \
+              --output-signature "${f}.sig" \
+              --output-certificate "${f}.pem" "$f"
+            gh release upload "$RELEASE_TAG" "${f}.sig" "${f}.pem" --clobber
           done
 
   asset-gate:

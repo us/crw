@@ -13,6 +13,7 @@ members = [
     "crates/crw-cli",
     "crates/crw-monitor",
 ]
+exclude = ["fuzz"]
 resolver = "2"
 
 [workspace.package]

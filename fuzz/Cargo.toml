@@ -1,0 +1,21 @@
+[package]
+name = "crw-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+crw-extract = { path = "../crates/crw-extract" }
+
+[[bin]]
+name = "html_to_markdown"
+path = "fuzz_targets/html_to_markdown.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
