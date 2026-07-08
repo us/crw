@@ -5,7 +5,7 @@
 # under QEMU for linux/arm64, which emulated the *entire* Rust compile and took
 # ~2h per release. Cross-compiling on the native runner brings arm64 back to
 # minutes; only the tiny runtime layer (ca-certificates) still touches QEMU.
-FROM --platform=$BUILDPLATFORM rust:1.93-bookworm@sha256:7c4ae649a84014c467d79319bbf17ce2632ae8b8be123ac2fb2ea5be46823f31 AS builder
+FROM --platform=$BUILDPLATFORM rust:1.96-bookworm@sha256:a339861ae23e9abb272cea45dfafde21760d2ce6577a70f8a926153677902663 AS builder
 
 # Provided automatically by buildx: amd64 | arm64.
 ARG TARGETARCH

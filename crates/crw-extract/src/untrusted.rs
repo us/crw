@@ -20,7 +20,7 @@
 //! - `label` distinguishes what kind of block it is (e.g. `SOURCE`, `PAGE`,
 //!   `DIFF`); `index` tags one block among many (e.g. per-source answers).
 
-use rand::Rng;
+use rand::RngExt;
 
 /// A per-call nonce: 12 hex chars (6 CSPRNG bytes). Enough entropy that
 /// untrusted content can't guess the closing delimiter to escape its fence.

@@ -32,7 +32,7 @@ tokio = { version = "1", features = ["full"] }
 # Web framework
 axum = { version = "0.8", features = ["macros", "multipart"] }
 tower = "0.5"
-tower-http = { version = "0.6", features = ["cors", "trace", "timeout", "set-header"] }
+tower-http = { version = "0.7", features = ["cors", "trace", "timeout", "set-header"] }
 
 # HTTP client
 # Phase B (latency-qn): `hickory-dns` makes hickory the default resolver, which
@@ -47,7 +47,7 @@ serde_json = "1"
 toml = "0.8"
 
 # HTML processing
-lol_html = "2"
+lol_html = "3"
 scraper = "0.25"
 htmd = "0.5"
 ego-tree = "0.10"
@@ -65,10 +65,10 @@ pdf-inspector = "0.1"
 
 # Diffing (change-tracking / monitor). Myers diff over lines; the parse-diff
 # AST and the unified text surface are both derived from its op stream.
-similar = "2"
+similar = "3"
 
 # Randomness
-rand = "0.9"
+rand = "0.10"
 
 # Async utilities
 futures = "0.3"
@@ -103,7 +103,7 @@ publicsuffix = "2"
 # Misc
 uuid = { version = "1", features = ["v4", "serde"] }
 url = { version = "2", features = ["serde"] }
-sha2 = "0.10"
+sha2 = "0.11"
 hex = "0.4"
 base64 = "0.22"
 
@@ -114,8 +114,8 @@ base64 = "0.22"
 # fixed-interval parser in `crw-monitor::schedule`), so no external cron crate is
 # pulled in — simpler and keeps the dependency surface (and the open-core tree)
 # minimal. `tokio-cron-scheduler` was evaluated and intentionally not adopted.
-rusqlite = { version = "0.32", features = ["bundled"] }
-hmac = "0.12"
+rusqlite = { version = "0.40", features = ["bundled"] }
+hmac = "0.13"
 
 # Unix process-group kill (browser teardown). Unix-only; already present
 # transitively. Used by crw-renderer's BROWSER_PGIDS group-kill registry.

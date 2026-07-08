@@ -16,7 +16,7 @@ use crate::{MonitorError, MonitorResult};
 /// Compute the `v1` HMAC-SHA256 hex signature over `"<t>.<body>"`.
 #[cfg(feature = "webhook")]
 pub fn sign(secret: &str, t: i64, body: &str) -> String {
-    use hmac::{Hmac, Mac};
+    use hmac::{Hmac, KeyInit, Mac};
     use sha2::Sha256;
     type HmacSha256 = Hmac<Sha256>;
 
@@ -126,7 +126,7 @@ mod tests {
         // length of a sha256 hex digest
         assert_eq!(got.len(), 64);
         // recompute independently
-        use hmac::{Hmac, Mac};
+        use hmac::{Hmac, KeyInit, Mac};
         use sha2::Sha256;
         let mut mac = Hmac::<Sha256>::new_from_slice(b"k").unwrap();
         mac.update(b"1.x");
