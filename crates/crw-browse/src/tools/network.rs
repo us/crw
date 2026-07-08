@@ -101,7 +101,7 @@ mod tests {
         result
             .content
             .first()
-            .and_then(|c| c.raw.as_text().map(|t| t.text.clone()))
+            .and_then(|c| c.as_text().map(|t| t.text.clone()))
             .unwrap_or_default()
     }
 

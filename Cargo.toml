@@ -44,13 +44,13 @@ reqwest = { version = "0.13", default-features = false, features = ["json", "coo
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-toml = "0.8"
+toml = "1"
 
 # HTML processing
 lol_html = "3"
-scraper = "0.25"
+scraper = "0.27"
 htmd = "0.5"
-ego-tree = "0.10"
+ego-tree = "0.11"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 once_cell = "1"
 
@@ -75,7 +75,7 @@ futures = "0.3"
 dashmap = "6"
 
 # WebSocket client (shared by crw-renderer and crw-browse)
-tokio-tungstenite = { version = "0.28", features = ["rustls-tls-native-roots"] }
+tokio-tungstenite = { version = "0.29", features = ["rustls-tls-native-roots"] }
 
 # JSON schema generation (used by rmcp #[tool] macro)
 schemars = "1.0"
@@ -94,7 +94,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 clap = { version = "4", features = ["derive", "env"] }
 
 # Metrics
-prometheus = "0.13"
+prometheus = "0.14"
 
 # Caching (host preferences)
 moka = { version = "0.12", features = ["future"] }
@@ -122,12 +122,12 @@ hmac = "0.13"
 libc = "0.2"
 
 # Compile-time perfect-hash sets (url_filter deny-lists)
-phf = { version = "0.11", features = ["macros"] }
+phf = { version = "0.13", features = ["macros"] }
 
 # Test dependencies
 tokio-test = "0.4"
 wiremock = "0.6"
-axum-test = "19"
+axum-test = "21"
 proptest = "1"
 insta = { version = "1", features = ["json"] }
 

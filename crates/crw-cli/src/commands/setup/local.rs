@@ -233,7 +233,7 @@ async fn handle_docker_not_running() -> Result<bool, SetupError> {
 
     let choice = Select::with_theme(&ui::select_style())
         .with_prompt("  What would you like to do?")
-        .items(&[
+        .items([
             "Retry (I just started Docker)",
             "Continue without search (skip SearXNG)",
             "Exit",
@@ -280,7 +280,7 @@ async fn handle_docker_not_found() -> Result<bool, SetupError> {
 
     let choice = Select::with_theme(&ui::select_style())
         .with_prompt("  What would you like to do?")
-        .items(&[
+        .items([
             "Continue without Docker (skip SearXNG)",
             "Exit and install Docker first",
         ])
@@ -422,7 +422,7 @@ async fn prompt_browser_engine() -> Result<BrowserEngine, SetupError> {
 async fn handle_download_failure() -> Result<bool, SetupError> {
     let choice = Select::with_theme(&ui::select_style())
         .with_prompt("  What would you like to do?")
-        .items(&[
+        .items([
             "Retry download",
             "Skip LightPanda (use Chrome if available)",
             "Continue without browser (HTTP only)",
@@ -509,7 +509,7 @@ async fn prompt_searxng_setup() -> Result<Option<String>, SetupError> {
 fn prompt_shell_config() -> Result<bool, SetupError> {
     let choice = Select::with_theme(&ui::select_style())
         .with_prompt("  Also export to your shell rc? (optional)")
-        .items(&[
+        .items([
             "No, config.toml is enough (recommended)",
             "Yes — also add `export CRW_*` lines (for CI/Docker/scripts)",
         ])
