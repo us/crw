@@ -68,7 +68,7 @@ pdf-inspector = "0.1"
 similar = "2"
 
 # Randomness
-rand = "0.9"
+rand = "0.10"
 
 # Async utilities
 futures = "0.3"
