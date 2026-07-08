@@ -8,6 +8,21 @@ The source of truth is the repository root changelog. Do not edit this docs page
 
 All notable changes to CRW are documented here.
 
+## [0.21.3](https://github.com/us/crw/compare/v0.21.2...v0.21.3) (2026-07-08)
+
+
+### Bug Fixes
+
+* **ci:** let release doc-sync pushes bypass branch protection ([7510d1e](https://github.com/us/crw/commit/7510d1ec6d28e431ab734a040aa423a756c842f8))
+
+## [0.21.2](https://github.com/us/crw/compare/v0.21.1...v0.21.2) (2026-07-08)
+
+
+### Bug Fixes
+
+* **renderer:** load images/media/fonts for screenshots ([2310e5c](https://github.com/us/crw/commit/2310e5cf0b18447c77dd37807b7a28dc78cb9dfc))
+* **renderer:** resolve CDP ws host to IP for Chromium 148+ rebinding guard ([b197b95](https://github.com/us/crw/commit/b197b950140b772b313137868fd8dc627e834c37))
+
 ## [0.21.1](https://github.com/us/crw/compare/v0.21.0...v0.21.1) (2026-07-07)
 
 
