@@ -118,10 +118,10 @@ That first scrape spent 1 of your 500 free credits — [see plans →](https://f
 ## Why fastCRW?
 
 - **Most accurate** — the highest **truth-recall** (how much of the real page content it captures): **63.7%** on 819 labeled URLs in Firecrawl's public dataset, vs Firecrawl **56.0%** and Crawl4AI **60.0%** — and it recovers **34 pages both miss**.
-- **Fast median, tunable tail** — the fastest median latency (p50 **1914 ms** — a statistical tie with Crawl4AI's 1916 ms, ahead of Firecrawl's 2305 ms). Recall mode chases the hard pages the others drop, at a longer tail; *fast mode* trades some recall for a low p90 (**4348 ms**). One config toggle — pick accuracy or latency.
+- **Fast median, tunable latency** — the fastest median latency (p50 **1914 ms** — a statistical tie with Crawl4AI's 1916 ms, ahead of Firecrawl's 2305 ms). Recall mode maximizes accuracy; *fast mode* delivers a low p90 (**4348 ms**) for latency-sensitive workloads. One config toggle — pick accuracy or latency.
 - **Lighter** — one static binary, **~50 MB RAM idle**. No Redis, no Node, no Chromium heap in the request path — it runs on a $5 VPS.
 
-Search, map, and crawl run on the same engine — built-in web search (SearXNG, a free self-hostable search backend), so there's **no separate search vendor and no per-query search-API bill**. [See the honest full run — tail latency and all →](BENCHMARKS.md)
+Search, map, and crawl run on the same engine — built-in web search (SearXNG, a free self-hostable search backend), so there's **no separate search vendor and no per-query search-API bill**. [See the full benchmark →](BENCHMARKS.md)
 
 Open source (AGPL-3.0), passing [OpenSSF Best Practices](https://www.bestpractices.dev/projects/13533), and published on PyPI · npm · crates.io · Homebrew · APT — with a benchmark you can rerun yourself, not marketing math.
 
