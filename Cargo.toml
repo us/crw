@@ -65,7 +65,7 @@ pdf-inspector = "0.1"
 
 # Diffing (change-tracking / monitor). Myers diff over lines; the parse-diff
 # AST and the unified text surface are both derived from its op stream.
-similar = "2"
+similar = "3"
 
 # Randomness
 rand = "0.9"
