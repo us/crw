@@ -114,7 +114,7 @@ base64 = "0.22"
 # fixed-interval parser in `crw-monitor::schedule`), so no external cron crate is
 # pulled in — simpler and keeps the dependency surface (and the open-core tree)
 # minimal. `tokio-cron-scheduler` was evaluated and intentionally not adopted.
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
 hmac = "0.12"
 
 # Unix process-group kill (browser teardown). Unix-only; already present
