@@ -48,7 +48,7 @@ toml = "0.8"
 
 # HTML processing
 lol_html = "3"
-scraper = "0.25"
+scraper = "0.27"
 htmd = "0.5"
 ego-tree = "0.10"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
