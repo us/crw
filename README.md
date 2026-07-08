@@ -58,19 +58,16 @@
 export CRW_API_KEY="crw_live_..."
 ```
 
-<table>
-<tr><th>cURL</th><th>Python</th></tr>
-<tr valign="top"><td>
-
 ```bash
+# cURL — works anywhere, no SDK
 curl -X POST https://api.fastcrw.com/v1/scrape \
-  -H "Authorization: Bearer $CRW_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"url":"https://example.com",
-       "formats":["markdown"]}'
+  -H "Authorization: Bearer $CRW_API_KEY" -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com","formats":["markdown"]}'
 ```
 
-</td><td>
+<table>
+<tr><th>Python</th><th>Node.js</th></tr>
+<tr valign="top"><td>
 
 ```bash
 pip install crw
@@ -84,10 +81,24 @@ page = crw.scrape("https://example.com",
 print(page["markdown"])
 ```
 
+</td><td>
+
+```bash
+npm install crw-sdk
+```
+```javascript
+import { CrwClient } from "crw-sdk";
+
+const crw = new CrwClient({ apiKey: "YOUR_API_KEY" });
+const page = await crw.scrape("https://example.com",
+                              { formats: ["markdown"] });
+console.log(page.markdown);
+```
+
 </td></tr>
 </table>
 
-`page` is a plain dict (`markdown`, `metadata`, `contentType`, …), so `print(page["markdown"])` gives you clean content:
+In both SDKs `page` is a plain object (`markdown`, `metadata`, `contentType`, …), so `page["markdown"]` / `page.markdown` is clean content:
 
 ```markdown
 # Example Domain
