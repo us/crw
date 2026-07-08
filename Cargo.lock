@@ -2514,9 +2514,9 @@ checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
 name = "lol_html"
-version = "2.9.0"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00aad58f6ec3990e795943872f13651e7a5fa59dca2c8f31a74faf8a0e0fb652"
+checksum = "2ae574a677ef0443a0bd3c291f0cab9d1e61a3ad85a1515e3cfc0bc720d5a48e"
 dependencies = [
  "bitflags 2.13.0",
  "cfg-if",
@@ -4393,7 +4393,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
