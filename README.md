@@ -47,7 +47,7 @@
 ## What you get
 
 - **Any URL → LLM-ready output.** Clean markdown, HTML, links, or schema-validated JSON — no HTML soup, no boilerplate.
-- **One API, six operations.** `search` the web and `scrape` a page, or `map` / `crawl` / `extract` / `change-track` a whole site — [see below](#core-operations).
+- **One API, six operations.** `search` the web and `scrape` a page, or `map` / `crawl` / `extract` / `monitor` a whole site — [see below](#core-operations).
 - **Drop-in Firecrawl compatibility.** Migrate existing Firecrawl code by changing one base URL.
 - **Managed or self-hosted, same API.** No exit cost — develop against the free open-source binary, ship to the cloud, or the reverse. Nothing changes but the base URL.
 
@@ -144,7 +144,7 @@ npx skills add -g us/crw         # global (user-level)
 | **Map** | `POST /v1/map` | Discover every URL on a site, fast |
 | **Crawl** | `POST /v1/crawl` | Async BFS crawl of a whole site (returns a job id) |
 | **Extract** | `POST /v1/scrape` `formats:["json"]` | Structured fields from a JSON Schema |
-| **Change-tracking** | `POST /v1/change-tracking/diff` | Diff a page vs a snapshot — the [monitoring](https://docs.fastcrw.com/monitoring/) primitive |
+| **Monitor** | `POST /v1/change-tracking/diff` | Diff a page vs a snapshot — the change-tracking primitive behind scheduled [monitoring](https://docs.fastcrw.com/monitoring/) |
 
 Full reference: [docs.fastcrw.com/#rest-api](https://docs.fastcrw.com/#rest-api).
 
