@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.21.3](https://github.com/us/crw/compare/v0.21.2...v0.21.3) (2026-07-08)
+
+
+### Bug Fixes
+
+* **ci:** let release doc-sync pushes bypass branch protection ([7510d1e](https://github.com/us/crw/commit/7510d1ec6d28e431ab734a040aa423a756c842f8))
+
 ## [0.21.2](https://github.com/us/crw/compare/v0.21.1...v0.21.2) (2026-07-08)
 
 
