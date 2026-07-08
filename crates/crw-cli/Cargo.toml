@@ -82,7 +82,7 @@ uuid = { workspace = true }
 # Interactive setup wizard
 dialoguer = { version = "0.11", features = ["fuzzy-select"] }
 console = "0.15"
-indicatif = "0.17"
+indicatif = "0.18"
 
 # Crypto (for checksum verification)
 sha2 = { workspace = true }
