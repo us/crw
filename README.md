@@ -217,15 +217,19 @@ from crw.integrations.crewai import CrwScrapeWebsiteTool   # pip install crw[cre
 
 ## Managed cloud vs self-host
 
-Same binary, same API in both modes — pick a lane, switch anytime by changing the base URL.
+Same binary, same API in both modes — switch anytime by changing the base URL. **Most teams run on
+the managed cloud:** it scales with your traffic, rotates proxies, and stays patched, so you ship
+features instead of operating a scraper.
 
-| | **Managed — `api.fastcrw.com`** &nbsp;·&nbsp; _most teams start here_ | **Self-host** |
+| | **Managed — `api.fastcrw.com`** &nbsp;·&nbsp; _recommended for most teams_ | **Self-host** |
 |---|---|---|
-| Best when | You want zero infra, a global proxy network, a dashboard, and usage metering | You have data-residency / compliance needs, want your own proxy strategy, and can operate the service |
-| Start | [Sign up](https://fastcrw.com/register) — 500 free credits, no card | `docker run -p 3000:3000 ghcr.io/us/crw` |
-| Search | Managed backend | Bundled SearXNG sidecar |
-| Cost | Free tier, then paid plans from **$11/mo** — [pricing](https://fastcrw.com/pricing) | $0 license — you run and pay for the infra |
-| License | You call an API over the network — no copyleft on your code | AGPL-3.0 — copyleft applies if you modify and expose the service, or embed the engine in-process |
+| Best for | Shipping fast at any scale, with zero infrastructure to run | Data-residency, air-gapped, or compliance-bound deployments |
+| Scale | Grows with you — 500 free credits to **millions of pages/month**, higher concurrency per tier, no capacity planning | You size, scale, and monitor the machines yourself |
+| Proxies & rendering | **Managed global proxy network** + rendering, rotated for you to get through blocked pages | Bring your own proxy pool and browser tier |
+| Ops & reliability | **Fully managed** — dashboard, usage metering, API keys, monitored infra; nothing to patch or babysit | You run, patch, upgrade, and monitor it |
+| Start | [Sign up](https://fastcrw.com/register) — **500 free credits, no card** | `docker run -p 3000:3000 ghcr.io/us/crw` |
+| Cost | Free tier, then plans from **$11/mo** — [pricing](https://fastcrw.com/pricing) | $0 license — you pay for the infra and your team's time |
+| License | You call an API — **no copyleft on your code** | AGPL-3.0 — copyleft if you bundle the engine or run a modified public service |
 
 ### Self-host in one command
 
