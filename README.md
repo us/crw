@@ -11,7 +11,7 @@
 
 <p align="center">
   Use the managed cloud for zero infra, or self-host the same open-source engine.
-  Start with Python, cURL, or MCP — you never touch Rust.
+  Start with Python, TypeScript, cURL, or MCP — you never touch Rust.
 </p>
 
 <p align="center">
@@ -52,15 +52,15 @@
 
 ## Why fastCRW?
 
-- **Better** — #1 truth-recall (**63.74%**) on Firecrawl's own 1,000-URL dataset, ahead of Firecrawl (56%) and Crawl4AI (60%), recovering **34 pages both miss**.
-- **Faster** — lowest median latency (**1914 ms**) and lowest p90 tail (**4348 ms**) of the three, with **0 errors** across 3,000 requests.
+- **Better** — the highest **truth-recall** (how much of the real page content it captures): **63.7%** on the 819 labeled URLs in Firecrawl's public 1,000-URL dataset, vs Firecrawl **56.0%** and Crawl4AI **60.0%** — and it recovers **34 pages both miss**.
+- **Faster** — the lowest **p90 tail latency** (the slowest 10% of requests) of the three: **4348 ms** in fast mode, vs 4754 / 6937 ms.
 - **Lighter** — one static binary, **~50 MB RAM idle**. No Redis, no Node, no Chromium heap in the request path — it runs on a $5 VPS.
 
-Search, map, and crawl run on that same engine — built-in web search (SearXNG), so there's **no separate search vendor and no per-query search-API bill**.
+Two modes, one config toggle: *recall mode* maximizes accuracy, *fast mode* minimizes the latency tail. Search, map, and crawl run on the same engine — built-in web search (SearXNG, a free self-hostable search backend), so there's **no separate search vendor and no per-query search-API bill**. [See the full run →](BENCHMARKS.md)
 
 ## Quickstart — your first scrape in 30 seconds
 
-**[Get a free API key → fastcrw.com/register](https://fastcrw.com/register)** — 500 credits, no card.
+**[Get a free API key → fastcrw.com/register](https://fastcrw.com/register)** — 500 free credits (1 credit ≈ 1 page), no card.
 
 ```bash
 export CRW_API_KEY="crw_live_..."
@@ -83,7 +83,7 @@ pip install crw
 ```python
 from crw import CrwClient
 
-crw = CrwClient(api_key="YOUR_API_KEY")
+crw = CrwClient()  # reads CRW_API_KEY from your env
 page = crw.scrape("https://example.com",
                   formats=["markdown"])
 print(page["markdown"])
@@ -97,7 +97,7 @@ npm install crw-sdk
 ```javascript
 import { CrwClient } from "crw-sdk";
 
-const crw = new CrwClient({ apiKey: "YOUR_API_KEY" });
+const crw = new CrwClient();  // reads CRW_API_KEY from your env
 const page = await crw.scrape("https://example.com",
                               { formats: ["markdown"] });
 console.log(page.markdown);
@@ -176,15 +176,21 @@ npm install crw-sdk      # TypeScript / Node.js
 ```python
 from crw import CrwClient
 
-client = CrwClient(api_key="YOUR_API_KEY")   # or CrwClient() for local embedded mode
+client = CrwClient()   # reads CRW_API_KEY; set CRW_LOCAL=1 for local embedded mode
 client.scrape("https://example.com", formats=["markdown", "links"])
 # .search() .map() .crawl() .extract() — one method per operation in the table above
 ```
 
-Framework extras: `pip install crw[crewai]` · `pip install crw[langchain]`.
-Works with [CrewAI](https://pypi.org/project/crw/) · [LangChain](https://pypi.org/project/crw/) ·
-[Agno](https://github.com/agno-agi/agno/pull/7183) · [Dify](https://github.com/langgenius/dify) ·
-[n8n](https://fastcrw.com/blog/n8n-web-scraping-crw) · [Flowise](https://github.com/FlowiseAI/Flowise/pull/6066).
+The TypeScript client (`crw-sdk`) exposes the same methods — typed and zero-dependency. The
+cloud client is pure `fetch`, so it runs on Node 18+, Bun, Deno, and edge runtimes.
+
+LangChain and CrewAI integrations ship in the package:
+
+```python
+from crw.integrations.langchain import CrwLoader          # pip install crw[langchain]
+from crw.integrations.crewai import CrwScrapeWebsiteTool   # pip install crw[crewai]
+```
+
 [All integrations →](https://docs.fastcrw.com/integrations/) · [SDK examples →](https://docs.fastcrw.com/sdk-examples/)
 
 ## Managed cloud vs self-host
@@ -197,7 +203,7 @@ Same binary, same API in both modes — pick a lane, switch anytime by changing 
 | Start | [Sign up](https://fastcrw.com/register) — 500 free credits, no card | `docker run -p 3000:3000 ghcr.io/us/crw` |
 | Search | Managed backend | Bundled SearXNG sidecar |
 | Cost | Free tier, then paid plans from **$11/mo** — [pricing](https://fastcrw.com/pricing) | $0 + your hosting bill |
-| License | AGPL carve-out for closed-source product code | AGPL-3.0 applies if you expose the API to third parties |
+| License | You call an API over the network — no copyleft on your code | AGPL-3.0 — copyleft applies if you modify and expose the service, or embed the engine in-process |
 
 ### Self-host in one command
 
@@ -255,10 +261,11 @@ checks as CI. Setup, architecture, and crate layout: **[CONTRIBUTING.md](CONTRIB
 
 ## License
 
-Open source under [AGPL-3.0](LICENSE). Embedding fastCRW in a closed-source product or
-exposing it as a hosted service without meeting AGPL's source-availability terms? The
-managed offering at [fastcrw.com](https://fastcrw.com) includes a commercial carve-out,
-and standalone commercial licenses are available — **hello@fastcrw.com**.
+Open source under [AGPL-3.0](LICENSE). **Calling the API over the network — managed or
+self-hosted — imposes nothing on your own code.** AGPL only applies if you embed the engine
+in-process or run a modified copy as a public service; for those cases the managed offering at
+[fastcrw.com](https://fastcrw.com) includes a commercial carve-out, and standalone commercial
+licenses are available — **hello@fastcrw.com**.
 
 ## Links
 
