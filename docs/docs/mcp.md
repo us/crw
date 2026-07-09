@@ -1,6 +1,6 @@
 # MCP Server for AI Agents
 
-CRW includes a built-in MCP (Model Context Protocol) server that gives any MCP-compatible AI assistant — Claude Code, Claude Desktop, Cursor, Windsurf, Cline, Continue.dev, OpenAI Codex CLI — 6 web scraping tools. Turn any AI coding agent into a web scraper with a single command.
+CRW includes a built-in MCP (Model Context Protocol) server that gives any MCP-compatible AI assistant — Claude Code, Claude Desktop, Cursor, Windsurf, Cline, Continue.dev, OpenAI Codex CLI — 8 web scraping tools. Turn any AI coding agent into a web scraper with a single command.
 
 > Also available on the [MCP Registry](https://registry.modelcontextprotocol.io/?q=crw)
 
@@ -10,8 +10,8 @@ CRW includes a built-in MCP (Model Context Protocol) server that gives any MCP-c
 
 | Mode | When | Tools | Description |
 |------|------|-------|-------------|
-| **Embedded** (default) | No `--api-url` / `CRW_API_URL` set | scrape, crawl, map, parse_file + **search** (when SearXNG configured) | Self-contained. No server needed. The scraping engine runs inside the MCP process. `crw_search` is advertised only when a SearXNG backend is configured (e.g. the Docker compose sidecar). |
-| **Proxy / Server** | `--api-url` / `CRW_API_URL` set | scrape, crawl, map, parse_file, search | Forwards tool calls to a remote CRW server — the [fastcrw.com](https://fastcrw.com) cloud **or your own self-hosted server**. `crw_search` is always advertised in proxy mode; it works whenever the server has SearXNG configured (the Docker stack enables it by default). |
+| **Embedded** (default) | No `--api-url` / `CRW_API_URL` set | scrape, crawl, check_crawl_status, map, extract, check_extract_status, parse_file + **search** (when SearXNG configured) | Self-contained. No server needed. The scraping engine runs inside the MCP process. `crw_search` is advertised only when a SearXNG backend is configured (e.g. the Docker compose sidecar). |
+| **Proxy / Server** | `--api-url` / `CRW_API_URL` set | scrape, crawl, check_crawl_status, map, extract, check_extract_status, parse_file, search | Forwards tool calls to a remote CRW server — the [fastcrw.com](https://fastcrw.com) cloud **or your own self-hosted server**. `crw_search` is always advertised in proxy mode; it works whenever the server has SearXNG configured (the Docker stack enables it by default). |
 
 ## Where to use what
 

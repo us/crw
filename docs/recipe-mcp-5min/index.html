@@ -284,7 +284,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
     <main class="content" id="content">
       <article id="article" role="main"><h1 id="give-claude-code-live-web-access-in-5-minutes">Give Claude Code Live Web Access in 5 Minutes</h1>
 <p>This recipe walks from zero to a working Claude Code agent that can search the web and scrape pages on demand. You will run one install command, register the MCP server, then see the exact tool calls Claude makes under the hood.</p>
-<p><strong>Time to complete:</strong> ~5 minutes<br><strong>Prerequisites:</strong> Node.js 18+, Claude Code installed<br><strong>Result:</strong> Claude Code gains <code>crw_search</code>, <code>crw_scrape</code>, <code>crw_crawl</code>, <code>crw_map</code>, <code>crw_check_crawl_status</code>, and <code>crw_parse_file</code></p>
+<p><strong>Time to complete:</strong> ~5 minutes<br><strong>Prerequisites:</strong> Node.js 18+, Claude Code installed<br><strong>Result:</strong> Claude Code gains <code>crw_search</code>, <code>crw_scrape</code>, <code>crw_crawl</code>, <code>crw_map</code>, <code>crw_check_crawl_status</code>, <code>crw_extract</code>, <code>crw_check_extract_status</code>, and <code>crw_parse_file</code></p>
 <hr>
 <h2 id="step-1-register-the-mcp-server">Step 1 — Register the MCP server</h2>
 <h3 id="option-a-local-embedded-mode-zero-setup-no-api-key">Option A: Local embedded mode (zero setup, no API key)</h3>
@@ -292,15 +292,15 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <pre data-lang="bash"><code class="language-bash">claude mcp add crw -- npx -y crw-mcp</code></pre>
 <p>Claude Code writes this into your project <code>.claude/mcp.json</code> automatically. You are done. Start a new Claude Code session and the tools are available.</p>
 <blockquote>
-<p><strong>What you get:</strong> <code>crw_scrape</code>, <code>crw_crawl</code>, <code>crw_check_crawl_status</code>, <code>crw_map</code>, <code>crw_parse_file</code>. <code>crw_search</code> requires a SearXNG backend — use cloud mode to get it instantly.</p>
+<p><strong>What you get:</strong> <code>crw_scrape</code>, <code>crw_crawl</code>, <code>crw_check_crawl_status</code>, <code>crw_map</code>, <code>crw_extract</code>, <code>crw_check_extract_status</code>, <code>crw_parse_file</code>. <code>crw_search</code> requires a SearXNG backend — use cloud mode to get it instantly.</p>
 </blockquote>
-<h3 id="option-b-cloud-mode-all-6-tools-including-crw_search">Option B: Cloud mode (all 6 tools, including <code>crw_search</code>)</h3>
+<h3 id="option-b-cloud-mode-all-8-tools-including-crw_search">Option B: Cloud mode (all 8 tools, including <code>crw_search</code>)</h3>
 <p>Get a free API key at <a href="https://fastcrw.com">fastcrw.com</a> — 500 one-time lifetime credits, no monthly reset.</p>
 <pre data-lang="bash"><code class="language-bash">claude mcp add crw \
   -e CRW_API_URL=https://api.fastcrw.com \
   -e CRW_API_KEY=crw_live_xxxxxxxxxxxx \
   -- npx -y crw-mcp</code></pre>
-<p>This registers the same <code>crw-mcp</code> binary in proxy mode. Tool calls are forwarded to <code>api.fastcrw.com</code>. All 6 tools are advertised, including <code>crw_search</code>.</p>
+<p>This registers the same <code>crw-mcp</code> binary in proxy mode. Tool calls are forwarded to <code>api.fastcrw.com</code>. All 8 tools are advertised, including <code>crw_search</code>.</p>
 <p><strong>Verify it works:</strong></p>
 <pre data-lang="bash"><code class="language-bash">claude mcp list
 # crw   npx crw-mcp   stdio</code></pre>
@@ -413,7 +413,7 @@ Find current sources, not training data.</code></pre>
 
 ## Tool reference (MCP)
 
-All 6 tools registered by `crw-mcp`:
+All 8 tools registered by `crw-mcp`:
 
 | Tool | Required params | Returns |
 |------|-----------------|---------|
@@ -422,6 +422,8 @@ All 6 tools registered by `crw-mcp`:
 | `crw_crawl` | `url` | `{ success, id }` — async job ID |
 | `crw_check_crawl_status` | `id` | `{ status, data: [...], total, completed }` |
 | `crw_map` | `url` | `{ links: [&quot;url1&quot;, ...] }` |
+| `crw_extract` | `urls` | `{ success, id }` — async job ID |
+| `crw_check_extract_status` | `id` | `{ status, results: [{url, status, data, error, llmUsage}] }` |
 | `crw_parse_file` | `contentBase64` | `{ success, data: { markdown } }` |
 
 **Key points:**

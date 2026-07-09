@@ -2,6 +2,7 @@ pub mod breakers;
 pub mod capabilities;
 pub mod change_tracking;
 pub mod crawl;
+pub mod extract;
 pub mod health;
 pub mod map;
 pub mod mcp;

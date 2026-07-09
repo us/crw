@@ -245,16 +245,27 @@ class CrwLoader(BaseLoader):
 
         client = self._get_client()
         urls = [self.url] if isinstance(self.url, str) else self.url
-        data = client.extract(
+        results = client.extract(
             urls,
             prompt=self.query,
             schema=self.params.get("schema"),
-            system_prompt=self.params.get("system_prompt"),
+            llm_api_key=self.params.get("llm_api_key"),
+            llm_provider=self.params.get("llm_provider"),
+            llm_model=self.params.get("llm_model"),
         )
-        yield Document(
-            page_content=json.dumps(data, ensure_ascii=False),
-            metadata={"source": "extract", "urls": list(urls)},
-        )
+        # Native /v1/extract returns one result per URL; emit a Document each,
+        # surfacing per-URL status/error so failures aren't silently swallowed.
+        for r in results:
+            data = r.get("data")
+            yield Document(
+                page_content=json.dumps(data, ensure_ascii=False) if data is not None else "",
+                metadata={
+                    "source": "extract",
+                    "url": r.get("url"),
+                    "status": r.get("status"),
+                    "error": r.get("error"),
+                },
+            )
 
     def _build_sdk_params(self) -> dict[str, Any]:
         """Build keyword arguments for CrwClient methods.

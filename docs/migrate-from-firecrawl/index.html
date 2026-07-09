@@ -402,8 +402,8 @@ export CRW_API_KEY=crw-...</code></pre>
 <p>Both SDKs read the variable automatically. No code change is needed once the env var is in place.</p>
 <hr>
 <h2 id="step-4-port-llm-extraction">Step 4 — Port LLM extraction</h2>
-<p>Firecrawl exposes a standalone <code>/v1/extract</code> route. fastCRW does <strong>not</strong> have that route. Single-URL extraction runs through <code>/v1/scrape</code> with <code>formats: [&quot;json&quot;]</code> and a <code>jsonSchema</code>. The response field is <code>data.json</code>.</p>
-<p>Multi-URL extraction (<code>/v1/extract</code> with an array of URLs) is not supported. Call scrape per URL or use <code>/v1/crawl</code>.</p>
+<p>Firecrawl exposes a standalone <code>/v1/extract</code> route. fastCRW supports both styles: <strong>single-URL</strong> extraction runs through <code>/v1/scrape</code> with <code>formats: [&quot;json&quot;]</code> and a <code>jsonSchema</code> (response field <code>data.json</code>), and <strong>multi-URL</strong> extraction has a native async <code>POST /v1/extract</code> (URLs + prompt/schema) that returns a per-URL <code>results</code> array via <code>GET /v1/extract/{id}</code>.</p>
+<p>Multi-URL extraction: send <code>{ &quot;urls&quot;: [...], &quot;prompt&quot;/&quot;schema&quot;: ... }</code> to <code>/v1/extract</code>, then poll <code>/v1/extract/{id}</code> for <code>results</code> (one <code>{ url, status, data, error }</code> per URL).</p>
 <div class="code-tabs">
       <div class="code-tabs-header"><button class="code-tab active" data-tab="0">Python — before (Firecrawl /extract)</button><button class="code-tab" data-tab="1">Python — after (crw scrape + json_schema)</button></div>
       <div class="code-tab-panel active" data-panel="0"><pre data-lang="python"><code class="language-python">from firecrawl import FirecrawlApp
@@ -547,7 +547,7 @@ console.log(result.json);</code></pre></div>
 <tr>
 <td><strong>MCP tool names</strong></td>
 <td><code>firecrawl_scrape</code>, <code>firecrawl_crawl</code>, …</td>
-<td><code>crw_scrape</code>, <code>crw_crawl</code>, <code>crw_check_crawl_status</code>, <code>crw_map</code>, <code>crw_search</code>, <code>crw_parse_file</code></td>
+<td><code>crw_scrape</code>, <code>crw_crawl</code>, <code>crw_check_crawl_status</code>, <code>crw_map</code>, <code>crw_extract</code>, <code>crw_check_extract_status</code>, <code>crw_search</code>, <code>crw_parse_file</code></td>
 <td>Update any MCP client tool-name references.</td>
 </tr>
 </tbody></table>

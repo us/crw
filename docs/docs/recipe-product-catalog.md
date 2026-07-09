@@ -24,8 +24,9 @@ export CRW_API_KEY="crw-..."
 
 ## How extraction works
 
-Structured extraction in CRW is a scrape mode, not a separate route.
-Send `formats: ["json"]` and a `jsonSchema` to `POST /v1/scrape`.
+For a single page, structured extraction is a scrape mode: send `formats: ["json"]`
+and a `jsonSchema` to `POST /v1/scrape`. (For many URLs at once, use the native async
+`POST /v1/extract` instead.)
 The engine scrapes the page, converts it to markdown, passes that markdown to the
 LLM with your schema, and returns validated JSON in `data.json`.
 

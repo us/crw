@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Extract — CRW Docs</title>
-  <meta name="description" content="Return structured JSON from a known page. In CRW, extraction is a scrape mode: use formats: [&quot;json&quot;] and provide a schema that describes the fields you want back.">
+  <meta name="description" content="Return structured JSON from known pages. For a single page, extraction is a scrape mode: use formats: [&quot;json&quot;] with a prompt and/or schema. For many pages, the native POST /v1/extract runs them as one">
   <meta name="keywords" content="web scraper, web crawler, firecrawl alternative, crawl4ai alternative, self-hosted scraper, rust web scraper, mcp server, ai web scraping, rag pipeline, llm extraction, open source crawler, headless browser scraper">
   <link rel="canonical" href="https://docs.fastcrw.com/extract">
   <link rel="icon" href="/favicon.png?v=2" type="image/png">
@@ -15,13 +15,13 @@
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://docs.fastcrw.com/extract">
   <meta property="og:title" content="Extract — CRW | Web Scraper in Rust">
-  <meta property="og:description" content="Return structured JSON from a known page. In CRW, extraction is a scrape mode: use formats: [&quot;json&quot;] and provide a schema that describes the fields you want back.">
+  <meta property="og:description" content="Return structured JSON from known pages. For a single page, extraction is a scrape mode: use formats: [&quot;json&quot;] with a prompt and/or schema. For many pages, the native POST /v1/extract runs them as one">
   <meta property="og:site_name" content="CRW">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Extract — CRW Docs">
-  <meta name="twitter:description" content="Return structured JSON from a known page. In CRW, extraction is a scrape mode: use formats: [&quot;json&quot;] and provide a schema that describes the fields you want back.">
+  <meta name="twitter:description" content="Return structured JSON from known pages. For a single page, extraction is a scrape mode: use formats: [&quot;json&quot;] with a prompt and/or schema. For many pages, the native POST /v1/extract runs them as one">
 
   <!-- Structured Data (JSON-LD) -->
   <script type="application/ld+json">
@@ -285,10 +285,10 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
       <article id="article" role="main"><div class="page-intro">
   <div class="page-kicker">More API</div>
   <h1 id="extract">Extract</h1>
-  <p class="page-subtitle">Return structured JSON from a known page. In CRW, extraction is a scrape mode: use <code>formats: ["json"]</code> and provide a schema that describes the fields you want back.</p>
+  <p class="page-subtitle">Return structured JSON from known pages. For a single page, extraction is a scrape mode: use <code>formats: ["json"]</code> with a prompt and/or schema. For many pages, the native <code>POST /v1/extract</code> runs them as one async job.</p>
   <div class="page-capabilities">
     <div class="page-capability"><strong>Best for:</strong> schema-first output</div>
-    <div class="page-capability"><strong>Route:</strong> <code>/v1/scrape</code></div>
+    <div class="page-capability"><strong>Route:</strong> <code>/v1/scrape</code> (1 URL) · <code>/v1/extract</code> (many)</div>
     <div class="page-capability"><strong>Start with:</strong> a tiny schema</div>
   </div>
   <div class="page-actions">
@@ -512,7 +512,7 @@ console.log(body.data.json);</code></pre></div><div class="code-tab-panel" data-
 <li>Sending <code>formats: [&quot;json&quot;]</code> without a schema</li>
 <li>Designing a schema that assumes more structure than the page really contains</li>
 <li>Debugging extraction before confirming the underlying scrape succeeded</li>
-<li>Treating extraction as a separate route instead of a scrape mode</li>
+<li>Using the async <code>/v1/extract</code> job for a single URL when a synchronous <code>/v1/scrape</code> with <code>formats: [&quot;json&quot;]</code> is simpler</li>
 </ul>
 <h2 id="when-to-use-something-else">When to use something else</h2>
 <ul>

@@ -25,7 +25,7 @@ The short rule: if your agent needs to *interact* (click, type, fill) or read th
 | **Purpose** | Bulk scrape / crawl / search | Stateful browser interaction |
 | **Session** | Stateless (each call independent) | Persistent session across calls |
 | **State** | None carried between calls | Cookies, auth, DOM state, scroll position all persist |
-| **Tools** | `crw_scrape`, `crw_crawl`, `crw_map`, `crw_search`, `crw_parse_file`, `crw_check_crawl_status` | `goto`, `tree`, `click`, `fill`, `type_text`, `evaluate`, `text`, `html`, `wait`, `console`, `network`, `storage`, `screenshot`, `script` |
+| **Tools** | `crw_scrape`, `crw_crawl`, `crw_map`, `crw_extract`, `crw_check_extract_status`, `crw_search`, `crw_parse_file`, `crw_check_crawl_status` | `goto`, `tree`, `click`, `fill`, `type_text`, `evaluate`, `text`, `html`, `wait`, `console`, `network`, `storage`, `screenshot`, `script` |
 | **Browser required?** | Optional (HTTP-only mode works without CDP) | Required (must have Chrome or Lightpanda running separately) |
 | **Cloud option** | fastcrw.com | Self-hosted only |
 | **Availability** | All modes (embedded + proxy + HTTP) | Self-hosted binary only |
@@ -257,6 +257,6 @@ Expected:
 
 ## See also
 
-- [MCP Server](/docs/mcp) — `crw-mcp` and its 6 read-only scraping tools
+- [MCP Server](/docs/mcp) — `crw-mcp` and its 8 scraping tools
 - [MCP Client Setup](/docs/mcp-clients) — host-by-host config for Claude Code, Cursor, Windsurf, Cline, Continue
 - [JS Rendering](/docs/js-rendering) — when `crw_scrape` with `renderJs: true` is enough

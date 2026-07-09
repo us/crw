@@ -296,8 +296,9 @@ export CRW_API_KEY=&quot;crw-...&quot;
 # The managed cloud (api.fastcrw.com) has one preconfigured.</code></pre>
 <hr>
 <h2 id="how-extraction-works">How extraction works</h2>
-<p>Structured extraction in CRW is a scrape mode, not a separate route.
-Send <code>formats: [&quot;json&quot;]</code> and a <code>jsonSchema</code> to <code>POST /v1/scrape</code>.
+<p>For a single page, structured extraction is a scrape mode: send <code>formats: [&quot;json&quot;]</code>
+and a <code>jsonSchema</code> to <code>POST /v1/scrape</code>. (For many URLs at once, use the native async
+<code>POST /v1/extract</code> instead.)
 The engine scrapes the page, converts it to markdown, passes that markdown to the
 LLM with your schema, and returns validated JSON in <code>data.json</code>.</p>
 <pre><code>POST /v1/scrape

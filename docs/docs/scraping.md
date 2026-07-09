@@ -172,7 +172,7 @@ If you ask for multiple formats, only those formats are populated in the respons
 
 ## Structured extraction
 
-Extraction is part of `scrape`, not a separate route. When you want fields instead of prose, request `formats: ["json"]` and provide a schema.
+For a single page, extraction is part of `scrape`: when you want fields instead of prose, request `formats: ["json"]` and provide a schema. (For structured extraction across many URLs in one job, use the native async [`POST /v1/extract`](/docs/extract).)
 
 ```json
 {

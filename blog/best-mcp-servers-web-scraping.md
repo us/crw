@@ -385,7 +385,7 @@ Yes. MCP is an open standard supported by Claude Desktop, Cursor, Windsurf, and 
 
 ### Which tools does the fastCRW MCP server expose?
 
-The crw-mcp server exposes six tools: scrape, search, crawl, check_crawl_status, map, and parse_file. There is no separate extract tool — structured JSON extraction runs through the scrape tool's json format with a schema. Register it in Claude Code with: claude mcp add fastcrw -- npx -y crw-mcp.
+The crw-mcp server exposes eight tools: scrape, search, crawl, check_crawl_status, map, extract, check_extract_status, and parse_file. Single-URL JSON extraction runs through the scrape tool's json format with a schema; the `extract` tool adds native async multi-URL extraction. Register it in Claude Code with: claude mcp add fastcrw -- npx -y crw-mcp.
 
 ### What's the difference between Playwright MCP and fastCRW MCP?
 

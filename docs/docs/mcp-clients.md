@@ -26,21 +26,25 @@ Use one of these three patterns:
 
 ## What tools you get
 
-Embedded local mode (`crw-mcp`) exposes up to 6 tools:
+Embedded local mode (`crw-mcp`) exposes up to 8 tools:
 
 - `crw_scrape`
 - `crw_crawl`
 - `crw_check_crawl_status`
 - `crw_map`
+- `crw_extract` — structured extraction across URLs (async job)
+- `crw_check_extract_status` — poll an extract job
 - `crw_parse_file` — parse a local PDF (base64) to markdown, no OCR (always present)
 - `crw_search` — only advertised when a SearXNG backend is configured; hidden otherwise
 
-fastcrw.com cloud mode exposes all 6 tools:
+fastcrw.com cloud mode exposes all 8 tools:
 
 - `crw_scrape`
 - `crw_crawl`
 - `crw_check_crawl_status`
 - `crw_map`
+- `crw_extract`
+- `crw_check_extract_status`
 - `crw_parse_file`
 - `crw_search` — always available (managed search backend)
 
@@ -50,7 +54,7 @@ Browser automation mode (`crw-browse`, separate server — v0.4.0+) exposes:
 - `tree` — accessibility snapshot of the current page
 
 :::tip
-If you only remember one rule, remember this one: local embedded mode is the easiest setup (up to 6 tools, with `crw_search` appearing automatically when SearXNG is configured), and fastcrw.com cloud mode is the easiest way to get all 6 tools including always-on web search.
+If you only remember one rule, remember this one: local embedded mode is the easiest setup (up to 8 tools, with `crw_search` appearing automatically when SearXNG is configured), and fastcrw.com cloud mode is the easiest way to get all 8 tools including always-on web search.
 :::
 
 ## Claude Code
@@ -226,7 +230,7 @@ Edit `~/.codeium/windsurf/mcp_config.json`.
 ```
 
 :::note
-Windsurf has a total MCP tool limit. CRW stays lightweight: local embedded mode exposes up to 6 tools (`crw_search` is hidden unless a SearXNG backend is configured), and cloud mode always exposes all 6 tools.
+Windsurf has a total MCP tool limit. CRW stays lightweight: local embedded mode exposes up to 8 tools (`crw_search` is hidden unless a SearXNG backend is configured), and cloud mode always exposes all 8 tools.
 :::
 
 ## Cline
@@ -361,7 +365,7 @@ Open Management (`⌘⇧M`) → **Providers** → **MCP Providers** → **Add MC
 | Command | `npx` |
 | Args | `crw-mcp` |
 
-`crw_*` tools then appear in chat namespaced as `crw_scrape`, `crw_crawl`, `crw_map`, `crw_parse_file` (and `crw_search` when SearXNG is configured).
+`crw_*` tools then appear in chat namespaced as `crw_scrape`, `crw_crawl`, `crw_check_crawl_status`, `crw_map`, `crw_extract`, `crw_check_extract_status`, `crw_parse_file` (and `crw_search` when SearXNG is configured).
 
 ### Or edit the config file
 

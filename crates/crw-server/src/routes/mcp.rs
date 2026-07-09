@@ -112,6 +112,50 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
                 .map_err(|e| format!("{e}"))?;
             serde_json::to_value(&resp).map_err(|e| format!("serialize error: {e}"))
         }
+        "crw_extract" => {
+            use crate::routes::extract::{ExtractRequest, prepare_extract};
+            let req: ExtractRequest =
+                serde_json::from_value(args).map_err(|e| format!("invalid arguments: {e}"))?;
+            // Same validation + SSRF preflight + template as POST /v1/extract.
+            let prepared = prepare_extract(state, req)
+                .await
+                .map_err(|e| format!("{e}"))?;
+            let urls = prepared.valid_count;
+            let id = state
+                .start_extract_job(prepared.entries, prepared.template)
+                .await;
+            Ok(json!({"success": true, "id": id.to_string(), "status": "processing", "urls": urls}))
+        }
+        "crw_check_extract_status" => {
+            use crate::routes::extract::ExtractUrlResult;
+            let id_str = args
+                .get("id")
+                .and_then(|v| v.as_str())
+                .ok_or("missing required parameter: id")?;
+            let id: Uuid = id_str
+                .parse()
+                .map_err(|_| format!("invalid extract id: {id_str}"))?;
+            let rec = {
+                let jobs = state.extract_jobs.read().await;
+                jobs.get(&id)
+                    .cloned()
+                    .ok_or(format!("extract job {id} not found"))?
+            };
+            let results: Vec<ExtractUrlResult> = rec
+                .per_url
+                .into_iter()
+                .map(ExtractUrlResult::from)
+                .collect();
+            serde_json::to_value(json!({
+                "success": !matches!(rec.status, crate::state::ExtractStatus::Failed),
+                "status": rec.status.as_str(),
+                "results": results,
+                "error": rec.error,
+                "creditsUsed": rec.credits_used,
+                "tokensUsed": rec.tokens_used,
+            }))
+            .map_err(|e| format!("serialize error: {e}"))
+        }
         "crw_parse_file" => {
             use base64::Engine;
             let b64 = args

@@ -289,7 +289,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
   <div class="page-capabilities">
     <div class="page-capability"><strong>Six verbs:</strong> scrape, map, crawl, search, extract, parse</div>
     <div class="page-capability"><strong>Start here:</strong> native <code>/v1</code></div>
-    <div class="page-capability"><strong>Extract note:</strong> not a separate route — it is scrape + JSON format</div>
+    <div class="page-capability"><strong>Extract:</strong> single URL = scrape + JSON format; many URLs = native <code>/v1/extract</code></div>
   </div>
   <div class="page-actions">
     <a class="page-btn primary" href="#decision-tree">Jump to decision tree</a>
@@ -341,11 +341,19 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <td>No (yes for <code>answer</code>/<code>summarize_results</code> options)</td>
 </tr>
 <tr>
-<td><strong>extract</strong></td>
+<td><strong>extract</strong> (single URL)</td>
 <td><code>POST /v1/scrape</code></td>
-<td>A URL + JSON schema</td>
-<td><code>data.json</code> — a filled-in object matching your schema</td>
-<td>You need structured fields (price, title, date…) not prose</td>
+<td>A URL + prompt/schema</td>
+<td><code>data.json</code> — a filled-in object</td>
+<td>You have one page and want structured fields (price, title, date…)</td>
+<td><strong>Yes</strong></td>
+</tr>
+<tr>
+<td><strong>extract</strong> (multi-URL)</td>
+<td><code>POST /v1/extract</code></td>
+<td>URLs + prompt/schema</td>
+<td>Async job — poll <code>GET /v1/extract/{id}</code> for a per-URL <code>results</code> array</td>
+<td>You want the same structure extracted across several pages in one job</td>
 <td><strong>Yes</strong></td>
 </tr>
 <tr>
@@ -358,17 +366,19 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 </tr>
 </tbody></table>
 <blockquote>
-<p><strong>Extract is not a separate route.</strong> It is the same <code>POST /v1/scrape</code> endpoint with
-<code>formats: [&quot;json&quot;]</code> and a <code>jsonSchema</code> field. The engine scrapes the page, then passes
-the content to an LLM alongside your schema to fill it in.</p>
+<p><strong>Two ways to extract.</strong> For a <strong>single</strong> page, extraction is just <code>POST /v1/scrape</code>
+with <code>formats: [&quot;json&quot;]</code> + a <code>prompt</code> and/or <code>jsonSchema</code>. For <strong>multiple</strong> URLs, the
+native <code>POST /v1/extract</code> runs them as one async job and returns a per-URL <code>results</code>
+array (each URL keeps its own object; no last-write-wins merge). Both call an LLM.</p>
 </blockquote>
 <h2 id="decision-tree">Decision tree</h2>
 <pre><code>Do you have a file (PDF) to parse?
   └─ Yes ──► Parse   POST /firecrawl/v2/parse
 
-Do you know the exact URL of the page you want?
+Do you know the exact URL(s) of the page(s) you want?
   ├─ Yes ──► Do you need structured fields (price, date, …)?
-  │            ├─ Yes ──► Extract  POST /v1/scrape  (formats:[&quot;json&quot;] + jsonSchema)
+  │            ├─ Yes ──► One URL?  ──► Extract  POST /v1/scrape  (formats:[&quot;json&quot;] + prompt/jsonSchema)
+  │            │          Many URLs? ──► Extract  POST /v1/extract (async, per-URL results)
   │            └─ No  ──► Scrape   POST /v1/scrape
   └─ No  ──► Are you looking across an entire site?
                ├─ Yes ──► Do you want every page's content in one job?
@@ -392,7 +402,18 @@ two fields to the request body:</p>
 }</code></pre>
 <p>CRW scrapes the page and then calls an LLM with your schema to produce the <code>data.json</code>
 field in the response. Because an LLM call is involved, extraction requires either a
-server-side <code>[extraction.llm]</code> configuration (self-hosted) or a per-request <code>llmApiKey</code>.
+server-side <code>[extraction.llm]</code> configuration (self-hosted) or a per-request <code>llmApiKey</code>.</p>
+<h3 id="multiple-urls-post-v1extract">Multiple URLs: <code>POST /v1/extract</code></h3>
+<p>When you want the same structure from several pages, use the native async route instead
+of calling scrape N times:</p>
+<pre data-lang="json"><code class="language-json">{
+  &quot;urls&quot;: [&quot;https://example.com/a&quot;, &quot;https://example.com/b&quot;],
+  &quot;prompt&quot;: &quot;extract the product title and price&quot;,
+  &quot;schema&quot;: { &quot;type&quot;: &quot;object&quot;, &quot;properties&quot;: { &quot;title&quot;: {&quot;type&quot;:&quot;string&quot;}, &quot;price&quot;: {&quot;type&quot;:&quot;string&quot;} } }
+}</code></pre>
+<p>It returns <code>{ &quot;id&quot;, &quot;status&quot;: &quot;processing&quot;, &quot;urls&quot;: 2 }</code>; poll <code>GET /v1/extract/{id}</code> for
+a <code>results</code> array (one <code>{ url, status, data, error }</code> per URL, in request order). Capped
+by <code>crawler.max_extract_urls</code> (default 50) since each URL triggers an LLM call.
 On the hosted service at <code>api.fastcrw.com</code> this is handled automatically.</p>
 <p>See <a href="extract.md">Extract</a> for the full parameter reference and provider options.</p>
 <h2 id="quick-examples">Quick examples</h2>

@@ -1196,6 +1196,11 @@ pub struct CrawlerConfig {
     /// request (sanity cap; plan-level caps live in the SaaS). Default 10000.
     #[serde(default = "default_max_batch_urls")]
     pub max_batch_urls: usize,
+    /// Maximum number of URLs accepted by a single `/v1/extract` request. Much
+    /// tighter than `max_batch_urls` because each URL triggers an LLM call.
+    /// Default 50.
+    #[serde(default = "default_max_extract_urls")]
+    pub max_extract_urls: usize,
 }
 
 fn default_per_host_max_concurrent() -> u32 {
@@ -1219,12 +1224,17 @@ impl Default for CrawlerConfig {
             per_host_min_interval_ms: 0,
             per_host_max_concurrent: default_per_host_max_concurrent(),
             max_batch_urls: default_max_batch_urls(),
+            max_extract_urls: default_max_extract_urls(),
         }
     }
 }
 
 fn default_max_batch_urls() -> usize {
     10_000
+}
+
+fn default_max_extract_urls() -> usize {
+    50
 }
 
 fn default_concurrency() -> usize {

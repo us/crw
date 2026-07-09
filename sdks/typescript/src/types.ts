@@ -68,7 +68,10 @@ export interface ExtractOptions {
   urls: string[];
   prompt?: string;
   schema?: Json;
-  systemPrompt?: string;
+  /** BYOK: use your own LLM key/provider/model instead of the server's. */
+  llmApiKey?: string;
+  llmProvider?: string;
+  llmModel?: string;
   pollInterval?: number;
   timeout?: number;
 }
@@ -91,7 +94,8 @@ export type ScrapeResult = Json;
 export type CrawlResult = Json[];
 export type SearchResult = Json | Json[];
 export type ParseResult = Json;
-export type ExtractResult = Json;
+/** Native `/v1/extract` returns one result object per URL, in request order. */
+export type ExtractResult = Json[];
 export type BatchResult = Json[];
 export type Capabilities = Json;
 export type DiffResult = Json;

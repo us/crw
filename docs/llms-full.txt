@@ -50,8 +50,9 @@ SaaS-only (fastcrw.com/api):
 | GET    | /api/v1/account/balance     | Read included credits + purchased balance    |
 | CRUD   | /api/v1/monitors            | Create/read/update/delete monitors           |
 
-NOT REAL — do not invent or call these routes:
-- /v1/extract (extraction is via /v1/scrape with formats:["json"])
+Native extraction routes:
+- /v1/scrape with formats:["json"] + jsonSchema — single-URL structured extraction (response data.json)
+- POST /v1/extract (urls[] + prompt/schema) — native async multi-URL extraction; poll GET /v1/extract/{id} for a per-URL results[] array
 
 
 ================================================================================
@@ -399,7 +400,7 @@ metadata.renderedWith in response: "http"|"lightpanda"|"chrome"|"chrome_proxy"|"
 
 
 ================================================================================
-## PART 7 — MCP SERVER (6 TOOLS)
+## PART 7 — MCP SERVER (8 TOOLS)
 ================================================================================
 
 Package: crw-mcp (npm: npx crw-mcp | cargo: cargo install crw-mcp)
@@ -516,6 +517,32 @@ Availability: always in proxy/cloud mode; embedded only when SearXNG is configur
 
 Example:
   crw_search(query="renewable energy 2025", limit=5)
+
+────────────────────────────────────────────────────────────────────────────────
+### Tool: crw_extract  →  POST /v1/extract
+────────────────────────────────────────────────────────────────────────────────
+Start an async multi-URL structured-extraction job. Returns a job ID — poll with
+crw_check_extract_status. Requires an LLM (server config or byok). At least one of
+prompt/schema is required.
+
+Parameters:
+  urls            string[]  required  URLs to extract from
+  prompt          string    opt       Free-text extraction objective
+  schema          object    opt       JSON Schema constraining the output
+  llmApiKey       string    opt       BYOK LLM key (self-host/local engine only)
+  llmProvider     string    opt       BYOK provider
+  llmModel        string    opt       BYOK model
+
+Returns: {"id": "job-uuid", "status": "processing", "urls": N}
+
+────────────────────────────────────────────────────────────────────────────────
+### Tool: crw_check_extract_status  →  GET /v1/extract/:id
+────────────────────────────────────────────────────────────────────────────────
+Poll an async extract job. Returns status and, when complete, a per-URL results
+array: [{url, status, data, error, llmUsage}] in request order.
+
+Parameters:
+  id              string    required  Extract job id from crw_extract
 
 ────────────────────────────────────────────────────────────────────────────────
 ### Tool: crw_parse_file  →  POST /firecrawl/v2/parse

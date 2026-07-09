@@ -424,21 +424,25 @@ class CrwClient:
         urls: list[str],
         prompt: str | None = None,
         schema: dict | None = None,
-        system_prompt: str | None = None,
+        llm_api_key: str | None = None,
+        llm_provider: str | None = None,
+        llm_model: str | None = None,
         poll_interval: float = 2.0,
         timeout: float = 120.0,
-    ) -> dict:
-        """Run structured LLM extraction across one or more URLs (HTTP mode only).
+    ) -> list[dict]:
+        """Run native multi-URL structured extraction (HTTP mode only).
 
-        Starts an async ``/v2/extract`` job, polls until completion, and returns
-        the merged ``data`` object. Requires an LLM provider configured on the
-        engine (or a BYOK key on the server).
+        Starts an async ``/v1/extract`` job, polls until completion, and returns
+        the per-URL ``results`` array (``[{url, status, data, error, llmUsage}]``)
+        in request order. Requires an LLM configured on the engine (or a BYOK key).
 
         Args:
             urls: URLs to extract from (at least one required).
-            prompt: Free-text extraction instruction.
+            prompt: Free-text extraction instruction (required unless ``schema``).
             schema: JSON Schema describing the desired output shape.
-            system_prompt: Optional system prompt for the extractor.
+            llm_api_key: BYOK LLM key (self-host/local engine only).
+            llm_provider: BYOK provider.
+            llm_model: BYOK model.
         """
         if not self._api_url:
             raise CrwError(_HTTP_ONLY_HINT.format(name="extract", reason="LLM extract job endpoint"))
@@ -448,10 +452,14 @@ class CrwClient:
             body["prompt"] = prompt
         if schema is not None:
             body["schema"] = schema
-        if system_prompt is not None:
-            body["systemPrompt"] = system_prompt
+        if llm_api_key is not None:
+            body["llmApiKey"] = llm_api_key
+        if llm_provider is not None:
+            body["llmProvider"] = llm_provider
+        if llm_model is not None:
+            body["llmModel"] = llm_model
 
-        start = self._http_request("POST", "/v2/extract", body, raw=True)
+        start = self._http_request("POST", "/v1/extract", body, raw=True)
         job_id = start.get("id")
         if not job_id:
             raise CrwError(f"extract did not return job ID: {start}")
@@ -461,11 +469,11 @@ class CrwClient:
             if time.monotonic() > deadline:
                 raise CrwTimeoutError(f"Extract {job_id} timed out after {timeout}s")
             status_result = self._http_request(
-                "GET", f"/v2/extract/{job_id}", raw=True, check_success=False
+                "GET", f"/v1/extract/{job_id}", raw=True, check_success=False
             )
             status = status_result.get("status")
             if status == "completed":
-                return status_result.get("data", {})
+                return status_result.get("results", [])
             if status == "failed":
                 raise CrwError(f"Extract failed: {status_result.get('error', 'unknown')}")
             time.sleep(poll_interval)

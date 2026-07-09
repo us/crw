@@ -1,10 +1,10 @@
 <div class="page-intro">
   <div class="page-kicker">More API</div>
   <h1>Extract</h1>
-  <p class="page-subtitle">Return structured JSON from a known page. In CRW, extraction is a scrape mode: use <code>formats: ["json"]</code> and provide a schema that describes the fields you want back.</p>
+  <p class="page-subtitle">Return structured JSON from known pages. For a single page, extraction is a scrape mode: use <code>formats: ["json"]</code> with a prompt and/or schema. For many pages, the native <code>POST /v1/extract</code> runs them as one async job.</p>
   <div class="page-capabilities">
     <div class="page-capability"><strong>Best for:</strong> schema-first output</div>
-    <div class="page-capability"><strong>Route:</strong> <code>/v1/scrape</code></div>
+    <div class="page-capability"><strong>Route:</strong> <code>/v1/scrape</code> (1 URL) · <code>/v1/extract</code> (many)</div>
     <div class="page-capability"><strong>Start with:</strong> a tiny schema</div>
   </div>
   <div class="page-actions">
@@ -213,7 +213,7 @@ If the underlying page scrape is weak, the JSON extraction will also be weak.
 - Sending `formats: ["json"]` without a schema
 - Designing a schema that assumes more structure than the page really contains
 - Debugging extraction before confirming the underlying scrape succeeded
-- Treating extraction as a separate route instead of a scrape mode
+- Using the async `/v1/extract` job for a single URL when a synchronous `/v1/scrape` with `formats: ["json"]` is simpler
 
 ## When to use something else
 
