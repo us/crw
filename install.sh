@@ -196,7 +196,16 @@ install() {
   # interactive terminal ([ -t 1 ] + readable /dev/tty). Non-interactive runs
   # (CI, logged pipe) just print the next step. Opt out with CRW_NO_SETUP=1.
   if [ "$BINARY" = "crw" ]; then
-    if [ "${CRW_NO_SETUP:-}" != "1" ] && [ -t 1 ] && [ -e /dev/tty ]; then
+    if [ "${CRW_NO_SETUP:-}" != "1" ] && [ -n "${CRW_API_KEY:-}" ]; then
+      # One-command cloud connect: `curl … | CRW_API_KEY=crw_live_… sh`.
+      # Non-interactive — validates the key and writes config.toml, no /dev/tty
+      # needed (works in CI too).
+      echo ""
+      info "Connecting to CRW Cloud with your API key…"
+      echo ""
+      "${INSTALL_DIR}/${BINARY}" setup --api-key "${CRW_API_KEY}" \
+        || info "Cloud connect failed — run 'crw setup --api-key <key>' to retry."
+    elif [ "${CRW_NO_SETUP:-}" != "1" ] && [ -t 1 ] && [ -e /dev/tty ]; then
       echo ""
       info "One step left — let's get you scraping."
       info "Cloud gives you 500 free credits in ~30s (no card, no Docker), or self-host local:"
