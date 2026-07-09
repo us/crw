@@ -75,6 +75,15 @@ function writeJson(file, obj) {
  * embedded binary needs no config) or {CRW_API_KEY, CRW_API_URL} for cloud.
  * Returns a short human label of what was done.
  */
+// Spawn the MCP server via `npx -y crw-mcp` rather than a bare `crw-mcp`. A
+// fresh `npx crw-mcp install` leaves NO `crw-mcp` on PATH (npx is ephemeral),
+// so a bare command would give the agent a server it can't launch. npx resolves
+// the launcher each spawn (first run downloads the native binary), so the
+// config works with zero extra install steps. Matches the SaaS "MCP config"
+// docs. Users who prefer the fast native binary can still swap in `crw-mcp`.
+const MCP_CMD = "npx";
+const MCP_ARGS = ["-y", "crw-mcp"];
+
 function installMcp(agent, env) {
   const m = agent.mcp;
   const hasEnv = Object.keys(env).length > 0;
@@ -82,7 +91,7 @@ function installMcp(agent, env) {
   if (m.kind === "claude-cli") {
     // add-json avoids the `-e` variadic-name pitfall and merges ~/.claude.json
     // (user scope) correctly. Idempotent-ish: remove a stale entry first.
-    const server = { command: "crw-mcp", ...(hasEnv ? { env } : {}) };
+    const server = { command: MCP_CMD, args: MCP_ARGS, ...(hasEnv ? { env } : {}) };
     spawnSync("claude", ["mcp", "remove", "--scope", "user", "crw"], { stdio: "ignore" });
     const r = spawnSync(
       "claude",
@@ -101,7 +110,8 @@ function installMcp(agent, env) {
     cfg.mcpServers = cfg.mcpServers || {};
     cfg.mcpServers.crw = {
       ...(m.withType ? { type: "stdio" } : {}),
-      command: "crw-mcp",
+      command: MCP_CMD,
+      args: MCP_ARGS,
       ...(hasEnv ? { env } : {}),
     };
     writeJson(file, cfg);
@@ -115,7 +125,7 @@ function installMcp(agent, env) {
     cfg.mcp = cfg.mcp || {};
     cfg.mcp.crw = {
       type: "local",
-      command: ["crw-mcp"],
+      command: [MCP_CMD, ...MCP_ARGS],
       ...(hasEnv ? { environment: env } : {}),
     };
     writeJson(file, cfg);
@@ -137,7 +147,7 @@ function installMcp(agent, env) {
       ? "\n[mcp_servers.crw.env]\n" +
         Object.entries(env).map(([k, v]) => `${k} = "${v}"`).join("\n") + "\n"
       : "";
-    const block = `\n[mcp_servers.crw]\ncommand = "crw-mcp"\n${envLines}`;
+    const block = `\n[mcp_servers.crw]\ncommand = "${MCP_CMD}"\nargs = [${MCP_ARGS.map((a) => `"${a}"`).join(", ")}]\n${envLines}`;
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.appendFileSync(file, (toml && !toml.endsWith("\n") ? "\n" : "") + block, "utf-8");
     return `MCP → ${m.file}`;
