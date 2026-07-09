@@ -356,11 +356,23 @@ class TestHttpOnlyMethods:
         client = CrwClient(api_url="https://fastcrw.com/api")
         start = {"success": True, "id": "job-1"}
         processing = {"success": True, "status": "processing"}
-        done = {"success": True, "status": "completed", "data": {"title": "Hi"}}
-        with patch.object(client, "_http_request", side_effect=[start, processing, done]):
+        done = {
+            "success": True,
+            "status": "completed",
+            "results": [
+                {"url": "https://example.com", "status": "completed", "data": {"title": "Hi"}}
+            ],
+        }
+        with patch.object(
+            client, "_http_request", side_effect=[start, processing, done]
+        ) as req:
             with patch("time.sleep"):
                 result = client.extract(["https://example.com"], schema={"x": 1})
-        assert result == {"title": "Hi"}
+        assert result == [
+            {"url": "https://example.com", "status": "completed", "data": {"title": "Hi"}}
+        ]
+        # Native route, not the FC-legacy /v2/extract.
+        assert req.call_args_list[0][0][:2] == ("POST", "/v1/extract")
 
     def test_batch_scrape_returns_pages(self) -> None:
         client = CrwClient(api_url="https://fastcrw.com/api")

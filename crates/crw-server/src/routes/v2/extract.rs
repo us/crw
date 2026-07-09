@@ -16,7 +16,7 @@ use crw_core::types::{OutputFormat, ScrapeRequest};
 
 use super::adapters::expires_at_rfc3339;
 use crate::error::AppError;
-use crate::state::{AppState, ExtractStatus};
+use crate::state::{AppState, ExtractStatus, PreparedUrl};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -73,7 +73,15 @@ pub async fn start_extract(
         ..Default::default()
     };
 
-    let id = state.start_extract_job(valid, template).await;
+    // v2 early-returns on the first bad URL (above), so every entry is valid.
+    let entries = valid
+        .into_iter()
+        .map(|url| PreparedUrl {
+            url,
+            preflight_error: None,
+        })
+        .collect();
+    let id = state.start_extract_job(entries, template).await;
     Ok(Json(V2ExtractStartResponse {
         success: true,
         id: id.to_string(),

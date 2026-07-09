@@ -108,6 +108,6 @@ MCP (Model Context Protocol) is a standard that lets AI assistants call external
 claude mcp add crw -- npx -y crw-mcp
 ```
 
-Once registered, your AI assistant gains six web tools (`crw_scrape`, `crw_crawl`, `crw_map`, `crw_search` (SearXNG-backed search; available when a SearXNG backend is configured), `crw_parse_file`, and more). On the next conversation turn the assistant can call them automatically whenever it needs to fetch a live page or run a crawl. No further setup is needed for the embedded mode.
+Once registered, your AI assistant gains eight web tools (`crw_scrape`, `crw_crawl`, `crw_check_crawl_status`, `crw_map`, `crw_extract`, `crw_check_extract_status`, `crw_search` (SearXNG-backed search; available when a SearXNG backend is configured), and `crw_parse_file`). On the next conversation turn the assistant can call them automatically whenever it needs to fetch a live page or run a crawl. No further setup is needed for the embedded mode.
 
 For client-specific config files (Codex, Cursor, Windsurf, Cline, Continue.dev) and the proxy mode that connects to the fastcrw.com cloud, see [MCP Server](mcp.md).

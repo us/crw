@@ -61,11 +61,13 @@ CRW_LOCAL=1 node app.js
 ¹ Local search needs a SearXNG URL configured on the engine.
 
 ```ts
-// Structured extraction:
-const data = await crw.extract({
+// Structured extraction (async job → per-URL results array):
+const results = await crw.extract({
   urls: ["https://example.com"],
   schema: { type: "object", properties: { title: { type: "string" } } },
 });
+// results: [{ url, status, data, error, llmUsage }]
+for (const r of results) if (r.status === "completed") console.log(r.url, r.data);
 
 // Parse a PDF:
 import { readFileSync } from "node:fs";

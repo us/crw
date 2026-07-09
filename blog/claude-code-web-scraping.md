@@ -312,7 +312,7 @@ Install the CRW MCP server with npx -y crw-mcp, then register it with claude mcp
 
 ### What is CRW MCP for Claude Code?
 
-CRW is an open-source web scraper with a built-in MCP (Model Context Protocol) server. When connected to Claude Code, the crw-mcp server exposes six tools — scrape, search, crawl, check_crawl_status, map, and parse_file — that let Claude Code fetch and read live web pages (and files, including PDFs) directly from your terminal. Structured JSON extraction runs through the scrape tool's json format with a schema, so there is no separate extract tool.
+CRW is an open-source web scraper with a built-in MCP (Model Context Protocol) server. When connected to Claude Code, the crw-mcp server exposes eight tools — scrape, search, crawl, check_crawl_status, map, extract, check_extract_status, and parse_file — that let Claude Code fetch and read live web pages (and files, including PDFs) directly from your terminal. Single-URL structured JSON extraction runs through the scrape tool's json format with a schema; the `extract` tool adds native async multi-URL extraction.
 
 ### Does Claude Code web scraping require an API key?
 

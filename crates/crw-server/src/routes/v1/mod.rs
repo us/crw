@@ -25,6 +25,14 @@ pub fn router() -> Router<AppState> {
                 .fallback(method_not_allowed),
         )
         .route(
+            "/v1/extract",
+            post(routes::extract::start_extract).fallback(method_not_allowed),
+        )
+        .route(
+            "/v1/extract/{id}",
+            get(routes::extract::get_extract).fallback(method_not_allowed),
+        )
+        .route(
             "/v1/map",
             post(routes::map::map).fallback(method_not_allowed),
         )

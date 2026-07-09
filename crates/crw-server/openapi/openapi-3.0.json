@@ -256,15 +256,19 @@
     },
     "/v1/change-tracking/diff": {
       "post": {
-        "tags": ["change-tracking"],
+        "tags": [
+          "change-tracking"
+        ],
         "summary": "Diff current scrape content against a previous snapshot",
-        "description": "Stateless: opencore stores nothing — the caller supplies the previous snapshot. Accepts a single body or a batch array (presence of batch selects batch mode). The crawl-path workhorse for monitors.",
+        "description": "Stateless: opencore stores nothing \u2014 the caller supplies the previous snapshot. Accepts a single body or a batch array (presence of batch selects batch mode). The crawl-path workhorse for monitors.",
         "operationId": "changeTrackingDiff",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ChangeTrackingDiffRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/ChangeTrackingDiffRequest"
+              }
             }
           }
         },
@@ -275,13 +279,25 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["success", "data"],
+                  "required": [
+                    "success",
+                    "data"
+                  ],
                   "properties": {
-                    "success": { "type": "boolean" },
+                    "success": {
+                      "type": "boolean"
+                    },
                     "data": {
                       "oneOf": [
-                        { "$ref": "#/components/schemas/ChangeTrackingResult" },
-                        { "type": "array", "items": { "$ref": "#/components/schemas/ChangeTrackingResult" } }
+                        {
+                          "$ref": "#/components/schemas/ChangeTrackingResult"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ChangeTrackingResult"
+                          }
+                        }
                       ]
                     }
                   }
@@ -289,8 +305,12 @@
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
         }
       }
     },
@@ -299,8 +319,9 @@
         "tags": [
           "extract"
         ],
-        "summary": "Structured JSON extraction (alias for scrape + formats:[json])",
-        "operationId": "extract",
+        "summary": "Start an async multi-URL structured extraction job",
+        "description": "Native extraction. Returns a per-URL array via GET /v1/extract/{id}. At least one of `prompt` or `schema` is required.",
+        "operationId": "extractStart",
         "requestBody": {
           "required": true,
           "content": {
@@ -313,14 +334,52 @@
         },
         "responses": {
           "200": {
-            "description": "Extracted JSON",
+            "description": "Extract job accepted; poll with /v1/extract/{id}",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ExtractResponse"
+                  "$ref": "#/components/schemas/ExtractAccepted"
                 }
               }
             }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/v1/extract/{id}": {
+      "get": {
+        "tags": [
+          "extract"
+        ],
+        "summary": "Get extract job status and per-URL results",
+        "operationId": "extractStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Extract job id returned by POST /v1/extract"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job status + per-URL extraction results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtractStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
           }
         }
       }
@@ -727,31 +786,40 @@
       "ExtractRequest": {
         "type": "object",
         "required": [
-          "url"
+          "urls"
         ],
+        "description": "At least one of `prompt` or `schema` must be present.",
         "properties": {
-          "url": {
+          "urls": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uri"
+            },
+            "description": "URLs to extract from (1..crawler.max_extract_urls)."
+          },
+          "prompt": {
             "type": "string",
-            "format": "uri"
+            "description": "Free-text extraction objective."
           },
           "schema": {
             "type": "object",
-            "additionalProperties": true
-          },
-          "prompt": {
-            "type": "string"
+            "additionalProperties": true,
+            "description": "JSON Schema constraining the extracted output."
           },
           "llmApiKey": {
             "type": "string",
-            "description": "BYOK: LLM provider API key (required unless server has one configured)"
+            "description": "BYOK LLM API key."
           },
           "llmProvider": {
-            "type": "string",
-            "description": "LLM provider name (e.g. openai, anthropic)"
+            "type": "string"
           },
           "llmModel": {
-            "type": "string",
-            "description": "Model identifier passed to the provider"
+            "type": "string"
+          },
+          "basis": {
+            "type": "boolean",
+            "description": "Per-field attribution (Phase 2b). Rejected with 400 while unsupported."
           }
         }
       },
@@ -793,46 +861,118 @@
       "ChangeTrackingOptions": {
         "type": "object",
         "properties": {
-          "modes": { "type": "array", "items": { "type": "string", "enum": ["gitDiff", "json"] }, "description": "Diff surfaces. gitDiff = markdown unified diff + AST; json = per-field diff; both = mixed." },
-          "schema": { "type": "object", "additionalProperties": true, "description": "JSON schema of tracked fields (json/mixed mode)" },
-          "prompt": { "type": "string" },
-          "previous": { "$ref": "#/components/schemas/ChangeTrackingSnapshot" },
-          "tag": { "type": "string", "description": "Opaque caller tag echoed on the result" },
-          "contentType": { "type": "string", "description": "MIME type; non-text content is hashed, not diffed" }
+          "modes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "gitDiff",
+                "json"
+              ]
+            },
+            "description": "Diff surfaces. gitDiff = markdown unified diff + AST; json = per-field diff; both = mixed."
+          },
+          "schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "JSON schema of tracked fields (json/mixed mode)"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "previous": {
+            "$ref": "#/components/schemas/ChangeTrackingSnapshot"
+          },
+          "tag": {
+            "type": "string",
+            "description": "Opaque caller tag echoed on the result"
+          },
+          "contentType": {
+            "type": "string",
+            "description": "MIME type; non-text content is hashed, not diffed"
+          }
         }
       },
       "ChangeTrackingSnapshot": {
         "type": "object",
         "properties": {
-          "markdown": { "type": "string", "description": "Present for gitDiff/mixed mode" },
-          "json": { "type": "object", "additionalProperties": true, "description": "Present for json/mixed mode" },
-          "contentHash": { "type": "string", "description": "Mode-aware hash; persist + supply on the next check" },
-          "capturedAt": { "type": "string", "description": "Caller-stamped capture time, echoed untouched" }
+          "markdown": {
+            "type": "string",
+            "description": "Present for gitDiff/mixed mode"
+          },
+          "json": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Present for json/mixed mode"
+          },
+          "contentHash": {
+            "type": "string",
+            "description": "Mode-aware hash; persist + supply on the next check"
+          },
+          "capturedAt": {
+            "type": "string",
+            "description": "Caller-stamped capture time, echoed untouched"
+          }
         }
       },
       "ChangeDiff": {
         "type": "object",
         "properties": {
-          "text": { "type": "string", "description": "Unified markdown diff (gitDiff/mixed)" },
-          "json": { "type": "object", "additionalProperties": true, "description": "Parse-diff AST (gitDiff-only) OR per-field path map {previous,current} (json/mixed)" }
+          "text": {
+            "type": "string",
+            "description": "Unified markdown diff (gitDiff/mixed)"
+          },
+          "json": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Parse-diff AST (gitDiff-only) OR per-field path map {previous,current} (json/mixed)"
+          }
         }
       },
       "ChangeJudgment": {
         "type": "object",
-        "required": ["meaningful", "confidence", "reason"],
+        "required": [
+          "meaningful",
+          "confidence",
+          "reason"
+        ],
         "properties": {
-          "meaningful": { "type": "boolean" },
-          "confidence": { "type": "string", "enum": ["low", "medium", "high"] },
-          "reason": { "type": "string" },
+          "meaningful": {
+            "type": "boolean"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
           "meaningfulChanges": {
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
-                "type": { "type": "string", "enum": ["added", "removed", "changed"] },
-                "before": { "type": "string" },
-                "after": { "type": "string" },
-                "reason": { "type": "string" }
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "added",
+                    "removed",
+                    "changed"
+                  ]
+                },
+                "before": {
+                  "type": "string"
+                },
+                "after": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
               }
             }
           }
@@ -840,43 +980,138 @@
       },
       "ChangeTrackingResult": {
         "type": "object",
-        "required": ["status", "contentHash"],
+        "required": [
+          "status",
+          "contentHash"
+        ],
         "properties": {
-          "status": { "type": "string", "enum": ["same", "changed"], "description": "Per-page status. Set-level new/removed are computed by the caller's reconciler." },
-          "firstObservation": { "type": "boolean", "description": "True when no previous was supplied — caller maps to 'new'" },
-          "contentHash": { "type": "string" },
-          "snapshot": { "$ref": "#/components/schemas/ChangeTrackingSnapshot" },
-          "diff": { "$ref": "#/components/schemas/ChangeDiff" },
-          "judgment": { "$ref": "#/components/schemas/ChangeJudgment" },
-          "tag": { "type": "string" },
-          "truncated": { "type": "boolean" }
+          "status": {
+            "type": "string",
+            "enum": [
+              "same",
+              "changed"
+            ],
+            "description": "Per-page status. Set-level new/removed are computed by the caller's reconciler."
+          },
+          "firstObservation": {
+            "type": "boolean",
+            "description": "True when no previous was supplied \u2014 caller maps to 'new'"
+          },
+          "contentHash": {
+            "type": "string"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/ChangeTrackingSnapshot"
+          },
+          "diff": {
+            "$ref": "#/components/schemas/ChangeDiff"
+          },
+          "judgment": {
+            "$ref": "#/components/schemas/ChangeJudgment"
+          },
+          "tag": {
+            "type": "string"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
         }
       },
       "ChangeTrackingDiffItem": {
         "type": "object",
-        "required": ["current"],
+        "required": [
+          "current"
+        ],
         "properties": {
-          "url": { "type": "string", "format": "uri" },
-          "current": { "type": "object", "properties": { "markdown": { "type": "string" }, "json": { "type": "object", "additionalProperties": true } } },
-          "previous": { "$ref": "#/components/schemas/ChangeTrackingSnapshot" },
-          "modes": { "type": "array", "items": { "type": "string", "enum": ["gitDiff", "json"] } },
-          "schema": { "type": "object", "additionalProperties": true },
-          "prompt": { "type": "string" },
-          "contentType": { "type": "string" },
-          "tag": { "type": "string" }
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "current": {
+            "type": "object",
+            "properties": {
+              "markdown": {
+                "type": "string"
+              },
+              "json": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          },
+          "previous": {
+            "$ref": "#/components/schemas/ChangeTrackingSnapshot"
+          },
+          "modes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "gitDiff",
+                "json"
+              ]
+            }
+          },
+          "schema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string"
+          }
         }
       },
       "ChangeTrackingDiffRequest": {
         "type": "object",
         "description": "Single body (provide 'current') OR batch (provide 'batch'). Top-level modes/schema/prompt/contentType act as shared defaults in batch mode.",
         "properties": {
-          "batch": { "type": "array", "items": { "$ref": "#/components/schemas/ChangeTrackingDiffItem" } },
-          "current": { "type": "object", "properties": { "markdown": { "type": "string" }, "json": { "type": "object", "additionalProperties": true } } },
-          "previous": { "$ref": "#/components/schemas/ChangeTrackingSnapshot" },
-          "modes": { "type": "array", "items": { "type": "string", "enum": ["gitDiff", "json"] } },
-          "schema": { "type": "object", "additionalProperties": true },
-          "prompt": { "type": "string" },
-          "contentType": { "type": "string" }
+          "batch": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChangeTrackingDiffItem"
+            }
+          },
+          "current": {
+            "type": "object",
+            "properties": {
+              "markdown": {
+                "type": "string"
+              },
+              "json": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          },
+          "previous": {
+            "$ref": "#/components/schemas/ChangeTrackingSnapshot"
+          },
+          "modes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "gitDiff",
+                "json"
+              ]
+            }
+          },
+          "schema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string"
+          }
         }
       },
       "Error": {
@@ -898,6 +1133,105 @@
           },
           "message": {
             "type": "string"
+          }
+        }
+      },
+      "ExtractAccepted": {
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "urls"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "processing"
+            ]
+          },
+          "urls": {
+            "type": "integer",
+            "description": "Count of URLs enqueued for fetch (preflight-failed URLs appear in results, not here)."
+          }
+        }
+      },
+      "ExtractUrlResult": {
+        "type": "object",
+        "required": [
+          "url",
+          "status"
+        ],
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "failed"
+            ]
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Extracted JSON object (present when status is completed)."
+          },
+          "error": {
+            "type": "string"
+          },
+          "llmUsage": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Per-URL LLM token usage (provider/model/input/output tokens)."
+          }
+        }
+      },
+      "ExtractStatus": {
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "expiresAt",
+          "creditsUsed",
+          "tokensUsed"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "processing",
+              "completed",
+              "failed"
+            ]
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExtractUrlResult"
+            },
+            "description": "Per-URL results in original request order."
+          },
+          "error": {
+            "type": "string",
+            "description": "Job-level error, set only when every URL failed."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "creditsUsed": {
+            "type": "integer"
+          },
+          "tokensUsed": {
+            "type": "integer"
           }
         }
       }

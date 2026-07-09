@@ -133,12 +133,14 @@ Crawl state is held in memory (not persisted). This means a CRW restart abandons
 
 ## MCP Server
 
-The MCP (Model Context Protocol) server reuses CRW's scraping engine directly. It exposes six tools:
+The MCP (Model Context Protocol) server reuses CRW's scraping engine directly. It exposes eight tools:
 
 - `crw_scrape` — delegates to the scrape handler
 - `crw_crawl` — starts an async crawl job and returns its id; the caller polls `crw_check_crawl_status` until the job completes (the same async model as the HTTP `/v1/crawl` endpoint)
 - `crw_check_crawl_status` — polls a crawl job and returns its pages
 - `crw_map` — returns the URL map for a site
+- `crw_extract` — starts an async multi-URL structured-extraction job; the caller polls `crw_check_extract_status` (same async model as `/v1/extract`)
+- `crw_check_extract_status` — polls an extract job and returns its per-URL results
 - `crw_search` — web search (always in proxy mode; in embedded mode only with a SearXNG backend)
 - `crw_parse_file` — parses a local PDF to markdown
 

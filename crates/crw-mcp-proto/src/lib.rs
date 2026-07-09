@@ -238,6 +238,59 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
                 "required": ["url"]
             }
         }),
+        json!({
+            "name": "crw_extract",
+            "title": "Extract structured data",
+            "description": "Extract structured JSON from URLs via a prompt and/or JSON schema. Async job — poll crw_check_extract_status with the returned id. Needs an LLM.",
+            // Starting an extract creates server-side job state (a side effect),
+            // so this is NOT read-only and NOT idempotent (same as crw_crawl).
+            "annotations": {
+                "readOnlyHint": false,
+                "destructiveHint": false,
+                "idempotentHint": false,
+                "openWorldHint": true
+            },
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "urls": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "URLs to extract from"
+                    },
+                    "prompt": {
+                        "type": "string",
+                        "description": "Free-text extraction objective (required unless schema is given)"
+                    },
+                    "schema": {
+                        "type": "object",
+                        "description": "JSON Schema constraining the extracted output"
+                    },
+                    "llmApiKey": { "type": "string", "description": "BYOK LLM API key" },
+                    "llmProvider": { "type": "string" },
+                    "llmModel": { "type": "string" }
+                },
+                "required": ["urls"]
+            }
+        }),
+        json!({
+            "name": "crw_check_extract_status",
+            "title": "Check extract job status",
+            "description": "Poll an extract job; returns status and, when complete, a per-URL results array.",
+            "annotations": {
+                "readOnlyHint": true,
+                "destructiveHint": false,
+                "idempotentHint": true,
+                "openWorldHint": true
+            },
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "id": { "type": "string", "description": "Extract job id from crw_extract" }
+                },
+                "required": ["id"]
+            }
+        }),
     ];
 
     // `crw_search` is always advertised. In embedded mode it dispatches to a
@@ -739,10 +792,13 @@ mod tests {
     /// is sufficient for a regression gate. Real cl100k count is ~25–30% lower.
     ///
     /// Baseline before the Phase 1 trim was 8233 bytes (~2744 est-tok). After the
-    /// Phase 1 trim + Phase 3 annotations/titles the full 6-tool list is ~6189 bytes
-    /// (~2063 est-tok ≈ ~1450 real cl100k tok). The ceiling is floor + ~11% so the
-    /// gate catches real bloat without churning on minor edits.
-    const TOOLS_LIST_TOKEN_CEILING: usize = 2300;
+    /// Phase 1 trim + Phase 3 annotations/titles + the two native extract tools the
+    /// full 8-tool list is ~8017 bytes (~2673 est-tok). The ceiling is floor + ~3%
+    /// headroom so the gate catches real bloat without churning on minor edits.
+    // Raised from 2300 when the two native extract tools (crw_extract +
+    // crw_check_extract_status) were added — proportional to the existing
+    // per-tool footprint, not description bloat.
+    const TOOLS_LIST_TOKEN_CEILING: usize = 2750;
 
     #[test]
     fn tools_list_token_budget() {
@@ -1221,8 +1277,8 @@ mod tests {
         assert_eq!(out["data"]["truncated"], json!(true));
     }
 
-    /// A1 — every tool advertises annotations + a title; crw_crawl is the only
-    /// non-read-only / non-idempotent tool; crw_parse_file is the only closed-world.
+    /// A1 — every tool advertises annotations + a title; crw_crawl and crw_extract
+    /// are the non-read-only / non-idempotent tools; crw_parse_file is the only closed-world.
     #[test]
     fn a1_tools_advertise_annotations_and_title() {
         let defs = tool_definitions(false);
@@ -1240,6 +1296,10 @@ mod tests {
         let crawl = tool_by_name(&defs, "crw_crawl");
         assert_eq!(crawl["annotations"]["readOnlyHint"], json!(false));
         assert_eq!(crawl["annotations"]["idempotentHint"], json!(false));
+        // crw_extract also starts a job — must be non-read-only, non-idempotent.
+        let extract = tool_by_name(&defs, "crw_extract");
+        assert_eq!(extract["annotations"]["readOnlyHint"], json!(false));
+        assert_eq!(extract["annotations"]["idempotentHint"], json!(false));
         let scrape = tool_by_name(&defs, "crw_scrape");
         assert_eq!(scrape["annotations"]["readOnlyHint"], json!(true));
         assert_eq!(scrape["annotations"]["openWorldHint"], json!(true));
@@ -1247,7 +1307,7 @@ mod tests {
         assert_eq!(parse["annotations"]["openWorldHint"], json!(false));
     }
 
-    /// A2 — is_known_tool recognizes all 6 tool names, rejects others.
+    /// A2 — is_known_tool recognizes all 8 tool names, rejects others.
     #[test]
     fn a2_is_known_tool() {
         for name in [
@@ -1257,6 +1317,8 @@ mod tests {
             "crw_map",
             "crw_search",
             "crw_parse_file",
+            "crw_extract",
+            "crw_check_extract_status",
         ] {
             assert!(is_known_tool(name), "{name} should be known");
         }
@@ -1288,10 +1350,10 @@ mod tests {
         }
         let with = list(true);
         assert!(with.contains(&"crw_search".to_string()));
-        assert_eq!(with.len(), 6);
+        assert_eq!(with.len(), 8);
         let without = list(false);
         assert!(!without.contains(&"crw_search".to_string()));
-        assert_eq!(without.len(), 5);
+        assert_eq!(without.len(), 7);
     }
 
     /// B13 — crw_search inlined scrape content (flat + grouped) is truncated.

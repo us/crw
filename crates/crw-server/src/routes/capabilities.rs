@@ -18,7 +18,19 @@ pub struct Capabilities {
     pub llm: LlmCapabilities,
     pub formats: FormatCapabilities,
     pub search: SearchCapabilities,
+    pub extract: ExtractCapabilities,
     pub documents: DocumentCapabilities,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtractCapabilities {
+    /// Native `POST /v1/extract` (async multi-URL structured extraction) is live.
+    pub supported: bool,
+    /// Max URLs accepted per request (`crawler.max_extract_urls`).
+    pub max_urls: usize,
+    /// Per-field `basis` attribution (Phase 2b). False until 2b ships.
+    pub per_field_attribution: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -112,6 +124,11 @@ pub async fn capabilities(State(state): State<AppState>) -> Json<Capabilities> {
         search: SearchCapabilities {
             answer: true,
             summarize_results: true,
+        },
+        extract: ExtractCapabilities {
+            supported: true,
+            max_urls: state.config.crawler.max_extract_urls,
+            per_field_attribution: false,
         },
         documents: {
             let pdf_on = crw_extract::pdf::PDF_SUPPORTED && state.config.document.enabled;

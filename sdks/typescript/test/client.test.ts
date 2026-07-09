@@ -77,6 +77,36 @@ test("non-2xx body surfaces engine error as CrwApiError", async () => {
   await assert.rejects(() => c.scrape("https://example.com"), /boom/);
 });
 
+test("extract starts a /v1/extract job and returns per-URL results", async () => {
+  let n = 0;
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    calls.push({ url: String(url), init });
+    const body =
+      n++ === 0
+        ? { success: true, id: "job-1" }
+        : {
+            success: true,
+            status: "completed",
+            results: [{ url: "https://example.com", status: "completed", data: { title: "Hi" } }],
+          };
+    return { ok: true, status: 200, statusText: "OK", text: async () => JSON.stringify(body) } as Response;
+  }) as typeof fetch;
+
+  const c = new CrwClient({ apiKey: "fc-test" });
+  const results = await c.extract({ urls: ["https://example.com"], schema: { type: "object" }, llmApiKey: "sk" });
+
+  assert.equal(calls[0].url, `${CLOUD_API_URL}/v1/extract`);
+  const postBody = JSON.parse(calls[0].init!.body as string);
+  assert.deepEqual(postBody.urls, ["https://example.com"]);
+  assert.equal(postBody.llmApiKey, "sk");
+  assert.ok(calls[1].url.startsWith(`${CLOUD_API_URL}/v1/extract/job-1`));
+  assert.equal(results.length, 1);
+  const r0 = results[0] as { url: string; data: { title: string } };
+  assert.equal(r0.url, "https://example.com");
+  assert.equal(r0.data.title, "Hi");
+});
+
 test("capabilities unwraps and uses GET /v1/capabilities", async () => {
   const calls = mockFetch({ version: "0.14.0" });
   const c = new CrwClient({ apiKey: "fc-test" });

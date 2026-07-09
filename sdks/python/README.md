@@ -155,11 +155,15 @@ These require `api_url` (a running server / cloud):
 ```python
 client = CrwClient(api_key="YOUR_KEY")  # cloud (default)
 
-# Structured LLM extraction across URLs (async job, polled to completion):
-data = client.extract(
+# Structured LLM extraction across URLs (async job, polled to completion).
+# Returns a per-URL results array: [{url, status, data, error, llmUsage}]
+results = client.extract(
     ["https://example.com"],
     schema={"type": "object", "properties": {"title": {"type": "string"}}},
 )
+for r in results:
+    if r["status"] == "completed":
+        print(r["url"], r["data"])
 
 # Scrape many URLs in one async batch:
 pages = client.batch_scrape(["https://a.com", "https://b.com"], formats=["markdown"])

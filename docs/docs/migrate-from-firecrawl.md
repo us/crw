@@ -170,9 +170,9 @@ Both SDKs read the variable automatically. No code change is needed once the env
 
 ## Step 4 — Port LLM extraction
 
-Firecrawl exposes a standalone `/v1/extract` route. fastCRW does **not** have that route. Single-URL extraction runs through `/v1/scrape` with `formats: ["json"]` and a `jsonSchema`. The response field is `data.json`.
+Firecrawl exposes a standalone `/v1/extract` route. fastCRW supports both styles: **single-URL** extraction runs through `/v1/scrape` with `formats: ["json"]` and a `jsonSchema` (response field `data.json`), and **multi-URL** extraction has a native async `POST /v1/extract` (URLs + prompt/schema) that returns a per-URL `results` array via `GET /v1/extract/{id}`.
 
-Multi-URL extraction (`/v1/extract` with an array of URLs) is not supported. Call scrape per URL or use `/v1/crawl`.
+Multi-URL extraction: send `{ "urls": [...], "prompt"/"schema": ... }` to `/v1/extract`, then poll `/v1/extract/{id}` for `results` (one `{ url, status, data, error }` per URL).
 
 :::tabs
 ::tab{title="Python — before (Firecrawl /extract)"}
@@ -281,7 +281,7 @@ The following table lists the gaps documented in [COMPATIBILITY-firecrawl.md](..
 | **Fire-engine anti-bot** | Firecrawl Cloud only | Not available (same as Firecrawl self-host) | For heavy bot-protected pages, compare output quality on real targets. |
 | **Screenshot format** | Supported | Not supported — `/v1/scrape` rejects `"screenshot"` with HTTP 400 (`"Unknown format 'screenshot'"`) | Remove `"screenshot"` from your `formats` array. |
 | **`data.metadata` field names** | Some keys differ | Minor divergence on a few keys | Inspect `metadata` on a real response; don't assume key names are identical. |
-| **MCP tool names** | `firecrawl_scrape`, `firecrawl_crawl`, … | `crw_scrape`, `crw_crawl`, `crw_check_crawl_status`, `crw_map`, `crw_search`, `crw_parse_file` | Update any MCP client tool-name references. |
+| **MCP tool names** | `firecrawl_scrape`, `firecrawl_crawl`, … | `crw_scrape`, `crw_crawl`, `crw_check_crawl_status`, `crw_map`, `crw_extract`, `crw_check_extract_status`, `crw_search`, `crw_parse_file` | Update any MCP client tool-name references. |
 
 ---
 

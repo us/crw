@@ -576,7 +576,7 @@ console.log(body.data.markdown);</code></pre></div><div class="code-tab-panel" d
 </ul>
 <p>If you ask for multiple formats, only those formats are populated in the response.</p>
 <h2 id="structured-extraction">Structured extraction</h2>
-<p>Extraction is part of <code>scrape</code>, not a separate route. When you want fields instead of prose, request <code>formats: [&quot;json&quot;]</code> and provide a schema.</p>
+<p>For a single page, extraction is part of <code>scrape</code>: when you want fields instead of prose, request <code>formats: [&quot;json&quot;]</code> and provide a schema. (For structured extraction across many URLs in one job, use the native async <a href="/docs/extract"><code>POST /v1/extract</code></a>.)</p>
 <pre data-lang="json"><code class="language-json">{
   &quot;url&quot;: &quot;https://example.com/product/123&quot;,
   &quot;formats&quot;: [&quot;json&quot;],

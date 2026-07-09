@@ -191,22 +191,28 @@ export class CrwClient {
     return this.localTransport().toolCall("crw_parse_file", args);
   }
 
-  /** Structured LLM extraction across URLs (HTTP mode only). */
+  /**
+   * Native multi-URL structured extraction (HTTP mode only). Starts an async
+   * `/v1/extract` job and polls until complete, returning a per-URL results
+   * array (`[{ url, status, data, error, llmUsage }]`) in request order.
+   */
   async extract(opts: ExtractOptions): Promise<ExtractResult> {
     if (!this.apiUrl) throw new CrwError(httpOnlyHint("extract", "LLM extract job endpoint"));
-    const { urls, prompt, schema, systemPrompt, pollInterval = 2, timeout = 120 } = opts;
+    const { urls, prompt, schema, llmApiKey, llmProvider, llmModel, pollInterval = 2, timeout = 120 } = opts;
     const body: Json = { urls: [...urls] };
     if (prompt !== undefined) body.prompt = prompt;
     if (schema !== undefined) body.schema = schema;
-    if (systemPrompt !== undefined) body.systemPrompt = systemPrompt;
-    const start = await this.httpRequest("POST", "/v2/extract", body, { raw: true });
+    if (llmApiKey !== undefined) body.llmApiKey = llmApiKey;
+    if (llmProvider !== undefined) body.llmProvider = llmProvider;
+    if (llmModel !== undefined) body.llmModel = llmModel;
+    const start = await this.httpRequest("POST", "/v1/extract", body, { raw: true });
     const jobId = start.id as string | undefined;
     if (!jobId) throw new CrwError(`extract did not return job ID: ${JSON.stringify(start)}`);
     const deadline = Date.now() + timeout * 1000;
     for (;;) {
       if (Date.now() > deadline) throw new CrwTimeoutError(`Extract ${jobId} timed out after ${timeout}s`);
-      const status = await this.httpRequest("GET", `/v2/extract/${jobId}`, undefined, { raw: true, checkSuccess: false });
-      if (status.status === "completed") return (status.data as Json) ?? {};
+      const status = await this.httpRequest("GET", `/v1/extract/${jobId}`, undefined, { raw: true, checkSuccess: false });
+      if (status.status === "completed") return (status.results as Json[]) ?? [];
       if (status.status === "failed") throw new CrwError(`Extract failed: ${status.error ?? "unknown"}`);
       await sleep(pollInterval * 1000);
     }

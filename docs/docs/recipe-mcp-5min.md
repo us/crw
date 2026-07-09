@@ -4,7 +4,7 @@ This recipe walks from zero to a working Claude Code agent that can search the w
 
 **Time to complete:** ~5 minutes  
 **Prerequisites:** Node.js 18+, Claude Code installed  
-**Result:** Claude Code gains `crw_search`, `crw_scrape`, `crw_crawl`, `crw_map`, `crw_check_crawl_status`, and `crw_parse_file`
+**Result:** Claude Code gains `crw_search`, `crw_scrape`, `crw_crawl`, `crw_map`, `crw_check_crawl_status`, `crw_extract`, `crw_check_extract_status`, and `crw_parse_file`
 
 ---
 
@@ -20,9 +20,9 @@ claude mcp add crw -- npx -y crw-mcp
 
 Claude Code writes this into your project `.claude/mcp.json` automatically. You are done. Start a new Claude Code session and the tools are available.
 
-> **What you get:** `crw_scrape`, `crw_crawl`, `crw_check_crawl_status`, `crw_map`, `crw_parse_file`. `crw_search` requires a SearXNG backend — use cloud mode to get it instantly.
+> **What you get:** `crw_scrape`, `crw_crawl`, `crw_check_crawl_status`, `crw_map`, `crw_extract`, `crw_check_extract_status`, `crw_parse_file`. `crw_search` requires a SearXNG backend — use cloud mode to get it instantly.
 
-### Option B: Cloud mode (all 6 tools, including `crw_search`)
+### Option B: Cloud mode (all 8 tools, including `crw_search`)
 
 Get a free API key at [fastcrw.com](https://fastcrw.com) — 500 one-time lifetime credits, no monthly reset.
 
@@ -33,7 +33,7 @@ claude mcp add crw \
   -- npx -y crw-mcp
 ```
 
-This registers the same `crw-mcp` binary in proxy mode. Tool calls are forwarded to `api.fastcrw.com`. All 6 tools are advertised, including `crw_search`.
+This registers the same `crw-mcp` binary in proxy mode. Tool calls are forwarded to `api.fastcrw.com`. All 8 tools are advertised, including `crw_search`.
 
 **Verify it works:**
 
@@ -187,7 +187,7 @@ Claude now has 5 live search results with titles, URLs, and descriptions. It pic
 
 ## Tool reference (MCP)
 
-All 6 tools registered by `crw-mcp`:
+All 8 tools registered by `crw-mcp`:
 
 | Tool | Required params | Returns |
 |------|-----------------|---------|
@@ -196,6 +196,8 @@ All 6 tools registered by `crw-mcp`:
 | `crw_crawl` | `url` | `{ success, id }` — async job ID |
 | `crw_check_crawl_status` | `id` | `{ status, data: [...], total, completed }` |
 | `crw_map` | `url` | `{ links: ["url1", ...] }` |
+| `crw_extract` | `urls` | `{ success, id }` — async job ID |
+| `crw_check_extract_status` | `id` | `{ status, results: [{url, status, data, error, llmUsage}] }` |
 | `crw_parse_file` | `contentBase64` | `{ success, data: { markdown } }` |
 
 **Key points:**

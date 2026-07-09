@@ -15,6 +15,8 @@
 //! - `crw_check_crawl_status` — poll crawl job status
 //! - `crw_map` — discover URLs on a website
 //! - `crw_search` — web search (embedded uses local SearXNG sidecar; proxy forwards to remote API)
+//! - `crw_extract` — start an async multi-URL structured extraction job
+//! - `crw_check_extract_status` — poll extract job status
 //!
 //! # Usage
 //!
@@ -252,6 +254,31 @@ async fn proxy_call_tool(
                 .headers(headers)
                 .timeout(TIMEOUT_SEARCH)
                 .json(&args)
+                .send()
+                .await
+                .map_err(|e| format!("HTTP request failed: {e}"))?;
+            parse_response(resp).await
+        }
+        "crw_extract" => {
+            let resp = client
+                .post(format!("{base_url}/v1/extract"))
+                .headers(headers)
+                .timeout(TIMEOUT_CRAWL_KICKOFF)
+                .json(&args)
+                .send()
+                .await
+                .map_err(|e| format!("HTTP request failed: {e}"))?;
+            parse_response(resp).await
+        }
+        "crw_check_extract_status" => {
+            let id = args
+                .get("id")
+                .and_then(|v| v.as_str())
+                .ok_or("missing required parameter: id")?;
+            let resp = client
+                .get(format!("{base_url}/v1/extract/{id}"))
+                .headers(headers)
+                .timeout(TIMEOUT_CRAWL_STATUS)
                 .send()
                 .await
                 .map_err(|e| format!("HTTP request failed: {e}"))?;

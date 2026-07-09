@@ -5,7 +5,7 @@
   <div class="page-capabilities">
     <div class="page-capability"><strong>Six verbs:</strong> scrape, map, crawl, search, extract, parse</div>
     <div class="page-capability"><strong>Start here:</strong> native <code>/v1</code></div>
-    <div class="page-capability"><strong>Extract note:</strong> not a separate route — it is scrape + JSON format</div>
+    <div class="page-capability"><strong>Extract:</strong> single URL = scrape + JSON format; many URLs = native <code>/v1/extract</code></div>
   </div>
   <div class="page-actions">
     <a class="page-btn primary" href="#decision-tree">Jump to decision tree</a>
@@ -23,12 +23,14 @@ New to CRW? Use `/v1`. Use `/firecrawl/v2` when migrating Firecrawl v2 SDK code 
 | **map** | `POST /v1/map` | A domain or start URL | List of URLs discovered under that origin | You need to enumerate pages before scraping or crawling | No |
 | **crawl** | `POST /v1/crawl` | A start URL | Async job — poll `GET /v1/crawl/{id}` for all pages | You want every page under a URL scraped in one background job | No (yes if you add `summary` to `scrapeOptions`) |
 | **search** | `POST /v1/search` | A query string | Ranked web search results, optionally with scraped content | You do not have a URL — you want the web to find relevant pages | No (yes for `answer`/`summarize_results` options) |
-| **extract** | `POST /v1/scrape` | A URL + JSON schema | `data.json` — a filled-in object matching your schema | You need structured fields (price, title, date…) not prose | **Yes** |
+| **extract** (single URL) | `POST /v1/scrape` | A URL + prompt/schema | `data.json` — a filled-in object | You have one page and want structured fields (price, title, date…) | **Yes** |
+| **extract** (multi-URL) | `POST /v1/extract` | URLs + prompt/schema | Async job — poll `GET /v1/extract/{id}` for a per-URL `results` array | You want the same structure extracted across several pages in one job | **Yes** |
 | **parse** | `POST /firecrawl/v2/parse` | A PDF file upload | Markdown (or JSON/summary with schema) from the document | You have a local file, not a URL | No (yes for `summary`/`json` formats) |
 
-> **Extract is not a separate route.** It is the same `POST /v1/scrape` endpoint with
-> `formats: ["json"]` and a `jsonSchema` field. The engine scrapes the page, then passes
-> the content to an LLM alongside your schema to fill it in.
+> **Two ways to extract.** For a **single** page, extraction is just `POST /v1/scrape`
+> with `formats: ["json"]` + a `prompt` and/or `jsonSchema`. For **multiple** URLs, the
+> native `POST /v1/extract` runs them as one async job and returns a per-URL `results`
+> array (each URL keeps its own object; no last-write-wins merge). Both call an LLM.
 
 ## Decision tree
 
@@ -36,9 +38,10 @@ New to CRW? Use `/v1`. Use `/firecrawl/v2` when migrating Firecrawl v2 SDK code 
 Do you have a file (PDF) to parse?
   └─ Yes ──► Parse   POST /firecrawl/v2/parse
 
-Do you know the exact URL of the page you want?
+Do you know the exact URL(s) of the page(s) you want?
   ├─ Yes ──► Do you need structured fields (price, date, …)?
-  │            ├─ Yes ──► Extract  POST /v1/scrape  (formats:["json"] + jsonSchema)
+  │            ├─ Yes ──► One URL?  ──► Extract  POST /v1/scrape  (formats:["json"] + prompt/jsonSchema)
+  │            │          Many URLs? ──► Extract  POST /v1/extract (async, per-URL results)
   │            └─ No  ──► Scrape   POST /v1/scrape
   └─ No  ──► Are you looking across an entire site?
                ├─ Yes ──► Do you want every page's content in one job?
@@ -70,6 +73,23 @@ two fields to the request body:
 CRW scrapes the page and then calls an LLM with your schema to produce the `data.json`
 field in the response. Because an LLM call is involved, extraction requires either a
 server-side `[extraction.llm]` configuration (self-hosted) or a per-request `llmApiKey`.
+
+### Multiple URLs: `POST /v1/extract`
+
+When you want the same structure from several pages, use the native async route instead
+of calling scrape N times:
+
+```json
+{
+  "urls": ["https://example.com/a", "https://example.com/b"],
+  "prompt": "extract the product title and price",
+  "schema": { "type": "object", "properties": { "title": {"type":"string"}, "price": {"type":"string"} } }
+}
+```
+
+It returns `{ "id", "status": "processing", "urls": 2 }`; poll `GET /v1/extract/{id}` for
+a `results` array (one `{ url, status, data, error }` per URL, in request order). Capped
+by `crawler.max_extract_urls` (default 50) since each URL triggers an LLM call.
 On the hosted service at `api.fastcrw.com` this is handled automatically.
 
 See [Extract](extract.md) for the full parameter reference and provider options.

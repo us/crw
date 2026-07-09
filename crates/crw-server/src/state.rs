@@ -103,13 +103,36 @@ impl ExtractStatus {
     }
 }
 
-/// A `/v2/extract` job record. `data` is the single merged JSON object (the
-/// scrape's `json` field unioned across URLs), matching the live API's
-/// `GET /v2/extract/{id}` `data` shape (an object, not an array of documents).
+/// One URL's extraction outcome. Powers the native `/v1/extract` per-URL array
+/// contract (`results:[{url,status,data,error,llmUsage}]`), which sidesteps the
+/// FC-legacy last-write-wins merge. `llm_usage` lets the SaaS settle real cost.
+#[derive(Debug, Clone)]
+pub struct UrlResult {
+    pub url: String,
+    pub status: ExtractStatus,
+    pub data: Option<serde_json::Value>,
+    pub error: Option<String>,
+    pub llm_usage: Option<crw_core::types::LlmUsage>,
+}
+
+/// A URL prepared by the handler for the worker, in original request order.
+/// `preflight_error: Some(..)` marks a parse/SSRF failure that must surface as a
+/// `failed` result without being fetched (native contract: no silent drops).
+#[derive(Debug, Clone)]
+pub struct PreparedUrl {
+    pub url: String,
+    pub preflight_error: Option<String>,
+}
+
+/// An async extract job record. `data` is the single merged JSON object (the
+/// scrape's `json` field unioned across URLs), preserved for the FC-legacy
+/// `GET /v2/extract/{id}` `data` shape. `per_url` is the native per-URL array
+/// (`GET /v1/extract/{id}`), in original request order.
 #[derive(Debug, Clone)]
 pub struct ExtractRecord {
     pub status: ExtractStatus,
     pub data: Option<serde_json::Value>,
+    pub per_url: Vec<UrlResult>,
     pub tokens_used: u32,
     pub credits_used: u32,
     pub error: Option<String>,
@@ -472,10 +495,17 @@ impl AppState {
         id
     }
 
-    /// Start a `/v2/extract` job. Scrapes each URL with `formats:[json]` + the
-    /// shared schema (already set on `template`) and merges the per-URL `json`
-    /// objects into one — matching the live API's single-object `data` shape.
-    pub async fn start_extract_job(&self, urls: Vec<String>, template: ScrapeRequest) -> Uuid {
+    /// Start an async extract job. Each entry is scraped with `formats:[json]` +
+    /// the shared template; per-URL `json` objects are both (a) merged into one
+    /// object for the FC-legacy `data` shape and (b) kept as an ordered per-URL
+    /// array for the native `/v1/extract` contract. `entries` is in original
+    /// request order and may include preflight-failed URLs (surfaced as `failed`
+    /// results without being fetched).
+    pub async fn start_extract_job(
+        &self,
+        entries: Vec<PreparedUrl>,
+        template: ScrapeRequest,
+    ) -> Uuid {
         let id = Uuid::new_v4();
         {
             let mut jobs = self.extract_jobs.write().await;
@@ -484,6 +514,7 @@ impl AppState {
                 ExtractRecord {
                     status: ExtractStatus::Processing,
                     data: None,
+                    per_url: Vec::new(),
                     tokens_used: 0,
                     credits_used: 0,
                     error: None,
@@ -504,14 +535,31 @@ impl AppState {
             let deadline_ms = config.effective_deadline_ms(template.deadline_ms, template.wait_for);
 
             let mut merged = serde_json::Map::new();
+            let mut per_url: Vec<UrlResult> = Vec::with_capacity(entries.len());
             let mut tokens = 0u32;
             let mut credits = 0u32;
             let mut last_err: Option<String> = None;
             let mut any_ok = false;
 
-            for u in urls {
+            for entry in entries {
+                // Preflight-failed URLs (bad parse / SSRF) surface as `failed`
+                // without a fetch — never silently dropped. Record the error at
+                // job level too so an all-preflight-failed job reports `Failed`
+                // (not `Completed`) via the `!any_ok && last_err` check below.
+                if let Some(err) = entry.preflight_error {
+                    last_err = Some(err.clone());
+                    per_url.push(UrlResult {
+                        url: entry.url,
+                        status: ExtractStatus::Failed,
+                        data: None,
+                        error: Some(err),
+                        llm_usage: None,
+                    });
+                    continue;
+                }
+
                 let mut req = template.clone();
-                req.url = u;
+                req.url = entry.url.clone();
                 let deadline = Deadline::from_request_ms(deadline_ms);
                 match scrape_url(
                     &req,
@@ -527,17 +575,34 @@ impl AppState {
                 {
                     Ok(d) => {
                         any_ok = true;
-                        if let Some(serde_json::Value::Object(obj)) = d.json {
+                        if let Some(serde_json::Value::Object(obj)) = &d.json {
                             for (k, v) in obj {
-                                merged.insert(k, v);
+                                merged.insert(k.clone(), v.clone());
                             }
                         }
-                        if let Some(usage) = d.llm_usage {
+                        if let Some(usage) = &d.llm_usage {
                             tokens += usage.total_tokens;
                         }
                         credits += if d.credit_cost == 0 { 1 } else { d.credit_cost };
+                        per_url.push(UrlResult {
+                            url: entry.url,
+                            status: ExtractStatus::Completed,
+                            data: d.json,
+                            error: None,
+                            llm_usage: d.llm_usage,
+                        });
                     }
-                    Err(e) => last_err = Some(e.to_string()),
+                    Err(e) => {
+                        let msg = e.to_string();
+                        last_err = Some(msg.clone());
+                        per_url.push(UrlResult {
+                            url: entry.url,
+                            status: ExtractStatus::Failed,
+                            data: None,
+                            error: Some(msg),
+                            llm_usage: None,
+                        });
+                    }
                 }
             }
 
@@ -550,7 +615,12 @@ impl AppState {
                     rec.status = ExtractStatus::Completed;
                     rec.data = Some(serde_json::Value::Object(merged));
                 }
+                rec.per_url = per_url;
                 rec.tokens_used = tokens;
+                // ponytail: 1-credit floor even on an all-failed job — inherited
+                // from the v2 worker's accounting; preflight-failed URLs add 0
+                // (they `continue` before the credit tally). SaaS settles the
+                // real cost separately, so this engine figure is a floor, not a bill.
                 rec.credits_used = credits.max(1);
             }
         });

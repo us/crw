@@ -64,7 +64,7 @@ async fn mcp_initialize_returns_capabilities() {
 
 #[tokio::test]
 async fn mcp_tools_list_returns_all_tools() {
-    // With a search backend configured, all 6 tools are advertised.
+    // With a search backend configured, all 8 tools are advertised.
     let server = test_app_with_search();
     let resp = server
         .post("/mcp")
@@ -76,8 +76,8 @@ async fn mcp_tools_list_returns_all_tools() {
     let tools = json["result"]["tools"].as_array().unwrap();
     assert_eq!(
         tools.len(),
-        6,
-        "Should have 6 tools: scrape, crawl, check, map, search, parse_file"
+        8,
+        "Should have 8 tools: scrape, crawl, check, map, search, parse_file, extract, check_extract"
     );
 
     let tool_names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
@@ -87,8 +87,12 @@ async fn mcp_tools_list_returns_all_tools() {
     assert!(tool_names.contains(&"crw_map"));
     assert!(tool_names.contains(&"crw_search"));
     assert!(tool_names.contains(&"crw_parse_file"));
+    assert!(tool_names.contains(&"crw_extract"));
+    assert!(tool_names.contains(&"crw_check_extract_status"));
 
-    // Every tool advertises annotations; crw_crawl is the only non-read-only one.
+    // Every tool advertises annotations. Job-starting tools (crw_crawl,
+    // crw_extract) have side effects and must NOT be marked read-only.
+    let non_read_only = ["crw_crawl", "crw_extract"];
     for t in tools {
         assert!(
             t["annotations"].is_object(),
@@ -100,6 +104,11 @@ async fn mcp_tools_list_returns_all_tools() {
             "{} must advertise a title",
             t["name"]
         );
+        let name = t["name"].as_str().unwrap();
+        let read_only = t["annotations"]["readOnlyHint"].as_bool().unwrap_or(true);
+        if non_read_only.contains(&name) {
+            assert!(!read_only, "{name} starts a job — must not be readOnly");
+        }
     }
     let crawl = tools.iter().find(|t| t["name"] == "crw_crawl").unwrap();
     assert_eq!(crawl["annotations"]["readOnlyHint"], false);
@@ -122,7 +131,7 @@ async fn mcp_tools_list_hides_search_without_backend() {
     let json: serde_json::Value = resp.json();
     let tools = json["result"]["tools"].as_array().unwrap();
     let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
-    assert_eq!(tools.len(), 5, "crw_search hidden without a backend");
+    assert_eq!(tools.len(), 7, "crw_search hidden without a backend");
     assert!(!names.contains(&"crw_search"));
     assert!(names.contains(&"crw_scrape"));
 }

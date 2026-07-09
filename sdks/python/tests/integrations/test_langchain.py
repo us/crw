@@ -296,7 +296,10 @@ class TestParseMode:
 
 class TestExtractMode:
     def test_extract_yields_json_document(self, mock_client):
-        mock_client.extract.return_value = {"title": "Hello"}
+        # Native /v1/extract returns a per-URL results array.
+        mock_client.extract.return_value = [
+            {"url": "https://example.com", "status": "completed", "data": {"title": "Hello"}}
+        ]
         loader = CrwLoader(
             url="https://example.com",
             mode="extract",
@@ -308,6 +311,7 @@ class TestExtractMode:
         assert len(docs) == 1
         assert '"title": "Hello"' in docs[0].page_content
         assert docs[0].metadata["source"] == "extract"
+        assert docs[0].metadata["url"] == "https://example.com"
         # prompt comes from query, schema from params
         assert mock_client.extract.call_args[1]["prompt"] == "Get the title"
         assert mock_client.extract.call_args[1]["schema"] == {"type": "object"}
