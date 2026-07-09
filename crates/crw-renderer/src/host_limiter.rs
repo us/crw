@@ -15,27 +15,36 @@
 use dashmap::DashMap;
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
-use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
+use tokio::sync::Mutex;
 use tokio::time::Instant;
+
+use crw_core::{LanePermit, ReservedSemaphore};
 
 /// Stale entries are dropped after this idle duration during periodic GC.
 const RATE_LIMITER_TTL: Duration = Duration::from_secs(3600);
 
-type RateLimiterEntry = (Arc<Mutex<RateLimiter>>, Arc<Semaphore>, Instant);
+type RateLimiterEntry = (Arc<Mutex<RateLimiter>>, ReservedSemaphore, Instant);
 
 static DOMAIN_RATE_LIMITERS: LazyLock<DashMap<String, RateLimiterEntry>> =
     LazyLock::new(DashMap::new);
 
 static LIMITER_CALL_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-/// Get or create a (rate limiter, per-host semaphore) pair for the given
-/// **already-normalized** host key. Pass the eTLD+1 form produced by
+/// Get or create a (rate limiter, per-host reserved semaphore) pair for the
+/// given **already-normalized** host key. Pass the eTLD+1 form produced by
 /// [`crate::preference::normalize_host`].
+///
+/// The semaphore is a [`ReservedSemaphore`] sized `per_host_max_concurrent +
+/// interactive_reserve`: batch/crawl are bounded to `per_host_max_concurrent`
+/// per host (target politeness), while interactive gets `interactive_reserve`
+/// dedicated slots so it's never queued behind a batch — yet total in-flight
+/// per host stays bounded (no target hammering).
 pub fn get_host_limiter(
     host_key: &str,
     rps: f64,
     per_host_max_concurrent: usize,
-) -> (Arc<Mutex<RateLimiter>>, Arc<Semaphore>) {
+    interactive_reserve: usize,
+) -> (Arc<Mutex<RateLimiter>>, ReservedSemaphore) {
     let now = Instant::now();
     if LIMITER_CALL_COUNT
         .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
@@ -69,7 +78,8 @@ pub fn get_host_limiter(
         .or_insert_with(|| {
             (
                 Arc::new(Mutex::new(RateLimiter::new(rps))),
-                Arc::new(Semaphore::new(cap)),
+                // total = batch cap + interactive reserve; reserved = interactive.
+                ReservedSemaphore::new(cap + interactive_reserve, interactive_reserve, "host"),
                 now,
             )
         });
@@ -80,15 +90,23 @@ pub fn get_host_limiter(
 /// the caller must sleep to honour the rate limit. The caller is responsible
 /// for performing the sleep (so it doesn't happen while holding any other
 /// async lock) and for keeping the permit alive across the request.
+///
+/// Class-aware (the A reserved lane): interactive takes a reserved per-host slot
+/// (never queued behind batch), batch stays bounded to `per_host_max_concurrent`
+/// per host. Both honour the rate limiter (target RPS). The returned
+/// [`LanePermit`] must be held across the request.
 pub async fn acquire(
     host_key: &str,
     rps: f64,
     per_host_max_concurrent: usize,
-) -> Result<(OwnedSemaphorePermit, Duration), tokio::sync::AcquireError> {
-    let (rate_limiter, sem) = get_host_limiter(host_key, rps, per_host_max_concurrent);
-    let permit = sem.acquire_owned().await?;
+    interactive_reserve: usize,
+) -> (LanePermit, Duration) {
+    let (rate_limiter, sem) =
+        get_host_limiter(host_key, rps, per_host_max_concurrent, interactive_reserve);
+    // Read class on the async side; acquire is infallible (semaphore never closed).
+    let permit = sem.acquire(crw_core::current_scrape_class()).await;
     let sleep = rate_limiter.lock().await.next_sleep();
-    Ok((permit, sleep))
+    (permit, sleep)
 }
 
 /// Minimum-interval rate limiter. Public so `crw-crawl` can keep its existing
@@ -158,25 +176,58 @@ mod tests {
 
     #[tokio::test]
     async fn acquire_returns_permit_and_sleep() {
-        let (_p, sleep) = acquire("test-acquire-1.example", 0.0, 1).await.unwrap();
+        // Unscoped = Interactive = takes a reserved per-host slot, no sleep.
+        let (_p, sleep) = acquire("test-acquire-1.example", 0.0, 1, 1).await;
         assert_eq!(sleep, Duration::ZERO);
     }
 
     #[tokio::test]
-    async fn per_host_cap_serializes() {
-        let (p1, _) = acquire("test-cap.example", 0.0, 1).await.unwrap();
-        // Second acquire must wait — verify it doesn't complete in 50ms.
-        let acquire_fut = acquire("test-cap.example", 0.0, 1);
-        let race = tokio::time::timeout(Duration::from_millis(50), acquire_fut).await;
-        assert!(race.is_err(), "second acquire should block while p1 held");
-        drop(p1);
-        // Now it should succeed quickly.
-        let (_p2, _) = tokio::time::timeout(
-            Duration::from_millis(200),
-            acquire("test-cap.example", 0.0, 1),
-        )
-        .await
-        .expect("second acquire should succeed after release")
-        .unwrap();
+    async fn per_host_cap_serializes_batch() {
+        // Batch traffic is bounded to `per_host_max_concurrent` (=1 here); a
+        // second concurrent batch acquire to the same host must wait.
+        crw_core::REQUEST_CLASS
+            .scope(crw_core::ScrapeClass::Batch, async {
+                let (p1, _) = acquire("test-cap.example", 0.0, 1, 1).await;
+                // Second batch acquire must wait — verify it doesn't complete in 50ms.
+                let acquire_fut = acquire("test-cap.example", 0.0, 1, 1);
+                let race = tokio::time::timeout(Duration::from_millis(50), acquire_fut).await;
+                assert!(
+                    race.is_err(),
+                    "second batch acquire should block while p1 held (batch cap=1)"
+                );
+                drop(p1);
+                // Now it should succeed quickly.
+                let _p2 = tokio::time::timeout(
+                    Duration::from_millis(200),
+                    acquire("test-cap.example", 0.0, 1, 1),
+                )
+                .await
+                .expect("second batch acquire should succeed after release");
+            })
+            .await;
+    }
+
+    #[tokio::test]
+    async fn interactive_reserved_slot_survives_batch() {
+        // Interactive gets a dedicated reserved slot, so it never blocks on the
+        // batch-held per-host cap.
+        crw_core::REQUEST_CLASS
+            .scope(crw_core::ScrapeClass::Batch, async {
+                let (_batch, _) = acquire("test-bypass.example", 0.0, 1, 1).await;
+                // A concurrent interactive request to the same host gets straight
+                // through (its reserved slot).
+                let interactive =
+                    crw_core::REQUEST_CLASS.scope(crw_core::ScrapeClass::Interactive, async {
+                        tokio::time::timeout(
+                            Duration::from_millis(100),
+                            acquire("test-bypass.example", 0.0, 1, 1),
+                        )
+                        .await
+                    });
+                let (_p, _) = interactive
+                    .await
+                    .expect("interactive should not block on the batch-held host cap");
+            })
+            .await;
     }
 }

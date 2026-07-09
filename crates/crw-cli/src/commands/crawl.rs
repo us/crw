@@ -183,7 +183,14 @@ pub async fn run(mut args: CrawlArgs) -> Result<(), CmdError> {
     };
 
     let crawl_handle = tokio::spawn(async move {
-        run_crawl(crawl_opts).await;
+        // A crawl is `Batch` traffic (multi-page). Scoped inside the spawned task
+        // (task-locals don't cross `tokio::spawn`) so its fetches/extracts use the
+        // batch lanes rather than the interactive reserve.
+        crw_core::REQUEST_CLASS
+            .scope(crw_core::ScrapeClass::Batch, async {
+                run_crawl(crawl_opts).await;
+            })
+            .await;
     });
 
     // Stream results as they come in

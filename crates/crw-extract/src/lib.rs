@@ -89,6 +89,7 @@ pub fn debug_candidate(
 
 pub mod answer;
 pub mod llm;
+pub mod llm_gate;
 pub mod pricing;
 pub mod summary;
 

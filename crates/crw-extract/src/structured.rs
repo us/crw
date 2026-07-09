@@ -244,6 +244,9 @@ pub(crate) async fn call_anthropic(
     tool_name: &str,
     tool_desc: &str,
 ) -> CrwResult<(serde_json::Value, Option<LlmUsage>)> {
+    // D reserved lane (covers structured JSON + the change-tracking judge, which
+    // both route through here). Held across the provider HTTP call.
+    let _llm_permit = crate::llm_gate::acquire_llm().await;
     let url = anthropic_messages_url(llm.base_url.as_deref(), "https://api.anthropic.com");
 
     let body = AnthropicRequest {
@@ -479,6 +482,8 @@ pub(crate) async fn call_openai(
     tool_name: &str,
     tool_desc: &str,
 ) -> CrwResult<(serde_json::Value, Option<LlmUsage>)> {
+    // D reserved lane (structured JSON + judge). Held across the HTTP call.
+    let _llm_permit = crate::llm_gate::acquire_llm().await;
     let default_base = match llm.provider.as_str() {
         "deepseek" => "https://api.deepseek.com",
         _ => "https://api.openai.com",

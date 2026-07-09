@@ -240,6 +240,10 @@ async fn dispatch(
     system_prompt: &str,
     user_msg: &str,
 ) -> CrwResult<LlmCallResult> {
+    // D reserved lane: bound LLM-call concurrency and keep a slice for
+    // interactive traffic. Read the class here (async side) and hold the permit
+    // across the provider HTTP call.
+    let _llm_permit = crate::llm_gate::acquire_llm().await;
     let client = shared_client();
     match provider.to_ascii_lowercase().as_str() {
         "anthropic" => {

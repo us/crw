@@ -400,22 +400,29 @@ impl EngineSource {
         let llm = cfg.extraction.llm.clone();
         let id = uuid::Uuid::new_v4();
         let handle = tokio::spawn(async move {
-            run_crawl(CrawlOptions {
-                id,
-                req,
-                renderer,
-                max_concurrency: cfg.crawler.max_concurrency,
-                respect_robots: cfg.crawler.respect_robots_txt,
-                requests_per_second: cfg.crawler.requests_per_second,
-                user_agent: &user_agent,
-                state_tx: tx,
-                llm_config: llm.as_ref(),
-                proxy: cfg.crawler.proxy.clone(),
-                jitter_factor: cfg.crawler.stealth.jitter_factor,
-                deadline_ms_per_page: cfg.effective_deadline_ms(None, None),
-                per_host_max_concurrent: cfg.crawler.per_host_max_concurrent,
-            })
-            .await;
+            // Monitor crawl targets are background `Batch` traffic. Scoped INSIDE
+            // this spawned task — a task-local set by the scheduler is lost across
+            // `tokio::spawn`, so the scope must be (re-)entered here.
+            crw_core::REQUEST_CLASS
+                .scope(crw_core::ScrapeClass::Batch, async {
+                    run_crawl(CrawlOptions {
+                        id,
+                        req,
+                        renderer,
+                        max_concurrency: cfg.crawler.max_concurrency,
+                        respect_robots: cfg.crawler.respect_robots_txt,
+                        requests_per_second: cfg.crawler.requests_per_second,
+                        user_agent: &user_agent,
+                        state_tx: tx,
+                        llm_config: llm.as_ref(),
+                        proxy: cfg.crawler.proxy.clone(),
+                        jitter_factor: cfg.crawler.stealth.jitter_factor,
+                        deadline_ms_per_page: cfg.effective_deadline_ms(None, None),
+                        per_host_max_concurrent: cfg.crawler.per_host_max_concurrent,
+                    })
+                    .await;
+                })
+                .await;
         });
 
         // Wait for terminal state.

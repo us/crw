@@ -8,10 +8,8 @@
 //! compile, and running the parse on an async worker would stall the runtime
 //! for large documents.
 
-use std::sync::{Arc, OnceLock};
+use std::sync::OnceLock;
 use std::time::Duration;
-
-use tokio::sync::Semaphore;
 
 use crw_core::config::{DocumentConfig, LlmConfig};
 use crw_core::error::{CrwError, CrwResult};
@@ -24,8 +22,10 @@ use crw_extract::pdf::{PdfError, PdfExtract};
 /// batch, upload). Configured once at server startup via [`configure_limits`];
 /// callers that never configure (CLI, tests) get the safe defaults below.
 struct ParseLimits {
-    /// Caps concurrent parses → bounds peak CPU and decompressed memory.
-    sem: Arc<Semaphore>,
+    /// Caps concurrent parses → bounds peak CPU and decompressed memory. A
+    /// reserved lane keeps interactive PDF scrapes from queuing behind a batch
+    /// that fills every parse slot (same shape as the extract pool).
+    sem: crw_core::ReservedSemaphore,
     /// Per-parse wall-clock budget (`None` = disabled).
     timeout: Option<Duration>,
     /// Hard server-side page cap (0 = unlimited), combined with any per-request
@@ -45,7 +45,14 @@ static LIMITS: OnceLock<ParseLimits> = OnceLock::new();
 /// the first call wins (subsequent calls are ignored), so call it once at boot.
 pub fn configure_limits(cfg: &DocumentConfig) {
     let _ = LIMITS.set(ParseLimits {
-        sem: Arc::new(Semaphore::new(cfg.max_concurrent_parses.max(1))),
+        sem: crw_core::ReservedSemaphore::new(
+            cfg.max_concurrent_parses.max(1),
+            crw_core::config::resolve_interactive_reserve(
+                cfg.reserved_interactive_parses,
+                cfg.max_concurrent_parses.max(1),
+            ),
+            "pdf",
+        ),
         timeout: (cfg.parse_timeout_ms > 0).then(|| Duration::from_millis(cfg.parse_timeout_ms)),
         max_pages_cap: cfg.max_pages,
         max_decompressed_bytes: cfg.max_decompressed_bytes,
@@ -56,7 +63,8 @@ pub fn configure_limits(cfg: &DocumentConfig) {
 
 fn limits() -> &'static ParseLimits {
     LIMITS.get_or_init(|| ParseLimits {
-        sem: Arc::new(Semaphore::new(4)),
+        // Default total 4, reserve 1 for interactive (floored, batch_gate=3).
+        sem: crw_core::ReservedSemaphore::new(4, 1, "pdf"),
         timeout: Some(Duration::from_millis(30_000)),
         max_pages_cap: 0,
         max_decompressed_bytes: 104_857_600, // 100 MiB
@@ -92,12 +100,9 @@ async fn run_parse(
     // Acquire BEFORE spawning; move the permit into the closure so it is held
     // for the full duration of the (possibly orphaned-after-timeout) parse —
     // this keeps the semaphore an honest bound on real concurrent CPU work.
-    let permit = lim
-        .sem
-        .clone()
-        .acquire_owned()
-        .await
-        .map_err(|_| PdfError::Corrupt("parse semaphore closed".to_string()))?;
+    // Read the traffic class on the async side (not inside spawn_blocking) so
+    // interactive PDF scrapes take the reserved lane.
+    let permit = lim.sem.acquire(crw_core::current_scrape_class()).await;
 
     // Sandbox path (Unix): run the parse in an isolated child process. The
     // permit is held for the whole call so the concurrency bound still holds.

@@ -68,6 +68,17 @@ pub async fn start_batch(
         .and_then(Value::as_bool)
         .unwrap_or(true);
 
+    // Optional per-job OUTER pipeline width (SaaS injects this per plan tier).
+    // Removed symmetric with `urls` so it doesn't leak into the per-URL scrape
+    // template below. Clamped to a safe range inside `start_batch_job`; a
+    // client-supplied value is not authoritative (the SaaS overrides it, and the
+    // engine clamps regardless).
+    let max_concurrency_override = obj
+        .remove("maxConcurrency")
+        .as_ref()
+        .and_then(Value::as_u64)
+        .map(|n| n as usize);
+
     // Build the per-page scrape template from the remaining (base scrape)
     // options by reusing the v2 scrape request → internal conversion. A
     // placeholder URL satisfies the required field; it's cleared afterward.
@@ -115,7 +126,9 @@ pub async fn start_batch(
         ))));
     }
 
-    let id = state.start_batch_job(valid, template).await;
+    let id = state
+        .start_batch_job(valid, template, max_concurrency_override)
+        .await;
     let base = base_url(&headers);
     Ok(Json(V2BatchStartResponse {
         success: true,
