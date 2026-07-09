@@ -2,6 +2,28 @@
 
 All notable changes to CRW are documented here.
 
+## [0.22.0](https://github.com/us/crw/compare/v0.21.3...v0.22.0) (2026-07-09)
+
+
+### Features
+
+* **cli:** non-interactive cloud setup via 'crw setup --api-key' ([e7cc4f9](https://github.com/us/crw/commit/e7cc4f99b29d88608b1fbe3359fab8ba179695ce))
+* **installer:** connect to cloud when CRW_API_KEY is set ([fedb5de](https://github.com/us/crw/commit/fedb5de046da3578d2207ba40bf66671d198f9c9))
+* **server:** batch scrape scale guards for 10k-URL submits ([9a3e0b6](https://github.com/us/crw/commit/9a3e0b64b0a0b6663315912c205f4278b8419801))
+
+
+### Bug Fixes
+
+* **clippy:** satisfy clippy 1.97 lints (for_kv_map, manual_filter) ([ed4522d](https://github.com/us/crw/commit/ed4522d943770999717531fe07cf75b17611697d))
+* **mcp:** launch server via 'npx -y crw-mcp' so fresh installs work ([a574a61](https://github.com/us/crw/commit/a574a61d587cc6e287a7d9d38f63ce42ada3e558))
+* **server:** cancelled crawl/batch jobs reach a terminal state ([fee388c](https://github.com/us/crw/commit/fee388cf3cc5570c5980ae60d73fe5a85f658d36))
+
+
+### Performance
+
+* **docker:** cargo-chef dependency layer for faster engine builds ([603acfa](https://github.com/us/crw/commit/603acfa94850ca3face85295d6091e11a7b6ade2))
+* **server:** raise batch URL validation concurrency to 256 ([651d3c0](https://github.com/us/crw/commit/651d3c0a6a3d6451492aa725e7a387669f3d7103))
+
 ## [0.21.3](https://github.com/us/crw/compare/v0.21.2...v0.21.3) (2026-07-08)
 
 
