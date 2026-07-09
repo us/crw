@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "CRW REST API",
-    "version": "0.22.0",
+    "version": "0.23.0",
     "description": "Firecrawl-compatible web scraping, crawling, mapping, search, and extraction API. Hosted at https://api.fastcrw.com; self-host with `docker run -p 3000:3000 ghcr.io/us/crw:latest`.",
     "license": {
       "name": "AGPL-3.0",
@@ -260,7 +260,7 @@
           "change-tracking"
         ],
         "summary": "Diff current scrape content against a previous snapshot",
-        "description": "Stateless: opencore stores nothing \u2014 the caller supplies the `previous` snapshot. Accepts a single body or a `batch` array (presence of `batch` selects batch mode). The crawl-path workhorse for monitors.",
+        "description": "Stateless: opencore stores nothing — the caller supplies the `previous` snapshot. Accepts a single body or a `batch` array (presence of `batch` selects batch mode). The crawl-path workhorse for monitors.",
         "operationId": "changeTrackingDiff",
         "requestBody": {
           "required": true,
@@ -884,7 +884,7 @@
           "actions": {
             "type": "object",
             "additionalProperties": true,
-            "description": "Unsupported Firecrawl parameter \u2014 returns a clear error if supplied"
+            "description": "Unsupported Firecrawl parameter — returns a clear error if supplied"
           },
           "extract": {
             "$ref": "#/components/schemas/ExtractOptions",
@@ -1391,7 +1391,7 @@
           },
           "firstObservation": {
             "type": "boolean",
-            "description": "True when no previous was supplied \u2014 caller maps to 'new'"
+            "description": "True when no previous was supplied — caller maps to 'new'"
           },
           "contentHash": {
             "type": "string"
