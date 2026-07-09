@@ -238,7 +238,7 @@ fn check_decompression_bomb(bytes: &[u8], cap: usize) -> Result<(), PdfError> {
     };
 
     let mut budget = cap;
-    for (_id, obj) in doc.objects.iter() {
+    for obj in doc.objects.values() {
         let Object::Stream(stream) = obj else {
             continue;
         };
