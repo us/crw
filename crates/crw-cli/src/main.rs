@@ -175,6 +175,7 @@ async fn main() {
             non_interactive: false,
             cloud: false,
             local: false,
+            api_key: None,
             no_color: false,
             reset_shell: false,
             reset: true,

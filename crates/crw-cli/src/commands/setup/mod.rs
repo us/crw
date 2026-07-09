@@ -31,6 +31,13 @@ pub struct SetupArgs {
     #[arg(long, conflicts_with = "cloud")]
     pub local: bool,
 
+    /// Connect to CRW Cloud non-interactively with this API key. Validates the
+    /// key, writes ~/.config/crw/config.toml (pointed at api.fastcrw.com), and
+    /// skips every prompt. Implies cloud mode — get a key at
+    /// https://fastcrw.com/dashboard (500 free credits).
+    #[arg(long, value_name = "KEY", conflicts_with_all = ["local", "reset", "reset_shell"])]
+    pub api_key: Option<String>,
+
     /// Disable colored output.
     #[arg(long)]
     pub no_color: bool,
@@ -94,7 +101,10 @@ pub async fn run(args: SetupArgs) {
     }
 
     // If specific mode is requested, run that directly
-    let result = if args.cloud {
+    let result = if let Some(key) = args.api_key.clone() {
+        // Non-interactive cloud connect (--api-key / installer pass-through).
+        cloud::run_with_key(key).await
+    } else if args.cloud {
         cloud::run().await
     } else if args.local {
         local::run().await

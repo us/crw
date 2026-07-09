@@ -13,12 +13,14 @@ use serde::Deserialize;
 const API_BASE_URL: &str = "https://api.fastcrw.com";
 const DASHBOARD_URL: &str = "https://fastcrw.com/dashboard";
 
-/// Account info returned from API key validation.
+/// Account info returned from `GET /v1/account/balance` (the SaaS balance
+/// endpoint). Only the total-credits field is needed to show a friendly count;
+/// unknown fields are ignored, and a missing value degrades to "validated"
+/// without a number rather than a misleading "0 credits".
 #[derive(Debug, Deserialize)]
 struct AccountInfo {
-    credits_remaining: Option<i64>,
-    #[allow(dead_code)]
-    email: Option<String>,
+    #[serde(rename = "totalCreditsAvailable")]
+    total_credits_available: Option<i64>,
 }
 
 /// API key validation result.
@@ -27,6 +29,69 @@ pub enum ApiKeyStatus {
     Valid { credits: i64 },
     Invalid,
     NetworkError(String),
+}
+
+/// Non-interactive cloud setup for `crw setup --api-key <key>` (and the
+/// `curl … | CRW_API_KEY=… sh` installer pass-through). Validates the key
+/// against the CRW API, persists it to `~/.config/crw/config.toml` pointed at
+/// api.fastcrw.com, and prints a summary — no prompts, no LLM step, no
+/// shell-rc question. This gives brew / curl / cargo the same one-command
+/// cloud connect that `npx crw-mcp install --api-key` gives agents.
+pub async fn run_with_key(api_key: String) -> Result<(), SetupError> {
+    ui::print_section_header("☁️", "CLOUD SETUP");
+
+    let api_key = api_key.trim().to_string();
+    if api_key.is_empty() {
+        return Err(SetupError::Other("API key is empty".to_string()));
+    }
+
+    print!("  ");
+    match validate_api_key(&api_key).await {
+        ApiKeyStatus::Valid { credits } => {
+            if credits >= 0 {
+                ui::print_success(&format!(
+                    "API key validated ({} credits remaining)",
+                    credits
+                ));
+            } else {
+                ui::print_success("API key validated");
+            }
+            println!();
+        }
+        ApiKeyStatus::Invalid => {
+            return Err(SetupError::Other(
+                "Invalid API key — copy it exactly from https://fastcrw.com/dashboard".to_string(),
+            ));
+        }
+        ApiKeyStatus::NetworkError(e) => {
+            return Err(SetupError::Other(format!(
+                "Could not reach fastcrw.com to validate the key ({e}) — check your connection and retry"
+            )));
+        }
+    }
+
+    // Persist canonical cloud config (client → api.fastcrw.com). No LLM leg in
+    // the non-interactive path; users can add one later with `crw setup`.
+    let cfg_path = config_file::write_user_config(build_user_config(&api_key, None))?;
+    ui::print_success(&format!("Saved {}", cfg_path.display()));
+    println!();
+
+    ui::print_summary(
+        "Configuration Summary",
+        &[
+            SummaryItem::new("Cloud API", "Connected (fastcrw.com)", true),
+            SummaryItem::new("Config saved", "~/.config/crw/config.toml", true),
+        ],
+    );
+
+    let quick_start = [
+        "crw example.com              # Scrape a page",
+        "crw search \"rust tutorials\"  # Web search",
+        "crw --help                   # See all commands",
+    ];
+    ui::print_completion_banner(None, &quick_start, &[]);
+
+    Ok(())
 }
 
 /// Run the cloud setup flow.
@@ -145,10 +210,14 @@ async fn get_api_key() -> Result<String, SetupError> {
         print!("  ");
         match validate_api_key(&api_key).await {
             ApiKeyStatus::Valid { credits } => {
-                ui::print_success(&format!(
-                    "API key validated ({} credits remaining)",
-                    credits
-                ));
+                if credits >= 0 {
+                    ui::print_success(&format!(
+                        "API key validated ({} credits remaining)",
+                        credits
+                    ));
+                } else {
+                    ui::print_success("API key validated");
+                }
                 println!();
                 return Ok(api_key);
             }
@@ -220,7 +289,7 @@ async fn validate_api_key(key: &str) -> ApiKeyStatus {
     };
 
     let resp = match client
-        .get(format!("{}/v1/account", API_BASE_URL))
+        .get(format!("{}/v1/account/balance", API_BASE_URL))
         .header("Authorization", format!("Bearer {}", key))
         .send()
         .await
@@ -238,8 +307,10 @@ async fn validate_api_key(key: &str) -> ApiKeyStatus {
     }
 
     match resp.json::<AccountInfo>().await {
+        // No count in the body ⇒ -1, which callers render as "validated" with
+        // no number (never a misleading "0 credits").
         Ok(info) => ApiKeyStatus::Valid {
-            credits: info.credits_remaining.unwrap_or(0),
+            credits: info.total_credits_available.unwrap_or(-1),
         },
         Err(_) => {
             // If we got a 200 but can't parse, assume it's valid
@@ -392,5 +463,26 @@ fn open_browser(url: &str) {
         let _ = std::process::Command::new("cmd")
             .args(["/c", "start", url])
             .spawn();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The core "connects to SaaS" contract of the non-interactive path: the
+    // persisted config points the CLI at api.fastcrw.com with the caller's key
+    // and no LLM leg. If this regresses, `crw setup --api-key` / the installer
+    // pass-through would silently write a config that doesn't reach cloud.
+    #[test]
+    fn build_user_config_wires_cloud_with_key() {
+        let cfg = build_user_config("crw_live_test_key", None);
+        let client = cfg.client.expect("client section");
+        assert_eq!(client.api_url.as_deref(), Some(API_BASE_URL));
+        assert_eq!(client.api_key.as_deref(), Some("crw_live_test_key"));
+        assert!(
+            cfg.extraction.is_none(),
+            "no LLM leg in non-interactive path"
+        );
     }
 }
