@@ -29,9 +29,12 @@ ARG DEPS_STAGE=cacher
 # live engine). MUST be identical in the cook and the build (fingerprint match).
 ARG CARGO_PKGS="-p crw-server --features cdp -p crw-mcp -p crw-cli"
 
-# Optional cap on compile parallelism (cargo -j). Empty = all cores (CI). Prod
-# sets it below the core count so a build never starves the live engine of CPU.
-ARG CARGO_BUILD_JOBS=""
+# Cap on compile parallelism. cargo reads CARGO_BUILD_JOBS natively (BuildKit
+# injects a declared ARG into the RUN env), so no -j flag is needed. "default" =
+# all cores (CI); prod passes a number below the core count so a build never
+# starves the live engine of CPU. Must NOT be empty — cargo rejects an empty
+# value ("could not parse ``").
+ARG CARGO_BUILD_JOBS=default
 
 # ---- shared toolchain base --------------------------------------------------
 FROM --platform=$BUILDPLATFORM rust:1.96-bookworm@sha256:a339861ae23e9abb272cea45dfafde21760d2ce6577a70f8a926153677902663 AS chef
@@ -87,10 +90,10 @@ ARG CARGO_PKGS
 ARG CARGO_BUILD_JOBS
 COPY --from=planner /recipe.json /recipe.json
 # $CARGO_PKGS is intentionally unquoted so it word-splits into cargo args.
+# Parallelism comes from the CARGO_BUILD_JOBS env (injected from the ARG).
 RUN set -eux; \
     RUST_TARGET="$(cat /rust_target)"; \
     cargo chef cook --release --target "$RUST_TARGET" \
-      ${CARGO_BUILD_JOBS:+-j$CARGO_BUILD_JOBS} \
       $CARGO_PKGS \
       --recipe-path /recipe.json
 
@@ -106,7 +109,6 @@ COPY . .
 RUN set -eux; \
     RUST_TARGET="$(cat /rust_target)"; \
     cargo build --release --target "$RUST_TARGET" \
-      ${CARGO_BUILD_JOBS:+-j$CARGO_BUILD_JOBS} \
       $CARGO_PKGS; \
     mkdir -p /out; \
     for b in crw crw-server crw-mcp; do \
