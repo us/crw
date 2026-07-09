@@ -2,6 +2,28 @@
 
 All notable changes to CRW are documented here.
 
+## [0.23.0](https://github.com/us/crw/compare/v0.22.0...v0.23.0) (2026-07-09)
+
+
+### ⚠ BREAKING CHANGES
+
+* **server:** SDK extract() now returns a per-URL results array instead of a merged object, and no longer accepts systemPrompt or baseUrl.
+
+### Features
+
+* **server:** native /v1/extract endpoint ([b5fc494](https://github.com/us/crw/commit/b5fc49441a440da37f9a094fb68a9a813380a814))
+* **server:** reserve interactive capacity from batch + plan-scaled width ([ada487d](https://github.com/us/crw/commit/ada487de8b8b7b98ece7eed012da0d406e2d21de))
+
+
+### Bug Fixes
+
+* **docker:** CARGO_BUILD_JOBS via env, not empty -j flag ([37282d2](https://github.com/us/crw/commit/37282d2bbd2fd38d50c8f0cfc1977bcb5fa19ff9))
+
+
+### Performance
+
+* **docker:** build only requested binaries via CARGO_PKGS arg ([98b6626](https://github.com/us/crw/commit/98b6626bc949cc1b89401306b5bb31ab47e60b89))
+
 ## [0.22.0](https://github.com/us/crw/compare/v0.21.3...v0.22.0) (2026-07-09)
 
 
