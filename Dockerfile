@@ -21,6 +21,18 @@
 # Global ARG (before the first FROM) so it is usable in the `builder` FROM line.
 ARG DEPS_STAGE=cacher
 
+# Which workspace binaries to cook + build. Default = all three (the public
+# open-core image ships crw + crw-server + crw-mcp). Prod overrides it to just
+# `-p crw-server --features cdp`: the engine container only runs crw-server
+# (CMD), so building crw-cli + crw-mcp there is wasted work — dropping them
+# removes two of three thin-LTO links (faster + far less CPU contention with the
+# live engine). MUST be identical in the cook and the build (fingerprint match).
+ARG CARGO_PKGS="-p crw-server --features cdp -p crw-mcp -p crw-cli"
+
+# Optional cap on compile parallelism (cargo -j). Empty = all cores (CI). Prod
+# sets it below the core count so a build never starves the live engine of CPU.
+ARG CARGO_BUILD_JOBS=""
+
 # ---- shared toolchain base --------------------------------------------------
 FROM --platform=$BUILDPLATFORM rust:1.96-bookworm@sha256:a339861ae23e9abb272cea45dfafde21760d2ce6577a70f8a926153677902663 AS chef
 
@@ -68,38 +80,50 @@ COPY . .
 RUN cargo chef prepare --recipe-path /recipe.json
 
 # ---- cacher: compile ONLY the dependency graph (the durable, taggable layer) -
-# Keyed solely on /recipe.json; SAME --target/--features/-p set as the real
-# build so the cooked artifacts fingerprint-match and are reused, not recompiled.
+# Keyed solely on /recipe.json; SAME --target/--features/-p set (CARGO_PKGS) as
+# the real build so the cooked artifacts fingerprint-match and are reused.
 FROM chef AS cacher
+ARG CARGO_PKGS
+ARG CARGO_BUILD_JOBS
 COPY --from=planner /recipe.json /recipe.json
+# $CARGO_PKGS is intentionally unquoted so it word-splits into cargo args.
 RUN set -eux; \
     RUST_TARGET="$(cat /rust_target)"; \
     cargo chef cook --release --target "$RUST_TARGET" \
-      -p crw-server --features cdp -p crw-mcp -p crw-cli \
+      ${CARGO_BUILD_JOBS:+-j$CARGO_BUILD_JOBS} \
+      $CARGO_PKGS \
       --recipe-path /recipe.json
 
 # ---- builder: compile the workspace crates on top of the cooked deps --------
 # DEPS_STAGE defaults to the in-tree `cacher` (CI / any plain `docker build`
 # cooks deps inline). Prod overrides it to the pinned crw-api-deps:<fp> image.
 FROM ${DEPS_STAGE} AS builder
+ARG CARGO_PKGS
+ARG CARGO_BUILD_JOBS
 COPY . .
+# Build the CARGO_PKGS set, then copy whatever binaries were produced (the set
+# is variable: all three by default, only crw-server in prod).
 RUN set -eux; \
     RUST_TARGET="$(cat /rust_target)"; \
     cargo build --release --target "$RUST_TARGET" \
-      -p crw-server --features cdp -p crw-mcp -p crw-cli; \
+      ${CARGO_BUILD_JOBS:+-j$CARGO_BUILD_JOBS} \
+      $CARGO_PKGS; \
     mkdir -p /out; \
-    cp "target/${RUST_TARGET}/release/crw" \
-       "target/${RUST_TARGET}/release/crw-server" \
-       "target/${RUST_TARGET}/release/crw-mcp" /out/
+    for b in crw crw-server crw-mcp; do \
+      f="target/${RUST_TARGET}/release/$b"; \
+      if [ -f "$f" ]; then cp "$f" /out/; fi; \
+    done; \
+    test -f /out/crw-server   # crw-server is required in every build
 
 # ---- runtime (unchanged) ----------------------------------------------------
 FROM debian:bookworm-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df
 
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /out/crw /usr/local/bin/crw
-COPY --from=builder /out/crw-server /usr/local/bin/crw-server
-COPY --from=builder /out/crw-mcp /usr/local/bin/crw-mcp
+# Copy whatever binaries the builder produced (all three for the public image;
+# just crw-server for the prod engine build). A directory copy tolerates the
+# variable set — no per-binary COPY that would fail when a binary was skipped.
+COPY --from=builder /out/ /usr/local/bin/
 COPY config.default.toml /app/config.default.toml
 COPY config.docker.toml /app/config.docker.toml
 
