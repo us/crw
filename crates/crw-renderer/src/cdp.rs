@@ -435,11 +435,21 @@ pub struct CdpRenderer {
     /// even when `intercept_enabled = true`.
     host_intercept_disable: Vec<String>,
     conn_semaphore: Arc<Semaphore>,
+    /// Batch reserved-lane gate in front of `conn_semaphore` (the B lane, legacy
+    /// `fetch_with_ws` path): batch renders take a gate permit first, interactive
+    /// go straight to the pool, so interactive always finds reserved render slots.
+    conn_batch_gate: crw_core::BatchGate,
     /// Browser context pool. `Some` when `[renderer.chrome.pool] enabled = true`
     /// AND backend is vanilla chrome (not browserless v2 — gated off in v1
     /// per plan §"Out of scope"). When `Some`, `fetch` dispatches through
     /// `fetch_with_pool`; when `None`, legacy `fetch_with_ws` is used.
     pool: Option<Arc<crate::browser_pool::BrowserContextPool<CdpConnection>>>,
+    /// Batch reserved-lane gate in front of `pool` (the B lane, pooled
+    /// `fetch_with_pool` path). Held OUTSIDE the pool so `BrowserContextPool`'s
+    /// permit-as-checkout-source-of-truth invariant stays untouched: batch takes
+    /// a gate permit before `pool.acquire()`, interactive skips it. `Some` iff
+    /// `pool` is `Some`, sized from the pool size.
+    pool_batch_gate: Option<crw_core::BatchGate>,
     /// DataImpulse base credentials (username without country suffix, password).
     /// When `Some`, the renderer drives Chrome's proxy auth via CDP
     /// `Fetch.authRequired`, composing the country-suffixed username per request.
@@ -483,7 +493,13 @@ impl CdpRenderer {
             blocklist: Blocklist::defaults(),
             host_intercept_disable: Vec::new(),
             conn_semaphore: Arc::new(Semaphore::new(pool_size)),
+            conn_batch_gate: crw_core::BatchGate::new(
+                pool_size,
+                crate::render_reserve(pool_size),
+                "render",
+            ),
             pool: None,
+            pool_batch_gate: None,
             proxy_auth_base: None,
             default_country: None,
             challenge_max_retries: CHALLENGE_MAX_RETRIES,
@@ -564,6 +580,11 @@ impl CdpRenderer {
         crw_core::metrics::metrics()
             .chrome_pool_size
             .set(cfg.size as i64);
+        self.pool_batch_gate = Some(crw_core::BatchGate::new(
+            cfg.size,
+            crate::render_reserve(cfg.size),
+            "render",
+        ));
         self.pool = Some(crate::browser_pool::BrowserContextPool::new(cfg, factory));
         self
     }
@@ -1589,6 +1610,14 @@ impl CdpRenderer {
     ) -> CrwResult<FetchResult> {
         let start = Instant::now();
         let handshake_t0 = Instant::now();
+        // Reserved lane (B, pooled path): batch takes the gate before checking
+        // out a pool slot so interactive always finds reserved slots free; held
+        // for the whole fetch alongside the pool guard. Class read on the async
+        // side. `pool_batch_gate` is `Some` whenever `pool` is set.
+        let _render_gate = match &self.pool_batch_gate {
+            Some(gate) => gate.enter(crw_core::current_scrape_class()).await,
+            None => None,
+        };
         let acquire_t0 = Instant::now();
         let guard = pool.acquire().await?;
         let acquire_elapsed = acquire_t0.elapsed();
@@ -1685,7 +1714,14 @@ impl CdpRenderer {
         let start = Instant::now();
         let handshake_t0 = Instant::now();
 
-        // Limit concurrent WebSocket connections to pool_size.
+        // Limit concurrent WebSocket connections to pool_size, with a reserved
+        // lane for interactive: batch takes the gate first (bounding batch's
+        // share of the pool); interactive skips it. Both held for the whole
+        // fetch. Class read on the async side (before any spawn_blocking).
+        let _render_gate = self
+            .conn_batch_gate
+            .enter(crw_core::current_scrape_class())
+            .await;
         let _permit = self
             .conn_semaphore
             .acquire()

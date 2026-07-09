@@ -80,6 +80,21 @@ pub struct CrawlJob {
     pub abort_handle: Option<tokio::task::AbortHandle>,
 }
 
+/// RAII guard that inc/decrements the `crw_batch_pipelines_inflight` gauge for
+/// the lifetime of one in-flight batch URL-pipeline.
+struct InflightGuard;
+impl InflightGuard {
+    fn new() -> Self {
+        crw_core::metrics::metrics().batch_pipelines_inflight.inc();
+        InflightGuard
+    }
+}
+impl Drop for InflightGuard {
+    fn drop(&mut self) {
+        crw_core::metrics::metrics().batch_pipelines_inflight.dec();
+    }
+}
+
 /// Maximum number of concurrent crawl jobs.
 const MAX_CONCURRENT_CRAWLS: usize = 10;
 /// Interval between expired crawl job cleanup runs.
@@ -149,6 +164,14 @@ pub struct AppState {
     /// is a single merged JSON object, not a `Vec<ScrapeData>`.
     pub extract_jobs: Arc<RwLock<HashMap<Uuid, ExtractRecord>>>,
     pub crawl_semaphore: Arc<tokio::sync::Semaphore>,
+    /// Process-wide cap on the total in-flight `/v2/batch/scrape` URL-pipelines
+    /// across all batch-scrape jobs (aggregate bound so `N jobs × width` can't
+    /// explode). Targets batch scrape specifically because that's the only wide
+    /// fan-out: crawl is BFS-sequential and `/v2/extract` scrapes one URL at a
+    /// time, both already bounded by the `crawl_semaphore` job cap. `None` =
+    /// unbounded (config `max_aggregate_batch_pipelines = 0`/absent). Acquired
+    /// as the first op in each batch URL future, before fetch.
+    pub batch_pipeline_sem: Option<Arc<tokio::sync::Semaphore>>,
     /// SearXNG client. `None` when `[search].searxng_url` is unset, in which
     /// case `/v1/search` returns a clear `search_disabled` error.
     pub searxng: Option<Arc<SearxngClient>>,
@@ -182,6 +205,7 @@ impl AppState {
         .with_host_limits(
             config.crawler.requests_per_second,
             config.crawler.per_host_max_concurrent,
+            config.crawler.per_host_interactive_reserve,
         );
 
         let searxng = if config.search.enabled
@@ -231,12 +255,44 @@ impl AppState {
             .inc_by(url_filter_cfg.host_overrides.len() as u64);
         let url_filter = Some(Arc::new(url_filter_cfg));
 
+        // Install the process-wide reserved-lane limits (extract / PDF / LLM)
+        // HERE — inside `AppState::new` — so every entry point that builds an
+        // AppState (the `crw-server` binary AND `crw serve` / embedded CLI) gets
+        // the configured concurrency + reservations, not just the fallbacks.
+        // All three are idempotent (first-call-wins).
+        let extract_total = config.extraction.max_concurrent_extracts;
+        crw_crawl::extract_pool::configure_extract_limit(
+            extract_total,
+            crw_core::config::resolve_interactive_reserve(
+                config.extraction.reserved_interactive_extracts,
+                extract_total,
+            ),
+        );
+        crw_crawl::pdf::configure_limits(&config.document);
+        if let Some(llm) = &config.extraction.llm {
+            crw_extract::llm_gate::configure_llm_limits(
+                llm.max_concurrency,
+                crw_core::config::resolve_interactive_reserve(
+                    llm.reserved_interactive_llm,
+                    llm.max_concurrency,
+                ),
+            );
+        }
+
+        // `0`/absent = unbounded aggregate (no cap); any n>0 bounds total
+        // in-flight batch URL-pipelines process-wide.
+        let batch_pipeline_sem = match config.crawler.max_aggregate_batch_pipelines {
+            0 => None,
+            n => Some(Arc::new(tokio::sync::Semaphore::new(n))),
+        };
+
         let state = Self {
             config: Arc::new(config),
             renderer: Arc::new(renderer),
             crawl_jobs: Arc::new(RwLock::new(HashMap::new())),
             extract_jobs: Arc::new(RwLock::new(HashMap::new())),
             crawl_semaphore: Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_CRAWLS)),
+            batch_pipeline_sem,
             searxng,
             url_filter,
         };
@@ -337,22 +393,30 @@ impl AppState {
                     return;
                 }
             };
-            run_crawl(CrawlOptions {
-                id,
-                req,
-                renderer,
-                max_concurrency,
-                respect_robots,
-                requests_per_second: rps,
-                user_agent: &user_agent,
-                state_tx: tx,
-                llm_config: llm_config.as_ref(),
-                proxy,
-                jitter_factor,
-                deadline_ms_per_page,
-                per_host_max_concurrent,
-            })
-            .await;
+            // Crawl pages are `Batch` traffic (same reserved-lane treatment as
+            // batch scrape). Scoped inside the job's spawned task so the
+            // task-local reaches every per-page fetch/extract; a handler-level
+            // scope would be lost across this `tokio::spawn`.
+            crw_core::REQUEST_CLASS
+                .scope(crw_core::ScrapeClass::Batch, async {
+                    run_crawl(CrawlOptions {
+                        id,
+                        req,
+                        renderer,
+                        max_concurrency,
+                        respect_robots,
+                        requests_per_second: rps,
+                        user_agent: &user_agent,
+                        state_tx: tx,
+                        llm_config: llm_config.as_ref(),
+                        proxy,
+                        jitter_factor,
+                        deadline_ms_per_page,
+                        per_host_max_concurrent,
+                    })
+                    .await;
+                })
+                .await;
         });
 
         // Store the abort handle so the job can be cancelled via DELETE.
@@ -370,7 +434,12 @@ impl AppState {
     /// UUID. Reuses the crawl-job machinery (`crawl_jobs` + `CrawlState`) but
     /// scrapes the given URLs directly — no link discovery, no same-origin
     /// filtering, no dedup; input order is recoverable via `metadata.sourceURL`.
-    pub async fn start_batch_job(&self, urls: Vec<String>, template: ScrapeRequest) -> Uuid {
+    pub async fn start_batch_job(
+        &self,
+        urls: Vec<String>,
+        template: ScrapeRequest,
+        max_concurrency_override: Option<usize>,
+    ) -> Uuid {
         let id = Uuid::new_v4();
         let total = urls.len() as u32;
         let (tx, rx) = watch::channel(CrawlState {
@@ -397,8 +466,16 @@ impl AppState {
 
         let renderer = self.renderer.clone();
         let crawl_semaphore = self.crawl_semaphore.clone();
+        let batch_pipeline_sem = self.batch_pipeline_sem.clone();
         let config = self.config.clone();
-        let max_concurrency = config.crawler.max_concurrency.max(1);
+        // Per-job OUTER pipeline width: the SaaS-injected (plan-scaled)
+        // `maxConcurrency`, or `max_concurrency` when absent. BOTH paths are
+        // clamped to `[1, max_batch_concurrency]` so a batch job never exceeds
+        // the ceiling regardless of source (wire value never trusted).
+        let width_ceiling = config.crawler.max_batch_concurrency.max(1);
+        let max_concurrency = max_concurrency_override
+            .unwrap_or(config.crawler.max_concurrency)
+            .clamp(1, width_ceiling);
 
         let handle = tokio::spawn(async move {
             let _permit = match crawl_semaphore.acquire().await {
@@ -445,42 +522,66 @@ impl AppState {
                 })
                 .collect();
 
-            futures::stream::iter(reqs)
-                .for_each_concurrent(max_concurrency, |req| {
-                    let renderer = renderer.clone();
-                    let config = config.clone();
-                    let user_agent = user_agent.clone();
-                    let tx = tx.clone();
-                    async move {
-                        let deadline = Deadline::from_request_ms(deadline_ms);
-                        let scraped = scrape_url(
-                            &req,
-                            &renderer,
-                            config.extraction.llm.as_ref(),
-                            &config.extraction,
-                            &user_agent,
-                            default_stealth,
-                            render_js_default,
-                            deadline,
-                        )
-                        .await
-                        .ok();
-                        // Mutate the shared status in place — push one document and
-                        // bump the counter without cloning the whole accumulated Vec
-                        // on every completion (avoids O(n^2) copying on large
-                        // batches). A failed scrape still advances `completed`.
-                        tx.send_modify(|st| {
-                            if let Some(d) = scraped {
-                                st.data.push(d);
+            // Stamp every URL in this job as `Batch` traffic. The scope wraps the
+            // whole `for_each_concurrent` stream; that combinator polls its
+            // futures cooperatively within THIS task (no `tokio::spawn` per URL),
+            // so the task-local propagates to each per-URL `scrape_url` and on to
+            // the reserved lanes it reads. Scoped here (inside the job's spawned
+            // task), not at the handler, because the task-local would be lost
+            // across this job's `tokio::spawn`.
+            crw_core::REQUEST_CLASS
+                .scope(crw_core::ScrapeClass::Batch, async move {
+                    futures::stream::iter(reqs)
+                        .for_each_concurrent(max_concurrency, |req| {
+                            let renderer = renderer.clone();
+                            let config = config.clone();
+                            let user_agent = user_agent.clone();
+                            let tx = tx.clone();
+                            let batch_pipeline_sem = batch_pipeline_sem.clone();
+                            async move {
+                                // Aggregate cap: acquire a process-wide pipeline
+                                // permit BEFORE fetching so `N jobs × width` can't
+                                // explode. `None` = unbounded. Held for this URL's
+                                // whole lifetime.
+                                let _pipeline_permit = match &batch_pipeline_sem {
+                                    Some(sem) => sem.acquire().await.ok(),
+                                    None => None,
+                                };
+                                // In-flight batch-pipeline gauge (RAII inc/dec).
+                                let _inflight = InflightGuard::new();
+                                let deadline = Deadline::from_request_ms(deadline_ms);
+                                let scraped = scrape_url(
+                                    &req,
+                                    &renderer,
+                                    config.extraction.llm.as_ref(),
+                                    &config.extraction,
+                                    &user_agent,
+                                    default_stealth,
+                                    render_js_default,
+                                    deadline,
+                                )
+                                .await
+                                .ok();
+                                // Mutate the shared status in place — push one document
+                                // and bump the counter without cloning the whole
+                                // accumulated Vec on every completion (avoids O(n^2)
+                                // copying on large batches). A failed scrape still
+                                // advances `completed`.
+                                tx.send_modify(|st| {
+                                    if let Some(d) = scraped {
+                                        st.data.push(d);
+                                    }
+                                    st.completed += 1;
+                                    // Only flip to Completed from InProgress — never
+                                    // overwrite a terminal Cancelled set by DELETE.
+                                    if st.completed >= total && st.status == CrawlStatus::InProgress
+                                    {
+                                        st.status = CrawlStatus::Completed;
+                                    }
+                                });
                             }
-                            st.completed += 1;
-                            // Only flip to Completed from InProgress — never
-                            // overwrite a terminal Cancelled set by DELETE.
-                            if st.completed >= total && st.status == CrawlStatus::InProgress {
-                                st.status = CrawlStatus::Completed;
-                            }
-                        });
-                    }
+                        })
+                        .await;
                 })
                 .await;
         });
@@ -528,101 +629,107 @@ impl AppState {
         let extract_jobs = self.extract_jobs.clone();
 
         tokio::spawn(async move {
-            let user_agent = config.crawler.user_agent.clone();
-            let default_stealth =
-                config.crawler.stealth.enabled && config.crawler.stealth.inject_headers;
-            let render_js_default = config.renderer.render_js_default;
-            let deadline_ms = config.effective_deadline_ms(template.deadline_ms, template.wait_for);
+            // `/v2/extract` is a multi-URL background job — `Batch` traffic, so its
+            // scrapes use the batch lanes and don't consume the interactive reserve.
+            // Scoped inside the spawned task (a handler-level scope is lost across
+            // `tokio::spawn`).
+            crw_core::REQUEST_CLASS
+                .scope(crw_core::ScrapeClass::Batch, async move {
+                    let user_agent = config.crawler.user_agent.clone();
+                    let default_stealth =
+                        config.crawler.stealth.enabled && config.crawler.stealth.inject_headers;
+                    let render_js_default = config.renderer.render_js_default;
+                    let deadline_ms =
+                        config.effective_deadline_ms(template.deadline_ms, template.wait_for);
 
-            let mut merged = serde_json::Map::new();
-            let mut per_url: Vec<UrlResult> = Vec::with_capacity(entries.len());
-            let mut tokens = 0u32;
-            let mut credits = 0u32;
-            let mut last_err: Option<String> = None;
-            let mut any_ok = false;
+                    let mut merged = serde_json::Map::new();
+                    let mut per_url: Vec<UrlResult> = Vec::with_capacity(entries.len());
+                    let mut tokens = 0u32;
+                    let mut credits = 0u32;
+                    let mut last_err: Option<String> = None;
+                    let mut any_ok = false;
 
-            for entry in entries {
-                // Preflight-failed URLs (bad parse / SSRF) surface as `failed`
-                // without a fetch — never silently dropped. Record the error at
-                // job level too so an all-preflight-failed job reports `Failed`
-                // (not `Completed`) via the `!any_ok && last_err` check below.
-                if let Some(err) = entry.preflight_error {
-                    last_err = Some(err.clone());
-                    per_url.push(UrlResult {
-                        url: entry.url,
-                        status: ExtractStatus::Failed,
-                        data: None,
-                        error: Some(err),
-                        llm_usage: None,
-                    });
-                    continue;
-                }
+                    for entry in entries {
+                        // Preflight-failed URLs (bad parse / SSRF) surface as
+                        // `failed` without a fetch — never silently dropped.
+                        if let Some(err) = entry.preflight_error {
+                            last_err = Some(err.clone());
+                            per_url.push(UrlResult {
+                                url: entry.url,
+                                status: ExtractStatus::Failed,
+                                data: None,
+                                error: Some(err),
+                                llm_usage: None,
+                            });
+                            continue;
+                        }
 
-                let mut req = template.clone();
-                req.url = entry.url.clone();
-                let deadline = Deadline::from_request_ms(deadline_ms);
-                match scrape_url(
-                    &req,
-                    &renderer,
-                    config.extraction.llm.as_ref(),
-                    &config.extraction,
-                    &user_agent,
-                    default_stealth,
-                    render_js_default,
-                    deadline,
-                )
-                .await
-                {
-                    Ok(d) => {
-                        any_ok = true;
-                        if let Some(serde_json::Value::Object(obj)) = &d.json {
-                            for (k, v) in obj {
-                                merged.insert(k.clone(), v.clone());
+                        let mut req = template.clone();
+                        req.url = entry.url.clone();
+                        let deadline = Deadline::from_request_ms(deadline_ms);
+                        match scrape_url(
+                            &req,
+                            &renderer,
+                            config.extraction.llm.as_ref(),
+                            &config.extraction,
+                            &user_agent,
+                            default_stealth,
+                            render_js_default,
+                            deadline,
+                        )
+                        .await
+                        {
+                            Ok(d) => {
+                                any_ok = true;
+                                if let Some(serde_json::Value::Object(obj)) = &d.json {
+                                    for (k, v) in obj {
+                                        merged.insert(k.clone(), v.clone());
+                                    }
+                                }
+                                if let Some(usage) = &d.llm_usage {
+                                    tokens += usage.total_tokens;
+                                }
+                                credits += if d.credit_cost == 0 { 1 } else { d.credit_cost };
+                                per_url.push(UrlResult {
+                                    url: entry.url,
+                                    status: ExtractStatus::Completed,
+                                    data: d.json,
+                                    error: None,
+                                    llm_usage: d.llm_usage,
+                                });
+                            }
+                            Err(e) => {
+                                let msg = e.to_string();
+                                last_err = Some(msg.clone());
+                                per_url.push(UrlResult {
+                                    url: entry.url,
+                                    status: ExtractStatus::Failed,
+                                    data: None,
+                                    error: Some(msg),
+                                    llm_usage: None,
+                                });
                             }
                         }
-                        if let Some(usage) = &d.llm_usage {
-                            tokens += usage.total_tokens;
-                        }
-                        credits += if d.credit_cost == 0 { 1 } else { d.credit_cost };
-                        per_url.push(UrlResult {
-                            url: entry.url,
-                            status: ExtractStatus::Completed,
-                            data: d.json,
-                            error: None,
-                            llm_usage: d.llm_usage,
-                        });
                     }
-                    Err(e) => {
-                        let msg = e.to_string();
-                        last_err = Some(msg.clone());
-                        per_url.push(UrlResult {
-                            url: entry.url,
-                            status: ExtractStatus::Failed,
-                            data: None,
-                            error: Some(msg),
-                            llm_usage: None,
-                        });
-                    }
-                }
-            }
 
-            let mut jobs = extract_jobs.write().await;
-            if let Some(rec) = jobs.get_mut(&id) {
-                if !any_ok && last_err.is_some() {
-                    rec.status = ExtractStatus::Failed;
-                    rec.error = last_err;
-                } else {
-                    rec.status = ExtractStatus::Completed;
-                    rec.data = Some(serde_json::Value::Object(merged));
-                }
-                rec.per_url = per_url;
-                rec.tokens_used = tokens;
-                // ponytail: 1-credit floor even on an all-failed job — inherited
-                // from the v2 worker's accounting; preflight-failed URLs add 0
-                // (they `continue` before the credit tally). SaaS settles the
-                // real cost separately, so this engine figure is a floor, not a bill.
-                rec.credits_used = credits.max(1);
-            }
+                    let mut jobs = extract_jobs.write().await;
+                    if let Some(rec) = jobs.get_mut(&id) {
+                        if !any_ok && last_err.is_some() {
+                            rec.status = ExtractStatus::Failed;
+                            rec.error = last_err;
+                        } else {
+                            rec.status = ExtractStatus::Completed;
+                            rec.data = Some(serde_json::Value::Object(merged));
+                        }
+                        rec.per_url = per_url;
+                        rec.tokens_used = tokens;
+                        // ponytail: 1-credit floor even on an all-failed job —
+                        // preflight-failed URLs add 0 (they `continue` before the
+                        // tally). SaaS settles the real cost separately.
+                        rec.credits_used = credits.max(1);
+                    }
+                })
+                .await;
         });
 
         id

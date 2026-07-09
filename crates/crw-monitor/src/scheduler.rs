@@ -86,16 +86,23 @@ impl Scheduler {
 
         for target in &targets {
             let prior = self.store.load_prior(&monitor.id)?;
-            let check = run_check(
-                monitor,
-                target,
-                &prior,
-                self.source.as_ref(),
-                &self.cfg,
-                judge_llm.as_ref(),
-                now,
-            )
-            .await?;
+            // Monitor checks are background work — `Batch` traffic, so their
+            // fetches and LLM judge calls use the batch lanes and never consume
+            // the interactive reserve.
+            let check = crw_core::REQUEST_CLASS
+                .scope(
+                    crw_core::ScrapeClass::Batch,
+                    run_check(
+                        monitor,
+                        target,
+                        &prior,
+                        self.source.as_ref(),
+                        &self.cfg,
+                        judge_llm.as_ref(),
+                        now,
+                    ),
+                )
+                .await?;
 
             // Persist the check (also advances snapshot baselines).
             self.store.record_check(&check)?;

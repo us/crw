@@ -1159,6 +1159,11 @@ async fn enrich_with_scrape(
         let deadline_ms = state.config.effective_deadline_ms(None, None);
         let permit_src = semaphore.clone();
 
+        // Deliberately NOT scoped to `ScrapeClass::Batch`: `/v1/search` is a
+        // synchronous, latency-sensitive interactive endpoint (not a job entry
+        // point), so its enrichment scrapes are interactive traffic and correctly
+        // read the `Interactive` default — they legitimately use interactive
+        // capacity rather than the batch lane.
         set.spawn(async move {
             let _permit = match permit_src.acquire_owned().await {
                 Ok(p) => p,

@@ -64,6 +64,13 @@ pub struct DocumentConfig {
     /// primary memory-DoS guard. Independent of `upload_concurrency` (which
     /// only bounds upload body buffering).
     pub max_concurrent_parses: usize,
+    /// Of `max_concurrent_parses`, how many parse slots are RESERVED for
+    /// interactive (single-scrape) traffic — a batch/crawl job can never hold
+    /// them, so an interactive PDF scrape isn't starved behind a batch that
+    /// fills the pool. Clamped so the batch lane keeps ≥1 slot. `Some(0)`
+    /// disables the reservation. `None` (absent) → ~1/4 of the ACTUAL configured
+    /// `max_concurrent_parses`, floored at 1.
+    pub reserved_interactive_parses: Option<usize>,
     /// Wall-clock timeout (ms) for a single PDF parse. A parse exceeding this
     /// returns a timeout error to the caller; protects against pathological
     /// documents that spin the parser. `0` disables the timeout.
@@ -99,6 +106,7 @@ impl Default for DocumentConfig {
             max_upload_bytes: 52_428_800, // 50 MiB
             upload_concurrency: 4,
             max_concurrent_parses: 4,
+            reserved_interactive_parses: None,
             parse_timeout_ms: 30_000,
             max_decompressed_bytes: 104_857_600, // 100 MiB
             sandbox: false,
@@ -1192,6 +1200,16 @@ pub struct CrawlerConfig {
     /// config when scraping their own infrastructure.
     #[serde(default = "default_per_host_max_concurrent")]
     pub per_host_max_concurrent: u32,
+    /// Extra per-host in-flight slots RESERVED for interactive (single-scrape)
+    /// traffic, on top of `per_host_max_concurrent`. Batch/crawl stay bounded to
+    /// `per_host_max_concurrent` per host (target politeness), while an
+    /// interactive hit gets its own dedicated slot so it isn't queued behind a
+    /// batch crawling that host. Total in-flight per host is therefore bounded by
+    /// `per_host_max_concurrent + this` (the target is still protected — no
+    /// unbounded hammering). `0` = interactive shares the batch slots (legacy
+    /// single-flight). Default 1.
+    #[serde(default = "default_per_host_interactive_reserve")]
+    pub per_host_interactive_reserve: u32,
     /// Maximum number of URLs accepted by a single `/v2/batch/scrape`
     /// request (sanity cap; plan-level caps live in the SaaS). Default 10000.
     #[serde(default = "default_max_batch_urls")]
@@ -1201,9 +1219,32 @@ pub struct CrawlerConfig {
     /// Default 50.
     #[serde(default = "default_max_extract_urls")]
     pub max_extract_urls: usize,
+    /// Ceiling on a single batch job's OUTER pipeline width (`for_each_concurrent`
+    /// = how many URL tasks are alive at once). A per-request `maxConcurrency`
+    /// (injected by the SaaS per plan tier) is clamped to `[1, this]`; absent →
+    /// `max_concurrency`. This is the OUTER width — it may exceed the inner
+    /// reserved lanes (extract/render/…), extra URL tasks just queue there.
+    /// Distinct from `max_batch_urls` (submit-size cap). Default 100.
+    #[serde(default = "default_max_batch_concurrency")]
+    pub max_batch_concurrency: usize,
+    /// Process-wide cap on the TOTAL number of in-flight `/v2/batch/scrape`
+    /// URL-pipelines across all batch-scrape jobs, so `N jobs × width` can't
+    /// explode into memory / socket pressure. (Batch scrape is the only wide
+    /// fan-out; crawl is BFS-sequential and `/v2/extract` is one URL at a time,
+    /// both bounded by the crawl-job cap.) Each live pipeline takes one permit
+    /// before it fetches. **`0` (or absent) means UNBOUNDED** — NOT a lock. Do NOT set `0`
+    /// to "disable by zero" expecting a small number; `0` skips the cap entirely.
+    /// This is the opposite convention from the reserved-lane `reserved_* = 0`
+    /// (which means "no reservation"). Default 0 (unbounded).
+    #[serde(default)]
+    pub max_aggregate_batch_pipelines: usize,
 }
 
 fn default_per_host_max_concurrent() -> u32 {
+    1
+}
+
+fn default_per_host_interactive_reserve() -> u32 {
     1
 }
 
@@ -1223,8 +1264,11 @@ impl Default for CrawlerConfig {
             stealth: StealthConfig::default(),
             per_host_min_interval_ms: 0,
             per_host_max_concurrent: default_per_host_max_concurrent(),
+            per_host_interactive_reserve: default_per_host_interactive_reserve(),
             max_batch_urls: default_max_batch_urls(),
             max_extract_urls: default_max_extract_urls(),
+            max_batch_concurrency: default_max_batch_concurrency(),
+            max_aggregate_batch_pipelines: 0,
         }
     }
 }
@@ -1235,6 +1279,10 @@ fn default_max_batch_urls() -> usize {
 
 fn default_max_extract_urls() -> usize {
     50
+}
+
+fn default_max_batch_concurrency() -> usize {
+    100
 }
 
 fn default_concurrency() -> usize {
@@ -1294,6 +1342,15 @@ pub struct ExtractionConfig {
     /// 12-vCPU host), floored at 2.
     #[serde(default = "default_max_concurrent_extracts")]
     pub max_concurrent_extracts: usize,
+    /// Of `max_concurrent_extracts`, how many extract slots are RESERVED for
+    /// interactive (single-scrape) traffic — a batch/crawl job can never hold
+    /// them, so an interactive scrape isn't starved behind a batch that fills
+    /// the pool. Clamped so the batch lane keeps ≥1 slot. `Some(0)` disables the
+    /// reservation (single FIFO lane, legacy behaviour). `None` (absent) →
+    /// ~1/4 of the ACTUAL configured pool, floored at 1 (so a custom
+    /// `max_concurrent_extracts` scales the reserve with it).
+    #[serde(default)]
+    pub reserved_interactive_extracts: Option<usize>,
 }
 
 fn default_http_retry_threshold() -> usize {
@@ -1322,8 +1379,16 @@ impl Default for ExtractionConfig {
             http_retry_threshold_bytes: default_http_retry_threshold(),
             lightpanda_retry_threshold_bytes: default_lightpanda_retry_threshold(),
             max_concurrent_extracts: default_max_concurrent_extracts(),
+            reserved_interactive_extracts: None,
         }
     }
+}
+
+/// Resolve an optional interactive reserve against the actual pool `total`:
+/// `None` → ~1/4 of `total` floored at 1; `Some(n)` → `n` (0 disables). Kept
+/// below `total` by the [`crate::ReservedSemaphore`] constructor.
+pub fn resolve_interactive_reserve(reserve: Option<usize>, total: usize) -> usize {
+    reserve.unwrap_or_else(|| (total / 4).max(1))
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1379,6 +1444,14 @@ pub struct LlmConfig {
     /// Bounded to avoid hitting provider rate limits.
     #[serde(default = "default_llm_max_concurrency")]
     pub max_concurrency: usize,
+    /// Of `max_concurrency`, how many LLM-call slots are RESERVED for interactive
+    /// (single-scrape) traffic — a batch/crawl job can never hold them, so an
+    /// interactive `formats:["json"]`/summary request isn't starved behind a
+    /// batch's LLM fan-out. Clamped so the batch lane keeps ≥1 slot. `Some(0)`
+    /// disables the reservation. `None` (absent) → `max(1, max_concurrency/4)`
+    /// of the ACTUAL configured `max_concurrency`.
+    #[serde(default)]
+    pub reserved_interactive_llm: Option<usize>,
     /// Byte cap on content sent to the LLM in a single call. Content beyond
     /// the cap is truncated on a UTF-8 char boundary.
     #[serde(default = "default_llm_max_html_bytes")]
@@ -1413,6 +1486,7 @@ impl Default for LlmConfig {
             max_tokens: default_llm_max_tokens(),
             azure_api_version: None,
             max_concurrency: default_llm_max_concurrency(),
+            reserved_interactive_llm: None,
             max_html_bytes: default_llm_max_html_bytes(),
             require_byok_header: None,
             temperature: None,

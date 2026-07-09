@@ -239,7 +239,7 @@ async fn v2_batch_cancel_flips_status_to_cancelled() {
 
     let template = crw_core::types::ScrapeRequest::default();
     let id = state
-        .start_batch_job(vec!["http://192.0.2.1/".into()], template)
+        .start_batch_job(vec!["http://192.0.2.1/".into()], template, None)
         .await;
 
     // Cancel via the public route.

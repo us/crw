@@ -78,6 +78,13 @@ pub struct Metrics {
     pub chrome_pool_idle: IntGauge,
     /// Current `CheckedOut` slot count.
     pub chrome_pool_inflight: IntGauge,
+    /// Wait time to acquire a reserved concurrency lane, by `lane`
+    /// ∈ {extract, pdf, llm, host, render} and `class` ∈ {interactive, batch}.
+    /// The proof metric for interactive isolation: interactive p99 should stay
+    /// flat while batch saturates a lane.
+    pub reserved_lane_wait_seconds: HistogramVec,
+    /// Current in-flight `/v2/batch/scrape` URL-pipelines (aggregate cap gauge).
+    pub batch_pipelines_inflight: IntGauge,
     /// Time spent in `pool.acquire()` (waiting for a permit + slot creation).
     pub chrome_pool_acquire_seconds: Histogram,
     /// Acquire-path accounting.
@@ -334,6 +341,22 @@ impl Metrics {
             registry
         )
         .unwrap();
+        let reserved_lane_wait_seconds = register_histogram_vec_with_registry!(
+            histogram_opts!(
+                "crw_reserved_lane_wait_seconds",
+                "Wait to acquire a reserved concurrency lane, by lane and class",
+                lat_buckets.clone()
+            ),
+            &["lane", "class"],
+            registry
+        )
+        .unwrap();
+        let batch_pipelines_inflight = register_int_gauge_with_registry!(
+            "crw_batch_pipelines_inflight",
+            "Current in-flight /v2/batch/scrape URL-pipelines",
+            registry
+        )
+        .unwrap();
         let chrome_pool_acquire_seconds = register_histogram_with_registry!(
             histogram_opts!(
                 "crw_chrome_pool_acquire_seconds",
@@ -512,6 +535,8 @@ impl Metrics {
             chrome_pool_size,
             chrome_pool_idle,
             chrome_pool_inflight,
+            reserved_lane_wait_seconds,
+            batch_pipelines_inflight,
             chrome_pool_acquire_seconds,
             chrome_pool_acquires_total,
             chrome_pool_recycle_seconds,

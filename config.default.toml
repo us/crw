@@ -69,6 +69,21 @@ user_agent = "CRW/0.0.1"
 default_max_depth = 2
 default_max_pages = 100
 job_ttl_secs = 3600
+#
+# Interactive-vs-batch traffic isolation (reserved lanes). Single `/scrape`
+# requests are "interactive"; batch-scrape/crawl/extract/monitor jobs are
+# "batch". At every shared chokepoint (per-host limiter, Chrome render pool,
+# HTML extract pool, PDF parse pool, LLM calls) a slice is RESERVED for
+# interactive so a heavy batch can never starve interactive latency. Each
+# reserve knob: absent = ~1/4 of that pool (scaled to the actual size); a
+# number = that many slots; 0 = disable the reservation for that lane. Defaults
+# are safe; tune only if you measure contention.
+#
+# per_host_max_concurrent = 1          # batch in-flight cap per host (politeness)
+# per_host_interactive_reserve = 1     # extra dedicated per-host slots for interactive
+# max_batch_concurrency = 100          # ceiling on one batch job's outer URL fan-out
+# max_aggregate_batch_pipelines = 0    # 0 = UNBOUNDED total batch pipelines (NOT a lock);
+#                                      # set >0 to cap process-wide in-flight batch URLs
 # Proxy support — route crawler requests through an HTTP or SOCKS5 proxy.
 # Useful for bypassing IP-based rate limiting on sites like Reddit, LinkedIn, etc.
 #
@@ -121,6 +136,8 @@ job_ttl_secs = 3600
 [extraction]
 default_format = "markdown"
 only_main_content = true
+# max_concurrent_extracts = 8         # process-wide HTML→markdown parse cap (default ~2/3 cores)
+# reserved_interactive_extracts = 2   # extract slots reserved for interactive (absent = ~1/4; 0 disables)
 
 # Per-domain CSS selector overrides applied before readability narrowing.
 # User-supplied request `selector` still wins over these defaults. Map key is
@@ -175,7 +192,8 @@ always_run = false
 # model = "claude-sonnet-4-20250514"
 # max_tokens = 4096
 # base_url = "https://custom-endpoint.example.com"  # optional, for OpenAI-compatible APIs
-# max_concurrency = 4           # bound for per-result search-summary fan-out
+# max_concurrency = 4           # bound for LLM-call fan-out (now enforced; was previously unbounded)
+# reserved_interactive_llm = 1  # LLM-call slots reserved for interactive (absent = ~1/4; 0 disables)
 # max_html_bytes = 100000       # truncate content past this before sending
 # require_byok_header = ""      # SaaS-only: header name that must be set on LLM-touching requests
 #
@@ -257,6 +275,8 @@ upload_concurrency = 4
 # crawl, batch, upload). Primary memory/CPU-DoS guard — a malicious PDF can
 # decompress far beyond its wire size, so bound how many parse at once.
 max_concurrent_parses = 4
+# reserved_interactive_parses = 1   # PDF parse slots reserved for interactive
+#                                   # scrapes (absent = ~1/4 of the pool; 0 disables)
 # Wall-clock timeout (ms) per PDF parse. A document exceeding this returns a
 # pdf_timeout error instead of pinning a worker. 0 disables.
 parse_timeout_ms = 30000

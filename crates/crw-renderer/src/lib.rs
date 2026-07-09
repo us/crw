@@ -106,6 +106,19 @@ tokio::task_local! {
     pub static REQUEST_SCREENSHOT: Option<ScreenshotReq>;
 }
 
+/// Interactive render-slot reserve for a Chrome pool of `pool_size` (the B
+/// reserved lane). About a quarter of the pool, floored at 1 whenever there are
+/// ≥2 slots so even small (2–3 slot) self-hosted pools keep interactive render
+/// isolation; only a 1-slot pool disables it (a reserve there would starve
+/// batch). Always kept below `pool_size` so the batch gate stays ≥1.
+pub fn render_reserve(pool_size: usize) -> usize {
+    if pool_size <= 1 {
+        0
+    } else {
+        (pool_size / 4).max(1).min(pool_size - 1)
+    }
+}
+
 /// Whether a screenshot was requested for the current task (reads the
 /// [`REQUEST_SCREENSHOT`] task-local). `false` when unset / outside a scope.
 pub fn screenshot_requested() -> bool {
@@ -298,8 +311,13 @@ pub struct FallbackRenderer {
     /// floor; the concurrency cap below still applies. Configured via
     /// [`Self::with_host_limits`].
     requests_per_second: f64,
-    /// Process-wide per-eTLD+1 in-flight cap. `1` enforces strict politeness.
+    /// Process-wide per-eTLD+1 in-flight cap for batch/crawl. `1` enforces strict
+    /// politeness. Interactive gets `per_host_interactive_reserve` extra slots.
     per_host_max_concurrent: u32,
+    /// Extra per-host in-flight slots reserved for interactive traffic (the A
+    /// reserved lane). Total per-host in-flight is bounded by
+    /// `per_host_max_concurrent + this`.
+    per_host_interactive_reserve: u32,
     /// Anti-bot classifier policy. Drives the in-loop `classify()` call that
     /// decides whether a 200-status block page is a soft failure (escalate
     /// toward `chrome_proxy`) or a genuine success.
@@ -420,6 +438,7 @@ impl FallbackRenderer {
                 tier_timeouts: tier_timeouts_from(config),
                 requests_per_second: 0.0,
                 per_host_max_concurrent: 1,
+                per_host_interactive_reserve: 1,
                 antibot: config.antibot.clone(),
                 proxy_rotator: None,
                 http_ua: effective_ua.clone(),
@@ -685,6 +704,7 @@ impl FallbackRenderer {
             tier_timeouts: tier_timeouts_from(config),
             requests_per_second: 0.0,
             per_host_max_concurrent: 1,
+            per_host_interactive_reserve: 1,
             antibot: config.antibot.clone(),
             proxy_rotator: None,
             http_ua: effective_ua.clone(),
@@ -806,9 +826,11 @@ impl FallbackRenderer {
         mut self,
         requests_per_second: f64,
         per_host_max_concurrent: u32,
+        per_host_interactive_reserve: u32,
     ) -> Self {
         self.requests_per_second = requests_per_second;
         self.per_host_max_concurrent = per_host_max_concurrent;
+        self.per_host_interactive_reserve = per_host_interactive_reserve;
         self
     }
 
@@ -921,11 +943,12 @@ impl FallbackRenderer {
                     key,
                     self.requests_per_second,
                     self.per_host_max_concurrent as usize,
+                    self.per_host_interactive_reserve as usize,
                 ),
             )
             .await
             {
-                Ok(Ok((permit, sleep))) => {
+                Ok((permit, sleep)) => {
                     if !sleep.is_zero() {
                         let budget = deadline.remaining();
                         if sleep > budget {
@@ -933,9 +956,11 @@ impl FallbackRenderer {
                         }
                         tokio::time::sleep(sleep).await;
                     }
+                    // Reserved per-host lane permit (interactive gets a dedicated
+                    // slot, batch a bounded one). Held for the whole fetch by
+                    // binding it to `_host_permit`.
                     Some(permit)
                 }
-                Ok(Err(_)) => return Err(CrwError::RendererError("host limiter closed".into())),
                 Err(_) => {
                     return Err(CrwError::Timeout(
                         deadline.overrun().as_millis().max(1) as u64
