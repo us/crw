@@ -21,6 +21,10 @@ from datasets import load_dataset
 
 LINK_RE = re.compile(r"\[([^\]]*)\]\([^)]*\)")
 
+# Standardize on CRW_API_URL (default 3000, matching map_recall/run_bench and
+# docker-compose's 3000:3000). The old hardcoded :3030 had no override.
+CRW_URL = os.getenv("CRW_API_URL", "http://localhost:3000")
+
 
 def split_phrases(text: str, min_len: int) -> list[str]:
     return [w.strip() for w in text.split("\n") if len(w.strip()) > min_len]
@@ -43,7 +47,7 @@ async def call_crw(session, url: str, timeout: int) -> dict:
     body = {"url": url, "formats": ["markdown"]}
     t0 = time.monotonic()
     async with session.post(
-        "http://localhost:3030/v1/scrape",
+        f"{CRW_URL}/v1/scrape",
         json=body,
         timeout=aiohttp.ClientTimeout(total=timeout),
     ) as resp:

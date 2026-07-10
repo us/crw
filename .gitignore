@@ -71,3 +71,6 @@ logs/
 
 # ── Internal design/planning notes (keep local) ──
 futures-plans.md
+
+# bench python venv (local; recreate from bench/requirements.txt)
+bench/.venv/
