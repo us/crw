@@ -1,3 +1,4 @@
+pub mod batch;
 pub mod breakers;
 pub mod capabilities;
 pub mod change_tracking;

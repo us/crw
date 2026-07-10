@@ -254,6 +254,92 @@
         }
       }
     },
+    "/v1/batch/scrape": {
+      "post": {
+        "tags": [
+          "batch"
+        ],
+        "summary": "Start an async batch scrape over an explicit URL list",
+        "operationId": "batchScrapeStart",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchScrapeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Batch job accepted; poll with /v1/batch/scrape/{id}",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchScrapeAccepted"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/batch/scrape/{id}": {
+      "get": {
+        "tags": [
+          "batch"
+        ],
+        "summary": "Get batch job status and results",
+        "operationId": "batchScrapeStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Batch job id returned by POST /v1/batch/scrape"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job status + scraped pages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrawlStatus"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "batch"
+        ],
+        "summary": "Cancel an active batch job",
+        "operationId": "batchScrapeCancel",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Batch job id returned by POST /v1/batch/scrape"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job cancelled; status becomes \"cancelled\""
+          }
+        }
+      }
+    },
     "/v1/change-tracking/diff": {
       "post": {
         "tags": [
@@ -1154,15 +1240,23 @@
       "CrawlStatus": {
         "type": "object",
         "required": [
-          "status"
+          "success",
+          "status",
+          "total",
+          "completed",
+          "data"
         ],
         "properties": {
+          "success": {
+            "type": "boolean"
+          },
           "status": {
             "type": "string",
             "enum": [
               "scraping",
               "completed",
-              "failed"
+              "failed",
+              "cancelled"
             ]
           },
           "completed": {
@@ -1176,6 +1270,9 @@
             "items": {
               "$ref": "#/components/schemas/ScrapeResponse"
             }
+          },
+          "error": {
+            "type": "string"
           }
         }
       },
@@ -1704,6 +1801,64 @@
           },
           "tokensUsed": {
             "type": "integer"
+          }
+        }
+      },
+      "BatchScrapeRequest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ScrapeOptions"
+          },
+          {
+            "type": "object",
+            "required": [
+              "urls"
+            ],
+            "properties": {
+              "urls": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "minItems": 1,
+                "description": "URLs to scrape. Each is SSRF-validated; invalid entries are reported in invalidUrls."
+              },
+              "ignoreInvalidUrls": {
+                "type": "boolean",
+                "default": true,
+                "description": "When false, a single invalid URL rejects the whole submit with 400."
+              },
+              "maxConcurrency": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "How many URLs the job scrapes concurrently. Clamped server-side to crawler.max_batch_concurrency."
+              }
+            }
+          }
+        ]
+      },
+      "BatchScrapeAccepted": {
+        "type": "object",
+        "required": [
+          "success",
+          "id",
+          "invalidUrls"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string",
+            "description": "Batch job id; poll with GET /v1/batch/scrape/{id}"
+          },
+          "invalidUrls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Submitted URLs rejected by parsing or the SSRF guard, verbatim."
           }
         }
       }
