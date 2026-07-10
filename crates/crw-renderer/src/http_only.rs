@@ -30,7 +30,44 @@ const HTTP_RETRY_BACKOFF: std::time::Duration = std::time::Duration::from_millis
 /// arriving. `is_request()` is intentionally NOT included — it also fires on
 /// permanent builder/config errors that no amount of retrying will fix.
 fn is_retriable_error(e: &reqwest::Error) -> bool {
-    e.is_connect() || e.is_timeout()
+    // `is_egress_rejected` is included so a reset gets one cheap direct retry: a stale
+    // pooled connection, a restarting origin, or a transient fault produces the same
+    // ErrorKind as a genuine egress block, and retrying costs milliseconds while a
+    // proxy hop costs bandwidth (billed per GB). Only if the retry also fails do we
+    // escalate to the proxy — see the `egress_rejected` arm in `fetch`.
+    e.is_connect() || e.is_timeout() || is_egress_rejected(e)
+}
+
+/// Returns true when the peer refused, reset, or aborted the transport. That is
+/// a signal our egress IP is unwelcome, which a different egress (the fallback
+/// proxy) often clears.
+///
+/// Deliberately NOT `is_connect()`. reqwest reports a reset on an *established*
+/// connection as `Kind::Request` (hyper_util `ErrorKind::SendRequest`), for which
+/// `is_connect()` is false — and that is precisely the WAF-style block we must
+/// catch (an origin that completes the handshake, inspects the request, then
+/// sends RST). Verified against this workspace's reqwest:
+///   reset   -> is_connect=false, chain contains io::ConnectionReset
+///   refused -> is_connect=true,  chain contains io::ConnectionRefused
+///   dns     -> is_connect=true,  chain contains no io::Error
+/// DNS failures are excluded on purpose: the proxy resolves the same name, so a
+/// retry through it is a wasted round trip.
+fn is_egress_rejected(e: &reqwest::Error) -> bool {
+    let mut src: Option<&(dyn std::error::Error + 'static)> = std::error::Error::source(e);
+    while let Some(s) = src {
+        if let Some(io) = s.downcast_ref::<std::io::Error>()
+            && matches!(
+                io.kind(),
+                std::io::ErrorKind::ConnectionReset
+                    | std::io::ErrorKind::ConnectionRefused
+                    | std::io::ErrorKind::ConnectionAborted
+            )
+        {
+            return true;
+        }
+        src = std::error::Error::source(s);
+    }
+    false
 }
 
 /// Returns true if a response status warrants one retry. Limited to the
@@ -368,6 +405,30 @@ impl PageFetcher for HttpFetcher {
                     );
                     use_relaxed = true;
                 }
+                // The origin refused or reset the connection: our egress IP is
+                // unwelcome. Switch to the fallback proxy — a different egress usually
+                // clears it. Arming does not consume the transient retry budget (same
+                // policy as the 429 arm above), so the proxy still gets one transient
+                // retry of its own if it answers with a 5xx. `!use_proxy` bounds this
+                // to a single switch: worst case is direct, direct-retry,
+                // [relaxed-TLS], proxy, proxy-retry — each bounded by
+                // `deadline.remaining()`.
+                //
+                // Deliberately placed AFTER the generic retriable arm. A reset/refused is
+                // not proof our egress is blocked: a stale pooled connection, a restarting
+                // origin, or a closed port produce the same ErrorKind. So we spend one
+                // cheap direct retry first (`is_retriable_error` now covers these), and
+                // only escalate to the billed proxy hop when that retry also fails.
+                //
+                // Skipped when too little budget remains for a proxy round trip to
+                // plausibly complete; otherwise we pay a TCP setup only to be cancelled
+                // milliseconds later.
+                //
+                // Note `active_client` prefers the proxy over the relaxed-TLS client, so
+                // a site that needs BOTH a relaxed cert and a different egress keeps the
+                // strict-TLS proxy client and will still fail. That ordering predates
+                // this arm (the 429 arm has the same property) and no origin observed in
+                // production needs both.
                 Ok(Err(e)) if attempt < HTTP_MAX_RETRIES && is_retriable_error(&e) => {
                     tracing::debug!(
                         "transient HTTP error to {url} ({e}), retrying (attempt {})",
@@ -379,7 +440,27 @@ impl PageFetcher for HttpFetcher {
                         tokio::time::sleep(backoff).await;
                     }
                 }
+                // Last resort before giving up: the direct retry above also failed with a
+                // refused/reset transport, so this looks like a genuine egress block.
+                // Switch to the fallback proxy for one more try.
+                Ok(Err(e))
+                    if !use_proxy
+                        && self.ratelimit_proxy_client.is_some()
+                        && deadline.remaining() >= crate::MIN_TIER_BUDGET
+                        && is_egress_rejected(&e) =>
+                {
+                    tracing::warn!(
+                        "connection refused/reset for {url} ({e}); retrying via proxy (egress_rejected)"
+                    );
+                    // Like the 429 arm: switching egress does not refund the transient
+                    // retry budget, so the proxy gets exactly one attempt. Worst case is
+                    // direct, direct-retry, proxy — three round trips.
+                    use_proxy = true;
+                }
                 Ok(Err(e)) => {
+                    // Unchanged: `is_connect()` (refused/DNS/TLS-handshake) means the target
+                    // is unreachable (422). A bare reset stays an HttpError (502, retryable)
+                    // — it can still be transient, and we do not know it is permanent.
                     return Err(if e.is_connect() {
                         CrwError::TargetUnreachable(format!("Could not reach {url}: {e}"))
                     } else {
@@ -558,6 +639,191 @@ mod tests {
         assert!(should_arm_proxy(403, true), "403 + cf-mitigated arms");
         assert!(should_arm_proxy(200, true), "challenge served as 200 arms");
         assert!(!should_arm_proxy(200, false), "clean 200 does not arm");
+    }
+
+    /// Complete the handshake, read the request, THEN abort with RST
+    /// (unix only: forcing an RST needs SO_LINGER; on other platforms `close()`
+    /// sends FIN and the test would assert the wrong error class).
+    /// This is the WAF-style block seen in production: the
+    /// origin inspects the request before rejecting it. Reading first is what makes
+    /// the test deterministic — it forces the error into hyper's send-request phase
+    /// rather than the connect phase.
+    #[cfg(unix)]
+    fn spawn_resetting_origin() -> String {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            for mut stream in listener.incoming().flatten() {
+                use std::io::Read;
+                let mut buf = [0u8; 1024];
+                let _ = stream.read(&mut buf);
+                #[cfg(unix)]
+                unsafe {
+                    use std::os::fd::AsRawFd;
+                    let l = libc::linger {
+                        l_onoff: 1,
+                        l_linger: 0,
+                    };
+                    libc::setsockopt(
+                        stream.as_raw_fd(),
+                        libc::SOL_SOCKET,
+                        libc::SO_LINGER,
+                        std::ptr::from_ref(&l).cast(),
+                        std::mem::size_of::<libc::linger>() as libc::socklen_t,
+                    );
+                }
+                drop(stream);
+            }
+        });
+        format!("http://{addr}/")
+    }
+
+    /// A reset on an established connection must arm the proxy. `is_connect()` is
+    /// false here — which is exactly why the predicate cannot be built on it. This
+    /// mirrors the production trace for `sabir.com`, where the engine reported
+    /// `HttpError` ("HTTP request failed") rather than `TargetUnreachable`, proving
+    /// `is_connect()` was false for the real block.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn egress_rejected_catches_connection_reset() {
+        let url = spawn_resetting_origin();
+        let err = reqwest::Client::new().get(&url).send().await.unwrap_err();
+        assert!(
+            !err.is_connect(),
+            "a post-handshake reset must not be is_connect(); \
+             if this ever flips, the arm ordering below needs revisiting"
+        );
+        assert!(is_egress_rejected(&err), "reset must arm the proxy");
+    }
+
+    /// A refused connection (nothing listening) must also arm the proxy.
+    #[tokio::test]
+    async fn egress_rejected_catches_connection_refused() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        drop(listener);
+        let err = reqwest::Client::new()
+            .get(format!("http://{addr}/"))
+            .send()
+            .await
+            .unwrap_err();
+        assert!(is_egress_rejected(&err), "refused must arm the proxy");
+    }
+
+    /// Minimal forward proxy: reads the absolute-URI request reqwest sends for a
+    /// plain-HTTP proxied GET and answers 200 with a marker body.
+    #[cfg(unix)]
+    fn spawn_stub_proxy() -> String {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            for mut stream in listener.incoming().flatten() {
+                use std::io::{Read, Write};
+                let mut buf = [0u8; 2048];
+                let _ = stream.read(&mut buf);
+                const BODY: &str = "<html><body>served via proxy</body></html>";
+                let _ = stream.write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{BODY}",
+                        BODY.len()
+                    )
+                    .as_bytes(),
+                );
+            }
+        });
+        format!("http://{addr}")
+    }
+
+    /// End-to-end: an origin that resets the connection is retried through the
+    /// fallback proxy and succeeds. This is the production `sabir.com` case
+    /// (prod egress IP refused, proxy reaches it in ~1.6s). Without the
+    /// `is_egress_rejected` arm the request dies with `HttpError` and the caller
+    /// sees a 502.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn connection_reset_is_retried_through_proxy() {
+        let origin = spawn_resetting_origin();
+        let proxy = spawn_stub_proxy();
+
+        let fetcher = HttpFetcher {
+            client: reqwest::Client::new(),
+            relaxed_client: None,
+            ratelimit_proxy_client: Some(
+                build_client(
+                    "test-ua",
+                    Some(&proxy),
+                    std::time::Duration::from_secs(5),
+                    false,
+                )
+                .unwrap(),
+            ),
+            inject_stealth_headers: false,
+        };
+
+        let res = fetcher
+            .fetch(
+                &origin,
+                &HashMap::new(),
+                None,
+                Deadline::from_request_ms(10_000),
+            )
+            .await
+            .expect("reset origin must be recovered through the proxy");
+        assert!(
+            res.html.contains("served via proxy"),
+            "expected the proxy's body, got: {}",
+            res.html
+        );
+    }
+
+    /// Without an armed proxy the same reset still fails — the arm is what fixes
+    /// it, not some incidental retry.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn connection_reset_without_proxy_still_fails() {
+        let origin = spawn_resetting_origin();
+        let fetcher = HttpFetcher {
+            client: reqwest::Client::new(),
+            relaxed_client: None,
+            ratelimit_proxy_client: None,
+            inject_stealth_headers: false,
+        };
+        let err = fetcher
+            .fetch(
+                &origin,
+                &HashMap::new(),
+                None,
+                Deadline::from_request_ms(10_000),
+            )
+            .await
+            .expect_err("no proxy armed => the reset must surface as an error");
+        assert!(
+            matches!(err, CrwError::HttpError(_) | CrwError::TargetUnreachable(_)),
+            "unexpected error variant: {err:?}"
+        );
+    }
+
+    /// A DNS failure must NOT arm the proxy: it resolves the same name, so the
+    /// extra round trip buys nothing.
+    /// A DNS failure must NOT arm the proxy: it resolves the same name, so the extra
+    /// round trip buys nothing. Written to be network-tolerant: if the environment's
+    /// resolver hijacks NXDOMAIN and returns a response, there is no error to classify
+    /// and the assertion is vacuous rather than flaky.
+    #[tokio::test]
+    async fn egress_rejected_ignores_dns_failure() {
+        let res = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()
+            .unwrap()
+            .get("http://nonexistent.invalid./")
+            .send()
+            .await;
+        if let Err(err) = res {
+            assert!(
+                !is_egress_rejected(&err),
+                "DNS failure must not arm the proxy (got {err:?})"
+            );
+        }
     }
 
     #[test]

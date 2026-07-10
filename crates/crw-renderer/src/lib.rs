@@ -281,6 +281,39 @@ enum HedgeOutcome {
     Thin(FetchResult, bool),
 }
 
+/// Did this renderer error come from failing to reach/navigate the ORIGIN, as
+/// opposed to a fault on our side (CDP pool exhausted, browser discovery failed,
+/// a pinned renderer that does not exist)?
+///
+/// Only used to decide whether an unreachable origin should outrank a JS-tier error
+/// when both fail. Getting it wrong in the permissive direction (treating our fault as
+/// the origin's) would blame the caller for our outage, so the match is deliberately
+/// narrow.
+///
+/// `Timeout` is NOT included: a JS-tier timeout is just as likely to be a local CDP
+/// websocket/command timeout as a slow origin, and it already maps to 504 on its own,
+/// which is the honest answer either way.
+fn is_origin_navigation_failure(e: &CrwError) -> bool {
+    match e {
+        CrwError::TargetUnreachable(_) => true,
+        // Chrome/LightPanda report a failure to reach the origin as a navigation error
+        // with a `net::ERR_*` code. Internal faults (pool exhausted, CDP discovery)
+        // carry different messages and keep their own error.
+        CrwError::RendererError(msg) => {
+            let m = msg.to_ascii_lowercase();
+            m.contains("navigation failed") || m.contains("net::err_")
+        }
+        _ => false,
+    }
+}
+
+/// Minimum remaining request budget for a network attempt to be worth making.
+/// Below this a CDP tier cannot complete its handshake and returns a fabricated
+/// `Timeout after Nms` (single-digit N) while still consuming a pool slot.
+/// Guards the main ladder loop, the hedge dispatch, the breaker leak-through arm,
+/// and the HTTP tier's proxy retry (`http_only`).
+pub(crate) const MIN_TIER_BUDGET: Duration = Duration::from_millis(500);
+
 /// Composite renderer that tries multiple backends in order.
 pub struct FallbackRenderer {
     http: Arc<dyn PageFetcher>,
@@ -1067,7 +1100,23 @@ impl FallbackRenderer {
                             .await
                             .map_err(|js_err| {
                                 tracing::warn!("Both HTTP and JS failed: http={e}, js={js_err}");
-                                js_err
+                                // When the HTTP tier could not reach the origin AND the JS tier
+                                // failed navigating to that same origin, the origin is the root
+                                // cause: surface TargetUnreachable (422 — the caller handed us a
+                                // dead target) instead of the JS tier's RendererError, which
+                                // falls through to a 500 and reads as "our server broke".
+                                //
+                                // A JS failure can also be OUR fault (pool exhausted, CDP
+                                // discovery failed, pinned renderer missing). Those keep their
+                                // own error, or we would blame the caller for our outage.
+                                match (&e, &js_err) {
+                                    (CrwError::TargetUnreachable(_), js)
+                                        if is_origin_navigation_failure(js) =>
+                                    {
+                                        e
+                                    }
+                                    _ => js_err,
+                                }
                             });
                     }
                     Err(e) => return Err(e),
@@ -1289,6 +1338,16 @@ impl FallbackRenderer {
             drop(ch_guard);
             return Ok(None);
         }
+        // Both `acquire_with_guard` calls above await, so the budget may have drained
+        // since the caller's floor check. Re-check before dispatching, or the floor is
+        // only advisory here. Bail to the serial loop, which applies its own floor and
+        // records the skip.
+        if deadline.remaining() < MIN_TIER_BUDGET {
+            drop(lp_guard);
+            drop(ch_guard);
+            return Ok(None);
+        }
+
         let mut lp_guard = Some(lp_guard);
         let mut ch_guard = Some(ch_guard);
 
@@ -1595,6 +1654,10 @@ impl FallbackRenderer {
         if self.chrome_hedge
             && !is_user_pinned
             && !proxy_active
+            // Same degenerate-budget guard as the serial loop: the hedge dispatches
+            // both CDP tiers directly, bypassing that check. Prod runs with
+            // CRW_CHROME_HEDGE=true, so this is load-bearing, not defensive.
+            && deadline.remaining() >= MIN_TIER_BUDGET
             && renderers.first().map(|r| r.name()) == Some("lightpanda")
             && renderers.iter().any(|r| r.name() == "chrome")
             && let Ok(_permit) = self.hedge_sem.clone().try_acquire_owned()
@@ -1635,13 +1698,47 @@ impl FallbackRenderer {
             // with the "" key when URL parsing failed.
             let trackable = kind.filter(|_| !host.is_empty());
 
-            // Pre-flight deadline skip removed: classify_outcome in the
-            // breaker layer already ignores DeadlineClamped outcomes, so a
-            // tier-side timeout on near-exhausted budget doesn't poison the
-            // breaker. Letting chrome attempt with partial-DOM budget gives
-            // higher success on legitimately-slow tail URLs than aborting
-            // pre-flight. tier_timeouts is still used by AttemptContext to
-            // detect clamping post-hoc.
+            // A tier-side skip on a *partial* budget stays removed (86dd10f): letting
+            // chrome attempt with a partial-DOM budget beats aborting pre-flight on
+            // legitimately-slow tail URLs, and classify_outcome ignores DeadlineClamped
+            // so the breaker isn't poisoned. What is reinstated here is narrower: a
+            // *degenerate* budget. A CDP attempt cannot even finish its handshake in
+            // single-digit milliseconds, so it returns a fabricated `Timeout after 5ms`
+            // that pollutes logs and burns a pool slot. Measured in prod: 432 of 536
+            // escalations ran with <50ms of budget. Skip those, and only those.
+            //
+            // Note this is skip-*without*-attempting, distinct from the post-hoc
+            // DeadlineClamped classification, which still only applies to tiers that
+            // were actually invoked.
+            let remaining = deadline.remaining();
+            if remaining < MIN_TIER_BUDGET {
+                tracing::debug!(
+                    renderer = renderer.name(),
+                    remaining_ms = remaining.as_millis() as u64,
+                    "budget below minimum tier budget, skipping renderer"
+                );
+                if let Some(k) = kind {
+                    // Deliberately NOT `breaker_skipped`: that vec means "the circuit
+                    // breaker rejected this tier" and gates the leak-through arm.
+                    metrics()
+                        .render_route_decision_total
+                        .with_label_values(&[k.as_str(), "budgetSkipped"])
+                        .inc();
+                }
+                // Preserve the status code a starved request returns today. The tier we
+                // are skipping would have been invoked with `remaining`, timed out, and
+                // written `CrwError::Timeout` here — overwriting any earlier error, as
+                // every other `last_error` assignment in this function does. Assign
+                // unconditionally for the same reason: `get_or_insert_with` would let an
+                // earlier tier's `RendererError` survive and map to 500 instead of 504.
+                //
+                // Report the budget the tier would have had, matching what the CDP tier
+                // reports when invoked and clamped (`Timeout after 5ms`). `overrun()` is
+                // 0 whenever the deadline has not actually expired — the common case
+                // here (1-499ms left).
+                last_error = Some(CrwError::Timeout(remaining.as_millis().max(1) as u64));
+                continue;
+            }
 
             // Consult breaker for tracked renderers. Untracked names (e.g.
             // "playwright") bypass the breaker for now.
@@ -1664,6 +1761,28 @@ impl FallbackRenderer {
                 }
                 probe_guard = Some(guard);
             }
+
+            // `acquire_with_guard` awaits, so the budget may have drained while we
+            // waited for a breaker permit. Re-check before dispatching, or the floor
+            // above is only advisory. Dropping `probe_guard` here cancels the probe
+            // (see `ProbeGuard::drop`), so the breaker is left as we found it.
+            let remaining = deadline.remaining();
+            if remaining < MIN_TIER_BUDGET {
+                tracing::debug!(
+                    renderer = renderer.name(),
+                    remaining_ms = remaining.as_millis() as u64,
+                    "budget drained while acquiring breaker permit, skipping renderer"
+                );
+                if let Some(k) = kind {
+                    metrics()
+                        .render_route_decision_total
+                        .with_label_values(&[k.as_str(), "budgetSkipped"])
+                        .inc();
+                }
+                last_error = Some(CrwError::Timeout(remaining.as_millis().max(1) as u64));
+                continue;
+            }
+
             if let Some(k) = kind {
                 chain.push(k);
             }
@@ -2048,11 +2167,11 @@ impl FallbackRenderer {
         // entering a renderer with <500ms budget produced 37/128 of the
         // first leak run's failures as "Timeout after 1-2ms" — the
         // attempt cannot succeed and just consumes a CDP connection.
-        const LEAK_MIN_BUDGET: Duration = Duration::from_millis(500);
+        // (Same reasoning now guards the main ladder loop; see MIN_TIER_BUDGET.)
         if thin_result.is_none()
             && !breaker_skipped.is_empty()
             && !is_user_pinned
-            && deadline.remaining() >= LEAK_MIN_BUDGET
+            && deadline.remaining() >= MIN_TIER_BUDGET
         {
             for renderer in &renderers_snapshot {
                 let kind = renderer_kind_for(renderer.name());
@@ -2063,6 +2182,11 @@ impl FallbackRenderer {
                 }
                 let permit = self.breakers.try_acquire_host_only(&host, k).await;
                 if permit == Permit::Rejected {
+                    continue;
+                }
+                // That acquire awaits; re-check the budget before dispatching so the
+                // floor above is not merely advisory (same TOCTOU as the serial loop).
+                if deadline.remaining() < MIN_TIER_BUDGET {
                     continue;
                 }
                 tracing::info!(
@@ -2135,7 +2259,11 @@ impl FallbackRenderer {
                 .get(&kind)
                 .copied()
                 .unwrap_or_else(|| std::time::Duration::from_secs(30));
-            if saw_hard_block && deadline.remaining() >= tier_budget {
+            // `tier_budget` is normally far above MIN_TIER_BUDGET (chrome_proxy defaults
+            // to chrome_timeout + 15s), but an operator can configure it lower. Take the
+            // stricter of the two so no JS dispatch path can run on a degenerate budget.
+            let arm_floor = tier_budget.max(MIN_TIER_BUDGET);
+            if saw_hard_block && deadline.remaining() >= arm_floor {
                 chain.push(kind);
                 let entry = self.pick_proxy_for_url(url);
                 let attempt = REQUEST_PROXY
@@ -2574,6 +2702,247 @@ mod tests {
             marker,
             "x".repeat(200)
         )
+    }
+
+    /// Mock that records whether it was invoked. Separate from `MockFetcher` so the
+    /// ~12 existing constructor sites stay untouched.
+    struct CountingFetcher {
+        name: &'static str,
+        calls: Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    #[async_trait::async_trait]
+    impl PageFetcher for CountingFetcher {
+        async fn fetch(
+            &self,
+            url: &str,
+            _headers: &HashMap<String, String>,
+            _wait_for_ms: Option<u64>,
+            _deadline: crw_core::Deadline,
+        ) -> CrwResult<FetchResult> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(FetchResult {
+                url: url.to_string(),
+                final_url: None,
+                status_code: 200,
+                html: rich_html("rendered"),
+                content_type: Some("text/html".to_string()),
+                raw_bytes: None,
+                rendered_with: Some(self.name.to_string()),
+                elapsed_ms: 0,
+                warning: None,
+                render_decision: None,
+                credit_cost: 0,
+                warnings: Vec::new(),
+                truncated: false,
+                deadline_exceeded: false,
+                captured_responses: Vec::new(),
+                screenshot: None,
+            })
+        }
+        fn name(&self) -> &str {
+            self.name
+        }
+        fn supports_js(&self) -> bool {
+            true
+        }
+        async fn is_available(&self) -> bool {
+            true
+        }
+    }
+
+    /// A degenerate budget must not invoke a JS tier at all (prod: 432 of 536
+    /// escalations ran with <50ms, returning a fabricated `Timeout after 5ms`),
+    /// and the request must still surface `CrwError::Timeout` so the server keeps
+    /// mapping it to 504 rather than a 500 from the `RendererError` tail.
+    #[tokio::test]
+    async fn degenerate_budget_skips_js_tier_and_preserves_timeout() {
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mock = Arc::new(CountingFetcher {
+            name: "chrome",
+            calls: calls.clone(),
+        });
+        let r = make_renderer_with_mocks(vec![mock]);
+
+        let err = r
+            .fetch_with_js(
+                "https://example.com",
+                &HashMap::new(),
+                None,
+                None,
+                crw_core::Deadline::from_request_ms(0),
+            )
+            .await
+            .expect_err("an exhausted budget must not produce a rendered page");
+
+        assert_eq!(
+            calls.load(std::sync::atomic::Ordering::SeqCst),
+            0,
+            "renderer must be skipped, not invoked with a few milliseconds"
+        );
+        assert!(
+            matches!(err, CrwError::Timeout(_)),
+            "must stay a Timeout (504), not RendererError (500); got {err:?}"
+        );
+    }
+
+    /// Burns most of the budget, then fails — so the NEXT tier lands below the floor.
+    struct SlowFailingFetcher {
+        name: &'static str,
+        burn: Duration,
+        calls: Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    #[async_trait::async_trait]
+    impl PageFetcher for SlowFailingFetcher {
+        async fn fetch(
+            &self,
+            _url: &str,
+            _headers: &HashMap<String, String>,
+            _wait_for_ms: Option<u64>,
+            _deadline: crw_core::Deadline,
+        ) -> CrwResult<FetchResult> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            tokio::time::sleep(self.burn).await;
+            Err(CrwError::RendererError("anti-bot wall".to_string()))
+        }
+        fn name(&self) -> &str {
+            self.name
+        }
+        fn supports_js(&self) -> bool {
+            true
+        }
+        async fn is_available(&self) -> bool {
+            true
+        }
+    }
+
+    /// A tier that fails for a real reason, followed by a tier skipped for lack of
+    /// budget, must still report Timeout (504) — not the earlier RendererError (500).
+    /// The skipped tier would have been invoked, timed out, and overwritten
+    /// `last_error`; skipping must not change the status the caller sees. Guards
+    /// against reintroducing `get_or_insert_with` here.
+    #[tokio::test]
+    async fn budget_skip_overrides_an_earlier_renderer_error() {
+        let slow_calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let slow = Arc::new(SlowFailingFetcher {
+            name: "lightpanda",
+            burn: Duration::from_millis(1_200),
+            calls: slow_calls.clone(),
+        });
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let chrome = Arc::new(CountingFetcher {
+            name: "chrome",
+            calls: calls.clone(),
+        });
+        let r = make_renderer_with_mocks(vec![slow, chrome]);
+
+        // 1500ms budget: lightpanda is comfortably above the 500ms floor even under
+        // CI scheduling jitter, burns 1200ms and errors, leaving ~300ms — chrome is
+        // then below the floor and is skipped.
+        let err = r
+            .fetch_with_js(
+                "https://example.com",
+                &HashMap::new(),
+                None,
+                None,
+                crw_core::Deadline::from_request_ms(1_500),
+            )
+            .await
+            .expect_err("both tiers must fail");
+
+        assert_eq!(
+            slow_calls.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "the first tier must actually run, or this test proves nothing"
+        );
+        assert_eq!(
+            calls.load(std::sync::atomic::Ordering::SeqCst),
+            0,
+            "chrome must be skipped for lack of budget"
+        );
+        assert!(
+            matches!(err, CrwError::Timeout(_)),
+            "a budget skip must overwrite the earlier RendererError so the server \
+             still maps this to 504; got {err:?}"
+        );
+    }
+
+    /// When the HTTP tier could not reach the origin at all, that error must win over
+    /// the JS tier's generic RendererError. `TargetUnreachable` maps to 422 (the caller
+    /// gave us a dead target); `RendererError` falls through to a 500 and reads as "our
+    /// server broke". Production emitted 11 such 500s that should have been 422s.
+    #[tokio::test]
+    async fn unreachable_origin_beats_js_renderer_error() {
+        struct Unreachable;
+        #[async_trait::async_trait]
+        impl PageFetcher for Unreachable {
+            async fn fetch(
+                &self,
+                url: &str,
+                _h: &HashMap<String, String>,
+                _w: Option<u64>,
+                _d: crw_core::Deadline,
+            ) -> CrwResult<FetchResult> {
+                Err(CrwError::TargetUnreachable(format!(
+                    "Could not reach {url}"
+                )))
+            }
+            fn name(&self) -> &str {
+                "http"
+            }
+            fn supports_js(&self) -> bool {
+                false
+            }
+            async fn is_available(&self) -> bool {
+                true
+            }
+        }
+
+        let js = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Err("Navigation failed: net::ERR_SSL".to_string()),
+        });
+        let mut r = make_renderer_with_mocks(vec![js]);
+        r.http = Arc::new(Unreachable);
+        r.render_js_default = None; // auto branch
+
+        let err = r
+            .fetch(
+                "https://dead.example",
+                &HashMap::new(),
+                None, // render_js: auto
+                None, // wait_for_ms
+                None, // requested_renderer
+                tdl(),
+            )
+            .await
+            .expect_err("both tiers fail");
+
+        assert!(
+            matches!(err, CrwError::TargetUnreachable(_)),
+            "an unreachable origin must surface as TargetUnreachable (422), not the JS \
+             tier's RendererError (500); got {err:?}"
+        );
+    }
+
+    /// Control: with a healthy budget the same tier IS invoked. Guards against the
+    /// floor silently disabling the ladder.
+    #[tokio::test]
+    async fn healthy_budget_still_invokes_js_tier() {
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mock = Arc::new(CountingFetcher {
+            name: "chrome",
+            calls: calls.clone(),
+        });
+        let r = make_renderer_with_mocks(vec![mock]);
+
+        let res = r
+            .fetch_with_js("https://example.com", &HashMap::new(), None, None, tdl())
+            .await
+            .expect("healthy budget must render");
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert!(res.html.contains("rendered"));
     }
 
     fn make_renderer_with_mocks(mocks: Vec<Arc<dyn PageFetcher>>) -> FallbackRenderer {
