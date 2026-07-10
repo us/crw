@@ -17,6 +17,8 @@ Scrape dozens (or hundreds) of unrelated URLs in one async job — no crawling, 
 
 Batch (`POST /firecrawl/v2/batch/scrape`) and crawl (`POST /firecrawl/v2/crawl`) share the same async job machinery and identical status/response envelopes. The difference is the input: batch takes an explicit `urls` array, crawl takes a single seed URL and discovers the rest itself.
 
+> **Native vs Firecrawl-compat.** This recipe uses the Firecrawl-compatible `/firecrawl/v2/batch/scrape` surface. There is also a native twin at `POST /v1/batch/scrape` (+ `GET`/`DELETE /v1/batch/scrape/{id}`) that follows the native v1 conventions: strict camelCase, so the flag is spelled `ignoreInvalidUrls` (not the v2 `ignoreInvalidURLs`) and the rejected list is returned as `invalidUrls` (not `invalidURLs`), and the status envelope matches `GET /v1/crawl/{id}`. Prefer `/v1` for new native integrations; keep `/firecrawl/v2` only when reusing Firecrawl SDK payloads verbatim.
+
 ---
 
 ## How It Works
@@ -29,7 +31,7 @@ DELETE /firecrawl/v2/batch/scrape/{id}  (cancel)
 GET  /firecrawl/v2/batch/scrape/{id}/errors
 ```
 
-**Status values:** `scraping` → `completed` | `failed`
+**Status values:** `scraping` → `completed` | `failed` | `cancelled`
 
 The response is paginated (100 documents per page, max ~10 MB per page). While `status` is `scraping`, the `next` cursor is set even if the current page is empty — keep polling forward until `next` is `null` and `status` is `completed`.
 

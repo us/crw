@@ -158,3 +158,101 @@ async fn map_endpoint_invalid_url() {
         .await;
     resp.assert_status(axum::http::StatusCode::BAD_REQUEST);
 }
+
+// ---------------------------------------------------------------------------
+// Native /v1/batch/scrape — offline guards + cancel-terminal flow.
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn v1_batch_requires_urls_400() {
+    let s = test_app();
+    let r = s.post("/v1/batch/scrape").json(&json!({"urls": []})).await;
+    r.assert_status(axum::http::StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn v1_batch_missing_urls_400() {
+    let s = test_app();
+    let r = s
+        .post("/v1/batch/scrape")
+        .json(&json!({"formats": ["markdown"]}))
+        .await;
+    r.assert_status(axum::http::StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn v1_batch_all_invalid_urls_400() {
+    // Unparseable URLs are rejected before any DNS lookup, so this stays offline.
+    let s = test_app();
+    let r = s
+        .post("/v1/batch/scrape")
+        .json(&json!({"urls": ["not-a-url", "also bad"]}))
+        .await;
+    r.assert_status(axum::http::StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn v1_batch_exceeds_cap_400() {
+    let config: AppConfig = toml::from_str("[crawler]\nmax_batch_urls = 2\n").unwrap();
+    let state = AppState::new(config).expect("AppState::new failed");
+    let s = TestServer::new(create_app(state));
+    let r = s
+        .post("/v1/batch/scrape")
+        .json(&json!({"urls": ["not-a-url", "not-a-url", "not-a-url"]}))
+        .await;
+    r.assert_status(axum::http::StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn v1_batch_status_unknown_404() {
+    let s = test_app();
+    let r = s
+        .get("/v1/batch/scrape/00000000-0000-0000-0000-000000000000")
+        .await;
+    r.assert_status(axum::http::StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn v1_batch_cancel_unknown_404() {
+    let s = test_app();
+    let r = s
+        .delete("/v1/batch/scrape/00000000-0000-0000-0000-000000000000")
+        .await;
+    r.assert_status(axum::http::StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn v1_batch_wrong_method_405() {
+    let s = test_app();
+    let r = s.get("/v1/batch/scrape").await;
+    r.assert_status(axum::http::StatusCode::METHOD_NOT_ALLOWED);
+}
+
+#[tokio::test]
+async fn v1_batch_cancel_flips_status_to_cancelled() {
+    // Start the job at the state layer with a TEST-NET-1 blackhole IP so it
+    // deterministically stays in progress until we cancel it.
+    let config: AppConfig = toml::from_str("").unwrap();
+    let state = AppState::new(config).expect("AppState::new failed");
+    let s = TestServer::new(create_app(state.clone()));
+
+    let template = crw_core::types::ScrapeRequest::default();
+    let id = state
+        .start_batch_job(vec!["http://192.0.2.1/".into()], template, None)
+        .await;
+
+    let r = s.delete(&format!("/v1/batch/scrape/{id}")).await;
+    r.assert_status_ok();
+    let body: serde_json::Value = r.json();
+    assert_eq!(body["success"], true);
+
+    // Status poll reports the terminal state, not "scraping".
+    let g = s.get(&format!("/v1/batch/scrape/{id}")).await;
+    g.assert_status_ok();
+    let st: serde_json::Value = g.json();
+    assert_eq!(st["status"], "cancelled");
+
+    // Re-cancelling a finished job is rejected.
+    let again = s.delete(&format!("/v1/batch/scrape/{id}")).await;
+    again.assert_status(axum::http::StatusCode::BAD_REQUEST);
+}

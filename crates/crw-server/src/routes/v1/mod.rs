@@ -1,4 +1,5 @@
 use axum::Router;
+use axum::extract::DefaultBodyLimit;
 use axum::routing::{get, post};
 
 use crate::routes::{self, method_not_allowed};
@@ -17,6 +18,20 @@ pub fn router() -> Router<AppState> {
         .route(
             "/v1/crawl",
             post(routes::crawl::start_crawl).fallback(method_not_allowed),
+        )
+        .route(
+            // Batch submits carry up to `max_batch_urls` URLs — needs more than
+            // the global 1 MB JSON cap (innermost DefaultBodyLimit wins).
+            "/v1/batch/scrape",
+            post(routes::batch::start_batch)
+                .layer(DefaultBodyLimit::max(routes::batch::MAX_BATCH_BODY_BYTES))
+                .fallback(method_not_allowed),
+        )
+        .route(
+            "/v1/batch/scrape/{id}",
+            get(routes::batch::get_batch)
+                .delete(routes::batch::cancel_batch)
+                .fallback(method_not_allowed),
         )
         .route(
             "/v1/crawl/{id}",
