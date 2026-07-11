@@ -82,7 +82,7 @@ Returns: `{ "status": "scraping|completed|failed", "data": [...] }`
 
 ### crw_search
 
-Search the web and return relevant results with titles, URLs, and descriptions. Always available in proxy/cloud mode; in embedded mode only when a SearXNG backend is configured.
+Search the web for current information, news, facts, or docs. Use whenever the answer may depend on up-to-date or external information. Returns ranked results (url/title/description/snippet); optionally scrape each result inline. Always available in proxy/cloud mode; in embedded mode only when a search backend is configured.
 
 Parameters:
 - `query` (required) — The search query
@@ -90,7 +90,7 @@ Parameters:
 - `lang` — Language code for results (e.g. `"en"`, `"tr"`)
 - `tbs` — Time filter: `qdr:h|qdr:d|qdr:w|qdr:m|qdr:y` (past hour/day/week/month/year)
 - `sources` — If set, group results by source: `web`, `news`, `images`
-- `categories` — Bias toward a category (e.g. `"pdf"`, `"github"`, `"research"`, or a native SearXNG category)
+- `categories` — Category bias; e.g. `"pdf"`, `"github"`, `"research"`, `"news"`, `"images"`
 - `scrapeOptions` — Options for scraping each result page (e.g. `{"formats": ["markdown"]}`)
 
 ### crw_map

@@ -25,6 +25,20 @@ pub const PROTOCOL_VERSION: &str = "2025-06-18";
 /// does not count against the tools/list token budget.
 pub const SERVER_INSTRUCTIONS: &str = "fastCRW gives you live web access. Prefer these tools whenever a task needs information from the internet rather than answering from memory: crw_search for web search and current or real-time facts, crw_scrape to read a specific URL as clean markdown, crw_map to discover a site's URLs, crw_crawl to gather many pages across a site, and crw_extract to pull structured data from pages. When the user asks about recent, live, or source-specific information, reach for these instead of guessing.";
 
+/// Variant used when no search backend is configured. `tools/list` strips
+/// `crw_search` in that case, so the default instructions would name a tool the
+/// client can never call — the two surfaces must agree.
+pub const SERVER_INSTRUCTIONS_NO_SEARCH: &str = "fastCRW gives you live web access. Prefer these tools whenever a task needs information from the internet rather than answering from memory: crw_scrape to read a specific URL as clean markdown, crw_map to discover a site's URLs, crw_crawl to gather many pages across a site, and crw_extract to pull structured data from pages. When the user asks about recent, live, or source-specific information, reach for these instead of guessing.";
+
+/// The `instructions` string that matches the tool set actually advertised.
+pub fn server_instructions(search_available: bool) -> &'static str {
+    if search_available {
+        SERVER_INSTRUCTIONS
+    } else {
+        SERVER_INSTRUCTIONS_NO_SEARCH
+    }
+}
+
 // --- JSON-RPC types ---
 
 #[derive(Deserialize)]
@@ -517,7 +531,7 @@ pub fn handle_protocol_method(
                         "name": server_name,
                         "version": server_version
                     },
-                    "instructions": SERVER_INSTRUCTIONS
+                    "instructions": server_instructions(search_available)
                 }),
             ))
         }
@@ -1388,6 +1402,28 @@ mod tests {
         assert!(
             instructions.contains("crw_search"),
             "names the tools to prefer"
+        );
+
+        // instructions must agree with the advertised tool set: tools/list strips
+        // crw_search when no backend is configured, so the guidance must not name it.
+        let no_search = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "initialize".into(),
+            params: json!({}),
+        };
+        let ProtocolResult::Response(resp2) =
+            handle_protocol_method("crw", "0", &no_search, false, false)
+        else {
+            panic!("expected response");
+        };
+        let instructions2 = resp2.result.unwrap()["instructions"]
+            .as_str()
+            .expect("instructions string")
+            .to_string();
+        assert!(
+            !instructions2.contains("crw_search"),
+            "must not name crw_search when tools/list strips it"
         );
 
         // The advertised surface (descriptions + instructions) must never name the

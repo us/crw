@@ -24,7 +24,7 @@ MCP (Model Context Protocol) server for the [CRW](https://github.com/us/crw) web
 | `crw_crawl` | Start an async BFS crawl (returns job ID) |
 | `crw_check_crawl_status` | Poll crawl job status and retrieve results |
 | `crw_map` | Discover all URLs on a website |
-| `crw_search` | Search the web (needs a configured search backend; always available in proxy mode, available in embedded mode only when a SearXNG backend is configured) |
+| `crw_search` | Search the web (needs a configured search backend; always available in proxy mode, available in embedded mode only when a search backend is configured) |
 | `crw_parse_file` | Parse a local PDF (base64) to markdown |
 
 > **Output bounding:** By default, content fields are truncated to ~15 000 chars and `crw_map` returns at most 100 URLs to keep agent context small. Pass `maxLength: 0` (scrape / check_status / parse_file) or `limit: 0` (map) to opt out.
