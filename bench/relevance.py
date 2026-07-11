@@ -30,8 +30,10 @@ import urllib.request
 from schema import content_hash, item_record
 
 CRW_URL = os.getenv("CRW_API_URL", "http://localhost:3000")
+CRW_API_KEY = os.getenv("CRW_API_KEY", "")  # required for managed endpoints
 TIMEOUT = int(os.getenv("BENCH_TIMEOUT", "60"))
 K = 10
+SEARCH_LIMIT = int(os.getenv("BENCH_SEARCH_LIMIT", "20"))  # fetch ≥K to score Recall@10
 
 # Query params that carry no semantics — dropped in canonicalization. Anything
 # NOT on this denylist is kept (a semantic ?q=/?id= must survive).
@@ -164,10 +166,11 @@ def score_query(returned: list[str], gold_urls: list[str], k: int = K) -> dict |
 # --- Live path -------------------------------------------------------------
 def search_ranked(query: str) -> tuple[list[str], str]:
     """POST /v1/search answer:false → (urls ordered by position, status)."""
-    body = json.dumps({"query": query, "answer": False}).encode()
-    req = urllib.request.Request(
-        f"{CRW_URL}/v1/search", data=body,
-        headers={"Content-Type": "application/json"})
+    body = json.dumps({"query": query, "answer": False, "limit": SEARCH_LIMIT}).encode()
+    headers = {"Content-Type": "application/json"}
+    if CRW_API_KEY:
+        headers["Authorization"] = f"Bearer {CRW_API_KEY}"
+    req = urllib.request.Request(f"{CRW_URL}/v1/search", data=body, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
             payload = json.load(resp)
@@ -175,8 +178,10 @@ def search_ranked(query: str) -> tuple[list[str], str]:
         return [], "timeout"
     except Exception:  # noqa: BLE001 — bench records the failure, does not crash
         return [], "error"
-    data = payload.get("data") or {}
-    results = data.get("results") or []
+    # /v1/search serializes results at `data` directly (a list); older/self-host
+    # shapes nested them under `data.results`. Handle both.
+    data = payload.get("data")
+    results = data if isinstance(data, list) else (data or {}).get("results") or []
     if not results:
         return [], "empty"
     ordered = sorted(results, key=lambda r: r.get("position", 1 << 30))
