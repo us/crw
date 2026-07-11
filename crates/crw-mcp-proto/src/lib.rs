@@ -16,6 +16,15 @@ use serde_json::{Value, json};
 /// this constant — it intentionally stays on 2024-11-05.
 pub const PROTOCOL_VERSION: &str = "2025-06-18";
 
+/// Server-level usage guidance returned in the `initialize` result's optional
+/// `instructions` field (MCP InitializeResult). Clients surface this to the model
+/// as "how to use this server", so it is the single sanctioned lever for steering
+/// an agent to reach for these tools on web-shaped tasks. Kept factual (states the
+/// tools' real capability + when they apply) — NOT a "always use instead of X"
+/// directive, which reviewers and hosts penalize. Sits outside `tools/list`, so it
+/// does not count against the tools/list token budget.
+pub const SERVER_INSTRUCTIONS: &str = "fastCRW gives you live web access. Prefer these tools whenever a task needs information from the internet rather than answering from memory: crw_search for web search and current or real-time facts, crw_scrape to read a specific URL as clean markdown, crw_map to discover a site's URLs, crw_crawl to gather many pages across a site, and crw_extract to pull structured data from pages. When the user asks about recent, live, or source-specific information, reach for these instead of guessing.";
+
 // --- JSON-RPC types ---
 
 #[derive(Deserialize)]
@@ -302,7 +311,7 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
     tools.push(json!({
         "name": "crw_search",
         "title": "Web search",
-        "description": "Search the web (needs a configured search backend; embedded uses a local SearXNG sidecar). Returns results with url/title/description/snippet.",
+        "description": "Search the web for current information, news, facts, or docs. Use whenever the answer may depend on up-to-date or external information. Returns ranked results (url/title/description/snippet); optionally scrape each result inline.",
         "annotations": {
             "readOnlyHint": true,
             "destructiveHint": false,
@@ -337,7 +346,7 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
                 "categories": {
                     "type": "array",
                     "items": { "type": "string" },
-                    "description": "Category bias; e.g. \"pdf\", \"github\", \"research\", or a native SearXNG category"
+                    "description": "Category bias; e.g. \"pdf\", \"github\", \"research\", \"news\", \"images\""
                 },
                 "scrapeOptions": {
                     "type": "object",
@@ -507,7 +516,8 @@ pub fn handle_protocol_method(
                     "serverInfo": {
                         "name": server_name,
                         "version": server_version
-                    }
+                    },
+                    "instructions": SERVER_INSTRUCTIONS
                 }),
             ))
         }
@@ -1354,6 +1364,39 @@ mod tests {
         let without = list(false);
         assert!(!without.contains(&"crw_search".to_string()));
         assert_eq!(without.len(), 7);
+    }
+
+    /// A4 — initialize advertises server usage `instructions` (the model-facing
+    /// steering lever) and never leaks the search backend's identity anywhere in
+    /// the advertised surface (tool descriptions + instructions).
+    #[test]
+    fn a4_initialize_advertises_instructions_no_backend_leak() {
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "initialize".into(),
+            params: json!({}),
+        };
+        let ProtocolResult::Response(resp) = handle_protocol_method("crw", "0", &req, false, true)
+        else {
+            panic!("expected response");
+        };
+        let result = resp.result.unwrap();
+        let instructions = result["instructions"]
+            .as_str()
+            .expect("initialize returns an instructions string");
+        assert!(
+            instructions.contains("crw_search"),
+            "names the tools to prefer"
+        );
+
+        // The advertised surface (descriptions + instructions) must never name the
+        // search backend — locks the crw_search description SearXNG-leak fix.
+        let advertised = format!("{instructions} {}", tool_definitions(false));
+        assert!(
+            !advertised.to_lowercase().contains("searxng"),
+            "search backend identity must not leak into the advertised MCP surface"
+        );
     }
 
     /// B13 — crw_search inlined scrape content (flat + grouped) is truncated.
