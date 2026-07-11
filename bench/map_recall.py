@@ -103,11 +103,11 @@ def _host(u: str) -> str:
 def run_live(site: Site) -> tuple[list[str], float]:
     """POST /v1/map and return (links, elapsed_seconds)."""
     body = json.dumps({"url": site.url}).encode()
-    req = urllib.request.Request(
-        f"{CRW_URL}/v1/map",
-        data=body,
-        headers={"Content-Type": "application/json"},
-    )
+    headers = {"Content-Type": "application/json"}
+    api_key = os.getenv("CRW_API_KEY", "")
+    if api_key:  # required for managed endpoints (self-host runs auth-off)
+        headers["Authorization"] = f"Bearer {api_key}"
+    req = urllib.request.Request(f"{CRW_URL}/v1/map", data=body, headers=headers)
     t0 = time.monotonic()
     with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
         payload = json.load(resp)
