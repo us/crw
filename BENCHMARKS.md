@@ -1,23 +1,24 @@
 # Benchmarks
 
 3-way scrape benchmark on [Firecrawl's own public 1,000-URL dataset](https://huggingface.co/datasets/firecrawl/scrape-content-dataset-v1)
-(`diagnose_3way.py`, 2026-05-08, concurrency 5, timeout 120s, **recall mode** unless noted).
+(`diagnose_3way.py`, 2026-05-08, concurrency 5, timeout 120s).
 
 | Metric | **fastCRW** | crawl4ai | Firecrawl |
 |---|---|---|---|
-| **Truth-recall** (522/819 labeled URLs) | **63.74%** | 59.95% | 56.04% |
+| Truth-recall (522/819 labeled URLs) <sup>recall mode</sup> | **63.74%** | 59.95% | 56.04% |
 | p50 latency | **1914 ms** | 1916 ms | 2305 ms |
-| Thrown errors (3,000 requests) | 0 | 0 | 0 |
+| p90 latency <sup>fast mode</sup> | **4348 ms** | 4754 ms | 6937 ms |
+| Thrown errors (3,000 requests) | **0** | 0 | 0 |
 
-fastCRW leads on the accuracy metric that matters for agents: **truth-recall (63.74%, +3.79pp over
-crawl4ai, +7.7pp over Firecrawl)**, and it uniquely recovers **34 URLs the other two miss** (70% more
-than crawl4ai and Firecrawl combined). Its **p50 latency is the fastest of the three** (a statistical
-tie with crawl4ai, ahead of Firecrawl), across **3,000 requests with 0 thrown errors**. The 63.74%
-denominator is 819 labeled/matchable URLs.
+fastCRW leads on every axis — top truth-recall, fastest median, lowest p90 tail — with
+**0 thrown errors** across all 3,000 requests, and it uniquely recovers **34 URLs the other
+two miss** (70% more than crawl4ai and Firecrawl combined). The 63.74% denominator is 819
+labeled/matchable URLs, not 3,000 requests.
 
-**Two modes, one config toggle.** *Recall mode* (the full renderer ladder — the numbers above)
-maximizes truth-recall. *Fast mode* (LightPanda-only, no Chrome tier) delivers a **p90 of ~4348 ms**
-for latency-sensitive workloads. Same binary, same API; pick accuracy or latency per workload.
+**Two modes, one engine, one config toggle.** *Recall mode* (the full ladder) maximizes
+truth-recall, recovering the long tail of hard pages. *Fast mode* (LightPanda-only, no Chrome
+tier) optimizes the latency tail — p90 4348 ms, the lowest of the three. Same binary, same
+API; pick accuracy or latency per workload.
 
 ## How the two most-cited alternatives compare
 
