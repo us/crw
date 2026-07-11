@@ -10,8 +10,8 @@ CRW includes a built-in MCP (Model Context Protocol) server that gives any MCP-c
 
 | Mode | When | Tools | Description |
 |------|------|-------|-------------|
-| **Embedded** (default) | No `--api-url` / `CRW_API_URL` set | scrape, crawl, check_crawl_status, map, extract, check_extract_status, parse_file + **search** (when SearXNG configured) | Self-contained. No server needed. The scraping engine runs inside the MCP process. `crw_search` is advertised only when a SearXNG backend is configured (e.g. the Docker compose sidecar). |
-| **Proxy / Server** | `--api-url` / `CRW_API_URL` set | scrape, crawl, check_crawl_status, map, extract, check_extract_status, parse_file, search | Forwards tool calls to a remote CRW server — the [fastcrw.com](https://fastcrw.com) cloud **or your own self-hosted server**. `crw_search` is always advertised in proxy mode; it works whenever the server has SearXNG configured (the Docker stack enables it by default). |
+| **Embedded** (default) | No `--api-url` / `CRW_API_URL` set | scrape, crawl, check_crawl_status, map, extract, check_extract_status, parse_file + **search** (when a search backend is configured) | Self-contained. No server needed. The scraping engine runs inside the MCP process. `crw_search` is advertised only when a search backend is configured (e.g. the Docker compose sidecar). |
+| **Proxy / Server** | `--api-url` / `CRW_API_URL` set | scrape, crawl, check_crawl_status, map, extract, check_extract_status, parse_file, search | Forwards tool calls to a remote CRW server — the [fastcrw.com](https://fastcrw.com) cloud **or your own self-hosted server**. `crw_search` is always advertised in proxy mode; it works whenever the server has a search backend configured (the Docker stack enables it by default). |
 
 ## Where to use what
 
@@ -152,7 +152,7 @@ This yields a ~4.2 MB binary (vs ~17 MB for the default embedded build) because 
 | `crw_crawl` | Start async crawl → returns job ID | `POST /v1/crawl` | All modes |
 | `crw_check_crawl_status` | Poll crawl status and get results | `GET /v1/crawl/:id` | All modes |
 | `crw_map` | Discover all URLs on a site | `POST /v1/map` | All modes |
-| `crw_search` | Search the web → titles, URLs, descriptions | `POST /v1/search` | Always in proxy mode; embedded only when a SearXNG backend is configured |
+| `crw_search` | Search the web → titles, URLs, descriptions | `POST /v1/search` | Always in proxy mode; embedded only when a search backend is configured |
 | `crw_parse_file` | Parse a local PDF (base64) → markdown | `POST /firecrawl/v2/parse` (multipart) | All modes |
 
 > **Output bounding:** Tool results are bounded by default to keep agent context small. Content fields (markdown/html/etc.) are truncated to ~15 000 chars; `crw_map` returns at most 100 URLs. Truncated responses include `truncated: true` and `totalDiscovered` markers. Pass `maxLength: 0` (scrape / check_status / parse_file) or `limit: 0` (map) to opt out.
@@ -250,7 +250,7 @@ For cloud mode and file-based configs, continue in [MCP Client Setup](#mcp-clien
 
 ### crw_search
 
-In **proxy mode** `crw_search` is always advertised. In **embedded mode** it is advertised only when a SearXNG backend is configured (e.g. via the Docker compose sidecar — see [Docker → Search (SearXNG)](/docker)). With no backend configured, the tool is hidden from `tools/list`.
+In **proxy mode** `crw_search` is always advertised. In **embedded mode** it is advertised only when a search backend is configured (e.g. via the Docker compose sidecar — see [Docker → Search](/docker)). With no backend configured, the tool is hidden from `tools/list`.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -259,7 +259,7 @@ In **proxy mode** `crw_search` is always advertised. In **embedded mode** it is 
 | `lang` | string | no | Language code (e.g. `"en"`, `"tr"`) |
 | `tbs` | string | no | Time-based filter (e.g. `"qdr:d"` for past day) |
 | `sources` | string[] | no | Restrict results to specific sources |
-| `categories` | string[] | no | SearXNG categories (e.g. `["general","news"]`) |
+| `categories` | string[] | no | Category bias (e.g. `["general","news"]`) |
 | `scrapeOptions` | object | no | Scrape each result page (e.g. `{"formats": ["markdown"]}`) |
 
 ### crw_parse_file

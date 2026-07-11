@@ -1,7 +1,7 @@
 {
   "name": "crw",
   "displayName": "fastCRW",
-  "description": "Scrape, crawl, map, search, parse, extract, and change-track the web with fastCRW — the open-source, self-hostable Firecrawl alternative. Single Rust binary, Firecrawl-compatible /v1 + /v2 API, bundled SearXNG search.",
+  "description": "Scrape, crawl, map, search, parse, extract, and change-track the web with fastCRW, the open-source, self-hostable Firecrawl alternative. Single Rust binary, Firecrawl-compatible /v1 + /v2 API, built-in web search.",
   "version": "0.3.0",
   "author": {
     "name": "us",
@@ -17,8 +17,7 @@
     "search",
     "extract",
     "web-data",
-    "firecrawl",
-    "searxng"
+    "firecrawl"
   ],
   "skills": "./skills/",
   "mcpServers": "./.mcp.json"

@@ -301,14 +301,14 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <tbody><tr>
 <td><strong>Embedded</strong> (default)</td>
 <td>No <code>--api-url</code> / <code>CRW_API_URL</code> set</td>
-<td>scrape, crawl, check_crawl_status, map, extract, check_extract_status, parse_file + <strong>search</strong> (when SearXNG configured)</td>
-<td>Self-contained. No server needed. The scraping engine runs inside the MCP process. <code>crw_search</code> is advertised only when a SearXNG backend is configured (e.g. the Docker compose sidecar).</td>
+<td>scrape, crawl, check_crawl_status, map, extract, check_extract_status, parse_file + <strong>search</strong> (when a search backend is configured)</td>
+<td>Self-contained. No server needed. The scraping engine runs inside the MCP process. <code>crw_search</code> is advertised only when a search backend is configured (e.g. the Docker compose sidecar).</td>
 </tr>
 <tr>
 <td><strong>Proxy / Server</strong></td>
 <td><code>--api-url</code> / <code>CRW_API_URL</code> set</td>
 <td>scrape, crawl, check_crawl_status, map, extract, check_extract_status, parse_file, search</td>
-<td>Forwards tool calls to a remote CRW server — the <a href="https://fastcrw.com">fastcrw.com</a> cloud <strong>or your own self-hosted server</strong>. <code>crw_search</code> is always advertised in proxy mode; it works whenever the server has SearXNG configured (the Docker stack enables it by default).</td>
+<td>Forwards tool calls to a remote CRW server — the <a href="https://fastcrw.com">fastcrw.com</a> cloud <strong>or your own self-hosted server</strong>. <code>crw_search</code> is always advertised in proxy mode; it works whenever the server has a search backend configured (the Docker stack enables it by default).</td>
 </tr>
 </tbody></table>
 <h2 id="where-to-use-what">Where to use what</h2>
@@ -487,7 +487,7 @@ claude mcp add crw \
 <td><code>crw_search</code></td>
 <td>Search the web → titles, URLs, descriptions</td>
 <td><code>POST /v1/search</code></td>
-<td>Always in proxy mode; embedded only when a SearXNG backend is configured</td>
+<td>Always in proxy mode; embedded only when a search backend is configured</td>
 </tr>
 <tr>
 <td><code>crw_parse_file</code></td>
@@ -723,7 +723,7 @@ codex mcp add crw -- npx crw-mcp</code></pre>
 </tr>
 </tbody></table>
 <h3 id="crw_search">crw_search</h3>
-<p>In <strong>proxy mode</strong> <code>crw_search</code> is always advertised. In <strong>embedded mode</strong> it is advertised only when a SearXNG backend is configured (e.g. via the Docker compose sidecar — see <a href="/docker">Docker → Search (SearXNG)</a>). With no backend configured, the tool is hidden from <code>tools/list</code>.</p>
+<p>In <strong>proxy mode</strong> <code>crw_search</code> is always advertised. In <strong>embedded mode</strong> it is advertised only when a search backend is configured (e.g. via the Docker compose sidecar — see <a href="/docker">Docker → Search</a>). With no backend configured, the tool is hidden from <code>tools/list</code>.</p>
 <table>
 <thead>
 <tr>
@@ -767,7 +767,7 @@ codex mcp add crw -- npx crw-mcp</code></pre>
 <td><code>categories</code></td>
 <td>string[]</td>
 <td>no</td>
-<td>SearXNG categories (e.g. <code>[&quot;general&quot;,&quot;news&quot;]</code>)</td>
+<td>Category bias (e.g. <code>[&quot;general&quot;,&quot;news&quot;]</code>)</td>
 </tr>
 <tr>
 <td><code>scrapeOptions</code></td>
