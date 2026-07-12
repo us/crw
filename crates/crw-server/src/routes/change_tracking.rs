@@ -13,8 +13,10 @@
 //!     where top-level `modes/schema/prompt/contentType` are shared defaults
 //!     each item may override.
 //!
-//! The LLM judge (`goal` / `judgeEnabled`) is accepted but not yet applied here
-//! — judging is wired in M2.
+//! `goal` / `judgeEnabled` are accepted and ignored: this endpoint is
+//! deterministic and never calls an LLM. The judge runs only on `/v1/scrape`,
+//! opt-in via `goal` + `judgeEnabled: true` alongside the `changeTracking`
+//! format.
 
 use axum::Json;
 use axum::extract::State;
@@ -60,7 +62,8 @@ pub struct DiffItem {
     pub content_type: Option<String>,
     #[serde(default)]
     pub tag: Option<String>,
-    // Accepted for forward-compat; judging is applied in M2.
+    // Accepted and ignored: this endpoint is deterministic and never calls an
+    // LLM. The judge runs only on /v1/scrape (goal + judgeEnabled: true).
     #[serde(default)]
     pub goal: Option<String>,
     #[serde(default, alias = "judge_enabled")]

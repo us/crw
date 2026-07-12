@@ -162,6 +162,8 @@ Each monitor takes 1–50 targets:
 
 Add a plain-language `goal` to be alerted only on meaningful changes. When `goal` is set and `judgeEnabled` is omitted, judging is enabled automatically. The judge runs only on **changed** pages and returns a judgment with `meaningful`, `confidence` (`low` / `medium` / `high`), `reason`, and `meaningfulChanges`. Set `judgeEnabled: false` to store a goal without judging.
 
+On the self-hosted engine the judge is **opt-in**: `/v1/scrape` runs it only when you pass both `goal` and `judgeEnabled: true` alongside the `changeTracking` format. Auto-on-when-`goal`-is-set is a managed-monitor convenience, not engine behaviour.
+
 ## Change tracking modes
 
 By default each page's markdown is diffed and reported as `same` / `changed` / `new` / `removed` / `error`. To track specific structured fields, set a `changeMode` on the target:
@@ -383,8 +385,8 @@ The `batch` array must contain at least one item; an empty array returns `400 Ba
 | `tag` | string | — | Opaque label echoed on the result. |
 | `url` | string | — | Informational URL label (batch items only; not used in diff computation). |
 | `batch` | object[] | — | Array of items; presence selects batch mode. |
-| `goal` | string | — | Plain-language goal for the meaningful-change judge. Accepted on both `DiffRequest` (shared default) and individual `DiffItem` entries for forward-compatibility. Not yet applied at the engine layer — judging is wired in M2. |
-| `judgeEnabled` | boolean | — | Force judging on or off. Accepted for forward-compatibility alongside `goal`; not yet applied at the engine layer — judging is wired in M2. |
+| `goal` | string | — | Accepted and ignored by this endpoint. `/v1/change-tracking/diff` is deterministic and never calls an LLM; the judge runs only on `/v1/scrape`. |
+| `judgeEnabled` | boolean | — | Accepted and ignored by this endpoint. To judge a change, use the `changeTracking` format on `/v1/scrape` with `goal` + `judgeEnabled: true`. |
 
 ### `ChangeTrackingSnapshot`
 
