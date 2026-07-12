@@ -1622,18 +1622,29 @@ impl FallbackRenderer {
         // on every escalation; gating it to genuine hard-blocks keeps the
         // recovery without the regression. Only in auto mode and when the
         // request isn't already proxied (that path wants chrome_proxy in-ladder).
-        let auto_egress_arm: Option<Arc<dyn PageFetcher>> =
-            if self.auto_egress_escalation && !is_user_pinned && !proxy_active {
-                let arm = self
-                    .js_renderers
-                    .iter()
-                    .find(|r| r.name() == "chrome_proxy")
-                    .cloned();
-                renderers.retain(|r| r.name() != "chrome_proxy");
-                arm
-            } else {
-                None
-            };
+        //
+        // NOT when a screenshot was requested: the retain above already dropped
+        // every tier that cannot capture, so on an instance whose only capable
+        // tier is chrome_proxy this hold-out would empty the ladder and fail a
+        // capture that `/v1/capabilities` correctly advertised as supported.
+        // Keep it in-ladder for a capture (same as the already-proxied path) and
+        // let the latency gating apply to the ordinary, screenshot-less traffic
+        // it was measured on.
+        let auto_egress_arm: Option<Arc<dyn PageFetcher>> = if self.auto_egress_escalation
+            && !is_user_pinned
+            && !proxy_active
+            && !screenshot_requested()
+        {
+            let arm = self
+                .js_renderers
+                .iter()
+                .find(|r| r.name() == "chrome_proxy")
+                .cloned();
+            renderers.retain(|r| r.name() != "chrome_proxy");
+            arm
+        } else {
+            None
+        };
 
         // Auto mode: if this host has been promoted, try Chrome first.
         if !is_user_pinned
