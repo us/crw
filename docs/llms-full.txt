@@ -37,7 +37,7 @@ All routes on the engine namespace (https://api.fastcrw.com or self-hosted base)
 | GET    | /v1/crawl/{id}         | Poll crawl job status and retrieve results               |
 | DELETE | /v1/crawl/{id}         | Cancel a running crawl job                               |
 | POST   | /v1/map                | URL discovery without scraping page bodies               |
-| POST   | /v1/search             | Web search (SearXNG-backed), returns ranked results      |
+| POST   | /v1/search             | Web search (own search backend), returns ranked results  |
 | POST   | /firecrawl/v2/parse              | Parse a file (PDF) into markdown/structured output       |
 | POST   | /v1/change-tracking/diff | Stateless per-page diff; accepts single item or batch  |
 | GET    | /v1/capabilities       | Surface what this instance supports (renderers, search)  |
@@ -263,7 +263,7 @@ Response:
 ### 4.4  POST /v1/search
 ────────────────────────────────────────────────────────────────────────────────
 
-Web search via SearXNG backend. No "country" parameter — use "lang" for locale.
+Web search via our own search backend. No "country" parameter — use "lang" for locale.
 
 Request:
   {"query": "web scraping tools 2025", "limit": 5}
@@ -274,15 +274,15 @@ Key parameters:
   lang            string    opt       Language code, e.g. "en", "tr"
   tbs             string    opt       Time filter: qdr:h|qdr:d|qdr:w|qdr:m|qdr:y
   sources         string[]  opt       Group results by source: "web", "news", "images"
-  categories      string[]  opt       Category bias; each element: "pdf", "github", "research", or any SearXNG category string (max 5)
+  categories      string[]  opt       Category bias; each element: "pdf", "github", "research", or any search backend category string (max 5)
   scrapeOptions   object    opt       Options to scrape each result page
   summarizeResults boolean  opt       Per-result LLM summary (needs LLM config)
   answer          boolean   opt       LLM-synthesized answer over top results
 
 Availability:
   Cloud (fastcrw.com): always available
-  Self-hosted: requires SearXNG sidecar configured (docker compose up starts it automatically)
-  Embedded MCP mode: only when SearXNG backend is configured
+  Self-hosted: requires a search backend sidecar configured (docker compose up starts it automatically)
+  Embedded MCP mode: only when a search backend is configured
 
 Flat response (no sources param):
   {
@@ -408,7 +408,7 @@ MCP key prefix: crw_live_
 
 Two MCP modes:
   Embedded  — no CRW_API_URL set; scraping engine runs inside the MCP process (~6 MB RAM)
-              crw_search only appears when SearXNG backend is configured
+              crw_search only appears when a search backend is configured
   Proxy     — CRW_API_URL set; forwards tool calls to a remote CRW server (cloud or self-hosted)
               crw_search always advertised (search backend is on the server)
 
@@ -510,10 +510,10 @@ Parameters:
   lang            string    opt       Language code, e.g. "en", "tr"
   tbs             string    opt       Time filter: "qdr:h"|"qdr:d"|"qdr:w"|"qdr:m"|"qdr:y"
   sources         string[]  opt       Group by source: "web", "news", "images"
-  categories      string[]  opt       Category bias; each element: "pdf", "github", "research", or any SearXNG category string (max 5)
+  categories      string[]  opt       Category bias; each element: "pdf", "github", "research", or any search backend category string (max 5)
   scrapeOptions   object    opt       Options for scraping each result
 
-Availability: always in proxy/cloud mode; embedded only when SearXNG is configured.
+Availability: always in proxy/cloud mode; embedded only when a search backend is configured.
 
 Example:
   crw_search(query="renewable energy 2025", limit=5)

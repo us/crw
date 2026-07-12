@@ -4,7 +4,7 @@ description: |
   Reference skill for building production-ready crw integrations. Covers verb
   selection, call surfaces (CLI/MCP/REST), post-filtering strategies, context-window
   hygiene, Hybrid RAG patterns, common pitfalls, and crw-specific operational
-  considerations (SearXNG limits, renderer pool, proxy rotation). Load this when
+  considerations (search backend limits, renderer pool, proxy rotation). Load this when
   writing application code that embeds crw, designing a multi-step agent workflow,
   or debugging an integration that isn't behaving as expected.
 license: AGPL-3.0
@@ -28,7 +28,7 @@ than the task requires.
 
 | Need | Verb | Notes |
 |------|------|-------|
-| You have a question/topic, not a URL | **search** | SearXNG-backed, no API key required. Returns titles + URLs + snippets. Add `scrapeOptions` to get markdown inline. |
+| You have a question/topic, not a URL | **search** | Own search backend, no API key required. Returns titles + URLs + snippets. Add `scrapeOptions` to get markdown inline. |
 | You have one (or a few) known URLs | **scrape** | Returns markdown, HTML, links, or structured JSON. JS auto-detected. |
 | You need to discover which URLs exist on a site | **map** | Fast URL discovery via sitemap + BFS. No content fetched. Use before committing to a crawl. |
 | You need content from many pages under a site | **crawl** | Async BFS job. Poll with `crw_check_crawl_status`. Always `map` first to estimate size. |
@@ -105,9 +105,10 @@ signal.
 
 ### Layer 1: Rank/order-based triage (free)
 
-SearXNG's raw score is unreliable (engine-dependent, often null). **Position is the
-reliable signal** — it reflects the aggregator's Reciprocal Rank Fusion over N
-engines. Default: trust the top 3-5 results unless they're obviously off-topic.
+The search backend's raw score is unreliable (engine-dependent, often null).
+**Position is the reliable signal** — it reflects the aggregator's Reciprocal
+Rank Fusion over N engines. Default: trust the top 3-5 results unless they're
+obviously off-topic.
 
 ```python
 # Rely on position, not score
@@ -191,7 +192,7 @@ crw search "query" → top-N results (titles + snippets)
 ```
 
 **Why crw for RAG:**
-- SearXNG search costs $0 per query (no per-call API fees)
+- Search costs $0 per query (no per-call API fees)
 - Recurring crawls use VPS cost, not per-page credits
 - `crw_crawl` + `jsonSchema` can extract typed objects per page directly —
   skip the embed step for structured data
@@ -227,7 +228,7 @@ fresh `crw search` results at query time (hybrid retrieval).
 | Problem | Impact | Solution |
 |---------|--------|----------|
 | Piping raw JSON into context | 50K-500K chars enters context; token waste, reasoning degradation | Always filter in a Python subprocess — see [crw-dynamic-search](../crw-dynamic-search/SKILL.md) |
-| Trusting `score` for triage | SearXNG scores are engine-dependent, often `null`; wrong results picked | Triage by `position` (rank order) + keyword density in `description` |
+| Trusting `score` for triage | The search backend's scores are engine-dependent, often `null`; wrong results picked | Triage by `position` (rank order) + keyword density in `description` |
 | Crawling without mapping first | Committing to a 500-page crawl when you needed 20 pages | Always `crw map` first to estimate site size; cap with `maxPages` |
 | JS rendering on every scrape | Unnecessary browser spawn on plain-HTML pages; slow | crw auto-detects SPAs — don't add `--js` / `renderJs: true` unless the page is blank |
 | Blocking on crawl job poll | Agent hangs waiting for async crawl | Set a poll interval (5-10s), set `maxPages` to bound job size, check `status: "completed"` |
@@ -241,14 +242,13 @@ Unlike credit-based APIs (Firecrawl, Tavily), crw's costs are infra-denominated.
 The right mental model: **you're paying for VPS time and renderer pool capacity, not
 per-page fees.**
 
-### SearXNG rate limits and politeness
+### Search backend rate limits and politeness
 
-- SearXNG is the search backend. Public instances (`searx.be`, etc.) rate-limit or
-  block JSON requests — **always use a local instance** (`crw setup --local` boots
-  one via Docker).
-- Self-hosted SearXNG has no built-in per-client rate limit, but the upstream
-  engines (Google, Bing, DDG) do. Burst too hard and engines start returning 429s
-  or CAPTCHAs to your SearXNG instance.
+- Public instances rate-limit or block JSON requests — **always use a local
+  instance** (`crw setup --local` boots one via Docker).
+- The self-hosted search backend has no built-in per-client rate limit, but the
+  upstream engines (Google, Bing, DDG) do. Burst too hard and engines start
+  returning 429s or CAPTCHAs to your instance.
 - Practical safe rate: 2-4 searches/second burst, < 1/second sustained. Space
   parallel searches with a short sleep or process them in series.
 - `--category news` and `--time-range week` bypass the general engine pool —
@@ -281,13 +281,13 @@ Self-hosted crw supports per-request BYOP (bring-your-own-proxy) via `--proxy UR
   `proxyRotation: "sticky_per_host"` so sessions from the same domain always hit
   the same exit IP (avoids anti-bot CAPTCHA triggers from IP-hopping mid-session).
 - Proxy rotation applies to `scrape`, `crawl`, and `map` — not `search` (which
-  goes to your local SearXNG, not directly to search engines).
+  goes to your local search backend, not directly to search engines).
 
 ### Managed vs self-hosted call-surface differences
 
 | Feature | Self-hosted | Managed (`api.fastcrw.com`) |
 |---------|-------------|------------------------------|
-| Search | Requires local SearXNG sidecar | Included (managed backend) |
+| Search | Requires a local search-backend sidecar | Included (managed backend) |
 | Proxy pool | BYOP via config | Managed proxy network |
 | Rate limiting | Token-bucket (configurable) | Per-plan limits; `X-RateLimit-*` headers |
 | Credits | N/A | 500 one-time lifetime free credits |

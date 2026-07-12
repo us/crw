@@ -2,7 +2,7 @@
 name: crw-self-host
 description: |
   Stand up your own fastCRW API server — single binary, Docker, or
-  docker-compose with a bundled SearXNG sidecar. Use when the user wants
+  docker-compose with a bundled search-backend sidecar. Use when the user wants
   to run crw locally or on their own infra, configure renderers/proxies/
   auth/LLM extraction, or understand the embedded vs proxy MCP modes.
 license: AGPL-3.0
@@ -89,9 +89,9 @@ curl http://localhost:3000/v1/scrape \
   -d '{"url":"https://example.com"}'
 ```
 
-**Docker Compose — full stack with SearXNG search:**
+**Docker Compose — full stack with bundled search:**
 ```bash
-docker compose up -d                                          # http + LightPanda + SearXNG
+docker compose up -d                                          # http + LightPanda + search backend
 docker compose --profile heavy up -d                          # + Chrome fallback
 docker compose -f docker-compose.yml \
   -f docker-compose.stealth.yml --profile stealth up -d       # + browserless stealth tier
@@ -107,18 +107,18 @@ After `compose up`:
 curl http://localhost:3000/health                              # → {"status":"ok",...}
 curl -X POST http://localhost:3000/v1/search \
   -H "Content-Type: application/json" \
-  -d '{"query":"fastCRW","limit":5}'                          # SearXNG-backed, no API key
+  -d '{"query":"fastCRW","limit":5}'                          # own backend, no API key
 ```
 
-## SearXNG sidecar
+## Search backend sidecar
 
-`docker-compose.yml` bundles a SearXNG container (`searxng/searxng:2026.5.9-0cba32c15`)
+`docker-compose.yml` bundles a search-backend container (`searxng/searxng:2026.5.9-0cba32c15`)
 that backs `/v1/search` with no API key and no per-query cost. It is internal-only —
 the port is not published to the host by default. The `crw` container points at it as
 `http://searxng:8080` via the Docker bridge network (set in `config.docker.toml`
 as `[search] searxng_url = "http://searxng:8080"`).
 
-To debug SearXNG directly, add to `docker-compose.override.yml`:
+To debug the search backend directly, add to `docker-compose.override.yml`:
 ```yaml
 services:
   searxng:
@@ -126,7 +126,7 @@ services:
       - "127.0.0.1:8888:8080"
 ```
 
-For a standalone binary pointing at an external SearXNG:
+For a standalone binary pointing at an external search backend:
 ```bash
 CRW_SEARCH__SEARXNG_URL=http://my-searxng:8080 crw-server
 ```
@@ -302,11 +302,11 @@ curl -X POST http://localhost:3000/v1/scrape \
   -d '{"url":"https://example.com","formats":["markdown"]}' | jq .success
 # → true
 
-# Search (requires SearXNG sidecar via docker compose up)
+# Search (requires a search-backend sidecar via docker compose up)
 curl -X POST http://localhost:3000/v1/search \
   -H "Content-Type: application/json" \
   -d '{"query":"hello","limit":3}' | jq .success
-# → true (or 400 search_disabled if SearXNG not wired up)
+# → true (or 400 search_disabled if search backend not wired up)
 ```
 
 ## Production hardening notes

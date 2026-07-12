@@ -148,7 +148,7 @@ CRW 提供 Firecrawl 的 API，但资源占用极低。无运行时依赖，无 
 claude mcp add crw -- npx -y crw-mcp
 ```
 
-> 完成。Claude Code 现在拥有 `crw_scrape`、`crw_crawl`、`crw_check_crawl_status`、`crw_map`、`crw_parse_file` 工具（`crw_search` 在配置 SearXNG 后端后自动出现）。Cursor、Windsurf、Cline 等 MCP 客户端请参见 [MCP 服务器](#mcp-服务器)。
+> 完成。Claude Code 现在拥有 `crw_scrape`、`crw_crawl`、`crw_check_crawl_status`、`crw_map`、`crw_parse_file` 工具（`crw_search` 在配置搜索后端后自动出现）。Cursor、Windsurf、Cline 等 MCP 客户端请参见 [MCP 服务器](#mcp-服务器)。
 
 **CLI（无需服务器）：**
 
@@ -316,7 +316,7 @@ claude mcp add crw -- npx -y crw-mcp
 }
 ```
 
-**工具（共 6 个）：** `crw_scrape`、`crw_crawl`、`crw_check_crawl_status`、`crw_map`、`crw_parse_file`（本地 PDF 转 Markdown）、`crw_search`（配置 SearXNG 后端后可用；云模式始终可用）
+**工具（共 6 个）：** `crw_scrape`、`crw_crawl`、`crw_check_crawl_status`、`crw_map`、`crw_parse_file`（本地 PDF 转 Markdown）、`crw_search`（配置搜索后端后可用；云模式始终可用）
 
 ## JS 渲染
 

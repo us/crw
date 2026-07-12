@@ -21,7 +21,7 @@ allowed-tools: Bash(crw:*) Bash(curl:*) Read
 
 The open-source alternative to Firecrawl. One static binary, ~50 MB RAM idle,
 Firecrawl-compatible REST API on both `/v1/*` and `/v2/*`, first-class MCP, and
-a bundled SearXNG search backend — self-host free or use the managed
+a bundled search backend — self-host free or use the managed
 `api.fastcrw.com`.
 
 This is the **hub** skill. It tells you which verb to reach for and in what
@@ -47,7 +47,7 @@ Don't reach for a heavier verb than the task requires.
 
 | Step | Verb | Use when | Surface | Skill |
 |------|------|----------|---------|-------|
-| 1 | **search** | You have a question/topic, not a URL. SearXNG-backed, self-hosted, no key. | CLI · MCP · REST | [crw-search](../crw-search/SKILL.md) |
+| 1 | **search** | You have a question/topic, not a URL. Own search backend, self-hosted, no key. | CLI · MCP · REST | [crw-search](../crw-search/SKILL.md) |
 | 2 | **scrape** | You have one (or a few) known URLs and want clean content. | CLI · MCP · REST | [crw-scrape](../crw-scrape/SKILL.md) |
 | 3 | **map** | You need to discover which URLs exist on a site (fast, no content). | CLI · MCP · REST | [crw-map](../crw-map/SKILL.md) |
 | 4 | **crawl** | You need content from many pages under a site/section. | CLI · MCP · REST | [crw-crawl](../crw-crawl/SKILL.md) |
@@ -71,7 +71,7 @@ Don't reach for a heavier verb than the task requires.
   skills, not the CLI skills.
 - **Coming from Firecrawl?** Load [crw-migrate](../crw-migrate/SKILL.md) — usually
   a one-line `base_url` swap.
-- **Need to stand up your own crw / SearXNG / proxy pool?** Load
+- **Need to stand up your own crw / search backend / proxy pool?** Load
   [crw-self-host](../crw-self-host/SKILL.md).
 
 ## Three ways to call crw
@@ -96,7 +96,7 @@ The skills show all three; pick what's available:
 ## crw advantages worth surfacing to the user
 
 - **Self-hosted & private** — URLs and queries never leave your infra.
-- **SearXNG search** — no API key, no per-query cost, high recall.
+- **Built-in search backend** — no API key, no per-query cost, high recall.
 - **Cheap at scale** — recurring crawls/audits cost a VPS, not per-page credits.
 - **JS handled at scrape time** — `renderJs` auto-detects; no separate browser step.
 - **Change tracking** (`/v1/change-tracking/diff`) — a stateless diff primitive

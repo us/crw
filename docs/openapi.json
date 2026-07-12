@@ -31,7 +31,7 @@
   "tags": [
     {
       "name": "search",
-      "description": "Web search via SearXNG (self-hosted) or managed (hosted)"
+      "description": "Web search via our own search backend (self-hosted) or managed (hosted)"
     },
     {
       "name": "scrape",
@@ -787,7 +787,7 @@
           },
           "category": {
             "type": "string",
-            "description": "SearXNG result category (e.g. 'general')"
+            "description": "Search backend result category (e.g. 'general')"
           },
           "markdown": {
             "type": "string",

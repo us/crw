@@ -53,7 +53,7 @@ use teardown::{CmdError, finish, install_signal_teardown};
         curl -fsSL https://fastcrw.com/install | sh\n\n\
         DOCS:    https://docs.fastcrw.com  ·  https://github.com/us/crw\n\
         CLOUD:   https://fastcrw.com (500 free credits, no monthly reset)\n\
-        SEARCH:  `crw setup --local` boots a JSON-enabled SearXNG on 127.0.0.1:8080.\n\
+        SEARCH:  `crw setup --local` boots a JSON-enabled search backend on 127.0.0.1:8080.\n\
         \x20        Public instances (searx.be, priv.au, ...) usually block JSON requests.\n\
         "
 )]
@@ -140,7 +140,7 @@ enum Commands {
     /// Scrape a single URL and output content
     Scrape(commands::scrape::ScrapeArgs),
 
-    /// Web search via SearXNG
+    /// Web search via the built-in search backend
     Search(commands::search::SearchArgs),
 
     /// BFS crawl a website starting from a URL

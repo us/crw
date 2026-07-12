@@ -4,7 +4,7 @@ description: |
   Search the web with fastCRW and get titles, URLs, and descriptions.
   Use when you have a question or topic but not a URL — "search for",
   "find pages about", "look up", "what is", "who is", "latest news on",
-  "find docs for". SearXNG-backed: self-hosted, no API key, no per-query
+  "find docs for". Own search backend: self-hosted, no API key, no per-query
   cost, high recall via meta-search aggregation. Step 1 of the crw
   workflow ladder.
 license: AGPL-3.0
@@ -16,7 +16,7 @@ metadata:
 allowed-tools: Bash(crw:*) Bash(curl:*) Read
 ---
 
-# crw-search — web search via SearXNG
+# crw-search — web search via crw's own search backend
 
 ## When to use
 
@@ -27,8 +27,8 @@ allowed-tools: Bash(crw:*) Bash(curl:*) Read
   and scrape it for full content.
 - **Token-heavy context?** Pipe through a subprocess filter instead of dumping
   raw JSON. See [crw-dynamic-search](../crw-dynamic-search/SKILL.md).
-- SearXNG is self-hosted and free — no API key, no per-query billing, no
-  usage cap. Queries never leave your infrastructure in embedded/local mode.
+- The search backend is self-hosted and free — no API key, no per-query billing,
+  no usage cap. Queries never leave your infrastructure in embedded/local mode.
 
 ## Quick start
 
@@ -67,7 +67,7 @@ curl -X POST "$CRW_API_URL/v1/search" -H "Authorization: Bearer $CRW_API_KEY" \
 | Language | `--language en` | `lang` |
 | Time filter | `--time-range day\|week\|month\|year` | `tbs: qdr:h\|qdr:d\|qdr:w\|qdr:m\|qdr:y` |
 | Safe search | `--safesearch 0\|1\|2` | — |
-| Custom SearXNG | `--searxng-url URL` / `$CRW_SEARXNG_URL` | — |
+| Custom search backend | `--searxng-url URL` / `$CRW_SEARXNG_URL` | — |
 | Group by source | — | `sources: ["web","news","images"]` |
 | Scrape results inline | — (use crw scrape separately) | `scrapeOptions: {formats:["markdown"]}` |
 
@@ -76,18 +76,17 @@ curl -X POST "$CRW_API_URL/v1/search" -H "Authorization: Bearer $CRW_API_KEY" \
 
 ## A note on result scores
 
-SearXNG is a **meta-search aggregator** — it merges results from multiple
-engines (Google, Bing, DuckDuckGo, etc.) and the `score` field reflects
-internal engine weighting, not a universal relevance measure. Do not rely on
-`score` for ranking or filtering. Use **`position`** (1-based rank) or
-**result order** instead — position 1 is the most relevant result SearXNG
-surfaced.
+The search backend is a **meta-search aggregator** — it merges results from
+multiple engines (Google, Bing, DuckDuckGo, etc.) and the `score` field
+reflects internal engine weighting, not a universal relevance measure. Do not
+rely on `score` for ranking or filtering. Use **`position`** (1-based rank) or
+**result order** instead — position 1 is the most relevant result surfaced.
 
 ## Tips
 
-- **No results / 403?** SearXNG needs JSON output enabled in its config. Run
-  `crw setup --local` to spin up a pre-configured sidecar automatically.
-  Public instances (searx.be, priv.au) usually block JSON with 403/429.
+- **No results / 403?** The search backend needs JSON output enabled in its
+  config. Run `crw setup --local` to spin up a pre-configured sidecar
+  automatically. Public instances usually block JSON with 403/429.
 - **`--fields` saves context.** `--json --fields title,url,snippet --limit 5`
   is one call; piping to `jq` is two. Prefer the flag.
 - **Inline scraping via MCP.** Pass `scrapeOptions: {formats: ["markdown"]}`

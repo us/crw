@@ -518,7 +518,7 @@ fn maybe_show_first_run_hint() {
     }
     eprintln!();
     eprintln!(
-        "  Tip: run `crw setup` to enable AI features (--summary, --extract) and SearXNG search."
+        "  Tip: run `crw setup` to enable AI features (--summary, --extract) and web search."
     );
     eprintln!();
     if let Some(parent) = sentinel.parent() {
