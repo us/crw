@@ -34,11 +34,13 @@ tower = "0.5"
 tower-http = { version = "0.7", features = ["cors", "trace", "timeout", "set-header"] }
 
 # HTTP client
-# Phase B (latency-qn): `hickory-dns` makes hickory the default resolver, which
-# caches DNS answers across requests on a reused Client — cuts repeated-host
-# resolution latency in crawls/scrape fan-outs (NOT response caching; the
-# "no cache" rule doesn't apply to DNS). Quality-neutral: identical bytes.
-reqwest = { version = "0.13", default-features = false, features = ["json", "cookies", "rustls", "gzip", "brotli", "deflate", "socks", "stream", "multipart", "hickory-dns"] }
+# Resolver: use reqwest's default system getaddrinfo resolver (no `hickory-dns`).
+# getaddrinfo reads /etc/resolv.conf natively, so it resolves both external
+# CNAME chains and internal service names through Docker's embedded DNS
+# (127.0.0.11); the hickory resolver failed on that path for direct egress
+# (managed LLM, research APIs). getaddrinfo runs on tokio's blocking pool, so
+# it does not block the async runtime.
+reqwest = { version = "0.13", default-features = false, features = ["json", "cookies", "rustls", "gzip", "brotli", "deflate", "socks", "stream", "multipart"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
