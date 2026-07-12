@@ -14,7 +14,7 @@
 //! - `crw_crawl` — start an async BFS crawl
 //! - `crw_check_crawl_status` — poll crawl job status
 //! - `crw_map` — discover URLs on a website
-//! - `crw_search` — web search (embedded uses local SearXNG sidecar; proxy forwards to remote API)
+//! - `crw_search` — web search (embedded: only when a search backend is configured; proxy: forwards to the remote API)
 //! - `crw_extract` — start an async multi-URL structured extraction job
 //! - `crw_check_extract_status` — poll extract job status
 //! - `crw_parse_file` — parse a local PDF (base64) to markdown
