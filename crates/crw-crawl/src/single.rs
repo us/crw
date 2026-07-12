@@ -581,14 +581,12 @@ async fn scrape_url_inner(
         {
             Ok(result) => {
                 data.json = Some(result.value);
-                // Surface per-call LLM token usage so callers (billing,
-                // dashboards) see the structured-extraction spend. Summary may
-                // overwrite this slot below; that's fine — each route triggers
-                // at most one of the two paths in the dominant flow, and the
-                // "first wins" tiebreak is preserved by the is_none() check.
-                if data.llm_usage.is_none() {
-                    data.llm_usage = result.usage;
-                }
+                // ACCUMULATE, never overwrite. A request can ask for json AND
+                // summary, and change tracking can add a judge on top: three
+                // separate model calls. Keeping only the first one made the others
+                // invisible to the SaaS, which prices off this field — we paid the
+                // provider for calls we never billed.
+                crw_core::types::LlmUsage::accumulate(&mut data.llm_usage, result.usage);
             }
             Err(e) => {
                 tracing::error!("Structured extraction failed: {e}");
@@ -617,9 +615,7 @@ async fn scrape_url_inner(
         {
             Ok(result) => {
                 data.summary = Some(result.content);
-                if data.llm_usage.is_none() {
-                    data.llm_usage = result.usage;
-                }
+                crw_core::types::LlmUsage::accumulate(&mut data.llm_usage, result.usage);
                 if let Some(w) = result.warning {
                     data.warnings.push(w);
                 }
@@ -772,6 +768,16 @@ async fn scrape_url_inner(
                                     .with_label_values(&["output"])
                                     .inc_by(u.output_tokens as u64);
                             }
+                            // The judge is a real model call. Its tokens only ever
+                            // reached Prometheus, so the SaaS — which prices off
+                            // data.llm_usage — never saw them: a judged page either
+                            // billed nothing for the judge, or (with no other leg
+                            // to report usage) fell back to charging the whole
+                            // worst-case reserve. Fold it in like every other leg.
+                            crw_core::types::LlmUsage::accumulate(
+                                &mut data.llm_usage,
+                                judgment.llm_usage.clone(),
+                            );
                             result.judgment = Some(judgment);
                         }
                         Err(e) => {

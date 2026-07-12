@@ -134,18 +134,34 @@ export class CrwClient {
     if (scrapeOptions) args.scrapeOptions = scrapeOptions;
     Object.assign(args, rest);
     if (this.apiUrl) {
-      // `answer`, `citations` and `llmUsage` ride at the TOP level of the response,
-      // beside `data`. httpPost unwraps `data` and drops them, so an `answer: true`
-      // search could never reach the answer it billed for. Keep the results array as
-      // the return value (that is the documented shape) and hang the synthesis off
-      // it, so both `for (const r of results)` and `results.answer` work.
-      const raw = await this.httpRequest("POST", "/v1/search", args, { raw: true });
-      const results = (Array.isArray(raw.data) ? raw.data : (raw.results ?? [])) as Json[];
-      const out = results as Json[] & { answer?: unknown; citations?: unknown; llmUsage?: unknown };
-      if (raw.answer !== undefined) out.answer = raw.answer;
-      if (raw.citations !== undefined) out.citations = raw.citations;
-      if (raw.llmUsage !== undefined) out.llmUsage = raw.llmUsage;
-      return out as unknown as SearchResult;
+      // `data` IS the results, in whatever shape the caller asked for: a flat
+      // array, a `{ web, news }` object when `sources` is set, or the engine's
+      // `{ results, answer, … }` when you point the client at a self-hosted
+      // server. Return it untouched — reshaping it here silently emptied both the
+      // grouped and the self-hosted cases.
+      //
+      // `answer` / `citations` / `llmUsage` ride BESIDE `data` on the managed API,
+      // and the old `data` unwrap dropped them: you could pay for an AI answer and
+      // have no way to read it. Attach them non-enumerably, so `results.answer`
+      // works while `for…of`, spread and JSON.stringify keep seeing exactly the
+      // array they saw before.
+      const raw = await this.httpRequest("POST", "/v1/search", args, {
+        raw: true,
+      });
+      const data = (raw.data ?? []) as Json;
+      if (data !== null && typeof data === "object") {
+        for (const key of ["answer", "citations", "llmUsage"] as const) {
+          if (raw[key] !== undefined) {
+            Object.defineProperty(data, key, {
+              value: raw[key],
+              enumerable: false,
+              configurable: true,
+              writable: true,
+            });
+          }
+        }
+      }
+      return data as SearchResult;
     }
     return this.localTransport().toolCall("crw_search", args) as Promise<SearchResult>;
   }

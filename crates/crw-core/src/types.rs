@@ -530,6 +530,56 @@ pub struct LlmUsage {
     pub answer_executed: bool,
 }
 
+impl LlmUsage {
+    /// Fold another leg's usage into this one.
+    ///
+    /// A single scrape can make MORE THAN ONE model call: structured extraction,
+    /// the summary, and the change-tracking judge are three separate legs. The old
+    /// code kept whichever landed first (`if usage.is_none()`), so the second and
+    /// third calls were invisible: the provider billed us for them and the SaaS,
+    /// which prices off this field, billed the customer for one.
+    ///
+    /// Tokens add up. `calls` counts the legs. The model/provider labels are kept
+    /// from the first leg, which is the managed model on every path today.
+    pub fn merge(&mut self, other: LlmUsage) {
+        self.input_tokens = self.input_tokens.saturating_add(other.input_tokens);
+        self.output_tokens = self.output_tokens.saturating_add(other.output_tokens);
+        self.total_tokens = self.total_tokens.saturating_add(other.total_tokens);
+        self.calls = self.calls.saturating_add(other.calls.max(1));
+        self.executed_summaries = self
+            .executed_summaries
+            .saturating_add(other.executed_summaries);
+        self.answer_executed |= other.answer_executed;
+        self.truncated |= other.truncated;
+        self.cache_hit_input_tokens =
+            sum_opt(self.cache_hit_input_tokens, other.cache_hit_input_tokens);
+        self.cache_miss_input_tokens =
+            sum_opt(self.cache_miss_input_tokens, other.cache_miss_input_tokens);
+        self.estimated_cost_usd = match (self.estimated_cost_usd, other.estimated_cost_usd) {
+            (Some(a), Some(b)) => Some(a + b),
+            (Some(a), None) => Some(a),
+            (None, b) => b,
+        };
+    }
+
+    /// Merge into an optional slot, seeding it when empty.
+    pub fn accumulate(slot: &mut Option<LlmUsage>, other: Option<LlmUsage>) {
+        let Some(other) = other else { return };
+        match slot {
+            Some(existing) => existing.merge(other),
+            None => *slot = Some(other),
+        }
+    }
+}
+
+fn sum_opt(a: Option<u32>, b: Option<u32>) -> Option<u32> {
+    match (a, b) {
+        (Some(x), Some(y)) => Some(x.saturating_add(y)),
+        (Some(x), None) => Some(x),
+        (None, y) => y,
+    }
+}
+
 fn one_u32() -> u32 {
     1
 }
@@ -790,6 +840,53 @@ pub fn resolve_pinned_renderer(req: Option<RequestedRenderer>) -> Option<&'stati
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn usage(input: u32, output: u32) -> LlmUsage {
+        LlmUsage {
+            input_tokens: input,
+            output_tokens: output,
+            total_tokens: input + output,
+            estimated_cost_usd: None,
+            model: "crw-managed-pro".into(),
+            provider: "azure".into(),
+            cache_hit_input_tokens: None,
+            cache_miss_input_tokens: None,
+            truncated: false,
+            calls: 1,
+            executed_summaries: 0,
+            answer_executed: false,
+        }
+    }
+
+    #[test]
+    fn llm_usage_accumulates_every_leg() {
+        // A scrape can call the model three times: structured extraction, the
+        // summary, and the change-tracking judge. Keeping only the first one is
+        // how we ended up paying the provider for calls the SaaS never billed.
+        let mut slot: Option<LlmUsage> = None;
+        LlmUsage::accumulate(&mut slot, Some(usage(1000, 100))); // json
+        LlmUsage::accumulate(&mut slot, Some(usage(500, 50))); // summary
+        LlmUsage::accumulate(&mut slot, Some(usage(200, 20))); // judge
+
+        let merged = slot.expect("usage");
+        assert_eq!(merged.input_tokens, 1700);
+        assert_eq!(merged.output_tokens, 170);
+        assert_eq!(merged.total_tokens, 1870);
+        assert_eq!(merged.calls, 3);
+    }
+
+    #[test]
+    fn llm_usage_accumulate_seeds_an_empty_slot_and_ignores_none() {
+        let mut slot: Option<LlmUsage> = None;
+        LlmUsage::accumulate(&mut slot, None);
+        assert!(slot.is_none(), "no call, no usage");
+
+        LlmUsage::accumulate(&mut slot, Some(usage(10, 1)));
+        LlmUsage::accumulate(&mut slot, None);
+        let merged = slot.expect("usage");
+        assert_eq!(merged.input_tokens, 10);
+        assert_eq!(merged.calls, 1);
+    }
 
     #[test]
     fn resolve_render_js_request_wins_true() {
