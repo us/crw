@@ -672,7 +672,7 @@
                         },
                         "perFieldAttribution": {
                           "type": "boolean",
-                          "description": "Per-field `basis` attribution. False until it ships — /v1/extract rejects basis:true today."
+                          "description": "Per-field `basis` attribution. This build ships `basis`, so it reports true; the flag reflects build capability, not whether an LLM is configured."
                         }
                       }
                     },

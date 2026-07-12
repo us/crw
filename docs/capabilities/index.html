@@ -322,7 +322,7 @@ Authorization: Bearer YOUR_API_KEY</code></pre>
   &quot;extract&quot;: {
     &quot;supported&quot;: true,
     &quot;maxUrls&quot;: 50,
-    &quot;perFieldAttribution&quot;: false
+    &quot;perFieldAttribution&quot;: true
   },
   &quot;documents&quot;: {
     &quot;parsers&quot;: [&quot;pdf&quot;],
@@ -511,7 +511,7 @@ Authorization: Bearer YOUR_API_KEY</code></pre>
 <tr>
 <td><code>perFieldAttribution</code></td>
 <td><code>boolean</code></td>
-<td>Per-field <code>basis</code> attribution. <code>false</code> today: <code>/v1/extract</code> rejects <code>basis: true</code> outright rather than silently ignoring it.</td>
+<td>Per-field <code>basis</code> attribution. <code>true</code> on a build that ships <code>basis</code>: <code>basis: true</code> on <code>/v1/extract</code> (or a <code>formats: [&quot;json&quot;]</code> scrape) returns an evidence record per top-level scalar schema property. Reports build capability, not whether an LLM is configured.</td>
 </tr>
 </tbody></table>
 <h3 id="documents"><code>documents</code></h3>
@@ -632,7 +632,7 @@ else:
 <li>PDF parsing may be disabled (<code>[document] enabled = false</code>) or not compiled in</li>
 <li>A server-side LLM key may or may not be configured</li>
 <li>The <code>[document] max_upload_bytes</code> limit can be set below 50 MiB</li>
-<li>SearXNG may not be connected</li>
+<li>The search backend may not be connected (<code>[search] searxng_url</code> unset)</li>
 </ul>
 <p>Always call <code>/v1/capabilities</code> before making assumptions about what a self-hosted instance can do.</p>
 <h2 id="authentication">Authentication</h2>
