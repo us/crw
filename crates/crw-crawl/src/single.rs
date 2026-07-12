@@ -737,7 +737,7 @@ async fn scrape_url_inner(
                 .observe(bytes as f64);
         }
 
-        // ── Meaningful-change judge (M2) ──────────────────────────────────
+        // ── Meaningful-change judge (opt-in) ──────────────────────────────
         // Runs only on a changed page that produced a diff (excludes binary
         // and first-observation pages), when a goal is set and judging is
         // enabled. Judge failure never fails the scrape — it degrades to no
