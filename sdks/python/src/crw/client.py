@@ -463,7 +463,13 @@ class CrwClient:
         start = self._http_request("POST", "/v1/extract", body, raw=True)
         job_id = start.get("id")
         if not job_id:
-            raise CrwError(f"extract did not return job ID: {start}")
+            # The managed API answers synchronously: the extraction is already
+            # finished and the payload is in this first response, with no job to
+            # poll. Only the async path hands back an `id`. Demanding one made
+            # every managed extract() raise.
+            if isinstance(start.get("results"), list):
+                return start["results"]
+            raise CrwError(f"extract returned neither a job id nor results: {start}")
 
         deadline = time.monotonic() + timeout
         while True:

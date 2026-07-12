@@ -133,7 +133,20 @@ export class CrwClient {
     if (categories) args.categories = categories;
     if (scrapeOptions) args.scrapeOptions = scrapeOptions;
     Object.assign(args, rest);
-    if (this.apiUrl) return this.httpPost("/v1/search", args) as Promise<SearchResult>;
+    if (this.apiUrl) {
+      // `answer`, `citations` and `llmUsage` ride at the TOP level of the response,
+      // beside `data`. httpPost unwraps `data` and drops them, so an `answer: true`
+      // search could never reach the answer it billed for. Keep the results array as
+      // the return value (that is the documented shape) and hang the synthesis off
+      // it, so both `for (const r of results)` and `results.answer` work.
+      const raw = await this.httpRequest("POST", "/v1/search", args, { raw: true });
+      const results = (Array.isArray(raw.data) ? raw.data : (raw.results ?? [])) as Json[];
+      const out = results as Json[] & { answer?: unknown; citations?: unknown; llmUsage?: unknown };
+      if (raw.answer !== undefined) out.answer = raw.answer;
+      if (raw.citations !== undefined) out.citations = raw.citations;
+      if (raw.llmUsage !== undefined) out.llmUsage = raw.llmUsage;
+      return out as unknown as SearchResult;
+    }
     return this.localTransport().toolCall("crw_search", args) as Promise<SearchResult>;
   }
 
@@ -207,7 +220,13 @@ export class CrwClient {
     if (llmModel !== undefined) body.llmModel = llmModel;
     const start = await this.httpRequest("POST", "/v1/extract", body, { raw: true });
     const jobId = start.id as string | undefined;
-    if (!jobId) throw new CrwError(`extract did not return job ID: ${JSON.stringify(start)}`);
+    // The managed API answers synchronously: the extraction is already finished and
+    // the payload is in this first response, with no job to poll. Only the async
+    // path hands back an `id`. Demanding one made every managed extract() throw.
+    if (!jobId) {
+      if (Array.isArray(start.results)) return start.results as Json[];
+      throw new CrwError(`extract returned neither a job id nor results: ${JSON.stringify(start)}`);
+    }
     const deadline = Date.now() + timeout * 1000;
     for (;;) {
       if (Date.now() > deadline) throw new CrwTimeoutError(`Extract ${jobId} timed out after ${timeout}s`);
