@@ -22,7 +22,7 @@ Your server      ← verifies X-CRW-Signature, posts to Slack
 
 The monitor control plane (`/v1/monitor`) lives at `https://fastcrw.com/api` — separate from the scrape engine at `https://api.fastcrw.com`. You only call the control plane to create/update the monitor; the scrapes and webhooks happen automatically on schedule.
 
-> **SaaS-only fields.** `targets[].changeMode` (`"markdown"` | `"json"` | `"mixed"`) is a SaaS control-plane field (validated by the Zod schema in `src/lib/monitor/validation.ts`; stored as `changeMode TEXT DEFAULT 'markdown'` in the `MonitorTarget` table). It is not present on the open-source `MonitorTarget` type in `crw-monitor/src/types.rs`, which uses a top-level `modes[]` array instead. Use `changeMode` only when calling `https://fastcrw.com/api`.
+> **SaaS-only field.** `targets[].changeMode` (`"markdown"` | `"json"` | `"mixed"`) belongs to the managed monitor control plane. The open-core engine has no monitor resource at all: it exposes the stateless `changeTracking` scrape format and `/v1/change-tracking/diff`, which take a top-level `modes[]` array instead. Use `changeMode` only when calling `https://fastcrw.com/api`.
 
 ---
 

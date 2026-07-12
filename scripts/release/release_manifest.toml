@@ -40,12 +40,6 @@ order = 4
 crates = ["crw-crawl", "crw-browse"]
 
 [[tiers]]
-# crw-monitor depends on crw-crawl and is an optional dependency of crw-server,
-# so it must publish after crw-crawl and before crw-server.
-order = 5
-crates = ["crw-monitor"]
-
-[[tiers]]
 order = 6
 crates = ["crw-server"]
 

@@ -11,7 +11,6 @@ members = [
     "crates/crw-mcp-proto",
     "crates/crw-browse",
     "crates/crw-cli",
-    "crates/crw-monitor",
 ]
 exclude = ["fuzz"]
 resolver = "2"
@@ -107,16 +106,6 @@ sha2 = "0.11"
 hex = "0.4"
 base64 = "0.22"
 
-# Self-host monitor mode (feature-gated, default OFF). These are optional deps
-# of `crw-monitor` only and MUST NOT leak into the default `crw-server` build —
-# the open-core boundary gate (`cargo tree -p crw-server`) asserts their absence.
-# NOTE: the monitor scheduler is a self-contained tokio sleep-loop (UTC cron +
-# fixed-interval parser in `crw-monitor::schedule`), so no external cron crate is
-# pulled in — simpler and keeps the dependency surface (and the open-core tree)
-# minimal. `tokio-cron-scheduler` was evaluated and intentionally not adopted.
-rusqlite = { version = "0.40", features = ["bundled"] }
-hmac = "0.13"
-
 # Unix process-group kill (browser teardown). Unix-only; already present
 # transitively. Used by crw-renderer's BROWSER_PGIDS group-kill registry.
 libc = "0.2"
@@ -145,7 +134,6 @@ crw-renderer = { path = "crates/crw-renderer", version = "0.23.0" }
 crw-search = { path = "crates/crw-search", version = "0.23.0" }
 crw-diff = { path = "crates/crw-diff", version = "0.23.0" }
 crw-crawl = { path = "crates/crw-crawl", version = "0.23.0" }
-crw-monitor = { path = "crates/crw-monitor", version = "0.23.0" }
 crw-server = { path = "crates/crw-server", version = "0.23.0" }
 crw-browse = { path = "crates/crw-browse", version = "0.23.0" }
 
