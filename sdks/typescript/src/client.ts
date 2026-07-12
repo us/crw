@@ -122,7 +122,7 @@ export class CrwClient {
   }
 
   /**
-   * Works in both modes; local mode needs a SearXNG URL configured on the engine.
+   * Works in both modes; local mode needs a search backend configured on the engine.
    */
   async search(query: string, opts: SearchOptions = {}): Promise<SearchResult> {
     const { limit = 5, lang, tbs, sources, categories, scrapeOptions, ...rest } = opts;

@@ -87,7 +87,7 @@ print(urls)
 
 ### Search
 
-Works in both modes. In subprocess mode the engine needs a SearXNG URL
+Works in both modes. In subprocess mode the engine needs a search backend
 configured (`[search].searxng_url` or `CRW_SEARCH__SEARXNG_URL`); the managed
 cloud has one preconfigured.
 
