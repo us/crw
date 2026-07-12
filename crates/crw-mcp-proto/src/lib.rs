@@ -316,11 +316,11 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
         }),
     ];
 
-    // `crw_search` is always advertised. In embedded mode it dispatches to a
-    // local SearXNG sidecar via crw-server's `/v1/search` pipeline; in proxy
-    // mode it forwards to the configured remote API. Whether the underlying
-    // SearXNG instance is configured is a runtime concern — the server returns
-    // a clear `search_disabled` error when [search].searxng_url is unset.
+    // `tool_definitions` always emits `crw_search`; whether the client SEES it is
+    // decided one level up, in `handle_protocol_method`'s `tools/list` arm, which
+    // retains it out when `search_available` is false (an embedded install with no
+    // search backend configured). Proxy mode always has it: the remote decides.
+    // The tool set itself does not depend on the mode, hence the discard.
     let _ = proxy_mode;
     tools.push(json!({
         "name": "crw_search",
