@@ -14,7 +14,7 @@
 
 ## API endpoints (live HTML, agent-facing)
 
-- [POST /v1/search](https://docs.fastcrw.com/api-reference/search/): Web search via SearXNG, returns ranked results
+- [POST /v1/search](https://docs.fastcrw.com/api-reference/search/): Web search via our own search backend, returns ranked results
 - [POST /v1/scrape](https://docs.fastcrw.com/api-reference/scrape/): Single-URL content extraction; add `formats:["json"]` + `jsonSchema` for structured JSON extraction
 - [POST /v1/map](https://docs.fastcrw.com/api-reference/map/): URL discovery without scraping bodies
 - [POST /v1/crawl](https://docs.fastcrw.com/api-reference/crawl/) + GET /v1/crawl/{id}: Async multi-page crawl

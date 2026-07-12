@@ -110,16 +110,16 @@ pub async fn run() -> Result<(), SetupError> {
     // Step 3: Search engine
     ui::print_step(3, 5, "Search Engine (for web search)");
 
-    println!("  CRW's search feature uses SearXNG, a privacy-respecting");
-    println!("  meta search engine that aggregates results from Google,");
-    println!("  Bing, DuckDuckGo, and 70+ other sources.");
+    println!("  CRW's search feature uses a privacy-respecting meta search");
+    println!("  engine that aggregates results from Google, Bing, DuckDuckGo,");
+    println!("  and 70+ other sources.");
     println!();
 
     let searxng_url = if docker_available {
         prompt_searxng_setup().await?
     } else {
-        ui::print_warning("Skipping SearXNG (Docker not available)");
-        ui::print_detail("crw search command won't work without SearXNG");
+        ui::print_warning("Skipping search backend (Docker not available)");
+        ui::print_detail("crw search command won't work without a search backend");
         None
     };
 
@@ -202,7 +202,7 @@ pub async fn run() -> Result<(), SetupError> {
 
     let mut extras = Vec::new();
     if searxng_url.is_some() {
-        extras.push("SearXNG management:");
+        extras.push("Search backend management:");
         extras.push("  docker start searxng         # Start search engine");
         extras.push("  docker stop searxng          # Stop search engine");
         extras.push("");
@@ -235,7 +235,7 @@ async fn handle_docker_not_running() -> Result<bool, SetupError> {
         .with_prompt("  What would you like to do?")
         .items([
             "Retry (I just started Docker)",
-            "Continue without search (skip SearXNG)",
+            "Continue without search (skip search backend)",
             "Exit",
         ])
         .default(0)
@@ -267,7 +267,7 @@ async fn handle_docker_not_found() -> Result<bool, SetupError> {
     let mut lines = vec![
         "Docker is required for local search setup",
         "",
-        "Docker runs SearXNG (search engine) in a container.",
+        "Docker runs the search engine in a container.",
         "Without it, you can still scrape but not search.",
         "",
         "Install Docker:",
@@ -281,7 +281,7 @@ async fn handle_docker_not_found() -> Result<bool, SetupError> {
     let choice = Select::with_theme(&ui::select_style())
         .with_prompt("  What would you like to do?")
         .items([
-            "Continue without Docker (skip SearXNG)",
+            "Continue without Docker (skip search backend)",
             "Exit and install Docker first",
         ])
         .default(0)
@@ -463,18 +463,18 @@ async fn prompt_searxng_setup() -> Result<Option<String>, SetupError> {
 
     // If already running, just return the URL
     if let searxng::SearxngStatus::Running { url } = &status {
-        ui::print_success(&format!("SearXNG already running at {}", url));
+        ui::print_success(&format!("Search backend already running at {}", url));
         return Ok(Some(url.clone()));
     }
 
     let items = vec![
         "Yes, using Docker (recommended)\n      • Auto-managed container\n      • ~500MB disk space\n      • Starts automatically when needed",
-        "No, I'll set it up myself\n      • Manual setup required\n      • See: https://docs.searxng.org",
+        "No, I'll set it up myself\n      • Manual setup required\n      • Point CRW_SEARXNG_URL at your own instance",
         "Skip (no search feature)\n      • crw search command won't work\n      • Scraping still works fine",
     ];
 
     let choice = Select::with_theme(&ui::select_style())
-        .with_prompt("  Set up SearXNG for web search?")
+        .with_prompt("  Set up a search backend for web search?")
         .items(&items)
         .default(0)
         .interact_opt()
@@ -489,11 +489,13 @@ async fn prompt_searxng_setup() -> Result<Option<String>, SetupError> {
             Ok(Some(url))
         }
         1 => {
-            ui::print_info("You can set up SearXNG manually and configure CRW_SEARXNG_URL");
+            ui::print_info(
+                "You can set up a search backend manually and configure CRW_SEARXNG_URL",
+            );
             Ok(None)
         }
         2 => {
-            ui::print_info("Skipping SearXNG setup");
+            ui::print_info("Skipping search backend setup");
             Ok(None)
         }
         _ => unreachable!(),

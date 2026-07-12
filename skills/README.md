@@ -3,7 +3,7 @@
 Reusable [agent skills](https://www.skills.sh) that teach AI coding agents how
 to use **fastCRW** — the open-source, self-hostable Firecrawl alternative
 (single Rust binary, ~6 MB RAM, Firecrawl-compatible `/v1` + `/v2` API, bundled
-SearXNG search, first-class MCP).
+search backend, first-class MCP).
 
 Works with Claude Code, Codex, Cursor, OpenCode, Gemini CLI, Windsurf, and any
 agent the [`skills`](https://github.com/vercel-labs/skills) tool supports.
@@ -27,7 +27,7 @@ skills plus the `crw-mcp` server (`.mcp.json`).
 
 The skills drive the `crw` CLI, the `crw-mcp` MCP tools, or the REST API — see
 each skill's Quick Start for all three call surfaces. No API key is needed for
-self-hosted search (SearXNG); the managed `api.fastcrw.com` offers a free tier.
+self-hosted search; the managed `api.fastcrw.com` offers a free tier.
 
 ## Catalog
 
@@ -37,7 +37,7 @@ Climb in order; stop at the cheapest rung that answers the need.
 | Skill | What it does |
 |-------|--------------|
 | [`crw`](./crw/SKILL.md) | Hub — which verb to use, in what order. Start here. |
-| [`crw-search`](./crw-search/SKILL.md) | Web search (SearXNG-backed, no API key). Step 1. |
+| [`crw-search`](./crw-search/SKILL.md) | Web search (own search backend, no API key). Step 1. |
 | [`crw-scrape`](./crw-scrape/SKILL.md) | Single-page → markdown / HTML / JSON / links. Step 2. |
 | [`crw-map`](./crw-map/SKILL.md) | Discover all URLs on a site (no content). Step 3. |
 | [`crw-crawl`](./crw-crawl/SKILL.md) | Scrape many pages under a site/section. Step 4. |
@@ -55,7 +55,7 @@ Climb in order; stop at the cheapest rung that answers the need.
 | Skill | What it does |
 |-------|--------------|
 | [`crw-migrate`](./crw-migrate/SKILL.md) | Coming from Firecrawl? Usually a one-line `base_url` swap. |
-| [`crw-self-host`](./crw-self-host/SKILL.md) | Stand up your own crw + SearXNG + proxy pool. |
+| [`crw-self-host`](./crw-self-host/SKILL.md) | Stand up your own crw + search backend + proxy pool. |
 
 ## Links
 

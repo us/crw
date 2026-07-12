@@ -158,7 +158,7 @@ pub async fn search_inner(
         .ok_or_else(|| {
             CrwError::SearchDisabled(
                 "Search is disabled. Set [search].searxng_url in config or define \
-                 CRW_SEARCH__SEARXNG_URL to point at a SearXNG instance."
+                 CRW_SEARCH__SEARXNG_URL to point at a search backend instance."
                     .into(),
             )
         })?
@@ -1006,14 +1006,14 @@ fn map_search_error(err: SearchError, timeout_ms: u64, base_url: &str) -> CrwErr
     match err {
         SearchError::Timeout => CrwError::Timeout(timeout_ms),
         SearchError::Upstream { status, body } => CrwError::HttpError(format!(
-            "SearXNG returned HTTP {status}: {}",
+            "Search backend returned HTTP {status}: {}",
             body.chars().take(200).collect::<String>()
         )),
         SearchError::InvalidResponse(msg) => {
-            CrwError::HttpError(format!("SearXNG returned invalid JSON: {msg}"))
+            CrwError::HttpError(format!("Search backend returned invalid JSON: {msg}"))
         }
         SearchError::Transport(msg) => CrwError::TargetUnreachable(format!(
-            "SearXNG ({}): {msg}",
+            "Search backend ({}): {msg}",
             crate::diagnostics::sanitize_url_origin(base_url)
         )),
     }

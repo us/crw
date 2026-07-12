@@ -88,7 +88,7 @@ curl -X POST https://api.fastcrw.com/v1/scrape \
 | `POST /v1/scrape` | Full markdown/html/links/json formats, `onlyMainContent`, `waitFor`, `renderJs`, `includeTags`/`excludeTags` |
 | `POST /v1/crawl` + `GET /v1/crawl/:id` + `DELETE /v1/crawl/:id` | Async BFS crawl, polling shape matches |
 | `POST /v1/map` | URL discovery |
-| `POST /v1/search` | SearXNG-backed instead of Fire-engine; same response shape |
+| `POST /v1/search` | Own search backend instead of Fire-engine; same response shape |
 | `POST /v2/scrape` | v2 surface with `parsers` field for PDFs |
 | `POST /v2/crawl` + `GET /v2/crawl/active` | v2 crawl |
 | `POST /v2/map` | v2 map |
@@ -199,7 +199,7 @@ curl -X POST "$CRW_API_URL/v1/map" \
   -d '{"url":"https://example.com"}' | jq '.data | length'
 # → N (should be > 0)
 
-# 4. Search (requires SearXNG — managed always works; self-host needs sidecar)
+# 4. Search (requires a search backend — managed always works; self-host needs sidecar)
 curl -X POST "$CRW_API_URL/v1/search" \
   -H "Authorization: Bearer $CRW_API_KEY" \
   -H "Content-Type: application/json" \
@@ -224,6 +224,6 @@ diverge; inspect with `jq .data.metadata` if your code reads specific keys.
 
 ## See also
 
-- [crw-self-host](../crw-self-host/SKILL.md) — stand up your own crw server + SearXNG
+- [crw-self-host](../crw-self-host/SKILL.md) — stand up your own crw server + search backend
 - [crw-best-practices](../crw-best-practices/SKILL.md) — SDK patterns, error handling, batching
 - [crw](../crw/SKILL.md) — hub skill, full verb ladder

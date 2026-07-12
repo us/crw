@@ -47,7 +47,7 @@ This decision drives Phase 1 hub title selection, Phase 4 README/Show HN copy, a
 | `results[].title` | `data[].title` | ✅ |
 | `results[].url` | `data[].url` | ✅ |
 | `results[].content` | `data[].description` | **rename: `content` → `description`** |
-| `results[].score` (float; range unspecified in Tavily docs) | `data[].score` (float, optional, SearXNG-derived) | scale differs (treat as ordinal, not absolute) |
+| `results[].score` (float; range unspecified in Tavily docs) | `data[].score` (float, optional, search-backend-derived) | scale differs (treat as ordinal, not absolute) |
 | `results[].raw_content` | `data[].markdown` / `data[].html` / `data[].raw_html` (when `scrapeOptions` set) | CRW separates by format |
 | `results[].favicon` | not present | gap |
 | `results[].published_date` (news only) | `data[].published_date` (news only) | ✅ |
@@ -126,7 +126,7 @@ class CrwTavilyShim:
       - No `answer` synthesis (returns "" if include_answer is set).
       - No `include_domains` / `exclude_domains` / `country` filtering.
       - `topic="finance"` is not supported.
-      - `score` is SearXNG-derived; treat as ordinal not absolute.
+      - `score` is search-backend-derived; treat as ordinal not absolute.
       - `raw_content` requires scrapeOptions on CRW; this shim wires it through.
     """
     def __init__(self, base_url: str, api_key: str | None = None):
@@ -172,7 +172,7 @@ class CrwTavilyShim:
         }
 ```
 
-This shim is the artifact `/alternatives/open-source-tavily` should ship to honor Branch B's "delay until Tavily-client adapter ships" condition. Without it, Phase 2 `/alternatives/open-source-tavily` should narrow to "Open-source SearXNG-based search APIs" per plan iter-6.
+This shim is the artifact `/alternatives/open-source-tavily` should ship to honor Branch B's "delay until Tavily-client adapter ships" condition. Without it, Phase 2 `/alternatives/open-source-tavily` should narrow to "Open-source, self-hosted search APIs" per plan iter-6.
 
 ---
 
@@ -181,7 +181,7 @@ This shim is the artifact `/alternatives/open-source-tavily` should ship to hono
 1. **Branch B applies.** Hub title cannot use "Tavily-compatible" without qualification. Two approved title variants (per plan iter-7):
    - `"Tavily-Style Search API — Free to Self-Host (2026)"` (53 chars)
    - `"Migrate from Tavily — Self-Hosted Search API (2026)"` (52 chars)
-2. **README repo description (Phase 4 step 1):** `"Free, self-hostable search API for AI agents — Rust + SearXNG. Tavily-style endpoints."` (Branch B variant).
+2. **README repo description (Phase 4 step 1):** `"Free, self-hostable search API for AI agents — built in Rust. Tavily-style endpoints."` (Branch B variant).
 3. **`/alternatives/open-source-tavily` ships with the adapter shim above** referenced inline (no delay), since the shim removes the "Tavily-client adapter must ship first" blocker.
 4. **The plan's "drop-in replacement" copy is forbidden** until either (a) param names align, or (b) the adapter ships and is tested in CI. Use "drop-in via adapter shim" only.
 5. **Compatibility gate for the `tavily compatible api` keyword** (per Phase 0 priority table): redirect to `/alternatives/tavily#migration` anchor that documents the matrix above. Do not promise drop-in.

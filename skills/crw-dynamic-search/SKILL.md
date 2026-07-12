@@ -79,7 +79,7 @@ The CLI outputs a **JSON array** of result objects (not a wrapper object):
   {
     "title": "string",
     "url": "string",
-    "description": "string (~200-600 chars from SearXNG snippet)",
+    "description": "string (~200-600 chars from the search backend snippet)",
     "snippet": "string (alias of description — always same value)",
     "position": 1,
     "score": 0.85,
@@ -89,12 +89,12 @@ The CLI outputs a **JSON array** of result objects (not a wrapper object):
 ```
 
 Key notes for crw vs Tavily:
-- **`score` is unreliable.** SearXNG aggregates results from many engines; scores
-  are engine-dependent and often `null`. **Triage by `position` (rank order) and
-  keyword density in `description`, not by score.**
+- **`score` is unreliable.** The search backend aggregates results from many
+  engines; scores are engine-dependent and often `null`. **Triage by `position`
+  (rank order) and keyword density in `description`, not by score.**
 - `description` and `snippet` are always the same value — pick either. `snippet`
   exists as an alias for Firecrawl-compat pipelines.
-- `category` is the SearXNG category: `"general"` for web, `"news"`, `"images"`.
+- `category` is the search backend's category: `"general"` for web, `"news"`, `"images"`.
 - `published_date` appears on news results (ISO 8601 string or null).
 
 ### `crw scrape --format json` output (ScrapeData)
@@ -222,7 +222,7 @@ with open('/tmp/crw_results.json', 'w') as f:
     json.dump(data, f)
 
 # Print only what you need to pick next steps
-# Sort by position (rank), not score — score is unreliable from SearXNG
+# Sort by position (rank), not score — score is unreliable from the search backend
 print(f'{len(data)} results saved to /tmp/crw_results.json\n')
 for r in data:
     print(f'[{r["position"]}] {r["title"][:90]}')
@@ -316,9 +316,9 @@ where you don't know the right keywords yet.
 
 The Python you write IS the filtering logic. There are no fixed templates. Principles:
 
-**Triage by position, not score.** SearXNG scores are engine-dependent and often
-absent. Result order (`position: 1, 2, 3...`) is a more reliable signal — the
-SearXNG aggregator's RRF ranking already baked in multi-engine consensus.
+**Triage by position, not score.** The search backend's scores are engine-dependent
+and often absent. Result order (`position: 1, 2, 3...`) is a more reliable signal —
+the aggregator's RRF ranking already baked in multi-engine consensus.
 
 **Be specific.** A financial query should filter for numbers and financial terms.
 A technical query should look for code blocks and version strings. Match your
@@ -337,7 +337,7 @@ print(relevant_content)
 print('---\n')
 ```
 
-**Handle errors.** Pages 404, scrapes timeout, SearXNG returns partial results.
+**Handle errors.** Pages 404, scrapes timeout, the search backend returns partial results.
 Always wrap scrape calls in try/except:
 
 ```python

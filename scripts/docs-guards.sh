@@ -125,6 +125,69 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Guard 3: the search backend's identity must never appear on a user-facing
+# surface. Config/contract identifiers are fine and must keep working, so we
+# only reject the bare NAME in prose: any "searxng" that is not part of a config
+# key, env var, docker service/image, CLI flag, or URL host.
+#
+# Allowed (contract the user must be able to type):
+#   searxng_url, [search].searxng_url, CRW_SEARCH__SEARXNG_URL, CRW_SEARXNG_URL,
+#   SEARXNG_SECRET_KEY, --searxng-url, the docker service/image/host `searxng`.
+
+BACKEND_SURFACES=(
+  README.md
+  README.zh-CN.md
+  COMPATIBILITY.md
+  COMPATIBILITY-firecrawl.md
+  docs/llms.txt
+  docs/llms-full.txt
+  crates/crw-server/openapi/openapi.json
+  crates/crw-server/openapi/openapi-3.0.json
+  crates/crw-server/src/routes/search.rs
+)
+
+# A hit is ALLOWED when the match is immediately part of an identifier: it is
+# followed by _url / _SECRET / :port / / (image or host path), preceded by - or _
+# or $ or / , or wrapped in the env-var prefix. Everything else is prose.
+BACKEND_ALLOWED='searxng_url|SEARXNG_URL|SEARXNG_SECRET|--searxng-url|searxng/searxng|searxng:[0-9]|//searxng|-searxng|searxng-internal|my-searxng'
+
+backend_hits=""
+for f in "${BACKEND_SURFACES[@]}" $(find skills -name 'SKILL.md' 2>/dev/null) skills/README.md; do
+  [ -f "$f" ] || continue
+  # crw-self-host legitimately documents running the compose stack by name.
+  case "$f" in skills/crw-self-host/SKILL.md) continue ;; esac
+
+  case "$f" in
+    *.rs)
+      # In Rust, only STRING LITERALS reach a user (error bodies, printed text).
+      # Type names (SearxngClient), fields (state.searxng) and internal comments
+      # are code, not surface, so require a quote and skip comment lines.
+      hits=$(grep -in "searxng" "$f" 2>/dev/null \
+        | grep -v '^[0-9]*:[[:space:]]*//' \
+        | grep '"' \
+        | grep -Eiv "$BACKEND_ALLOWED" || true)
+      ;;
+    *)
+      hits=$(grep -in "searxng" "$f" 2>/dev/null | grep -Eiv "$BACKEND_ALLOWED" || true)
+      ;;
+  esac
+
+  if [ -n "$hits" ]; then
+    backend_hits="${backend_hits}${f}:\n$(echo "$hits" | sed 's/^/  /')\n"
+  fi
+done
+
+if [ -n "$backend_hits" ]; then
+  echo "FAIL: the search backend's name leaked into a user-facing surface." >&2
+  echo "      Say \"the search backend\" in prose. Config keys, env vars, CLI" >&2
+  echo "      flags and docker service names are fine and must stay verbatim." >&2
+  printf "%b" "$backend_hits" >&2
+  FAIL=1
+else
+  echo "ok: no search-backend name in user-facing prose"
+fi
+
+# ---------------------------------------------------------------------------
 
 if [ "$FAIL" -ne 0 ]; then
   exit 1

@@ -20,7 +20,7 @@ This is a **capability matrix**, not an API-shape compatibility matrix (which th
 | `/v1/scrape` (single URL → markdown/html) | ✅ | ✅ (no Fire-engine) | ✅ |
 | `/v1/crawl` (multi-page) | ✅ | ✅ | ✅ |
 | `/v1/map` (URL discovery) | ✅ | ✅ | ✅ |
-| `/v1/search` (web search → grounded results) | ✅ | ⚠️ (no Fire-engine; Cloud has stronger anti-bot) | ✅ (SearXNG-backed) |
+| `/v1/search` (web search → grounded results) | ✅ | ⚠️ (no Fire-engine; Cloud has stronger anti-bot) | ✅ (own search backend) |
 | `/v1/extract` (LLM extraction) | ✅ (standalone route) | ⚠️ (requires LLM provider key + manual `.env`) | ⚠️ **No standalone `/v1/extract` route.** LLM extraction is exposed via `/v1/scrape` with `formats: ["json"]` + a JSON schema. Firecrawl `/extract` callers must port to `/v1/scrape` (single-URL only — multi-URL `/extract` is not matched). |
 | `/v1/deep-research` | ✅ | ❌ (Cloud-only) | ❌ |
 | `/firecrawl/v2/parse` (file upload → markdown) | ✅ (PDF/DOCX/XLSX/HTML/…) | ⚠️ (rolling out) | ✅ **PDF only** (multipart `file` + `options`; pure-Rust `pdf-inspector`, no OCR) |
@@ -142,8 +142,8 @@ This is a **capability matrix**, not an API-shape compatibility matrix (which th
 
 | | Firecrawl self-host | fastCRW |
 |---|---|---|
-| Stack | Docker Compose: API + workers + Postgres + Redis | Single Rust binary (or `docker compose up` with bundled SearXNG sidecar) |
-| Memory baseline | ~1-2GB (full stack) | ~6.6 MB idle (binary); +SearXNG container if used |
+| Stack | Docker Compose: API + workers + Postgres + Redis | Single Rust binary (or `docker compose up` with bundled search backend sidecar) |
+| Memory baseline | ~1-2GB (full stack) | ~6.6 MB idle (binary); +search backend container if used |
 | Cold start | ~5-15s (full stack warmup) | ~85ms (binary) |
 | Languages | TypeScript (workers), some Rust (`/parse` Apr 2026) | Rust |
 
@@ -179,7 +179,7 @@ This is a **capability matrix**, not an API-shape compatibility matrix (which th
 ## 12. Recent moves (Mar–May 2026)
 
 - **Firecrawl:** Lockdown Mode (Apr 30), Rust-based `/parse` engine (Apr 28), Spark 1 models on `/agent`, multiple status incidents Mar 21/24/31 + Apr 19-30 (`status.firecrawl.dev/incidents`), Series A $14.5M (Aug 2025).
-- **fastCRW:** `/v1/search` SearXNG-backed (Q2 2026), bundled Docker sidecar, Tavily-cluster pages shipped 2026-05-09.
+- **fastCRW:** `/v1/search` on our own search backend (Q2 2026), bundled Docker sidecar, Tavily-cluster pages shipped 2026-05-09.
 
 ---
 

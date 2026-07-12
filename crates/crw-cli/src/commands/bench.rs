@@ -77,9 +77,9 @@ pub struct BenchArgs {
     pub query_expand: Option<usize>,
 
     /// How many questions to run concurrently. 1 = sequential. Higher cuts
-    /// wall-clock but the ceiling is the upstream limits — SearXNG engine
-    /// blocks, residential-proxy connection caps, and the synth model's TPM —
-    /// not CPU. Watch the empty/error rate when raising it.
+    /// wall-clock but the ceiling is the upstream limits — search backend
+    /// engine blocks, residential-proxy connection caps, and the synth model's
+    /// TPM — not CPU. Watch the empty/error rate when raising it.
     #[arg(long, default_value_t = 1)]
     pub concurrency: usize,
 }
