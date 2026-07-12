@@ -319,6 +319,9 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 </tr>
 </tbody></table>
 <p>Batch (<code>POST /firecrawl/v2/batch/scrape</code>) and crawl (<code>POST /firecrawl/v2/crawl</code>) share the same async job machinery and identical status/response envelopes. The difference is the input: batch takes an explicit <code>urls</code> array, crawl takes a single seed URL and discovers the rest itself.</p>
+<blockquote>
+<p><strong>Native vs Firecrawl-compat.</strong> This recipe uses the Firecrawl-compatible <code>/firecrawl/v2/batch/scrape</code> surface. There is also a native twin at <code>POST /v1/batch/scrape</code> (+ <code>GET</code>/<code>DELETE /v1/batch/scrape/{id}</code>) that follows the native v1 conventions: strict camelCase, so the flag is spelled <code>ignoreInvalidUrls</code> (not the v2 <code>ignoreInvalidURLs</code>) and the rejected list is returned as <code>invalidUrls</code> (not <code>invalidURLs</code>), and the status envelope matches <code>GET /v1/crawl/{id}</code>. Prefer <code>/v1</code> for new native integrations; keep <code>/firecrawl/v2</code> only when reusing Firecrawl SDK payloads verbatim.</p>
+</blockquote>
 <hr>
 <h2 id="how-it-works">How It Works</h2>
 <pre><code>POST /firecrawl/v2/batch/scrape        →  { id, url, invalidURLs }
@@ -326,7 +329,7 @@ GET  /firecrawl/v2/batch/scrape/{id}   →  { status, total, completed, data[], 
 GET  /firecrawl/v2/batch/scrape/{id}?skip=100   (paginate large results)
 DELETE /firecrawl/v2/batch/scrape/{id}  (cancel)
 GET  /firecrawl/v2/batch/scrape/{id}/errors</code></pre>
-<p><strong>Status values:</strong> <code>scraping</code> → <code>completed</code> | <code>failed</code></p>
+<p><strong>Status values:</strong> <code>scraping</code> → <code>completed</code> | <code>failed</code> | <code>cancelled</code></p>
 <p>The response is paginated (100 documents per page, max ~10 MB per page). While <code>status</code> is <code>scraping</code>, the <code>next</code> cursor is set even if the current page is empty — keep polling forward until <code>next</code> is <code>null</code> and <code>status</code> is <code>completed</code>.</p>
 <hr>
 <h2 id="examples">Examples</h2>
