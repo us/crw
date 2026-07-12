@@ -8,6 +8,39 @@ The source of truth is the repository root changelog. Do not edit this docs page
 
 All notable changes to CRW are documented here.
 
+## [0.24.0](https://github.com/us/crw/compare/v0.23.0...v0.24.0) (2026-07-12)
+
+
+### ⚠ BREAKING CHANGES
+
+* **server:** the `monitor` cargo feature and the crw-monitor crate are removed. Self-hosted scheduled monitoring must be driven by an external scheduler calling the stateless change-tracking primitives.
+
+### Features
+
+* **bench:** live answer track + managed-endpoint support ([278d6d5](https://github.com/us/crw/commit/278d6d52fb694e6820f27014413fb9f9dfd9f742))
+* **bench:** multi-track benchmark discipline ([887623c](https://github.com/us/crw/commit/887623c885c9a7299d34a622254f78a5882a3cb6))
+* **extract:** per-field evidence contract (basis) ([273f2da](https://github.com/us/crw/commit/273f2da9c5ddf620264c2976b565fd7b7007097c))
+* **mcp:** advertise server instructions and web-first tool guidance ([23cc08d](https://github.com/us/crw/commit/23cc08dfeb88dd9f732bf8e0580ba2138dc52e47))
+* **server:** derive /v1/capabilities from the real build and config ([cd5818c](https://github.com/us/crw/commit/cd5818c63c19e4de9bada7b5ebdade4eda871fb2))
+* **server:** native /v1/batch/scrape endpoint ([3a51f33](https://github.com/us/crw/commit/3a51f3364b47e744cbb040c4e4b823e3870cd5ae))
+
+
+### Bug Fixes
+
+* **engine:** accumulate LLM usage across every leg, not just the first ([c83de80](https://github.com/us/crw/commit/c83de80c0c368cfa7b9437c9b6e25faf840fd3a1))
+* **mcp:** align instructions with advertised tools, scrub backend name ([392e390](https://github.com/us/crw/commit/392e3904e3aaea5c561e958eb15e96ad1980a480))
+* **renderer:** keep chrome_proxy in the screenshot ladder for captures ([4152404](https://github.com/us/crw/commit/41524042081fe33d92fb96e45ee9f2c6a2626c29))
+* **renderer:** recover blocked-egress scrapes and stop degenerate JS attempts ([376f8d9](https://github.com/us/crw/commit/376f8d98abfadee947c2df3b1320e418276e3978))
+* **renderer:** recover connect-timeout blackholes via the fallback proxy ([1e14879](https://github.com/us/crw/commit/1e14879eb2325ad9d96d1231eaa656f3a3b68bc3))
+* **sdk:** extract works against the managed API, and search stops discarding the answer ([612df13](https://github.com/us/crw/commit/612df13d3b8dfb1c37fe59046122733d04caef59))
+* **server:** stop advertising extract and baseUrl the instance cannot honour ([db358b0](https://github.com/us/crw/commit/db358b09ba878abfb2e8c08fabb6a8ca2da5be37))
+* stop leaking the search backend's name to users, and guard it ([22098d6](https://github.com/us/crw/commit/22098d6d464f8416dd09b576fd58d87a7cf4e4fd))
+
+
+### Code Refactoring
+
+* **server:** remove the stateful monitor layer from open core ([bf6d221](https://github.com/us/crw/commit/bf6d221ed32111bda21e4ae184a42ff6da9b2143))
+
 ## [0.23.0](https://github.com/us/crw/compare/v0.22.0...v0.23.0) (2026-07-09)
 
 
