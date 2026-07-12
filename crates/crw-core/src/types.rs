@@ -177,6 +177,19 @@ pub struct ScrapeRequest {
     pub exclude_tags: Vec<String>,
     #[serde(alias = "json_schema")]
     pub json_schema: Option<serde_json::Value>,
+    /// Ask structured extraction (the `json` format) for per-field evidence.
+    ///
+    /// Each top-level **scalar** property of `json_schema` comes back with a
+    /// [`crate::evidence::Basis`]: the value, the citation supporting it, and an
+    /// honest [`crate::evidence::FieldStatus`]. Requires `json_schema`; the
+    /// model's claims are verified server-side, so a field whose attribution
+    /// does not hold up is marked `unverified`/`unsupported` rather than given
+    /// a fabricated citation.
+    ///
+    /// Off by default, and when off the request sent to the model is unchanged.
+    /// Costs extra output tokens and is materially slower on large schemas.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub basis: bool,
     #[serde(default)]
     pub headers: HashMap<String, String>,
     /// CSS selector to narrow content before extraction.
@@ -401,6 +414,7 @@ impl Default for ScrapeRequest {
             include_tags: Vec::new(),
             exclude_tags: Vec::new(),
             json_schema: None,
+            basis: false,
             headers: HashMap::new(),
             css_selector: None,
             xpath: None,
@@ -619,6 +633,30 @@ pub struct ScrapeData {
     pub links: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub json: Option<serde_json::Value>,
+    /// Per-field evidence for `json`; populated only when the request set
+    /// `basis: true`. One entry per top-level scalar schema property, each with
+    /// an honest [`crate::evidence::FieldStatus`] — a field whose attribution
+    /// could not be verified says so rather than carrying a fabricated citation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub basis: Option<Vec<crate::evidence::Basis>>,
+    /// Coded reasons for every basis downgrade.
+    ///
+    /// Deliberately NOT merged into `warnings`: that field carries free-form
+    /// upstream text and internal renderer detail, whereas these are a closed,
+    /// crw-owned code set safe for a consumer to persist and show a customer.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub basis_warnings: Vec<crate::evidence::BasisWarning>,
+    /// `"sha256:"`-prefixed hash of the canonical text sent to the extraction
+    /// LLM (the cleaned markdown, after truncation). Populated on the `basis`
+    /// path only.
+    ///
+    /// This is the per-document hash a consumer checks `EvidenceCitation
+    /// .sourceHash` against. It is recorded even when no citation survived, so
+    /// that check has an independent record to compare with rather than
+    /// validating a citation against itself. Distinct from `source_hash`, which
+    /// covers the **full** markdown; `sourceTextKind` names which is which.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub llm_input_hash: Option<String>,
     /// LLM-generated summary; populated when `formats` includes `summary`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,

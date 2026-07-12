@@ -120,10 +120,30 @@ pub async fn judge_change(
     let prompt = build_prompt(goal, clipped);
     let schema = judge_schema();
 
+    // The judge keeps the default 60s bound; only the basis path needs longer.
+    let timeout = crate::structured::LLM_REQUEST_TIMEOUT;
     let (value, usage) = match llm.provider.as_str() {
-        "anthropic" => call_anthropic(&prompt, schema, llm, JUDGE_TOOL_NAME, JUDGE_TOOL_DESC).await,
+        "anthropic" => {
+            call_anthropic(
+                &prompt,
+                schema,
+                llm,
+                JUDGE_TOOL_NAME,
+                JUDGE_TOOL_DESC,
+                timeout,
+            )
+            .await
+        }
         "openai" | "deepseek" | "openai-compatible" => {
-            call_openai(&prompt, schema, llm, JUDGE_TOOL_NAME, JUDGE_TOOL_DESC).await
+            call_openai(
+                &prompt,
+                schema,
+                llm,
+                JUDGE_TOOL_NAME,
+                JUDGE_TOOL_DESC,
+                timeout,
+            )
+            .await
         }
         other => Err(CrwError::ExtractionError(format!(
             "Unsupported LLM provider for judge: {other}. Use 'anthropic', 'openai', 'deepseek', or 'openai-compatible'."

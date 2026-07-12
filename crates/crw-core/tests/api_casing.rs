@@ -67,6 +67,9 @@ fn sample_scrape_data() -> ScrapeData {
         warnings: vec!["w2".into()],
         render_decision: None,
         credit_cost: 1,
+        basis: None,
+        basis_warnings: Vec::new(),
+        llm_input_hash: None,
         metadata: PageMetadata {
             title: Some("t".into()),
             description: Some("d".into()),

@@ -295,6 +295,9 @@ mod tests {
             warnings: vec![],
             render_decision: None,
             credit_cost: 1,
+            basis: None,
+            basis_warnings: Vec::new(),
+            llm_input_hash: None,
             metadata: PageMetadata {
                 title: Some("T".into()),
                 description: None,

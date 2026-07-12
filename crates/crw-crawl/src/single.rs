@@ -557,6 +557,15 @@ async fn scrape_url_inner(
     let byok_config = build_byok_llm_config(req, llm_config);
     let effective_llm = byok_config.as_ref().or(llm_config);
 
+    // `basis` is defined per schema leaf and rides the structured-extraction
+    // call. Asking for it anywhere else is a caller mistake, not a no-op: fail
+    // loudly rather than return a response with a silently absent `basis`.
+    if req.basis && !formats_include_json(&req.formats) {
+        return Err(crw_core::error::CrwError::InvalidRequest(
+            "'basis' (per-field evidence) requires formats to include 'json'.".into(),
+        ));
+    }
+
     if formats_include_json(&req.formats) {
         // A schema OR a prompt is enough to run structured extraction.
         if effective_schema.is_none() && effective_prompt.is_none() {
@@ -570,17 +579,50 @@ async fn scrape_url_inner(
             ));
         };
         let md = data.markdown.as_deref().unwrap_or("");
-        match crw_extract::structured::extract_structured_with_usage(
-            md,
-            effective_schema,
-            effective_prompt,
-            llm,
-            None,
-        )
-        .await
-        {
+        // Evidence is emitted per top-level scalar property of the caller's
+        // schema, so a prompt-only extraction (no schema) has nothing to attach
+        // it to. Reject rather than degrade to an empty `basis`.
+        let extraction = if req.basis {
+            let Some(schema) = effective_schema else {
+                return Err(crw_core::error::CrwError::InvalidRequest(
+                    "'basis' (per-field evidence) requires a 'jsonSchema'; it is emitted per schema property, so a prompt-only extraction has no fields to attribute.".into()
+                ));
+            };
+            // The document the server actually read, after redirects. This is
+            // the url the citations carry and the one the model is shown; its
+            // own echoed string is only ever compared, never surfaced.
+            let doc_url = fetch_result
+                .final_url
+                .as_deref()
+                .unwrap_or(&fetch_result.url)
+                .to_string();
+            crw_extract::structured::extract_structured_with_basis(
+                md,
+                schema,
+                effective_prompt,
+                llm,
+                None,
+                &doc_url,
+            )
+            .await
+        } else {
+            crw_extract::structured::extract_structured_with_usage(
+                md,
+                effective_schema,
+                effective_prompt,
+                llm,
+                None,
+            )
+            .await
+        };
+        match extraction {
             Ok(result) => {
                 data.json = Some(result.value);
+                if req.basis {
+                    data.basis = Some(result.basis);
+                    data.basis_warnings = result.basis_warnings;
+                    data.llm_input_hash = result.llm_input_hash;
+                }
                 // ACCUMULATE, never overwrite. A request can ask for json AND
                 // summary, and change tracking can add a judge on top: three
                 // separate model calls. Keeping only the first one made the others

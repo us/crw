@@ -12,6 +12,7 @@
 //! - **Structured JSON** — LLM-based extraction with JSON Schema validation
 
 pub mod antibot;
+mod basis;
 pub mod chunking;
 pub mod clean;
 pub mod dom_features;
@@ -869,6 +870,11 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
         warnings,
         render_decision,
         credit_cost,
+        // Basis rides the structured-extraction path (single.rs), not this
+        // extractor; it is stamped there when the request asks for it.
+        basis: None,
+        basis_warnings: Vec::new(),
+        llm_input_hash: None,
         metadata: PageMetadata {
             title: meta.title,
             description: meta.description,

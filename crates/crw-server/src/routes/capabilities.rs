@@ -29,8 +29,15 @@ pub struct ExtractCapabilities {
     pub supported: bool,
     /// Max URLs accepted per request (`crawler.max_extract_urls`).
     pub max_urls: usize,
-    /// Per-field `basis` attribution (Phase 2b). False until 2b ships.
+    /// Per-field `basis` attribution: `basis: true` on `/v1/extract` and on a
+    /// `formats:["json"]` scrape returns an evidence record per top-level scalar
+    /// schema property. Reports the truth of the running build.
     pub per_field_attribution: bool,
+    /// The engine's effective per-leg output-token cap for structured
+    /// extraction (`extraction.llm.max_tokens`). A budget estimator pins its
+    /// worst-case leg cost to this exact number, so it is reported here rather
+    /// than assumed — an ops change to `max_tokens` moves this value with it.
+    pub max_output_tokens: u32,
 }
 
 #[derive(Debug, Serialize)]
@@ -128,7 +135,21 @@ pub async fn capabilities(State(state): State<AppState>) -> Json<Capabilities> {
         extract: ExtractCapabilities {
             supported: true,
             max_urls: state.config.crawler.max_extract_urls,
-            per_field_attribution: false,
+            // True from the build that shipped `basis`. Scoped exactly like
+            // `supported` above: it reports what this binary implements, not
+            // whether an LLM happens to be configured (extraction of any kind
+            // needs one, and reports that per request).
+            per_field_attribution: true,
+            // The cap the basis leg is actually bounded by. When no extraction
+            // LLM is configured basis cannot run, but the effective default is
+            // still reported so a consumer never reads a 0. Matches
+            // `config::default_llm_max_tokens()`.
+            max_output_tokens: state
+                .config
+                .extraction
+                .llm
+                .as_ref()
+                .map_or(4096, |c| c.max_tokens),
         },
         documents: {
             let pdf_on = crw_extract::pdf::PDF_SUPPORTED && state.config.document.enabled;

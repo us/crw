@@ -289,6 +289,10 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
                         "type": "object",
                         "description": "JSON Schema constraining the extracted output"
                     },
+                    "basis": {
+                        "type": "boolean",
+                        "description": "Return per-field evidence: each top-level scalar property comes back with a source url, verbatim excerpt and honest status (supported/unverified/unsupported/notFound). Requires schema."
+                    },
                     "llmApiKey": { "type": "string", "description": "BYOK LLM API key" },
                     "llmProvider": { "type": "string" },
                     "llmModel": { "type": "string" }

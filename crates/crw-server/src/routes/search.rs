@@ -1178,6 +1178,7 @@ async fn enrich_with_scrape(
                 include_tags: vec![],
                 exclude_tags: vec![],
                 json_schema: None,
+                basis: false,
                 headers: HashMap::new(),
                 css_selector: None,
                 xpath: None,

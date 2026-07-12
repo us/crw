@@ -28,8 +28,56 @@ export interface ScrapeOptions {
   waitFor?: number;
   /** JSON Schema for structured LLM extraction (auto-adds the `json` format). */
   jsonSchema?: Json;
+  /**
+   * Return per-field evidence alongside `json`. Every top-level scalar property
+   * of `jsonSchema` comes back as a {@link Basis}. Requires `jsonSchema`.
+   */
+  basis?: boolean;
   /** Any other engine scrape option, passed through verbatim. */
   [key: string]: unknown;
+}
+
+/** How well an extracted field is attributed to its source. */
+export type FieldStatus = "supported" | "unverified" | "unsupported" | "notFound";
+
+/** The citation backing an extracted value. Every field is server-produced. */
+export interface EvidenceCitation {
+  /** The document the engine fetched. Never a model-supplied url. */
+  url: string;
+  title?: string;
+  /**
+   * Verbatim span from the canonical source text. Absent when the span could
+   * not be established (`status: "unverified"`).
+   */
+  excerpt?: string;
+  /** `sha256:<hex>` of the exact text sent to the model. */
+  sourceHash: string;
+  /** Which text `sourceHash` covers. `"llmInput"` for extraction basis. */
+  sourceTextKind: string;
+}
+
+/**
+ * Per-field extraction evidence. Emitted only for top-level scalar schema
+ * properties, and only when the request set `basis: true`.
+ *
+ * `status` is honest: a field whose attribution could not be verified is marked
+ * `unverified`/`unsupported` rather than given a fabricated citation.
+ * `citations` is empty exactly when `status` is `unsupported` or `notFound`;
+ * `value` is `null` exactly when `status` is `notFound`.
+ */
+export interface Basis {
+  basisVersion: number;
+  field: string;
+  value: unknown | null;
+  status: FieldStatus;
+  confidence?: "low" | "medium" | "high";
+  citations: EvidenceCitation[];
+}
+
+/** A coded reason a field's attribution was downgraded. Never upstream text. */
+export interface BasisWarning {
+  field: string;
+  code: string;
 }
 
 export interface CrawlOptions {
@@ -68,6 +116,11 @@ export interface ExtractOptions {
   urls: string[];
   prompt?: string;
   schema?: Json;
+  /**
+   * Return per-field evidence: each result carries a `basis` array, one
+   * {@link Basis} per top-level scalar schema property. Requires `schema`.
+   */
+  basis?: boolean;
   /** BYOK: use your own LLM key/provider/model instead of the server's. */
   llmApiKey?: string;
   llmProvider?: string;

@@ -837,6 +837,101 @@
           }
         }
       },
+      "FieldStatus": {
+        "type": "string",
+        "enum": [
+          "supported",
+          "unverified",
+          "unsupported",
+          "notFound"
+        ],
+        "description": "How well an extracted field is attributed to its source. Honest: a field whose attribution could not be verified is 'unverified'/'unsupported' rather than given a fabricated citation."
+      },
+      "EvidenceCitation": {
+        "type": "object",
+        "required": [
+          "url",
+          "sourceHash",
+          "sourceTextKind"
+        ],
+        "description": "A citation backing an extracted value. Every field is server-produced; never a model-supplied url, hash or excerpt.",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The document the engine fetched."
+          },
+          "title": {
+            "type": "string"
+          },
+          "excerpt": {
+            "type": "string",
+            "description": "Verbatim span from the canonical source text. Absent when the span could not be established (status 'unverified')."
+          },
+          "sourceHash": {
+            "type": "string",
+            "description": "'sha256:<hex>' of the exact text sent to the model."
+          },
+          "sourceTextKind": {
+            "type": "string",
+            "description": "Which text sourceHash covers. 'llmInput' for extraction basis (the truncated markdown sent to the model)."
+          }
+        }
+      },
+      "Basis": {
+        "type": "object",
+        "required": [
+          "basisVersion",
+          "field",
+          "value",
+          "status",
+          "citations"
+        ],
+        "description": "Per-field extraction evidence. Emitted only for top-level scalar schema properties, and only when the request set basis:true. citations is empty exactly when status is 'unsupported' or 'notFound'; value is null exactly when status is 'notFound'.",
+        "properties": {
+          "basisVersion": {
+            "type": "integer"
+          },
+          "field": {
+            "type": "string"
+          },
+          "value": {
+            "description": "The schema-validated value; null when status is 'notFound'. Never rewritten to the model's claim."
+          },
+          "status": {
+            "$ref": "#/components/schemas/FieldStatus"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "citations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EvidenceCitation"
+            }
+          }
+        }
+      },
+      "BasisWarning": {
+        "type": "object",
+        "required": [
+          "field",
+          "code"
+        ],
+        "description": "A coded reason a field's attribution was downgraded. Closed, crw-owned code set; never upstream text.",
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          }
+        }
+      },
       "ScrapeRequest": {
         "type": "object",
         "required": [
@@ -901,6 +996,11 @@
             "type": "object",
             "additionalProperties": true,
             "description": "JSON Schema describing the structured output shape for the 'json' format"
+          },
+          "basis": {
+            "type": "boolean",
+            "default": false,
+            "description": "Return per-field evidence alongside the 'json' format: each top-level scalar schema property comes back as a Basis with an honest status. Requires a JSON schema; off by default, and when off the request sent to the model is unchanged."
           },
           "headers": {
             "type": "object",
@@ -1107,6 +1207,23 @@
               },
               "creditCost": {
                 "type": "number"
+              },
+              "basis": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Basis"
+                },
+                "description": "Per-field evidence for the 'json' format; present only when the request set basis:true."
+              },
+              "basisWarnings": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BasisWarning"
+                }
+              },
+              "llmInputHash": {
+                "type": "string",
+                "description": "'sha256:'-prefixed hash of the canonical text sent to the extraction LLM. The independent record a consumer checks a citation's sourceHash against, so the check is not circular."
               }
             }
           }
@@ -1312,7 +1429,7 @@
           },
           "basis": {
             "type": "boolean",
-            "description": "Per-field attribution (Phase 2b). Rejected with 400 while unsupported."
+            "description": "Return per-field evidence: each result carries a 'basis' array, one entry per top-level scalar schema property. Requires 'schema'. Reported by GET /v1/capabilities (extract.perFieldAttribution)."
           }
         }
       },
@@ -1757,6 +1874,23 @@
             "type": "object",
             "additionalProperties": true,
             "description": "Per-URL LLM token usage (provider/model/input/output tokens)."
+          },
+          "basis": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Basis"
+            },
+            "description": "Per-field evidence for this URL; present only when the request set basis:true."
+          },
+          "basisWarnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BasisWarning"
+            }
+          },
+          "llmInputHash": {
+            "type": "string",
+            "description": "'sha256:'-prefixed hash of the canonical text sent to the extraction LLM."
           }
         }
       },
