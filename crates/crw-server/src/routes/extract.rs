@@ -13,6 +13,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use crw_core::error::CrwError;
+use crw_core::evidence::{Basis, BasisWarning};
 use crw_core::types::{ExtractOptions, LlmUsage, OutputFormat, ScrapeRequest};
 
 use crate::error::AppError;
@@ -48,8 +49,12 @@ pub struct ExtractRequest {
     // vector shared engine-wide; not accepted here until that path validates it.
     #[serde(default)]
     pub base_url: Option<String>,
-    /// Per-field attribution (Phase 2b). Parsed now; until 2b ships, `true` is
-    /// rejected so callers never believe an inert flag is honored.
+    /// Per-field attribution. Each top-level **scalar** property of `schema`
+    /// comes back with an honest evidence record (value, citation, status).
+    /// Requires `schema`; the model's claimed attribution is verified
+    /// server-side, so an unverifiable field says so rather than carrying a
+    /// fabricated citation. Reported by `GET /v1/capabilities`
+    /// (`extract.perFieldAttribution`).
     #[serde(default)]
     pub basis: Option<bool>,
 }
@@ -116,9 +121,15 @@ pub(crate) async fn prepare_extract(
             "nothing to extract: provide a non-empty `prompt`, a `schema`, or both".into(),
         ));
     }
-    if req.basis == Some(true) {
+    // Evidence is emitted per top-level scalar schema property, so a prompt-only
+    // extraction has nothing to attribute. Reject upfront (the worker would fail
+    // the same way per URL, but only after paying for every fetch).
+    let basis = req.basis.unwrap_or(false);
+    if basis && req.schema.is_none() {
         return Err(CrwError::InvalidRequest(
-            "`basis` (per-field attribution) is not yet supported".into(),
+            "`basis` (per-field attribution) requires a `schema`: evidence is emitted per schema \
+             property, so a prompt-only extraction has no fields to attribute"
+                .into(),
         ));
     }
     if req.base_url.is_some() {
@@ -182,6 +193,7 @@ pub(crate) async fn prepare_extract(
     let template = ScrapeRequest {
         formats: vec![OutputFormat::Json],
         json_schema: req.schema.clone(),
+        basis,
         // `extract.prompt` is the field JSON extraction reads (single.rs).
         extract: Some(ExtractOptions {
             schema: None,
@@ -211,6 +223,19 @@ pub struct ExtractUrlResult {
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub llm_usage: Option<LlmUsage>,
+    /// Per-field evidence for this URL; present only when the request set
+    /// `basis: true`. One entry per top-level scalar schema property.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub basis: Option<Vec<Basis>>,
+    /// Coded reasons for every basis downgrade on this URL. Closed, crw-owned
+    /// code set — never upstream text.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub basis_warnings: Vec<BasisWarning>,
+    /// `"sha256:"`-prefixed hash of the canonical text sent to the extraction
+    /// LLM. The independent record a consumer checks a citation's `sourceHash`
+    /// against, so the check is not circular.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub llm_input_hash: Option<String>,
 }
 
 impl From<UrlResult> for ExtractUrlResult {
@@ -221,6 +246,9 @@ impl From<UrlResult> for ExtractUrlResult {
             data: r.data,
             error: r.error,
             llm_usage: r.llm_usage,
+            basis: r.basis,
+            basis_warnings: r.basis_warnings,
+            llm_input_hash: r.llm_input_hash,
         }
     }
 }

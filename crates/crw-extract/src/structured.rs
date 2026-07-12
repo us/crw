@@ -1,12 +1,22 @@
+use crate::basis;
 use crate::pricing;
 use crw_core::config::LlmConfig;
 use crw_core::error::{CrwError, CrwResult};
+use crw_core::evidence::{Basis, BasisWarning};
 use crw_core::types::LlmUsage;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::sync::OnceLock;
+use std::time::Duration;
 
 /// Request timeout for LLM API calls.
-const LLM_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+pub(crate) const LLM_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Request timeout for a basis extraction. Basis rides the same call but grows
+/// its **output** by 2-4k tokens, and output tokens are the serial-decode term:
+/// at the slower providers' 15-30 tok/s that alone exceeds the 60s default.
+/// Applied per-request, so the judge and summary paths keep the 60s bound.
+const BASIS_REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// Default UTF-8-safe truncation ceiling on markdown sent to the LLM for
 /// structured extraction. Matches the Next.js side's pre-flight cap so the
@@ -18,11 +28,23 @@ pub const DEFAULT_MAX_INPUT_BYTES: usize = 50_000;
 /// plus per-call token usage and a `truncated` flag indicating whether the
 /// markdown input was clipped at [`DEFAULT_MAX_INPUT_BYTES`] (or the
 /// caller-supplied override) before being sent to the LLM.
-#[derive(Debug, Clone)]
+///
+/// The `basis*` / `llm_input_hash` fields are populated only by
+/// [`extract_structured_with_basis`]; they stay empty on the plain path.
+#[derive(Debug, Clone, Default)]
 pub struct StructuredExtractResult {
     pub value: serde_json::Value,
     pub usage: Option<LlmUsage>,
     pub truncated: bool,
+    /// Per-field evidence, one entry per top-level scalar schema property.
+    pub basis: Vec<Basis>,
+    /// Coded explanations for every basis downgrade. Never upstream text.
+    pub basis_warnings: Vec<BasisWarning>,
+    /// `"sha256:"`-prefixed hash of the canonical source text — the exact
+    /// (truncated) markdown sent to the model. This is the document-map key a
+    /// consumer verifies `EvidenceCitation.source_hash` against; it is recorded
+    /// even when no citation survived, so the check is not circular.
+    pub llm_input_hash: Option<String>,
 }
 
 /// UTF-8-safe truncation: clip at `max_bytes` but walk back to the nearest
@@ -103,6 +125,60 @@ pub async fn extract_structured_with_usage(
     llm: &LlmConfig,
     max_input_bytes: Option<usize>,
 ) -> CrwResult<StructuredExtractResult> {
+    extract_inner(markdown, schema, user_prompt, llm, max_input_bytes, None).await
+}
+
+/// Extract structured JSON **with per-field evidence** (`basis`).
+///
+/// Same single LLM call as [`extract_structured_with_usage`]: the model is asked
+/// to attribute each top-level scalar field it extracts (source url, verbatim
+/// excerpt, confidence) inside the same tool call. The attribution is then
+/// verified server-side and deterministically — see [`crate::basis`]. A claim
+/// that does not hold up is downgraded, never dressed up: the result never
+/// carries a fake attribution.
+///
+/// Requires a `schema` (evidence is defined per schema leaf) and refuses
+/// upfront a schema whose evidence could not fit the model's output cap.
+///
+/// `source_url` is the document the server fetched. It is what the citations
+/// carry and what the model's claimed url is checked against; the model's own
+/// string never reaches the wire.
+pub async fn extract_structured_with_basis(
+    markdown: &str,
+    schema: &serde_json::Value,
+    user_prompt: Option<&str>,
+    llm: &LlmConfig,
+    max_input_bytes: Option<usize>,
+    source_url: &str,
+) -> CrwResult<StructuredExtractResult> {
+    if let Some(reason) = basis::reject_reason(schema, llm.max_tokens) {
+        return Err(CrwError::InvalidRequest(reason));
+    }
+    extract_inner(
+        markdown,
+        Some(schema),
+        user_prompt,
+        llm,
+        max_input_bytes,
+        Some(source_url),
+    )
+    .await
+}
+
+/// The one extraction path. `basis_for` carries the document url in basis mode
+/// and is `None` otherwise — and every basis behaviour (the tool-schema
+/// injection, the prompt section, the longer timeout, the hash, the alignment)
+/// is gated on it. With `None` the request bytes are byte-for-byte what they
+/// were before basis existed, which is what keeps every existing caller and
+/// self-hoster on exactly the path they are on today.
+async fn extract_inner(
+    markdown: &str,
+    schema: Option<&serde_json::Value>,
+    user_prompt: Option<&str>,
+    llm: &LlmConfig,
+    max_input_bytes: Option<usize>,
+    basis_for: Option<&str>,
+) -> CrwResult<StructuredExtractResult> {
     if llm.api_key.is_empty() {
         return Err(CrwError::ExtractionError(
             "LLM API key is empty. Set [extraction.llm.api_key] or CRW_EXTRACTION__LLM__API_KEY."
@@ -113,28 +189,51 @@ pub async fn extract_structured_with_usage(
     let max_bytes = max_input_bytes.unwrap_or(DEFAULT_MAX_INPUT_BYTES);
     let (clipped, truncated) = truncate_md(markdown, max_bytes);
 
+    // The canonical source text is `clipped` — the exact bytes the model sees,
+    // after cleaning AND truncation. Hash it BEFORE the call, so the hash can
+    // never be anything the model had a hand in. (Deliberately not the same
+    // hash as `ScrapeData.source_hash`, which covers the full markdown; the
+    // citation's `sourceTextKind` is what disambiguates the two.)
+    let llm_input_hash =
+        basis_for.map(|_| format!("sha256:{}", hex::encode(Sha256::digest(clipped.as_bytes()))));
+
     // When the caller gave only a prompt (no schema), let the LLM shape the
     // object itself; the tool still needs an input schema, so use a permissive
     // one that accepts any properties.
     let permissive_schema = serde_json::json!({ "type": "object", "additionalProperties": true });
-    let tool_schema = schema.unwrap_or(&permissive_schema);
+    let base_schema = schema.unwrap_or(&permissive_schema);
+    let leaves = basis_for
+        .map(|_| basis::scalar_leaves(base_schema))
+        .unwrap_or_default();
+    // In basis mode the caller's schema stays the document ROOT, with one
+    // `basis` property added. Nesting it under a wrapper would break every
+    // `"$ref": "#/$defs/..."` a generated schema carries.
+    let owned_tool_schema = basis_for.map(|_| basis::tool_schema(base_schema, &leaves));
+    let tool_schema = owned_tool_schema.as_ref().unwrap_or(base_schema);
 
     // The caller-supplied prompt (trusted API input, not scraped content) steers
     // extraction. Fall back to the generic schema-driven instruction when absent.
     let user_prompt = user_prompt.map(str::trim).filter(|p| !p.is_empty());
-    let prompt = match user_prompt {
+    let instruction = match user_prompt {
         Some(p) => format!(
             "Extract structured data from the following content. \
              Follow this instruction: {p}\n\
-             Call the extract_data tool with the extracted data.\n\n## Content\n{clipped}"
+             Call the extract_data tool with the extracted data."
         ),
-        None => format!(
-            "Extract structured data from the following content according to the JSON schema. \
-             Call the extract_data tool with the extracted data.\n\n## Content\n{clipped}"
-        ),
+        None => "Extract structured data from the following content according to the JSON schema. \
+                 Call the extract_data tool with the extracted data."
+            .to_string(),
+    };
+    let evidence = basis_for.map(basis::prompt_section).unwrap_or_default();
+    let prompt = format!("{instruction}{evidence}\n\n## Content\n{clipped}");
+
+    let timeout = if basis_for.is_some() {
+        BASIS_REQUEST_TIMEOUT
+    } else {
+        LLM_REQUEST_TIMEOUT
     };
 
-    let (value, mut usage) = match llm.provider.as_str() {
+    let (mut value, mut usage) = match llm.provider.as_str() {
         "anthropic" => {
             call_anthropic(
                 &prompt,
@@ -142,6 +241,7 @@ pub async fn extract_structured_with_usage(
                 llm,
                 "extract_data",
                 "Extract structured data from the content",
+                timeout,
             )
             .await
         }
@@ -152,6 +252,7 @@ pub async fn extract_structured_with_usage(
                 llm,
                 "extract_data",
                 "Extract structured data from the content",
+                timeout,
             )
             .await
         }
@@ -164,15 +265,42 @@ pub async fn extract_structured_with_usage(
         u.truncated = true;
     }
 
+    // Lift the basis out of the response BEFORE validation: what remains is the
+    // caller's own object, which is what their schema describes. A model that
+    // ignored the basis instruction entirely still produces a valid extract —
+    // every leaf just lands `unsupported`. Degrade honestly, never hard-fail.
+    let model_basis = basis_for
+        .and_then(|_| value.as_object_mut())
+        .and_then(|o| o.remove("basis"));
+
     // Only validate against a caller-supplied schema; a prompt-only extraction
     // has no contract to check the permissive result against.
     if let Some(schema) = schema {
         validate_against_schema(&value, schema)?;
     }
+
+    // `value` is now schema-validated and authoritative. The model's claims are
+    // checked against it and against the bytes we actually sent; they never
+    // rewrite it.
+    let (basis, basis_warnings) = match (basis_for, &llm_input_hash) {
+        (Some(url), Some(hash)) => basis::align_basis(
+            base_schema,
+            &value,
+            model_basis.as_ref(),
+            url,
+            hash,
+            clipped,
+        ),
+        _ => (vec![], vec![]),
+    };
+
     Ok(StructuredExtractResult {
         value,
         usage,
         truncated,
+        basis,
+        basis_warnings,
+        llm_input_hash,
     })
 }
 
@@ -237,12 +365,17 @@ enum AnthropicContentBlock {
 /// Call Anthropic with a tool-use forcing the given `schema`. `prompt` is the
 /// full user message; `tool_name`/`tool_desc` name the forced tool. Shared by
 /// structured extraction and the change-tracking judge.
+///
+/// `timeout` is per-request (it overrides the shared client's default), because
+/// a basis extraction decodes several thousand more output tokens than a judge
+/// call and must not drag the judge's bound up with it.
 pub(crate) async fn call_anthropic(
     prompt: &str,
     schema: &serde_json::Value,
     llm: &LlmConfig,
     tool_name: &str,
     tool_desc: &str,
+    timeout: Duration,
 ) -> CrwResult<(serde_json::Value, Option<LlmUsage>)> {
     // D reserved lane (covers structured JSON + the change-tracking judge, which
     // both route through here). Held across the provider HTTP call.
@@ -266,6 +399,7 @@ pub(crate) async fn call_anthropic(
     let client = shared_client();
     let resp = client
         .post(&url)
+        .timeout(timeout)
         .header("x-api-key", &llm.api_key)
         .header("anthropic-version", "2023-06-01")
         .header("content-type", "application/json")
@@ -475,12 +609,15 @@ fn anthropic_messages_url(base_url: Option<&str>, default_base: &str) -> String 
 /// Call an OpenAI-compatible provider with a function-call forcing the given
 /// `schema`. `prompt` is the full user message; `tool_name`/`tool_desc` name
 /// the forced function. Shared by structured extraction and the judge.
+///
+/// `timeout` is per-request — see [`call_anthropic`].
 pub(crate) async fn call_openai(
     prompt: &str,
     schema: &serde_json::Value,
     llm: &LlmConfig,
     tool_name: &str,
     tool_desc: &str,
+    timeout: Duration,
 ) -> CrwResult<(serde_json::Value, Option<LlmUsage>)> {
     // D reserved lane (structured JSON + judge). Held across the HTTP call.
     let _llm_permit = crate::llm_gate::acquire_llm().await;
@@ -510,6 +647,7 @@ pub(crate) async fn call_openai(
     let client = shared_client();
     let resp = client
         .post(&url)
+        .timeout(timeout)
         .header("Authorization", format!("Bearer {}", llm.api_key))
         .header("content-type", "application/json")
         .json(&body)

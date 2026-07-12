@@ -759,6 +759,7 @@ fn build_request(
         include_tags: vec![],
         exclude_tags: vec![],
         json_schema: extract_schema,
+        basis: false,
         headers: HashMap::new(),
         css_selector: css,
         xpath,

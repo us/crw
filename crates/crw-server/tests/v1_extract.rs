@@ -1,7 +1,7 @@
 //! Offline integration tests for the native `/v1/extract` surface.
 //!
 //! Network-free: they exercise request validation (empty urls, nothing-to-
-//! extract, over-cap, pre-2b basis flag, all-invalid urls), the unknown-job
+//! extract, over-cap, basis-without-schema, all-invalid urls), the unknown-job
 //! 404, and the `/v1/capabilities` advertisement. End-to-end completion (which
 //! needs an LLM) is covered separately.
 
@@ -52,8 +52,11 @@ async fn v1_extract_whitespace_prompt_no_schema_400() {
 }
 
 #[tokio::test]
-async fn v1_extract_rejects_basis_pre_2b_400() {
+async fn v1_extract_rejects_basis_without_schema_400() {
     let s = test_app();
+    // Evidence is emitted per top-level scalar SCHEMA property, so a prompt-only
+    // extraction has no fields to attribute. Reject upfront rather than fetch
+    // every URL and hand back an empty `basis`.
     let r = s
         .post("/v1/extract")
         .json(&json!({
@@ -272,6 +275,16 @@ async fn v1_capabilities_lists_extract() {
     r.assert_status_ok();
     let body: Value = r.json();
     assert_eq!(body["extract"]["supported"], json!(true));
-    assert_eq!(body["extract"]["perFieldAttribution"], json!(false));
+    // Honest capability: this build implements `basis`, so it says so. A client
+    // that gates its evidence UI on this flag must not be told `false` by a
+    // binary that would happily honour the flag.
+    assert_eq!(body["extract"]["perFieldAttribution"], json!(true));
     assert!(body["extract"]["maxUrls"].is_number());
+    // The per-leg output cap a budget estimator pins its worst case to
+    // (charter 5.3): reported, not assumed. Never a 0.
+    let max_out = body["extract"]["maxOutputTokens"].as_u64().unwrap();
+    assert!(
+        max_out > 0,
+        "maxOutputTokens must be reported, got {max_out}"
+    );
 }

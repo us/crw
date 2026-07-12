@@ -121,6 +121,12 @@ impl ExtractStatus {
 /// One URL's extraction outcome. Powers the native `/v1/extract` per-URL array
 /// contract (`results:[{url,status,data,error,llmUsage}]`), which sidesteps the
 /// FC-legacy last-write-wins merge. `llm_usage` lets the SaaS settle real cost.
+///
+/// The `basis*` / `llm_input_hash` fields carry per-field evidence and are
+/// populated only when the request set `basis: true`. They stay per-URL on
+/// purpose: a citation is only meaningful next to the document it came from, so
+/// merging them into the FC-legacy flattened `data` object would destroy the
+/// attribution.
 #[derive(Debug, Clone)]
 pub struct UrlResult {
     pub url: String,
@@ -128,6 +134,9 @@ pub struct UrlResult {
     pub data: Option<serde_json::Value>,
     pub error: Option<String>,
     pub llm_usage: Option<crw_core::types::LlmUsage>,
+    pub basis: Option<Vec<crw_core::evidence::Basis>>,
+    pub basis_warnings: Vec<crw_core::evidence::BasisWarning>,
+    pub llm_input_hash: Option<String>,
 }
 
 /// A URL prepared by the handler for the worker, in original request order.
@@ -660,6 +669,9 @@ impl AppState {
                                 data: None,
                                 error: Some(err),
                                 llm_usage: None,
+                                basis: None,
+                                basis_warnings: Vec::new(),
+                                llm_input_hash: None,
                             });
                             continue;
                         }
@@ -696,6 +708,9 @@ impl AppState {
                                     data: d.json,
                                     error: None,
                                     llm_usage: d.llm_usage,
+                                    basis: d.basis,
+                                    basis_warnings: d.basis_warnings,
+                                    llm_input_hash: d.llm_input_hash,
                                 });
                             }
                             Err(e) => {
@@ -707,6 +722,9 @@ impl AppState {
                                     data: None,
                                     error: Some(msg),
                                     llm_usage: None,
+                                    basis: None,
+                                    basis_warnings: Vec::new(),
+                                    llm_input_hash: None,
                                 });
                             }
                         }

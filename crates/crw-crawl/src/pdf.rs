@@ -545,6 +545,11 @@ fn build_scrape_data(
         // Per-page billing: 1 credit per page, floor 1. The SaaS settles
         // against this; opencore just reports it.
         credit_cost: extract.page_count.max(1) as u32,
+        // PDF path does not run the basis-mode extraction; stamped only by the
+        // structured-extraction choke (single.rs) when the request asks for it.
+        basis: None,
+        basis_warnings: Vec::new(),
+        llm_input_hash: None,
         metadata: PageMetadata {
             title: extract.title,
             description: None,

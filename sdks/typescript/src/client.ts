@@ -227,10 +227,11 @@ export class CrwClient {
    */
   async extract(opts: ExtractOptions): Promise<ExtractResult> {
     if (!this.apiUrl) throw new CrwError(httpOnlyHint("extract", "LLM extract job endpoint"));
-    const { urls, prompt, schema, llmApiKey, llmProvider, llmModel, pollInterval = 2, timeout = 120 } = opts;
+    const { urls, prompt, schema, basis, llmApiKey, llmProvider, llmModel, pollInterval = 2, timeout = 120 } = opts;
     const body: Json = { urls: [...urls] };
     if (prompt !== undefined) body.prompt = prompt;
     if (schema !== undefined) body.schema = schema;
+    if (basis !== undefined) body.basis = basis;
     if (llmApiKey !== undefined) body.llmApiKey = llmApiKey;
     if (llmProvider !== undefined) body.llmProvider = llmProvider;
     if (llmModel !== undefined) body.llmModel = llmModel;

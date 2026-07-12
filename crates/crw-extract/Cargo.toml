@@ -46,6 +46,9 @@ sxd_html = "0.1"
 phf = { workspace = true }
 futures = { workspace = true }
 rand = { workspace = true }
+# Canonical-source-text hashing for extraction basis (`sha256:` citations).
+sha2 = { workspace = true }
+hex = { workspace = true }
 
 [dev-dependencies]
 wiremock = { workspace = true }
