@@ -519,15 +519,16 @@ async fn renderer_mode_serializes_as_a_lowercase_string() {
     assert_eq!(body["screenshot"]["supported"], json!(false));
 }
 
-// ── Boundary guard: `basis` is not this workstream's to flip ─────────────────
+// ── `basis` ships, so the capability reports it truthfully ───────────────────
 
 #[tokio::test]
-async fn per_field_attribution_stays_false_until_basis_ships() {
+async fn per_field_attribution_reports_the_shipped_basis_feature() {
     let body = caps(&app_from("")).await;
     assert_eq!(
         body["extract"]["perFieldAttribution"],
-        json!(false),
-        "/v1/extract rejects `basis` today — advertising it would be a lie"
+        json!(true),
+        "this build implements `basis`, so the capability must say so — \
+         it reports what the binary can do, not whether an LLM is configured"
     );
 }
 
