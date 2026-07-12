@@ -121,10 +121,11 @@ class CrwClient:
 
     Feature availability:
         * scrape / crawl / map / parse_file — work in both local and HTTP mode.
-        * search — works in both modes, but local mode needs a SearXNG URL
+        * search — works in both modes, but local mode needs a search backend
           configured ([search].searxng_url); cloud has it preconfigured.
         * extract / batch_scrape / capabilities / change_tracking_diff — HTTP mode
-          only (no MCP tool exists for these on the engine).
+          only. The engine's MCP server does expose crw_extract, but this SDK's
+          local transport does not route it yet.
     """
 
     def __init__(self, api_url: str | None = None, api_key: str | None = None):
@@ -263,7 +264,7 @@ class CrwClient:
     ) -> list[dict] | dict:
         """Search the web and optionally scrape results.
 
-        Works in both modes. In subprocess mode the engine needs a SearXNG URL
+        Works in both modes. In subprocess mode the engine needs a search backend
         configured (``[search].searxng_url`` or ``CRW_SEARCH__SEARXNG_URL``); the
         managed cloud has one preconfigured. If search is not configured the engine
         returns a clear ``search_disabled`` error.

@@ -58,7 +58,7 @@ CRW_LOCAL=1 node app.js
 | `changeTrackingDiff(cur, prev?)` | Diff vs a prior snapshot | HTTP |
 | `close()` | Shut down the local subprocess | — |
 
-¹ Local search needs a SearXNG URL configured on the engine.
+¹ Local search needs a search backend configured on the engine.
 
 ```ts
 // Structured extraction (async job → per-URL results array):
