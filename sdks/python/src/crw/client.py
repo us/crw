@@ -94,6 +94,21 @@ def _encode_multipart(filename: str, content: bytes, options: dict[str, Any]) ->
     return bytes(buf), f"multipart/form-data; boundary={boundary}"
 
 
+class SearchResults(list):
+    """The results list, with the search's synthesis hanging off it.
+
+    `answer`, `citations` and `llmUsage` ride BESIDE `data` in the managed API's
+    response, and unwrapping `data` dropped them: a caller could pay for an AI
+    answer and have no way to read it. Subclassing `list` keeps every existing
+    caller working (`for r in results`, indexing, len) while `results.answer`
+    becomes reachable.
+    """
+
+    answer: str | None = None
+    citations: list | None = None
+    llm_usage: dict | None = None
+
+
 class CrwClient:
     """CRW web scraper client.
 
@@ -295,7 +310,19 @@ class CrwClient:
         args.update(kwargs)
 
         if self._api_url:
-            return self._http_post("/v1/search", args)
+            raw = self._http_request("POST", "/v1/search", args, raw=True)
+            data = raw.get("data", [])
+            # `data` IS the results, in whatever shape was asked for: a flat list,
+            # a {"web": [...], "news": [...]} dict when `sources` is set, or the
+            # engine's own {"results": [...], "answer": ...} when the client points
+            # at a self-hosted server. Only the flat list can carry the synthesis.
+            if isinstance(data, list):
+                out = SearchResults(data)
+                out.answer = raw.get("answer")
+                out.citations = raw.get("citations")
+                out.llm_usage = raw.get("llmUsage")
+                return out
+            return data
         return self._tool_call("crw_search", args)
 
     # --- Firecrawl-compatible Research API (cloud only) ---------------------
