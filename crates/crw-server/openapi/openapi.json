@@ -502,11 +502,11 @@
                         },
                         "supportsBaseUrl": {
                           "type": "boolean",
-                          "description": "The LLM dispatcher accepts a custom baseUrl on the scrape and search paths. POST /v1/extract rejects baseUrl — configure [extraction.llm.base_url] server-side for that route."
+                          "description": "The LLM dispatcher accepts a custom baseUrl, but only as part of a BYOK request: the per-request LLM config that carries it is only built when the request also supplies llmApiKey. Sending baseUrl without a key leaves the server's own endpoint in force (the server never points its own key at a caller-chosen host). POST /v1/extract rejects baseUrl outright — configure [extraction.llm.base_url] server-side for that route. Build-invariant: no config turns this off."
                         },
                         "serverKeyConfigured": {
                           "type": "boolean",
-                          "description": "True when a server-side LLM API key is present. False on BYOK-only deploys (CRW_DISABLE_SERVER_LLM_KEY=1); callers may still pass llmApiKey per request."
+                          "description": "True when a server-side LLM API key is present. False on BYOK-only deploys (CRW_DISABLE_SERVER_LLM_KEY=1), where a self-hosted instance still accepts a per-request llmApiKey. The managed cloud does not take a caller-supplied key."
                         },
                         "maxConcurrency": {
                           "type": "integer",
@@ -560,7 +560,7 @@
                           "items": {
                             "type": "string"
                           },
-                          "description": "Formats that additionally need an LLM: a server key (llm.serverKeyConfigured) or a per-request llmApiKey. Requesting them without one is a hard error, never a silent downgrade.",
+                          "description": "Formats that additionally need an LLM: a server key (llm.serverKeyConfigured) or a per-request llmApiKey. Requesting them without one is a hard error, never a silent downgrade. When llm.requireByokHeader is set the server key is NOT sufficient: the scrape and extract paths reject these formats unless the request carries llmApiKey.",
                           "example": [
                             "json",
                             "summary"
@@ -592,7 +592,7 @@
                         },
                         "answer": {
                           "type": "boolean",
-                          "description": "Answer synthesis works WITHOUT a caller-supplied LLM key (search configured AND a server LLM key present). When false but supported is true, a request carrying llmApiKey still gets an answer."
+                          "description": "Answer synthesis works WITHOUT a caller-supplied LLM key (search configured AND a server LLM key present). When false but supported is true, a self-hosted instance still answers a request that carries llmApiKey; the managed cloud does not take a caller-supplied key."
                         },
                         "summarizeResults": {
                           "type": "boolean",
@@ -637,7 +637,15 @@
                         },
                         "mode": {
                           "type": "string",
-                          "description": "Effective [renderer].mode.",
+                          "enum": [
+                            "auto",
+                            "none",
+                            "lightpanda",
+                            "chrome",
+                            "playwright",
+                            "camoufox"
+                          ],
+                          "description": "Effective [renderer].mode. Note chrome_proxy is a renderer TIER (it can appear in renderers.available) but not a mode.",
                           "example": "auto"
                         },
                         "renderJsDefault": {
@@ -656,7 +664,7 @@
                       "properties": {
                         "supported": {
                           "type": "boolean",
-                          "description": "Native async multi-URL POST /v1/extract is live. Each URL needs an LLM (server key or per-request llmApiKey)."
+                          "description": "POST /v1/extract works for a request that carries no credentials of its own. The route is ALWAYS mounted, but it needs an LLM: false means a server LLM key is absent, or llm.requireByokHeader is set (which makes the server key insufficient). false does NOT mean 'not implemented' — a request carrying llmApiKey still extracts on a self-hosted instance."
                         },
                         "maxUrls": {
                           "type": "integer",
@@ -699,8 +707,8 @@
                             },
                             "endpoint": {
                               "type": "string",
-                              "description": "Canonical Firecrawl-compat upload path. The deprecated root alias /v2/parse is still mounted and behaves identically.",
-                              "example": "/firecrawl/v2/parse"
+                              "description": "Upload path to join onto your API base. /v2/parse is the one path served by every surface: the engine mounts it at the root and under /firecrawl, and the hosted API proxies /v1/* and /v2/* only.",
+                              "example": "/v2/parse"
                             },
                             "maxBytes": {
                               "type": "integer",

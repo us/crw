@@ -249,7 +249,7 @@ Despite these gaps, CRW works well for a specific, well-defined set of use cases
 - High-concurrency scraping of publicly accessible content
 - Low-memory self-hosting as a sidecar to existing applications
 
-If your use case falls in this set, CRW's limitations are unlikely to be blocking. If you need screenshots, document parsing, or reliable SPA coverage today, use the tools that do those things well — and check back as the roadmap progresses.
+If your use case falls in this set, CRW's limitations are unlikely to be blocking. Screenshots and PDF parsing both ship today (screenshots need a Chrome-class renderer tier; PDF only, no OCR, no DOCX). What is still genuinely thin is OCR and non-PDF document formats — if you need those, use the tools that do them well.
 
 ## How We Prioritize the Roadmap
 

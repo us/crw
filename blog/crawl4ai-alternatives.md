@@ -56,7 +56,6 @@ Crawl4AI has genuine strengths — Python-native extraction hooks, LLM chunking 
 
 - **Python hooks:** If you need to run custom Python extraction logic inside the scraper, Crawl4AI's hooks are unmatched.
 - **Chunking strategies:** Built-in chunking optimized for LLMs — CRW provides markdown that you chunk downstream.
-- **Screenshot support:** Crawl4AI can capture screenshots via Playwright; CRW has this on the roadmap.
 - **License:** Apache-2.0 (Crawl4AI) is more permissive than AGPL-3.0 (CRW) for commercial embedding.
 
 **Best for:** Teams that want a fast, lightweight REST API for scraping without being locked into the Python ecosystem. [Full CRW vs Crawl4AI comparison](/blog/crw-vs-crawl4ai).

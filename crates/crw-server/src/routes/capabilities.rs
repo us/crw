@@ -43,9 +43,15 @@ pub struct Capabilities {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtractCapabilities {
-    /// Native `POST /v1/extract` (async multi-URL structured extraction) is
-    /// live. The route is always mounted; each URL needs an LLM — see
-    /// `llm.serverKeyConfigured` and BYOK.
+    /// `POST /v1/extract` (async multi-URL structured extraction) works for a
+    /// request that carries NO credentials of its own. The route is ALWAYS
+    /// mounted, but it needs an LLM: it rejects a keyless request when no
+    /// server LLM key is configured, and it rejects one regardless of the
+    /// server key when `llm.requireByokHeader` is set. Same gate as
+    /// `search.answer`, plus the header guard.
+    ///
+    /// `false` does not mean "not implemented" — a request carrying `llmApiKey`
+    /// still extracts. It means "not usable without your own key".
     pub supported: bool,
     /// Max URLs accepted per request (`crawler.max_extract_urls`).
     pub max_urls: usize,
@@ -75,8 +81,10 @@ pub struct DocumentCapabilities {
 #[serde(rename_all = "camelCase")]
 pub struct FileUploadCapabilities {
     pub supported: bool,
-    /// Canonical Firecrawl-compat path. The deprecated root alias `/v2/parse`
-    /// is still mounted and behaves identically.
+    /// Upload path, as a value a client can join onto its API base. `/v2/parse`
+    /// is the one path served by EVERY surface: the engine mounts it at the
+    /// root and under `/firecrawl`, and the hosted API proxies `/v1/*` and
+    /// `/v2/*` only — a `/firecrawl/...` value would 404 there.
     pub endpoint: &'static str,
     /// The ENFORCED body cap — the same value the `/v2/parse` body-limit layer
     /// applies (`document.max_upload_bytes`, clamped by the hard ceiling).
@@ -93,9 +101,18 @@ pub struct LlmCapabilities {
     /// `crw_extract::llm::SUPPORTED_PROVIDERS`, the same list the dispatcher
     /// validates against, so the advertisement cannot drift from reality.
     pub providers: Vec<&'static str>,
-    /// The dispatcher accepts a custom `baseUrl` on the scrape and search
-    /// paths. NOTE: `/v1/extract` rejects `baseUrl` — for that route the
-    /// endpoint is configured server-side (`[extraction.llm.base_url]`).
+    /// The dispatcher accepts a custom `baseUrl`, but ONLY as part of a BYOK
+    /// request: `baseUrl` is read while building the per-request LLM config,
+    /// which is only built when the request also carries `llmApiKey`. Sending
+    /// `baseUrl` without a key leaves the server's own endpoint in force. The
+    /// server would otherwise be pointing its OWN key at a caller-chosen host,
+    /// so this is deliberate.
+    ///
+    /// `/v1/extract` rejects `baseUrl` outright; configure
+    /// `[extraction.llm.base_url]` server-side for that route.
+    ///
+    /// Build-invariant: the dispatcher always compiles this in, so unlike the
+    /// other fields here there is no config that turns it off.
     pub supports_base_url: bool,
     /// True when a server-wide LLM key is configured (self-hosted /
     /// no-SaaS deploys). SaaS-fronted deploys set
@@ -119,6 +136,10 @@ pub struct FormatCapabilities {
     /// Formats that additionally need an LLM — a server key
     /// (`llm.serverKeyConfigured`) or a per-request `llmApiKey`. Without one,
     /// requesting them is a hard error, never a silent downgrade.
+    ///
+    /// When `llm.requireByokHeader` is set, the server key alone is NOT enough:
+    /// the scrape and extract paths reject these formats unless the request
+    /// carries `llmApiKey`, even on a deploy that has a server key.
     pub llm_required: Vec<&'static str>,
     /// Change-tracking diff modes this instance supports. The SaaS
     /// capability-gate checks `supported` contains `"changeTracking"` before
@@ -165,7 +186,8 @@ pub struct RendererCapabilities {
     /// JS renderer tiers this instance actually constructed, in fallback order.
     /// Reflects BOTH the build features (a CDP-less build constructs none) and
     /// the config (a tier whose `ws_url` / `base_url` is unset is never built).
-    /// These are exactly the values the per-request `renderer` pin accepts.
+    /// A `renderer` pin naming a tier outside this list is rejected; the pin
+    /// also accepts `"auto"`, which is not a tier and so is not listed here.
     ///
     /// "Constructible / pinnable", not "always in the auto ladder": `camoufox`
     /// is built whenever its endpoint is set even when `include_in_auto` is
@@ -216,6 +238,11 @@ const LLM_REQUIRED_CHANGE_TRACKING_MODES: &[&str] = &["json"];
 pub async fn capabilities(State(state): State<AppState>) -> Json<Capabilities> {
     let llm_cfg = state.config.extraction.llm.as_ref();
     let server_key_configured = llm_cfg.map(|c| !c.api_key.is_empty()).unwrap_or(false);
+    // With the BYOK header guard on, the scrape and extract paths reject
+    // LLM-backed work unless the request brings its own key — the server key
+    // does not count. `search` has no such guard, hence the split.
+    let byok_header_required = llm_cfg.is_some_and(|c| c.require_byok_header.is_some());
+    let llm_ready_without_caller_key = server_key_configured && !byok_header_required;
 
     // Search is usable exactly when the SearXNG client was constructed, which
     // happens only when `search.enabled && search.searxng_url.is_some()`.
@@ -275,7 +302,7 @@ pub async fn capabilities(State(state): State<AppState>) -> Json<Capabilities> {
             render_js_default: state.config.renderer.render_js_default,
         },
         extract: ExtractCapabilities {
-            supported: true,
+            supported: llm_ready_without_caller_key,
             max_urls: state.config.crawler.max_extract_urls,
             // True from the build that shipped `basis`. Scoped exactly like
             // `supported` above: it reports what this binary implements, not
@@ -297,7 +324,7 @@ pub async fn capabilities(State(state): State<AppState>) -> Json<Capabilities> {
             parsers: if pdf_on { vec!["pdf"] } else { vec![] },
             file_upload: FileUploadCapabilities {
                 supported: upload_on,
-                endpoint: "/firecrawl/v2/parse",
+                endpoint: "/v2/parse",
                 max_bytes: max_upload_bytes,
                 types: if upload_on {
                     vec!["application/pdf"]
