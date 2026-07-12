@@ -29,6 +29,7 @@
     "./skills/crw-crawl",
     "./skills/crw-parse",
     "./skills/crw-extract",
+    "./skills/crw-research",
     "./skills/crw-watch",
     "./skills/crw-dynamic-search",
     "./skills/crw-best-practices",
