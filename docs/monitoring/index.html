@@ -355,6 +355,7 @@ GET    /v1/monitor/{id}/checks/{checkId}     # get one check + its pages</code><
 <p><code>scrapeOptions</code> / <code>crawlOptions</code> pass through to the underlying jobs. Monitor scrapes always fetch fresh.</p>
 <h2 id="goals-and-judging">Goals and judging</h2>
 <p>Add a plain-language <code>goal</code> to be alerted only on meaningful changes. When <code>goal</code> is set and <code>judgeEnabled</code> is omitted, judging is enabled automatically. The judge runs only on <strong>changed</strong> pages and returns a judgment with <code>meaningful</code>, <code>confidence</code> (<code>low</code> / <code>medium</code> / <code>high</code>), <code>reason</code>, and <code>meaningfulChanges</code>. Set <code>judgeEnabled: false</code> to store a goal without judging.</p>
+<p>On the self-hosted engine the judge is <strong>opt-in</strong>: <code>/v1/scrape</code> runs it only when you pass both <code>goal</code> and <code>judgeEnabled: true</code> alongside the <code>changeTracking</code> format. Auto-on-when-<code>goal</code>-is-set is a managed-monitor convenience, not engine behaviour.</p>
 <h2 id="change-tracking-modes">Change tracking modes</h2>
 <p>By default each page&#39;s markdown is diffed and reported as <code>same</code> / <code>changed</code> / <code>new</code> / <code>removed</code> / <code>error</code>. To track specific structured fields, set a <code>changeMode</code> on the target:</p>
 <ul>
@@ -734,13 +735,13 @@ Authorization: Bearer $CRW_API_KEY</code></pre>
 <td><code>goal</code></td>
 <td>string</td>
 <td>—</td>
-<td>Plain-language goal for the meaningful-change judge. Accepted on both <code>DiffRequest</code> (shared default) and individual <code>DiffItem</code> entries for forward-compatibility. Not yet applied at the engine layer — judging is wired in M2.</td>
+<td>Accepted and ignored by this endpoint. <code>/v1/change-tracking/diff</code> is deterministic and never calls an LLM; the judge runs only on <code>/v1/scrape</code>.</td>
 </tr>
 <tr>
 <td><code>judgeEnabled</code></td>
 <td>boolean</td>
 <td>—</td>
-<td>Force judging on or off. Accepted for forward-compatibility alongside <code>goal</code>; not yet applied at the engine layer — judging is wired in M2.</td>
+<td>Accepted and ignored by this endpoint. To judge a change, use the <code>changeTracking</code> format on <code>/v1/scrape</code> with <code>goal</code> + <code>judgeEnabled: true</code>.</td>
 </tr>
 </tbody></table>
 <h3 id="changetrackingsnapshot"><code>ChangeTrackingSnapshot</code></h3>

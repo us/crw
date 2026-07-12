@@ -666,7 +666,7 @@ async fn scrape_url_inner(
     // Activated by the `"changeTracking"` format string; options ride on the
     // sibling `change_tracking` field. The diff is computed against the
     // caller-supplied `previous` snapshot — opencore stores nothing. The LLM
-    // judge is injected by the M2 orchestration layer, not here.
+    // judge is opt-in and runs below: it requires `goal` + `judgeEnabled: true`.
     if req.formats.contains(&OutputFormat::ChangeTracking) {
         let Some(ct_opts) = &req.change_tracking else {
             return Err(crw_core::error::CrwError::InvalidRequest(
