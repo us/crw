@@ -349,7 +349,38 @@ impl PageFetcher for HttpFetcher {
         // remaining deadline so the request cannot exceed the overall budget.
         let mut attempt: u32 = 0;
         let mut use_relaxed = false;
-        let mut use_proxy = false;
+
+        // Egress memory: if this host recently hard-blocked our direct egress,
+        // start on the proxy instead of re-discovering the block. Without this
+        // every URL on a blocking host repeats the whole climb
+        // (direct → 429 → proxy retry → JS ladder), which is the 10-20s/URL that
+        // made /map time out on sites like Hacker News.
+        //
+        // We only PREFER the proxy — we never forbid direct (see the rescue arm
+        // below). A falsely-latched host whose proxy egress is worse must still be
+        // able to succeed, or scrape success would regress.
+        let host = url::Url::parse(url)
+            .ok()
+            .and_then(|u| u.host_str().map(str::to_owned));
+        // The latch is inert unless a proxy exists AND the deadline can afford both
+        // a real proxy attempt and a full direct rescue. Splitting a short budget
+        // (the SaaS scrape deadline is 5s) would let a hanging proxy starve the
+        // direct rescue, failing a request that direct alone would have served —
+        // a scrape-success regression. Below the threshold we behave exactly as
+        // before the latch existed.
+        let proxy_first = match (&host, self.ratelimit_proxy_client.is_some()) {
+            (Some(h), true) => {
+                deadline.remaining() >= crate::egress::MIN_BUDGET_FOR_LATCH
+                    && crate::egress::global().should_proxy(h).await
+            }
+            _ => false,
+        };
+        let mut use_proxy = proxy_first;
+        let mut direct_rescue_used = false;
+        if proxy_first {
+            crw_core::metrics::metrics().egress_latch_hit_total.inc();
+        }
+
         let resp = loop {
             let remaining = deadline.remaining();
             if remaining.is_zero() {
@@ -359,6 +390,35 @@ impl PageFetcher for HttpFetcher {
                     (start.elapsed().as_millis().max(1)) as u64,
                 ));
             }
+            // While trying the proxy first, hold back a FULL direct-rescue budget. A
+            // HANGING proxy is the dangerous case: without the reserve it would eat
+            // the whole deadline and direct would never run — the very suppression
+            // this design exists to avoid.
+            //
+            // The reserve is flat, not a share of what's left: a share would shrink
+            // the rescue on short deadlines to the point where a healthy direct
+            // origin no longer fits in it. `proxy_first` already guarantees the
+            // budget is at least MIN_BUDGET_FOR_LATCH, so this subtraction always
+            // leaves a real proxy attempt behind.
+            let attempt_budget = if use_proxy && proxy_first && !direct_rescue_used {
+                remaining.saturating_sub(crate::egress::DIRECT_FALLBACK_RESERVE)
+            } else {
+                remaining
+            };
+            if attempt_budget.is_zero() {
+                // Not enough left to try the proxy AND still rescue with direct.
+                // Spend what remains on direct, which is the attempt we know how to
+                // reason about.
+                if use_proxy && proxy_first && !direct_rescue_used {
+                    use_proxy = false;
+                    direct_rescue_used = true;
+                    continue;
+                }
+                return Err(CrwError::Timeout(
+                    (start.elapsed().as_millis().max(1)) as u64,
+                ));
+            }
+            let remaining = attempt_budget;
             // On the cert-error fallback path use the verification-disabled
             // client; otherwise the strict client.
             let active_client = if use_proxy {
@@ -371,6 +431,17 @@ impl PageFetcher for HttpFetcher {
             let send_fut = build_request(active_client).send();
             let send_result = tokio::time::timeout(remaining, send_fut).await;
             match send_result {
+                // The proxy-first attempt HUNG until its capped budget ran out.
+                // This is the case the reserve exists for: fall back to direct with
+                // the budget we held back, instead of failing the whole fetch on a
+                // proxy that a latch — possibly a false one — put in front of it.
+                Err(_) if use_proxy && proxy_first && !direct_rescue_used => {
+                    tracing::warn!(
+                        "proxy attempt for {url} exhausted its budget while latched; falling back to direct"
+                    );
+                    use_proxy = false;
+                    direct_rescue_used = true;
+                }
                 Err(_) => {
                     return Err(CrwError::Timeout(remaining.as_millis() as u64));
                 }
@@ -396,6 +467,11 @@ impl PageFetcher for HttpFetcher {
                 // 429 is not returned before the proxy is tried.
                 Ok(Ok(r))
                     if !use_proxy
+                        // `direct_rescue_used` means we already tried the proxy for
+                        // this request and it failed, which is why we are on direct
+                        // at all. Bouncing back to that same broken proxy would just
+                        // burn the rescue budget on an attempt we know fails.
+                        && !direct_rescue_used
                         && self.ratelimit_proxy_client.is_some()
                         && should_arm_proxy(
                             r.status().as_u16(),
@@ -411,7 +487,46 @@ impl PageFetcher for HttpFetcher {
                         r.status()
                     );
                     drop(r);
+                    // WRITE HOOK — direct-only by construction: this arm is gated on
+                    // `!use_proxy`, so the block we just saw was observed on a
+                    // genuine direct attempt. Remember it, so the next URL on this
+                    // host starts on the proxy instead of paying the climb again.
+                    //
+                    // A block seen *through* a proxy must never land here: it would
+                    // say the proxy is blocked, not direct, and would let one
+                    // caller's broken proxy demote every other caller's healthy
+                    // direct traffic onto paid bandwidth.
+                    if let Some(h) = &host {
+                        crate::egress::global().note_block(h).await;
+                    }
                     use_proxy = true;
+                }
+                // The proxy-first attempt came back blocked as well. Direct is not
+                // forbidden by a latch — only deprioritized — so spend the reserved
+                // budget on one direct attempt rather than returning the proxy's
+                // block. Keeps best-result behaviour when the proxy is the worse
+                // egress for this host (origin blocks the proxy ranges, bad geo
+                // exit, etc).
+                Ok(Ok(r))
+                    if use_proxy
+                        && proxy_first
+                        && !direct_rescue_used
+                        && should_arm_proxy(
+                            r.status().as_u16(),
+                            r.headers()
+                                .get("cf-mitigated")
+                                .and_then(|v| v.to_str().ok())
+                                .map(crate::detector::is_cloudflare_mitigated_header)
+                                .unwrap_or(false),
+                        ) =>
+                {
+                    tracing::warn!(
+                        "HTTP {} from {url} via proxy while latched; falling back to direct",
+                        r.status()
+                    );
+                    drop(r);
+                    use_proxy = false;
+                    direct_rescue_used = true;
                 }
                 Ok(Ok(r)) => break r,
                 // TLS cert verification failed and relaxed-TLS fallback is armed:
@@ -420,6 +535,20 @@ impl PageFetcher for HttpFetcher {
                 // before the generic retry arm because cert failures are
                 // `is_connect()` and would otherwise be retried on the strict
                 // client (pointless — the cert is still broken).
+                // The proxy-first attempt could not reach the origin AT ALL (proxy
+                // down, refused, DNS, misconfigured creds). The latch only expresses
+                // a preference, so this must not sink the fetch: spend the reserved
+                // budget on direct. Without this arm an unreachable proxy would turn
+                // every scrape of a latched host into a hard failure for the whole
+                // cooldown — a scrape-success regression, and precisely the case the
+                // "reorder, never suppress" rule exists to prevent.
+                Ok(Err(_)) if use_proxy && proxy_first && !direct_rescue_used => {
+                    tracing::warn!(
+                        "proxy egress failed for {url} while latched; falling back to direct"
+                    );
+                    use_proxy = false;
+                    direct_rescue_used = true;
+                }
                 Ok(Err(e))
                     if !use_relaxed && self.relaxed_client.is_some() && is_cert_error(&e) =>
                 {

@@ -135,3 +135,67 @@ fn robots_case_insensitive_directives() {
     assert!(!robots.is_allowed("/blocked/page"));
     assert_eq!(robots.sitemaps.len(), 1);
 }
+
+/// Real Hacker News robots.txt. Its rules key on the query string, so matching
+/// on the bare path silently allows everything it forbids — which is exactly
+/// how /map ended up rendering `/hide?id=...` through a full Chrome ladder.
+const HN_ROBOTS: &str = "User-Agent: *\n\
+Crawl-delay: 30\n\
+Disallow: /x?\n\
+Disallow: /r?\n\
+Disallow: /vote?\n\
+Disallow: /reply?\n\
+Disallow: /submitlink?\n\
+Disallow: /collapse?\n\
+Disallow: /context?\n\
+Disallow: /fave?\n\
+Disallow: /flag?\n\
+Disallow: /hide?\n\
+Disallow: /login\n\
+Disallow: /logout\n";
+
+#[test]
+fn url_allowed_matches_on_path_and_query() {
+    let robots = RobotsTxt::parse(HN_ROBOTS);
+
+    // Forbidden action links: these were being fetched before the fix.
+    for blocked in [
+        "https://news.ycombinator.com/hide?id=48876505&goto=news",
+        "https://news.ycombinator.com/vote?id=123&how=up",
+        "https://news.ycombinator.com/reply?id=9&goto=item",
+        "https://news.ycombinator.com/login",
+    ] {
+        let url = url::Url::parse(blocked).unwrap();
+        assert!(
+            !robots.is_url_allowed(&url),
+            "robots.txt forbids {blocked}, it must not be fetched"
+        );
+    }
+
+    // Real content that HN does NOT disallow must still be crawled: robots is
+    // the authority, so we must not over-filter into a hand-rolled deny-list.
+    for allowed in [
+        "https://news.ycombinator.com/",
+        "https://news.ycombinator.com/item?id=48876505",
+        "https://news.ycombinator.com/user?id=tionis",
+        "https://news.ycombinator.com/from?site=iroh.computer",
+    ] {
+        let url = url::Url::parse(allowed).unwrap();
+        assert!(
+            robots.is_url_allowed(&url),
+            "robots.txt permits {allowed}, it must still be crawled"
+        );
+    }
+}
+
+/// Pins the exact bug: matching on the bare path lets `/hide?...` through.
+#[test]
+fn bare_path_matching_would_miss_query_keyed_rules() {
+    let robots = RobotsTxt::parse(HN_ROBOTS);
+    let url = url::Url::parse("https://news.ycombinator.com/hide?id=1&goto=news").unwrap();
+
+    // The old call shape — path only — wrongly reports "allowed".
+    assert!(robots.is_allowed(url.path()));
+    // The fixed call shape correctly reports "forbidden".
+    assert!(!robots.is_url_allowed(&url));
+}

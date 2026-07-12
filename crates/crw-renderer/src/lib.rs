@@ -46,6 +46,7 @@ pub mod cdp;
 #[cfg(feature = "cdp")]
 pub mod cdp_conn;
 pub mod detector;
+pub mod egress;
 #[cfg(feature = "cdp")]
 pub mod health_telemetry;
 pub mod host_limiter;

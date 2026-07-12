@@ -101,6 +101,11 @@ pub async fn map(
         max_urls: req
             .limit
             .unwrap_or(crw_crawl::crawl::DEFAULT_MAX_DISCOVERED_URLS),
+        // Discovery stops just before the backstop below and returns what it has.
+        // Previously the backstop was the only bound: it dropped the future and
+        // every discovered URL with it, so a slow site got a 504 with zero links.
+        overall_deadline: crw_crawl::crawl::discovery_deadline(Duration::from_secs(timeout_secs)),
+        respect_robots: state.config.crawler.respect_robots_txt,
     });
 
     let result =

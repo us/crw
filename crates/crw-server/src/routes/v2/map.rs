@@ -89,6 +89,10 @@ pub async fn map(
         max_urls: req
             .limit
             .unwrap_or(crw_crawl::crawl::DEFAULT_MAX_DISCOVERED_URLS),
+        // Stop just before the backstop below and return partials, instead of
+        // letting the backstop drop the future and lose every discovered URL.
+        overall_deadline: crw_crawl::crawl::discovery_deadline(Duration::from_secs(timeout_secs)),
+        respect_robots: state.config.crawler.respect_robots_txt,
     });
 
     let result = match tokio::time::timeout(Duration::from_secs(timeout_secs), fut).await {
