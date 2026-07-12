@@ -100,7 +100,7 @@ This is a **capability matrix**, not an API-shape compatibility matrix (which th
 | Provider support | OpenAI, Anthropic, etc. | Same (manual config) | OpenAI, Anthropic, configurable via `[extraction.llm]` |
 | Pricing | Per call + LLM token cost | Self-paid LLM tokens only | Self-paid LLM tokens only (self-host); cloud per-call pricing on managed plans |
 
-**Shape note:** fastCRW's `/v1/extract` is async — it returns a job id you poll on `GET /v1/extract/{id}`, and it accepts a `urls` array. The per-request URL cap is advertised as `limits.maxExtractUrls` on `GET /v1/capabilities` (default 50). Single-URL extraction also works inline via `/v1/scrape` `formats: ["json"]` with a top-level `jsonSchema` (or the `extract.schema` alias for closer Firecrawl parity). Per-field `basis` attribution is not implemented; `/v1/extract` rejects `basis: true` rather than silently ignoring it.
+**Shape note:** fastCRW's `/v1/extract` is async — it returns a job id you poll on `GET /v1/extract/{id}`, and it accepts a `urls` array. The per-request URL cap is advertised as `limits.maxExtractUrls` on `GET /v1/capabilities` (default 50). Single-URL extraction also works inline via `/v1/scrape` `formats: ["json"]` with a top-level `jsonSchema` (or the `extract.schema` alias for closer Firecrawl parity). Per-field `basis` attribution is supported: pass `basis: true` to get, for each top-level scalar field, an evidence object with its source URL, a hash of the exact text the model saw, a verbatim excerpt, a confidence, and an honest status (a field that cannot be grounded is marked `unverified`/`unsupported`, never fabricated). `perFieldAttribution` on `GET /v1/capabilities` reports whether this build ships it.
 
 ---
 
