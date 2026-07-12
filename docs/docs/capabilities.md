@@ -47,7 +47,7 @@ No request body. No query parameters.
   "extract": {
     "supported": true,
     "maxUrls": 50,
-    "perFieldAttribution": false
+    "perFieldAttribution": true
   },
   "documents": {
     "parsers": ["pdf"],
@@ -144,7 +144,7 @@ Bring-your-own-key is always accepted and cannot be turned off. So on a BYOK-onl
 |-------|------|-------------|
 | `supported` | `boolean` | `POST /v1/extract` (async, multi-URL) is mounted. Each URL still needs an LLM — see `llm.serverKeyConfigured` and BYOK. |
 | `maxUrls` | `number` | Max URLs accepted per request (`[crawler] max_extract_urls`). |
-| `perFieldAttribution` | `boolean` | Per-field `basis` attribution. `false` today: `/v1/extract` rejects `basis: true` outright rather than silently ignoring it. |
+| `perFieldAttribution` | `boolean` | Per-field `basis` attribution. `true` on a build that ships `basis`: `basis: true` on `/v1/extract` (or a `formats: ["json"]` scrape) returns an evidence record per top-level scalar schema property. Reports build capability, not whether an LLM is configured. |
 
 ### `documents`
 
@@ -222,7 +222,7 @@ Self-hosted deployments differ from the hosted API in several ways a caller cann
 - PDF parsing may be disabled (`[document] enabled = false`) or not compiled in
 - A server-side LLM key may or may not be configured
 - The `[document] max_upload_bytes` limit can be set below 50 MiB
-- SearXNG may not be connected
+- The search backend may not be connected (`[search] searxng_url` unset)
 
 Always call `/v1/capabilities` before making assumptions about what a self-hosted instance can do.
 
