@@ -154,8 +154,8 @@ pub struct FormatCapabilities {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchCapabilities {
-    /// `/v1/search` is usable: `search.enabled` AND a SearXNG URL is
-    /// configured. Configured, not health-probed — a configured-but-unreachable
+    /// `/v1/search` is usable: `search.enabled` AND `search.searxng_url` are
+    /// set. Configured, not health-probed — a configured-but-unreachable
     /// backend still reports `true`.
     pub supported: bool,
     /// Answer synthesis works WITHOUT a caller-supplied LLM key (search

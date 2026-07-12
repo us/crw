@@ -288,7 +288,10 @@ async fn v1_capabilities_extract_supported_tracks_the_llm_it_needs() {
     // The per-leg output cap a budget estimator pins its worst case to
     // (charter 5.3): reported, not assumed. Never a 0.
     let max_out = body["extract"]["maxOutputTokens"].as_u64().unwrap();
-    assert!(max_out > 0, "maxOutputTokens must be reported, got {max_out}");
+    assert!(
+        max_out > 0,
+        "maxOutputTokens must be reported, got {max_out}"
+    );
 
     // Prove the advertisement, rather than trusting it: the same instance really
     // does refuse a well-formed keyless extract.

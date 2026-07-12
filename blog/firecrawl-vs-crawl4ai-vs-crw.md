@@ -34,7 +34,7 @@ One of Crawl4AI's distinctive features is its deep LLM integration: you can pass
 
 CRW is a Rust-based web scraping API that implements Firecrawl's REST interface — same endpoints, same request/response format. It's service-first: deploy it over HTTP, call it from any language. It ships as a single small static binary with a low idle memory footprint and no headless-browser baseline, and deploys with one Docker command.
 
-CRW prioritizes operational simplicity and performance for HTML-primary workloads. It includes a built-in MCP server for direct AI agent integration, which means tools like Claude Desktop, Cursor, or any MCP-compatible client can call CRW as a tool without additional configuration. What it doesn't have yet: screenshot capture, PDF parsing, or the level of browser automation maturity that Playwright provides.
+CRW prioritizes operational simplicity and performance for HTML-primary workloads. It includes a built-in MCP server for direct AI agent integration, which means tools like Claude Desktop, Cursor, or any MCP-compatible client can call CRW as a tool without additional configuration. Screenshot capture and PDF parsing both ship (capture needs a Chrome-class renderer tier; PDF is text-layer only, with no OCR and no DOCX). What it doesn't have yet: OCR, non-PDF document formats, and the level of browser automation maturity that Playwright provides.
 
 The hosted version of CRW is [fastCRW](https://fastcrw.com) — same API, same performance characteristics, with proxy networks and auto-scaling added. If you don't want to manage servers but want CRW's performance profile and API compatibility, fastCRW is the path.
 
@@ -521,7 +521,7 @@ Signals that you've outgrown CRW: you're hitting more than 20% failure rates on 
 
 ### Scraping documents (PDFs, DOCX, spreadsheets)
 
-**Better fit: Firecrawl.** PDF and DOCX parsing is a gap in both CRW and Crawl4AI currently. This is the clearest current advantage for Firecrawl.
+**Better fit: Firecrawl.** CRW parses PDFs (text layer only), but OCR over scanned documents and DOCX/XLSX parsing are gaps in both CRW and Crawl4AI. For document formats beyond PDF, Firecrawl is the clearest fit.
 
 ### Running 50+ concurrent scraping workers self-hosted
 
