@@ -484,6 +484,18 @@ claude mcp add crw \
 <td>All modes</td>
 </tr>
 <tr>
+<td><code>crw_extract</code></td>
+<td>Extract structured JSON from URLs → async job ID</td>
+<td><code>POST /v1/extract</code></td>
+<td>All modes</td>
+</tr>
+<tr>
+<td><code>crw_check_extract_status</code></td>
+<td>Poll extract status and get results</td>
+<td><code>GET /v1/extract/:id</code></td>
+<td>All modes</td>
+</tr>
+<tr>
 <td><code>crw_search</code></td>
 <td>Search the web → titles, URLs, descriptions</td>
 <td><code>POST /v1/search</code></td>
@@ -761,7 +773,7 @@ codex mcp add crw -- npx crw-mcp</code></pre>
 <td><code>sources</code></td>
 <td>string[]</td>
 <td>no</td>
-<td>Restrict results to specific sources</td>
+<td>Group results by source instead of a flat list</td>
 </tr>
 <tr>
 <td><code>categories</code></td>

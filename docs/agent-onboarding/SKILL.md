@@ -24,10 +24,11 @@ Use this skill when:
 ## Installation
 
 ```bash
-crw fastcrw.com
+npx crw-mcp@latest install   # installs the skill + MCP server into detected agents
+npx crw-mcp@latest init      # skill only
 ```
 
-This installs the CRW skill and MCP server to all detected AI agents (Claude Code, Cursor, Gemini CLI, Codex, OpenCode, Windsurf, Roo Code).
+`install` sets up the CRW skill and MCP server for all detected AI agents (Claude Code, Cursor, Gemini CLI, Codex, OpenCode, Windsurf, Roo Code).
 
 ## Authentication
 
@@ -105,6 +106,29 @@ Parameters:
 - `limit` — Maximum URLs to return. `0` = unbounded. Default: `100`
 
 Returns: `{ "links": ["url1", "url2", ...] }`
+
+### crw_extract
+
+Extract structured JSON from one or more URLs via a prompt and/or JSON schema. Async job, poll with `crw_check_extract_status`. Needs an LLM.
+
+Parameters:
+- `urls` (required) — URLs to extract from
+- `prompt` — Free-text extraction objective (required unless `schema` is given)
+- `schema` — JSON schema constraining the extracted output
+- `llmApiKey` — BYOK LLM API key
+- `llmProvider` — LLM provider (used with `llmApiKey`)
+- `llmModel` — LLM model (used with `llmApiKey`)
+
+Returns: `{ "id": "job-uuid" }` — use this ID with crw_check_extract_status.
+
+### crw_check_extract_status
+
+Poll an async extract job for results.
+
+Parameters:
+- `id` (required) — The extract job ID from `crw_extract`
+
+Returns: status and, when complete, a per-URL results array.
 
 ### crw_parse_file
 

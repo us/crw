@@ -17,6 +17,7 @@
 //! - `crw_search` — web search (embedded uses local SearXNG sidecar; proxy forwards to remote API)
 //! - `crw_extract` — start an async multi-URL structured extraction job
 //! - `crw_check_extract_status` — poll extract job status
+//! - `crw_parse_file` — parse a local PDF (base64) to markdown
 //!
 //! # Usage
 //!

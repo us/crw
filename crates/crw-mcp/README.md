@@ -7,7 +7,7 @@ MCP (Model Context Protocol) server for the [CRW](https://github.com/us/crw) web
 
 ## Overview
 
-`crw-mcp` is a self-contained MCP server that gives any MCP-compatible AI client (Claude Code, Claude Desktop, Cursor, Windsurf, Cline, Continue.dev, OpenAI Codex CLI) 6 web scraping tools. No external server needed — just add and go.
+`crw-mcp` is a self-contained MCP server that gives any MCP-compatible AI client (Claude Code, Claude Desktop, Cursor, Windsurf, Cline, Continue.dev, OpenAI Codex CLI) 8 web scraping tools. No external server needed — just add and go.
 
 **Two modes:**
 
@@ -16,7 +16,7 @@ MCP (Model Context Protocol) server for the [CRW](https://github.com/us/crw) web
 | **Embedded** (default) | No `--api-url` set | Self-contained, zero setup |
 | **Proxy** | `--api-url` provided | Forwards to remote CRW server |
 
-**6 MCP tools:**
+**8 MCP tools:**
 
 | Tool | Description |
 |------|-------------|
@@ -24,6 +24,8 @@ MCP (Model Context Protocol) server for the [CRW](https://github.com/us/crw) web
 | `crw_crawl` | Start an async BFS crawl (returns job ID) |
 | `crw_check_crawl_status` | Poll crawl job status and retrieve results |
 | `crw_map` | Discover all URLs on a website |
+| `crw_extract` | Extract structured JSON from URLs via a prompt and/or JSON schema (async job, returns job ID) |
+| `crw_check_extract_status` | Poll extract job status and retrieve results |
 | `crw_search` | Search the web (needs a configured search backend; always available in proxy mode, available in embedded mode only when a search backend is configured) |
 | `crw_parse_file` | Parse a local PDF (base64) to markdown |
 
