@@ -27,7 +27,3 @@ pub mod middleware;
 pub mod routes;
 pub mod setup;
 pub mod state;
-
-/// Optional self-host monitor mode. Compiled only with `--features monitor`.
-#[cfg(feature = "monitor")]
-pub mod monitor;

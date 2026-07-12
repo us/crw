@@ -59,11 +59,6 @@
         {
           "type": "toml",
           "path": "Cargo.toml",
-          "jsonpath": "$.workspace.dependencies.crw-monitor.version"
-        },
-        {
-          "type": "toml",
-          "path": "Cargo.toml",
           "jsonpath": "$.workspace.dependencies.crw-server.version"
         },
         {

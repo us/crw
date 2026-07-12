@@ -45,7 +45,7 @@ make build
 
 The workspace members are declared in `Cargo.toml` at the repo root:
 `crw-core`, `crw-diff`, `crw-renderer`, `crw-extract`, `crw-crawl`, `crw-search`,
-`crw-server`, `crw-mcp`, `crw-mcp-proto`, `crw-browse`, `crw-cli`, `crw-monitor`.
+`crw-server`, `crw-mcp`, `crw-mcp-proto`, `crw-browse`, `crw-cli`.
 
 > **Note:** CI does not run a standalone `cargo build` step. Clippy (run with
 > `--all-targets -D warnings`) compile-checks every target including benchmarks and

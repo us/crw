@@ -297,7 +297,7 @@ LLM judge        ← is this a meaningful price change?
 Your server      ← verifies X-CRW-Signature, posts to Slack</code></pre>
 <p>The monitor control plane (<code>/v1/monitor</code>) lives at <code>https://fastcrw.com/api</code> — separate from the scrape engine at <code>https://api.fastcrw.com</code>. You only call the control plane to create/update the monitor; the scrapes and webhooks happen automatically on schedule.</p>
 <blockquote>
-<p><strong>SaaS-only fields.</strong> <code>targets[].changeMode</code> (<code>&quot;markdown&quot;</code> | <code>&quot;json&quot;</code> | <code>&quot;mixed&quot;</code>) is a SaaS control-plane field (validated by the Zod schema in <code>src/lib/monitor/validation.ts</code>; stored as <code>changeMode TEXT DEFAULT &#39;markdown&#39;</code> in the <code>MonitorTarget</code> table). It is not present on the open-source <code>MonitorTarget</code> type in <code>crw-monitor/src/types.rs</code>, which uses a top-level <code>modes[]</code> array instead. Use <code>changeMode</code> only when calling <code>https://fastcrw.com/api</code>.</p>
+<p><strong>SaaS-only field.</strong> <code>targets[].changeMode</code> (<code>&quot;markdown&quot;</code> | <code>&quot;json&quot;</code> | <code>&quot;mixed&quot;</code>) belongs to the managed monitor control plane. The open-core engine has no monitor resource at all: it exposes the stateless <code>changeTracking</code> scrape format and <code>/v1/change-tracking/diff</code>, which take a top-level <code>modes[]</code> array instead. Use <code>changeMode</code> only when calling <code>https://fastcrw.com/api</code>.</p>
 </blockquote>
 <hr>
 <h2 id="step-1-create-the-monitor">Step 1 — Create the monitor</h2>

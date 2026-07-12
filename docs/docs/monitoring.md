@@ -1,11 +1,11 @@
 <div class="page-intro">
   <div class="page-kicker">More APIs</div>
   <h1>Monitoring</h1>
-  <p class="page-subtitle">Schedule recurring scrapes or crawls, detect when a page actually changes, and notify your agent by signed webhook or email — with a structured diff and an optional LLM judge that filters out noise. A Firecrawl-compatible alternative to <code>/monitor</code>, with self-hostable change detection.</p>
+  <p class="page-subtitle">Schedule recurring scrapes or crawls, detect when a page actually changes, and notify your agent by signed webhook or email — with a structured diff and an optional LLM judge that filters out noise. A Firecrawl-compatible alternative to <code>/monitor</code>.</p>
   <div class="page-capabilities">
     <div class="page-capability"><strong>Best for:</strong> change detection on pages you rely on</div>
     <div class="page-capability"><strong>Hosted:</strong> fastcrw.com (full scheduler + notifications)</div>
-    <div class="page-capability"><strong>Self-hosted:</strong> changeTracking primitive + optional <code>monitor</code> mode</div>
+    <div class="page-capability"><strong>Self-hosted:</strong> stateless changeTracking primitive + <code>/v1/change-tracking/diff</code></div>
     <div class="page-capability"><strong>Start with:</strong> one scrape target, daily schedule</div>
   </div>
   <div class="page-actions">
@@ -21,7 +21,7 @@ Use monitoring when you need to know the moment a page changes and only care abo
 Reach for `monitoring` instead of polling `/v1/scrape` yourself when you want the schedule, snapshot storage, diffing, retries, and noise filtering handled for you.
 
 :::note
-**Self-hosted users**: the managed scheduler, notifications, and billing are part of the hosted product. The open-core engine ships the **stateless `changeTracking` primitive** (diff one scrape against a snapshot you supply) and `/v1/change-tracking/diff`, both default-on, to drive your own scheduling loop. An experimental, feature-gated **`monitor` Cargo feature** (default OFF) ships a SQLite scheduler library, but it is not yet wired to a runnable server surface — no monitor management API or CLI ships in the open-core build. See [self-hosting monitoring](#monitoring) below.
+**Self-hosted users**: the scheduler, durable state, notifications, and billing are part of the hosted product. The open-core engine ships the **stateless `changeTracking` primitive** (diff one scrape against a snapshot you supply) and `/v1/change-tracking/diff`, both default-on, to drive your own scheduling loop. See [self-hosting monitoring](#self-hosting-monitoring) below.
 :::
 
 :::info
@@ -31,7 +31,7 @@ Reach for `monitoring` instead of polling `/v1/scrape` yourself when you want th
 
 **Engine endpoints** (scrape, crawl, map, search, change-tracking) are served at `https://api.fastcrw.com` on the hosted product and at your own origin when self-hosting.
 
-**Self-hosted installs have no monitor management API.** Use the stateless `changeTracking` primitive and `/v1/change-tracking/diff` with your own scheduler. (An experimental, feature-gated `monitor` SQLite scheduler library exists in-tree but is not yet wired to a server or CLI — see [Self-hosting monitoring](#self-hosting-monitoring) below.)
+**Self-hosted installs have no monitor management API.** Use the stateless `changeTracking` primitive and `/v1/change-tracking/diff` with your own scheduler — see [Self-hosting monitoring](#self-hosting-monitoring) below.
 :::
 
 ## Endpoints
@@ -243,8 +243,10 @@ Checks with no changed pages use no judge credits. When a monitor runs out of cr
 The open-core engine gives self-hosters the building blocks:
 
 - **`changeTracking` scrape format** — add it to `/v1/scrape` `formats` with the diff `modes` and a `previous` snapshot you persist between checks. opencore is stateless: it returns the diff + the new snapshot for you to store.
-- **`POST /v1/change-tracking/diff`** — diff a page (or a batch) against a supplied `previous` snapshot. The workhorse for crawl-based monitoring.
-- **Experimental `monitor` library (feature-gated, default OFF)** — the `monitor` Cargo feature links an in-tree SQLite scheduler with set-level `new`/`removed`, an LLM judge, and HMAC-signed local webhooks, with no external database. It currently has **no HTTP or CLI surface** and email delivery is a stub, so it is not a drop-in self-host monitor yet — the intended integration point is the library API (`Store`, `Scheduler`, `run_check`). For self-host change detection today, use `changeTracking` + `/v1/change-tracking/diff` with your own cron.
+- **`POST /v1/change-tracking/diff`** — diff a page (or a batch) against a supplied `previous` snapshot. The workhorse for crawl-based monitoring. Deterministic and diff-only: it never calls an LLM.
+- **Optional LLM judge on scrape** — pass `goal` + `judgeEnabled` alongside the `changeTracking` format on `/v1/scrape` to have a changed page judged for meaningfulness with your own LLM key.
+
+Persist the snapshot yourself and drive the loop from your own cron or scheduler. The engine stores nothing.
 
 ```bash
 # diff the current scrape against your stored snapshot
@@ -258,7 +260,7 @@ curl -s -X POST "http://localhost:3000/v1/change-tracking/diff" \
 ```
 
 :::note
-The `monitor` feature pulls in SQLite/HMAC dependencies only when enabled — the default engine build stays dependency-light. Self-host monitoring uses UTC schedules and your own LLM key for judging.
+The engine keeps no monitor state, no scheduler, and no database — self-host monitoring is your scheduler plus these stateless primitives, with your own LLM key for judging.
 :::
 
 ## Change Tracking
@@ -511,4 +513,4 @@ When `contentType` indicates a binary resource (e.g. `application/pdf`, `image/p
 - [Scrape](#scraping) — the single-page primitive monitors run under the hood.
 - [Crawl](#crawling) — multi-page discovery for crawl targets.
 - [Credit Costs](#credit-costs) — how checks are metered.
-- [Self-Hosting](#self-hosting) — run the engine + optional `monitor` mode yourself.
+- [Self-Hosting](#self-hosting) — run the engine yourself.

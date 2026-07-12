@@ -16,10 +16,6 @@ cdp = ["crw-renderer/cdp"]
 # byte-identical. Forwards to crw-renderer/camoufox (→ crw-core/camoufox).
 camoufox = ["crw-renderer/camoufox"]
 test-utils = []
-# Optional self-host monitor mode. Default OFF. Activating it links the
-# `crw-monitor` crate (and only then its SQLite/HMAC stack). The open-core
-# boundary gate asserts the DEFAULT build pulls no rusqlite/hmac/cron.
-monitor = ["dep:crw-monitor"]
 
 [dependencies]
 crw-core = { workspace = true }
@@ -28,8 +24,6 @@ crw-renderer = { workspace = true }
 crw-extract = { workspace = true }
 crw-crawl = { workspace = true }
 crw-search = { workspace = true }
-# Optional self-host monitor mode (default OFF — see the `monitor` feature).
-crw-monitor = { workspace = true, optional = true }
 axum = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
