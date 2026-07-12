@@ -53,8 +53,8 @@ The hosted version of CRW is [fastCRW](https://fastcrw.com) — same API, same p
 | Firecrawl API compatible | ✅ Yes | ✅ Native | ❌ |
 | LLM structured extraction | ✅ | ✅ | ✅ |
 | Clean markdown output | ✅ | ✅ | ✅ |
-| Screenshot support | ❌ Roadmap | ✅ | ✅ |
-| PDF / DOCX parsing | ❌ Roadmap | ✅ | Partial |
+| Screenshot support | ✅ (needs a Chrome-class tier) | ✅ | ✅ |
+| PDF / DOCX parsing | PDF only | ✅ | Partial |
 | Browser automation depth | Moderate (LightPanda) | High (Playwright) | High (Playwright) |
 | Python extensibility | ❌ | Limited | ✅ Rich hooks |
 | Anti-bot handling | Partial | Good | Good |

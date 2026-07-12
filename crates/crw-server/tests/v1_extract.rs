@@ -269,22 +269,37 @@ model = "claude-test"
 }
 
 #[tokio::test]
-async fn v1_capabilities_lists_extract() {
+async fn v1_capabilities_extract_supported_tracks_the_llm_it_needs() {
+    // `test_app()` has no [extraction.llm]. The route IS mounted, but it rejects
+    // a request that brings no llmApiKey — so `supported` must be false. This
+    // used to assert `true`, which was exactly the lie: a caller reading it
+    // would enable extract and have every keyless request 400.
     let s = test_app();
     let r = s.get("/v1/capabilities").await;
     r.assert_status_ok();
     let body: Value = r.json();
-    assert_eq!(body["extract"]["supported"], json!(true));
-    // Honest capability: this build implements `basis`, so it says so. A client
-    // that gates its evidence UI on this flag must not be told `false` by a
-    // binary that would happily honour the flag.
+    assert_eq!(body["extract"]["supported"], json!(false));
+    // Honest capability: this build implements `basis`, so it says so even on a
+    // keyless deploy that reports supported:false. A client that gates its
+    // evidence UI on this flag must not be told `false` by a binary that would
+    // honour the flag once a key is present.
     assert_eq!(body["extract"]["perFieldAttribution"], json!(true));
     assert!(body["extract"]["maxUrls"].is_number());
     // The per-leg output cap a budget estimator pins its worst case to
     // (charter 5.3): reported, not assumed. Never a 0.
     let max_out = body["extract"]["maxOutputTokens"].as_u64().unwrap();
+    assert!(max_out > 0, "maxOutputTokens must be reported, got {max_out}");
+
+    // Prove the advertisement, rather than trusting it: the same instance really
+    // does refuse a well-formed keyless extract.
+    let r = s
+        .post("/v1/extract")
+        .json(&json!({"urls": ["https://example.com"], "prompt": "get the title"}))
+        .await;
+    r.assert_status(StatusCode::BAD_REQUEST);
     assert!(
-        max_out > 0,
-        "maxOutputTokens must be reported, got {max_out}"
+        r.text().contains("requires an LLM"),
+        "extract must refuse a keyless request when it advertises supported:false, got: {}",
+        r.text()
     );
 }

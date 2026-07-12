@@ -146,7 +146,7 @@ curl -X POST https://api.fastcrw.com/v1/scrape \
 ```
 { "url": "https://blog.example.com/post", "formats": ["markdown"], "onlyMainContent": true }
 ```
- Advanced Format Options CRW exposes several options to fine-tune what gets extracted: `onlyMainContent` (boolean) — use heuristics to identify and extract only the primary content area, discarding sidebars and navigation `includeTags` (string[]) — CSS selectors; only include matched elements and their descendants `excludeTags` (string[]) — CSS selectors; remove matched elements before extraction `formats` — request `"markdown"`, `"html"`, `"links"`, or `"screenshot"` (roadmap) `waitFor` (number) — milliseconds to wait after page load before extracting (useful for JavaScript-rendered content) Batch Processing Multiple URLs
+ Advanced Format Options CRW exposes several options to fine-tune what gets extracted: `onlyMainContent` (boolean) — use heuristics to identify and extract only the primary content area, discarding sidebars and navigation `includeTags` (string[]) — CSS selectors; only include matched elements and their descendants `excludeTags` (string[]) — CSS selectors; remove matched elements before extraction `formats` — request `"markdown"`, `"html"`, `"links"`, or `"screenshot"` (needs a Chrome-class renderer tier) `waitFor` (number) — milliseconds to wait after page load before extracting (useful for JavaScript-rendered content) Batch Processing Multiple URLs
 ```
 import PQueue from "p-queue";
 

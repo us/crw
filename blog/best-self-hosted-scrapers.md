@@ -52,7 +52,7 @@ CRW is the better fit when operational simplicity and cost efficiency matter mor
 | Firecrawl-compatible API | ✅ | ✅ Native | ❌ |
 | LLM extraction | ✅ | ✅ | ✅ |
 | Screenshot support | ✅ (needs a Chrome-class tier) | ✅ | ✅ |
-| PDF/DOCX parsing | Roadmap | ✅ | Partial |
+| PDF/DOCX parsing | PDF only | ✅ | Partial |
 | Anti-bot | Partial | Good | Good |
 | Horizontal scaling | Stateless, trivial | Redis queue, moderate | Limited |
 | Open source license | AGPL-3.0 | AGPL-3.0 | Apache-2.0 |

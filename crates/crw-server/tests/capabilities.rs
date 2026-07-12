@@ -434,6 +434,91 @@ async fn llm_required_formats_are_declared() {
     );
 }
 
+// ── Extract: `supported` tracks the LLM the route actually needs ─────────────
+
+/// A config with a server LLM key, which is what `/v1/extract` needs to run a
+/// request that brings no key of its own.
+const SERVER_LLM_KEY: &str = r#"
+[extraction.llm]
+provider = "openai"
+api_key = "sk-test"
+model = "gpt-4o-mini"
+"#;
+
+#[tokio::test]
+async fn extract_not_supported_without_an_llm() {
+    // No [extraction.llm]: /v1/extract rejects a keyless request outright, so
+    // advertising `supported: true` would be a lie the caller acts on.
+    let body = caps(&app_from("")).await;
+    assert_eq!(body["extract"]["supported"], json!(false));
+    assert_eq!(body["llm"]["serverKeyConfigured"], json!(false));
+}
+
+#[tokio::test]
+async fn extract_supported_with_a_server_llm_key() {
+    let body = caps(&app_from(SERVER_LLM_KEY)).await;
+    assert_eq!(body["extract"]["supported"], json!(true));
+    assert_eq!(body["llm"]["serverKeyConfigured"], json!(true));
+}
+
+#[tokio::test]
+async fn extract_not_supported_when_the_byok_header_guard_is_on() {
+    // The header guard makes the SERVER key insufficient: /v1/extract rejects a
+    // request that carries no llmApiKey even though a server key exists. So the
+    // capability must go false while serverKeyConfigured stays true.
+    let body = caps(&app_from(&format!(
+        "{SERVER_LLM_KEY}require_byok_header = \"x-tenant-llm-key\"\n"
+    )))
+    .await;
+
+    assert_eq!(body["llm"]["serverKeyConfigured"], json!(true));
+    assert_eq!(body["llm"]["requireByokHeader"], json!("x-tenant-llm-key"));
+    assert_eq!(
+        body["extract"]["supported"],
+        json!(false),
+        "the BYOK header guard rejects keyless extract, so it must not be advertised"
+    );
+}
+
+// ── The upload endpoint must be a path every surface actually serves ─────────
+
+#[tokio::test]
+async fn advertised_upload_endpoint_is_mounted_on_every_surface() {
+    let server = app_from("");
+    let endpoint = caps(&server).await["documents"]["fileUpload"]["endpoint"]
+        .as_str()
+        .expect("endpoint must be a string")
+        .to_string();
+
+    // Not a 404: the advertised path is really routed. (An empty body is a 4xx
+    // on content, which is fine — we are only proving the route exists.)
+    for path in [endpoint.clone(), format!("/firecrawl{endpoint}")] {
+        let status = server.post(&path).await.status_code();
+        assert_ne!(
+            status,
+            axum::http::StatusCode::NOT_FOUND,
+            "the advertised upload endpoint `{path}` is not mounted"
+        );
+    }
+}
+
+#[tokio::test]
+async fn renderer_mode_serializes_as_a_lowercase_string() {
+    // The SaaS compares this against a string; a Rust variant name would break it.
+    assert_eq!(
+        caps(&app_from("")).await["renderers"]["mode"],
+        json!("auto")
+    );
+    let body = caps(&app_from("[renderer]\nmode = \"none\"\n")).await;
+    assert_eq!(body["renderers"]["mode"], json!("none"));
+    assert_eq!(
+        body["renderers"]["available"],
+        json!([]),
+        "mode=none constructs no JS renderer tier"
+    );
+    assert_eq!(body["screenshot"]["supported"], json!(false));
+}
+
 // ── Boundary guard: `basis` is not this workstream's to flip ─────────────────
 
 #[tokio::test]

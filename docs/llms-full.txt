@@ -336,7 +336,7 @@ Note: "json" and "summary" formats require an LLM configured on the server.
 
 
 ================================================================================
-## PART 5 — OUTPUT FORMATS (8 FORMATS)
+## PART 5 — OUTPUT FORMATS (9 FORMATS)
 ================================================================================
 
 Request multiple formats in one call. Only requested formats appear in the response data.
@@ -354,7 +354,11 @@ Request multiple formats in one call. Only requested formats appear in the respo
 | Screenshot     | screenshot       | data.screenshot   | base64 PNG data URL; needs a capture-capable tier |
 
 Aliases accepted (map to json): "extract", "llm-extract"
-Aliases accepted (map to screenshot): "screenshot@fullPage" (full-page capture)
+Aliases accepted (map to screenshot): "screenshot@fullPage"
+
+Full-page capture differs by surface. On /v2 (Firecrawl-compat) the "@fullPage" suffix
+  carries the flag. On /v1 the suffix parses but does NOT widen the capture — set the
+  body field screenshotFullPage: true instead. Both surfaces gate on the same renderer.
 
 screenshot requirements: capture runs over CDP Page.captureScreenshot, so it needs a
   chrome, chrome_proxy or playwright renderer tier. LightPanda and Camoufox cannot

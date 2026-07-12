@@ -39,8 +39,10 @@ impl OutputFormat {
             "changeTracking" | "change-tracking" => Ok(OutputFormat::ChangeTracking),
             // `screenshot@fullPage` parses to the same fieldless variant; the
             // `fullPage` bit is carried out-of-band via
-            // `ScrapeRequest.screenshot_full_page` (v2 extracts it in
-            // `routes/v2/formats.rs`; v1 always treats it as false — see D7).
+            // `ScrapeRequest.screenshot_full_page`. v2 extracts it from the
+            // format spec (`routes/v2/formats.rs`); a v1 caller sets the body
+            // field `screenshotFullPage`, so on v1 the `@fullPage` suffix alone
+            // is accepted but does NOT widen the capture.
             "screenshot" | "screenshot@fullPage" => Ok(OutputFormat::Screenshot),
             other => Err(format!(
                 "Unknown format '{other}'. Valid formats: markdown, html, rawHtml, plainText, links, json, summary, changeTracking, screenshot \

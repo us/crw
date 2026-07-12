@@ -126,12 +126,17 @@ pub fn render_reserve(pool_size: usize) -> usize {
 /// ~30-byte stub and Camoufox is an HTTP sidecar that doesn't speak CDP —
 /// neither can capture.
 ///
+/// An ALLOWLIST, so it fails closed: a tier added later is treated as unable to
+/// capture until it is listed here. A denylist would silently advertise
+/// `screenshot.supported: true` for a new non-CDP tier and then hand back an
+/// empty capture.
+///
 /// SINGLE SOURCE OF TRUTH: used both by the request-time renderer filter in
 /// `FallbackRenderer::fetch_with_js` and by
 /// [`FallbackRenderer::supports_screenshot`] (which `/v1/capabilities` reports),
 /// so the advertised capability and the runtime behaviour cannot drift apart.
 pub fn renderer_can_screenshot(name: &str) -> bool {
-    name != "lightpanda" && name != "camoufox"
+    matches!(name, "chrome" | "chrome_proxy" | "playwright")
 }
 
 /// Whether a screenshot was requested for the current task (reads the

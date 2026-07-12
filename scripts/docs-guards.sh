@@ -205,16 +205,31 @@ fi
 
 echo "==> Guard 4: retired capability claims"
 
-# Scanned: tracked markdown. Excluded: changelogs (they record history, which
+# Scanned: markdown and plain text (docs/llms-full.txt is the agent-facing copy
+# and carried these claims too). Excluded: changelogs (they record history, which
 # legitimately contains the old claim) and generated HTML (rebuilt from the
 # markdown by scripts/build-docs-pages.mjs).
+#
+# THE GAP EXPRESSION IS `[^.]{0,60}`, NOT `[^|]*`. These claims live
+# overwhelmingly in MARKDOWN TABLE ROWS — "| Screenshot support | ❌ Roadmap |" —
+# where the subject and the claim sit in DIFFERENT CELLS. A `[^|]*` bridge
+# cannot cross the cell separator, so it silently matches nothing: the very
+# claims this guard exists to catch sailed straight through it.
+#
+# So the gap must allow `|`. It must NOT be a bare `.*`, which spans a whole
+# line and fires on legitimate prose (a sentence that says screenshots DO ship
+# and mentions the roadmap 80 characters later). Excluding `.` keeps a match
+# inside one sentence, and the {0,60} bound keeps it near its subject.
 STALE_PATTERNS=(
   # screenshot: produced on a chrome/chrome_proxy/playwright tier (crw-core OutputFormat::Screenshot)
-  'screenshot[^|]*not (yet )?(supported|implemented|produced)'
-  'not (yet )?(supported|implemented|produced)[^|]*screenshot'
+  'screenshot[^.]{0,60}not (yet )?(supported|implemented|produced)'
+  'not (yet )?(supported|implemented|produced)[^.]{0,60}screenshot'
+  'screenshot[^.]{0,30}(❌ *)?roadmap'
   # POST /v1/extract exists (routes/v1/mod.rs), and takes a `urls` array
   'no standalone `?/v1/extract'
-  'multi-url[^|]*extract[^|]*not supported'
+  '/v1/extract[^.]{0,60}not implemented'
+  'multi-url[^.]{0,60}extract[^.]{0,60}not supported'
+  'extract[^.]{0,60}multi-url[^.]{0,60}not supported'
   # the TypeScript SDK is published as `crw-sdk`; @fastcrw/sdk never existed
   '@fastcrw/sdk'
   # /v1/search synthesizes an answer when an LLM is available (answer: true)
@@ -222,12 +237,14 @@ STALE_PATTERNS=(
   'no LLM answer'
   # 1 credit = 1 page, whatever the egress path
   'credit surcharge'
+  # bring-your-own-proxy ships on self-host ([proxy] pool + the `proxy` body param)
+  'bring[- ]your[- ]own[- ]proxy[^.]{0,60}not (supported|available)'
 )
 
 stale=""
 for pat in "${STALE_PATTERNS[@]}"; do
   hits=$(
-    grep -rniE --include="*.md" "${pat}" . 2>/dev/null \
+    grep -rniE --include="*.md" --include="*.txt" "${pat}" . 2>/dev/null \
       | grep -vE '(^|/)CHANGELOG\.md:' \
       | grep -vE '^\./docs/docs/changelog\.md:' \
       | grep -vE '^\./(target|node_modules)/' \
