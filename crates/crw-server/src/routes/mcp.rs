@@ -1,3 +1,7 @@
+/// Discovery budget for `crw_map` over MCP, which has no request timeout of its
+/// own. Matches the HTTP route's default so both surfaces behave the same.
+const MCP_MAP_TIMEOUT_SECS: u64 = 120;
+
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
@@ -108,6 +112,13 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
                 max_urls: req
                     .limit
                     .unwrap_or(crw_crawl::crawl::DEFAULT_MAX_DISCOVERED_URLS),
+                // MCP has no outer timeout of its own, so discovery would
+                // otherwise be unbounded. Give it the same default budget the
+                // HTTP route uses, explicitly rather than by accident.
+                overall_deadline: crw_crawl::crawl::discovery_deadline(
+                    std::time::Duration::from_secs(MCP_MAP_TIMEOUT_SECS),
+                ),
+                respect_robots: state.config.crawler.respect_robots_txt,
             })
             .await
             .map_err(|e| format!("{e}"))?;

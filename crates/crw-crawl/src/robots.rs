@@ -109,6 +109,22 @@ impl RobotsTxt {
             None => true, // No matching rule means allowed
         }
     }
+
+    /// Check whether a URL may be fetched, matching on **path *and* query**.
+    ///
+    /// Prefer this over calling [`Self::is_allowed`] with `url.path()`: robots
+    /// patterns routinely key on the query string, and dropping it silently
+    /// allows everything the site tried to forbid. Hacker News, for example,
+    /// disallows `/hide?`, `/vote?` and `/reply?` — matching bare `/hide`
+    /// against pattern `/hide?` fails, so `/hide?id=1&goto=news` would be
+    /// fetched despite being explicitly forbidden.
+    pub fn is_url_allowed(&self, url: &url::Url) -> bool {
+        let path_and_query = match url.query() {
+            Some(q) => format!("{}?{}", url.path(), q),
+            None => url.path().to_string(),
+        };
+        self.is_allowed(&path_and_query)
+    }
 }
 
 /// Effective pattern length for specificity calculation.

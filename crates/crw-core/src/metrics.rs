@@ -4,10 +4,10 @@
 //! [`gather_text`] to render the current snapshot for `/metrics`.
 
 use prometheus::{
-    Encoder, Histogram, HistogramVec, IntCounterVec, IntGauge, Registry, TextEncoder,
+    Encoder, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, Registry, TextEncoder,
     exponential_buckets, histogram_opts, register_histogram_vec_with_registry,
     register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_gauge_with_registry,
+    register_int_counter_with_registry, register_int_gauge_with_registry,
 };
 use std::sync::OnceLock;
 
@@ -25,6 +25,11 @@ pub struct Metrics {
     pub user_pin_total: IntCounterVec,
     /// Current size of the host preferences cache.
     pub host_preferences_size: IntGauge,
+    /// Hosts currently latched to proxy-first egress after a hard block.
+    /// A runaway value means we are paying for proxy bandwidth we may not need.
+    pub egress_latched_hosts: IntGauge,
+    /// Fetches that started on the proxy because the host was latched.
+    pub egress_latch_hit_total: IntCounter,
     /// Chrome navigation budget truncations, labeled by snapshot outcome
     /// (`ok` = partial DOM extracted, `empty` = nothing snapshotted).
     pub chrome_budget_truncated_total: IntCounterVec,
@@ -202,6 +207,18 @@ impl Metrics {
         let host_preferences_size = register_int_gauge_with_registry!(
             "crw_host_preferences_size",
             "Current size of the host preferences cache",
+            registry
+        )
+        .unwrap();
+        let egress_latched_hosts = register_int_gauge_with_registry!(
+            "crw_egress_latched_hosts",
+            "Hosts currently latched to proxy-first egress after a hard block",
+            registry
+        )
+        .unwrap();
+        let egress_latch_hit_total = register_int_counter_with_registry!(
+            "crw_egress_latch_hit_total",
+            "Fetches that started on the proxy because the host was latched",
             registry
         )
         .unwrap();
@@ -517,6 +534,8 @@ impl Metrics {
             admin_preferences_reset_total,
             user_pin_total,
             host_preferences_size,
+            egress_latched_hosts,
+            egress_latch_hit_total,
             chrome_budget_truncated_total,
             chrome_blocked_requests_total,
             breaker_ignored_total,

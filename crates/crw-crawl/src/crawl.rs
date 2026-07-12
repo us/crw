@@ -5,6 +5,7 @@ use crw_core::types::{
 };
 use crw_extract::readability::extract_links;
 use crw_renderer::FallbackRenderer;
+use futures::StreamExt;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
@@ -448,6 +449,19 @@ pub struct DiscoverOptions<'a> {
     /// Max URLs to discover. Clamped to `[1, MAX_DISCOVERED_URLS_CEILING]`.
     /// Use `DEFAULT_MAX_DISCOVERED_URLS` for the historical behaviour.
     pub max_urls: usize,
+    /// Wall-clock deadline for the WHOLE discovery call.
+    ///
+    /// Every phase (robots, sitemap probes, sitemap tree, each BFS page) is
+    /// clamped by whatever is left of this, and discovery returns the URLs it
+    /// has when it runs out. Callers must set it *inside* their own request
+    /// timeout: if the caller's `tokio::time::timeout` fires first it drops this
+    /// future and every discovered URL is lost — which is exactly the
+    /// zero-result 504 this field exists to prevent.
+    pub overall_deadline: std::time::Instant,
+    /// Skip links that robots.txt disallows. Fetching only; a disallowed link is
+    /// still *reported* if we discovered it, because robots governs fetching,
+    /// not listing.
+    pub respect_robots: bool,
 }
 
 /// Result of [`discover_urls`]. URLs in `urls` have already passed the
@@ -483,6 +497,34 @@ const SITEMAP_ESCALATE_BUDGET: usize = 64;
 /// the caller's request timeout instead of being killed with nothing.
 const SITEMAP_PHASE_BUDGET_SECS: u64 = 75;
 
+/// Margin held back so discovery finishes *before* the caller's backstop timeout.
+///
+/// The backstop drops the future and loses everything; the inner deadline returns
+/// partial results. They must not be the same instant, or the race decides whether
+/// the caller gets its URLs or a 504.
+const DISCOVERY_BACKSTOP_MARGIN: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// The `overall_deadline` to hand [`DiscoverOptions`] for a caller-supplied request
+/// timeout. Shared by every caller (v1/v2 map, MCP, CLI) so they cannot drift.
+pub fn discovery_deadline(request_timeout: std::time::Duration) -> std::time::Instant {
+    let budget = request_timeout
+        .saturating_sub(DISCOVERY_BACKSTOP_MARGIN)
+        .max(std::time::Duration::from_millis(500));
+    std::time::Instant::now() + budget
+}
+
+/// Time left before `deadline`, or `None` if it has already passed.
+///
+/// Every awaited phase of discovery clamps itself with this. Clamping only some
+/// of them leaves the total-loss bug open in the ones that aren't: the caller's
+/// outer timeout fires, the future is dropped, and every URL found so far is
+/// thrown away.
+fn remaining_budget(deadline: std::time::Instant) -> Option<std::time::Duration> {
+    deadline
+        .checked_duration_since(std::time::Instant::now())
+        .filter(|d| !d.is_zero())
+}
+
 /// Discover URLs from a site (map endpoint).
 pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResult> {
     let DiscoverOptions {
@@ -499,6 +541,8 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResul
         per_host_max_concurrent,
         url_filter,
         max_urls,
+        overall_deadline,
+        respect_robots,
     } = opts;
     // `0` is the documented "unbounded" sentinel (MCP/Firecrawl) → the ceiling.
     let max_urls = if max_urls == 0 {
@@ -605,15 +649,29 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResul
         .build()
         .map_err(|e| crw_core::error::CrwError::Internal(format!("http client build: {e}")))?;
 
+    // The base URL is always part of the result, so seed it up front and let it
+    // count against `max_urls`. Appending it at the very end instead would push the
+    // result to `max_urls + 1` whenever the cap was already full and the base was
+    // not among the discovered URLs — a caller asking for 10 would get 11.
     let mut all_urls: HashSet<String> = HashSet::new();
+    all_urls.insert(base_url.to_string());
+
+    // robots.txt is fetched OUTSIDE the `use_sitemap` block: the BFS phase needs
+    // its Disallow rules even when sitemap discovery is switched off. (It used to
+    // live inside, which silently disabled robots for `use_sitemap: false`.)
+    //
+    // The client's own 15s timeout is longer than a short caller timeout, so it
+    // is additionally clamped by the overall deadline — otherwise a slow
+    // robots.txt alone could burn the whole budget and lose every result.
+    let robots = match remaining_budget(overall_deadline) {
+        Some(budget) => tokio::time::timeout(budget, RobotsTxt::fetch(&origin, &client))
+            .await
+            .unwrap_or_else(|_| Ok(RobotsTxt::parse("")))
+            .unwrap_or_else(|_| RobotsTxt::parse("")),
+        None => RobotsTxt::parse(""),
+    };
 
     if use_sitemap {
-        // robots.txt fetch is wrapped in the discover client's 15s/5s timeouts —
-        // it can no longer block the entire map call (the original bug).
-        let robots = RobotsTxt::fetch(&origin, &client)
-            .await
-            .unwrap_or_else(|_| RobotsTxt::parse(""));
-
         let seeds: Vec<String> = if !robots.sitemaps.is_empty() {
             robots.sitemaps.clone()
         } else {
@@ -638,7 +696,18 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResul
                 let u = u.clone();
                 async move { (u.clone(), crate::sitemap::head_probe(&u, &client).await) }
             });
-            let probe_results = futures::future::join_all(probes).await;
+            // Clamped by the overall deadline: the probes inherit the discovery
+            // client's 15s timeout, which outlives a short caller budget. Unbounded,
+            // they could run past the deadline and let the route's backstop drop the
+            // future — losing every URL found so far, the exact bug we are fixing.
+            // On expiry we just skip the CMS-specific guesses; the canonical
+            // /sitemap.xml seed is still tried.
+            let probe_results = match remaining_budget(overall_deadline) {
+                Some(budget) => tokio::time::timeout(budget, futures::future::join_all(probes))
+                    .await
+                    .unwrap_or_default(),
+                None => Vec::new(),
+            };
             let mut seeds: Vec<String> = vec![canonical];
             seeds.extend(
                 probe_results
@@ -685,22 +754,44 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResul
         // behind its own Cloudflare solve) would grind every child to the outer
         // request timeout and return nothing; with it the walk stops and returns
         // whatever it recovered.
-        let sitemap_deadline = escalator.as_ref().map(|_| {
-            std::time::Instant::now() + std::time::Duration::from_secs(SITEMAP_PHASE_BUDGET_SECS)
-        });
+        // Always clamped by the overall deadline. SITEMAP_PHASE_BUDGET_SECS (75s)
+        // is a hardcoded constant, so on its own it happily outlives a caller who
+        // asked for `timeout=10` — the outer timeout would then fire mid-walk and
+        // discard everything. Take whichever comes first, and arm it even without
+        // an escalator so the plain-HTTP walk is bounded too.
+        let sitemap_deadline = Some(
+            (std::time::Instant::now() + std::time::Duration::from_secs(SITEMAP_PHASE_BUDGET_SECS))
+                .min(overall_deadline),
+        );
 
-        let sitemap_urls = crate::sitemap::fetch_sitemap_tree(
-            seeds,
-            &parsed,
-            &client,
-            SITEMAP_MAX_DEPTH,
-            sitemap_max_fetches,
-            max_urls,
-            per_host_max_concurrent as usize,
-            escalator.as_ref(),
-            sitemap_deadline,
-        )
-        .await;
+        // Hard-bounded by the overall deadline, on top of the inner `sitemap_deadline`.
+        //
+        // The inner deadline is only checked BETWEEN batches: a batch that starts a
+        // millisecond before it can still run for a full client timeout (15s), which
+        // blows straight through the backstop margin. The route's outer timeout would
+        // then fire, drop this future, and throw away every URL — the exact
+        // zero-result 504 this whole change exists to prevent. The inner deadline
+        // still does the real work (it returns partial sitemap results); this timeout
+        // is the guarantee that the phase can never outlive its budget.
+        let sitemap_urls = match remaining_budget(overall_deadline) {
+            Some(budget) => tokio::time::timeout(
+                budget,
+                crate::sitemap::fetch_sitemap_tree(
+                    seeds,
+                    &parsed,
+                    &client,
+                    SITEMAP_MAX_DEPTH,
+                    sitemap_max_fetches,
+                    max_urls,
+                    per_host_max_concurrent as usize,
+                    escalator.as_ref(),
+                    sitemap_deadline,
+                ),
+            )
+            .await
+            .unwrap_or_default(),
+            None => Vec::new(),
+        };
         for u in sitemap_urls {
             if all_urls.len() >= max_urls {
                 break;
@@ -714,7 +805,6 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResul
 
     // Sitemap-only mode (or sitemap was empty + crawl_fallback is off).
     if !crawl_fallback {
-        all_urls.insert(base_url.to_string());
         let mut urls: Vec<String> = all_urls.into_iter().collect();
         urls.sort();
         return Ok(DiscoverResult {
@@ -724,102 +814,176 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResul
         });
     }
 
-    // Sitemap was rich enough → run BFS with a tight budget. Otherwise let it
-    // run to the per-page deadline and the outer route timeout.
+    // The BFS phase is ALWAYS bounded. It used to get a deadline only when the
+    // sitemap had already produced >= 50 URLs; a site with no sitemap (e.g. Hacker
+    // News) therefore ran the BFS with no budget at all until the outer request
+    // timeout killed the future and threw away every URL it had found — a 504 with
+    // zero results. A rich sitemap still shortens the budget (we have plenty
+    // already); everything else runs to the overall deadline and returns partials.
     let bfs_deadline_at = if all_urls.len() >= SITEMAP_SUFFICIENT_THRESHOLD {
         tracing::info!(
             sitemap_urls = all_urls.len(),
             "sitemap sufficient, BFS will run with short budget"
         );
-        Some(std::time::Instant::now() + std::time::Duration::from_secs(BFS_SHORT_BUDGET_SECS))
+        (std::time::Instant::now() + std::time::Duration::from_secs(BFS_SHORT_BUDGET_SECS))
+            .min(overall_deadline)
     } else {
-        None
+        overall_deadline
     };
 
     let max_depth = max_depth.min(10);
-    let semaphore = Arc::new(Semaphore::new(max_concurrency));
     // Per-host limiter is owned by FallbackRenderer (see run_crawl).
     let _ = (requests_per_second, per_host_max_concurrent);
     let mut visited: HashSet<String> = HashSet::new();
-    let mut queue: VecDeque<(String, u32)> = VecDeque::new();
 
-    queue.push_back((base_url.to_string(), 0));
     visited.insert(normalize_url(base_url));
+    let mut frontier: Vec<String> = vec![base_url.to_string()];
 
-    while let Some((url, depth)) = queue.pop_front() {
-        if visited.len() > max_urls {
+    // BFS runs level by level, fetching each level CONCURRENTLY.
+    //
+    // The previous loop built a `Semaphore`, acquired a permit, then awaited the
+    // fetch inline in the same iteration and dropped the permit at the end of it.
+    // Nothing was ever spawned, so real concurrency was 1 and `max_concurrency`
+    // was dead weight — every URL was fetched strictly one after another.
+    //
+    // Level-by-level keeps `visited` single-owner (mutated only between levels,
+    // never across tasks), so there is no shared-mutex churn and no chance of the
+    // same URL being fetched twice. Note the real ceiling here is the per-host
+    // limiter inside `FallbackRenderer::fetch`, not `max_concurrency`: map only
+    // follows same-origin links, so every fetch contends for the same host's
+    // permits. Politeness is unchanged by design.
+    //
+    // A level's fetches are STREAMED, not collected: results are merged as each
+    // page lands and the level is abandoned the moment `max_urls` is reached.
+    // Waiting for a whole batch would make every batch cost as much as its slowest
+    // page — and pages are wildly uneven. On Hacker News a `/item?id=` page takes
+    // ~6.7s while the list pages that actually yield most of the links take ~0.7s,
+    // so batching made map ~6x slower for the same output. Streaming lets the cheap
+    // pages satisfy the cap while the expensive ones are still in flight; dropping
+    // the stream then cancels them.
+    'bfs: for depth in 0..=max_depth {
+        if frontier.is_empty() {
             break;
         }
-        if let Some(deadline) = bfs_deadline_at
-            && std::time::Instant::now() >= deadline
+        let mut next_frontier: Vec<String> = Vec::new();
+        let level_urls = std::mem::take(&mut frontier);
+
         {
-            tracing::info!("BFS short budget exhausted; returning sitemap+partial results");
-            break;
-        }
+            let mut in_flight = futures::stream::iter(level_urls.into_iter().map(|url| {
+                let renderer = renderer.clone();
+                async move {
+                    // A page must not start if the budget is already gone, and its own
+                    // deadline is clamped to what is left of the overall budget —
+                    // otherwise a page begun just before the deadline runs for its full
+                    // per-page allowance and overruns the caller's timeout, losing
+                    // everything to the outer backstop.
+                    let budget = remaining_budget(bfs_deadline_at)?;
 
-        let _permit = match semaphore.clone().acquire_owned().await {
-            Ok(p) => p,
-            Err(_) => break,
-        };
-        // Per-host limiter handled in FallbackRenderer (see run_crawl note).
-        if let Ok(parsed) = url::Url::parse(&url)
-            && crw_core::url_safety::validate_safe_url_resolved(&parsed)
-                .await
-                .is_err()
-        {
-            continue;
-        }
+                    let parsed = url::Url::parse(&url).ok()?;
+                    // The SSRF check resolves DNS, so it is an awaited phase like any
+                    // other and must live inside the budget. Slow resolution would
+                    // otherwise burn time the per-page deadline below never accounts
+                    // for, pushing the request past the caller's backstop.
+                    let safe = tokio::time::timeout(
+                        budget,
+                        crw_core::url_safety::validate_safe_url_resolved(&parsed),
+                    )
+                    .await;
+                    if !matches!(safe, Ok(Ok(()))) {
+                        return None;
+                    }
 
-        let discover_deadline = crw_core::Deadline::from_request_ms(deadline_ms_per_page);
-        // Honor the config rotator so discovery page fetches egress through the
-        // proxy (sticky-per-host), not direct. Resolved once into REQUEST_PROXY.
-        let resolved_proxy = renderer.pick_proxy_for_url(&url);
-        let empty_headers: HashMap<String, String> = HashMap::new();
-        // render_js = None (auto), not Some(false): SPAs (Angular/React/Vue)
-        // serve an empty app shell over plain HTTP, so HTTP-only discovery finds
-        // zero navigational links and /map returns only the seed URL (issue #166).
-        // Auto mode lets the renderer escalate thin/SPA shells to a JS render
-        // (it stays HTTP-only for static sites), matching /scrape and /crawl.
-        let fetch_fut = renderer.fetch(&url, &empty_headers, None, None, None, discover_deadline);
-        let fetch = crw_renderer::REQUEST_PROXY
-            .scope(resolved_proxy, fetch_fut)
-            .await;
+                    // Re-read the budget: DNS resolution may have eaten into it.
+                    let budget = remaining_budget(bfs_deadline_at)?;
+                    let page_ms = (budget.as_millis() as u64).min(deadline_ms_per_page);
+                    let discover_deadline = crw_core::Deadline::from_request_ms(page_ms);
+                    // Honor the config rotator so discovery page fetches egress through
+                    // the proxy (sticky-per-host), not direct. Resolved into REQUEST_PROXY.
+                    let resolved_proxy = renderer.pick_proxy_for_url(&url);
+                    let empty_headers: HashMap<String, String> = HashMap::new();
+                    // render_js = None (auto), not Some(false): SPAs (Angular/React/Vue)
+                    // serve an empty app shell over plain HTTP, so HTTP-only discovery
+                    // finds zero navigational links and /map returns only the seed URL
+                    // (issue #166). Auto lets the renderer escalate thin/SPA shells to a
+                    // JS render (staying HTTP-only for static sites), like /scrape.
+                    let fetch_fut =
+                        renderer.fetch(&url, &empty_headers, None, None, None, discover_deadline);
+                    let result = crw_renderer::REQUEST_PROXY
+                        .scope(resolved_proxy, fetch_fut)
+                        .await
+                        .ok()?;
+                    Some((url, result.html))
+                }
+            }))
+            .buffer_unordered(max_concurrency.max(1));
 
-        if let Ok(result) = fetch {
-            let links = extract_links(&result.html, &url);
-            for link in links {
-                if let Ok(link_url) = url::Url::parse(&link) {
+            // Merge each page's links as it lands. `visited` and the filter counters
+            // have a single owner here, and `urls.sort()` below keeps the output
+            // deterministic regardless of the order pages completed in.
+            while let Some(page) = in_flight.next().await {
+                if all_urls.len() >= max_urls || std::time::Instant::now() >= bfs_deadline_at {
+                    break;
+                }
+                let Some((url, html)) = page else { continue };
+                for link in extract_links(&html, &url) {
+                    let Ok(link_url) = url::Url::parse(&link) else {
+                        continue;
+                    };
                     if !is_safe_url(&link_url) {
                         continue;
                     }
                     // Compare full origin (scheme + host + explicit port) so a
-                    // non-default-port target (e.g. https://example.com:8443)
-                    // doesn't reject its own same-origin links.
+                    // non-default-port target (e.g. https://example.com:8443) doesn't
+                    // reject its own same-origin links.
                     if link_url.origin().ascii_serialization() != origin {
                         continue;
                     }
-                    let normalized = match filter_parsed(
+                    let Some(normalized) = filter_parsed(
                         &link_url,
                         &link,
                         &mut dropped_action_count,
                         &mut stripped_tracking_count,
-                    ) {
-                        Some(n) => n,
-                        None => continue,
+                    ) else {
+                        continue;
                     };
-                    if !visited.contains(&normalized) {
-                        visited.insert(normalized.clone());
-                        all_urls.insert(normalized.clone());
-                        if depth < max_depth {
-                            queue.push_back((normalized, depth + 1));
-                        }
+                    if visited.contains(&normalized) {
+                        continue;
                     }
+                    visited.insert(normalized.clone());
+                    // The URL is REPORTED even if robots disallows it: robots.txt
+                    // governs fetching, not listing. Only the re-fetch below is gated.
+                    all_urls.insert(normalized.clone());
+                    if all_urls.len() >= max_urls {
+                        break;
+                    }
+                    if depth >= max_depth {
+                        continue;
+                    }
+                    // robots gate applies to FETCHING only. Hacker News disallows
+                    // `/hide?`, `/vote?`, `/reply?` etc; we were rendering each of those
+                    // through a full Chrome ladder, ~10-20s a piece, which is most of
+                    // how the 120s budget got burned.
+                    if respect_robots
+                        && let Ok(next_url) = url::Url::parse(&normalized)
+                        && !robots.is_url_allowed(&next_url)
+                    {
+                        continue;
+                    }
+                    next_frontier.push(normalized);
                 }
             }
         }
+        frontier = next_frontier;
+
+        if all_urls.len() >= max_urls || std::time::Instant::now() >= bfs_deadline_at {
+            tracing::info!(
+                discovered = all_urls.len(),
+                "BFS stopping: URL cap or budget reached; returning what we have"
+            );
+            break 'bfs;
+        }
     }
 
-    all_urls.insert(base_url.to_string());
     let mut urls: Vec<String> = all_urls.into_iter().collect();
     urls.sort();
     Ok(DiscoverResult {

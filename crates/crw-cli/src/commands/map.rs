@@ -5,6 +5,10 @@ use clap::{Args, ValueEnum};
 use crw_core::config::{RendererConfig, RendererMode, StealthConfig};
 use crw_crawl::crawl::{DiscoverOptions, discover_urls};
 use crw_renderer::FallbackRenderer;
+
+/// Discovery budget for the `map` subcommand, which has no request timeout of
+/// its own. Matches the HTTP route's default.
+const CLI_MAP_TIMEOUT_SECS: u64 = 120;
 use std::sync::Arc;
 
 #[derive(Clone, ValueEnum)]
@@ -148,6 +152,12 @@ pub async fn run(mut args: MapArgs) -> Result<(), CmdError> {
         per_host_max_concurrent: 2,
         url_filter: None,
         max_urls: args.limit,
+        // The CLI has no outer timeout, so discovery would otherwise be
+        // unbounded. Same default budget as the HTTP route, stated explicitly.
+        overall_deadline: crw_crawl::crawl::discovery_deadline(std::time::Duration::from_secs(
+            CLI_MAP_TIMEOUT_SECS,
+        )),
+        respect_robots: true,
     };
 
     let result = match discover_urls(opts).await {

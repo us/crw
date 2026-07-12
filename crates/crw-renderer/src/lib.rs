@@ -48,6 +48,7 @@ pub mod cdp_conn;
 #[cfg(feature = "cloak")]
 pub mod cloak;
 pub mod detector;
+pub mod egress;
 #[cfg(feature = "cdp")]
 pub mod health_telemetry;
 pub mod host_limiter;
