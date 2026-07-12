@@ -272,14 +272,14 @@ The following table lists the gaps documented in [COMPATIBILITY-firecrawl.md](..
 
 | Feature | Firecrawl | fastCRW | Action required |
 |---|---|---|---|
-| **`/v1/extract` route** | Standalone async route | Not implemented — use `/v1/scrape` + `jsonSchema` | Port single-URL extract calls (see Step 4 above). Multi-URL loops need iteration. |
-| **Multi-URL `/extract`** | One call → N URLs | Not supported | Iterate URLs in your code or use `/v1/crawl`. |
+| **`/v1/extract` route** | Standalone async route | Supported — `POST /v1/extract` returns a job id you poll on `GET /v1/extract/{id}` | None. `/v1/scrape` + `jsonSchema` also works for a single URL. |
+| **Multi-URL `/extract`** | One call → N URLs | Supported — pass `urls: [...]` (capped by `limits.maxExtractUrls`, default 50) | None. Check the cap on `GET /v1/capabilities`. |
 | **`/v1/deep-research`** | Cloud-only Firecrawl feature | Not implemented | No equivalent path — remove or redesign. |
 | **`/v1/agent` (Spark models)** | Cloud-only Firecrawl feature | Not implemented | No equivalent path. |
 | **`/firecrawl/v2/parse` file types** | PDF, DOCX, XLSX, ODT, RTF | PDF only (pure-Rust `pdf-inspector`, no OCR) | If you upload non-PDF files or rely on OCR, keep Firecrawl for those calls. |
 | **OCR mode on PDF** | `mode: "ocr"` supported | Accepted for wire-compat; falls back to text-layer extraction with `pdf_scanned` warning | Scanned-only PDFs won't extract text. |
 | **Fire-engine anti-bot** | Firecrawl Cloud only | Not available (same as Firecrawl self-host) | For heavy bot-protected pages, compare output quality on real targets. |
-| **Screenshot format** | Supported | Not supported — `/v1/scrape` rejects `"screenshot"` with HTTP 400 (`"Unknown format 'screenshot'"`) | Remove `"screenshot"` from your `formats` array. |
+| **Screenshot format** | Supported | Supported on an instance with a capture-capable browser tier (Chrome or Playwright); LightPanda and Camoufox cannot capture | Check `screenshot.supported` on `GET /v1/capabilities` before relying on it. |
 | **`data.metadata` field names** | Some keys differ | Minor divergence on a few keys | Inspect `metadata` on a real response; don't assume key names are identical. |
 | **MCP tool names** | `firecrawl_scrape`, `firecrawl_crawl`, … | `crw_scrape`, `crw_crawl`, `crw_check_crawl_status`, `crw_map`, `crw_extract`, `crw_check_extract_status`, `crw_search`, `crw_parse_file` | Update any MCP client tool-name references. |
 
@@ -381,6 +381,7 @@ The following Firecrawl Cloud capabilities have no equivalent in fastCRW and are
 - `/v1/deep-research` (Spark model pipeline)
 - `/v1/agent` (AI agent sessions)
 - Fire-engine proprietary anti-bot layer
-- Rotating proxy pool (bring your own proxy via the `proxy` scrape param)
+
+Bring-your-own-proxy IS supported on a self-hosted instance: set a pool in `[proxy]`, or pass `proxy` on the scrape body. See [Proxies](/docs/proxies).
 
 For any capability not in the matrix above, check [`COMPATIBILITY-firecrawl.md`](../COMPATIBILITY-firecrawl.md) which is the authoritative reference.

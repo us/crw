@@ -56,6 +56,10 @@ WHITELIST=(
   "docs/docs/recipe-monitoring.md"
   "docs/docs/troubleshooting.md"
   "docs/llms-full.txt"
+  # Research routes are served by the SaaS control plane under /api/v2/...;
+  # the engine mounts them only under /v1/search/research/*. The page documents
+  # both surfaces, so the control-plane URL is legitimate here.
+  "docs/docs/research-api.md"
 )
 
 # Build a grep -v filter for whitelisted paths. Each entry is anchored at the
@@ -185,6 +189,63 @@ if [ -n "$backend_hits" ]; then
   FAIL=1
 else
   echo "ok: no search-backend name in user-facing prose"
+fi
+
+# ---------------------------------------------------------------------------
+# Guard 4: retired capability claims
+# ---------------------------------------------------------------------------
+#
+# These features SHIP. The docs used to say otherwise, and a stale claim is a
+# lie a caller can act on (they design around a feature we actually have, or
+# skip a capability check we actually expose). Each pattern below is a claim
+# that was true once and is not any more; re-introducing one fails CI.
+#
+# If a claim here becomes true again (a feature is genuinely removed), delete
+# its pattern in the SAME commit that removes the feature.
+
+echo "==> Guard 4: retired capability claims"
+
+# Scanned: tracked markdown. Excluded: changelogs (they record history, which
+# legitimately contains the old claim) and generated HTML (rebuilt from the
+# markdown by scripts/build-docs-pages.mjs).
+STALE_PATTERNS=(
+  # screenshot: produced on a chrome/chrome_proxy/playwright tier (crw-core OutputFormat::Screenshot)
+  'screenshot[^|]*not (yet )?(supported|implemented|produced)'
+  'not (yet )?(supported|implemented|produced)[^|]*screenshot'
+  # POST /v1/extract exists (routes/v1/mod.rs), and takes a `urls` array
+  'no standalone `?/v1/extract'
+  'multi-url[^|]*extract[^|]*not supported'
+  # the TypeScript SDK is published as `crw-sdk`; @fastcrw/sdk never existed
+  '@fastcrw/sdk'
+  # /v1/search synthesizes an answer when an LLM is available (answer: true)
+  'does not synthesize answers'
+  'no LLM answer'
+  # 1 credit = 1 page, whatever the egress path
+  'credit surcharge'
+)
+
+stale=""
+for pat in "${STALE_PATTERNS[@]}"; do
+  hits=$(
+    grep -rniE --include="*.md" "${pat}" . 2>/dev/null \
+      | grep -vE '(^|/)CHANGELOG\.md:' \
+      | grep -vE '^\./docs/docs/changelog\.md:' \
+      | grep -vE '^\./(target|node_modules)/' \
+      || true
+  )
+  if [ -n "$hits" ]; then
+    stale="${stale}${hits}"$'\n'
+  fi
+done
+
+if [ -n "$stale" ]; then
+  echo "FAIL: a retired capability claim is back in the docs." >&2
+  echo "      These features ship today — see scripts/docs-guards.sh Guard 3." >&2
+  echo >&2
+  echo "$stale" | sed '/^$/d; s/^/  /' >&2
+  FAIL=1
+else
+  echo "ok: no retired capability claims"
 fi
 
 # ---------------------------------------------------------------------------

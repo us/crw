@@ -58,7 +58,7 @@ curl http://localhost:3000/v1/scrape \
   -d '{"url": "https://example.com", "formats": ["markdown"]}'
 ```
 
-**Limitations:** No screenshot or PDF/DOCX parsing yet (both on the roadmap). Complex React/Vue SPAs may be more reliably handled by Playwright today. AGPL-3.0 has copyleft implications for embedded commercial use — calling the API from a closed-source product is fine; modifying and redistributing the engine triggers source-sharing obligations. A commercial license is available.
+**Limitations:** Screenshots need a Chrome-class renderer tier, and document parsing is PDF-only with no OCR (no DOCX/XLSX). Complex React/Vue SPAs may be more reliably handled by Playwright today. AGPL-3.0 has copyleft implications for embedded commercial use — calling the API from a closed-source product is fine; modifying and redistributing the engine triggers source-sharing obligations. A commercial license is available.
 
 ### 2. Scrapy (Python)
 

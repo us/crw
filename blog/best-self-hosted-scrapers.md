@@ -51,7 +51,7 @@ CRW is the better fit when operational simplicity and cost efficiency matter mor
 | MCP server | ✅ Built-in | Separate package | Community |
 | Firecrawl-compatible API | ✅ | ✅ Native | ❌ |
 | LLM extraction | ✅ | ✅ | ✅ |
-| Screenshot support | Roadmap | ✅ | ✅ |
+| Screenshot support | ✅ (needs a Chrome-class tier) | ✅ | ✅ |
 | PDF/DOCX parsing | Roadmap | ✅ | Partial |
 | Anti-bot | Partial | Good | Good |
 | Horizontal scaling | Stateless, trivial | Redis queue, moderate | Limited |
@@ -311,7 +311,7 @@ For teams that want CRW's economics without managing servers, [fastCRW](https://
 
 ## Honest Limitations by Tool
 
-**CRW:** No screenshot support yet (on the roadmap). No PDF or DOCX parsing. Anti-bot handling is not best-in-class — sites with aggressive bot detection will require a proxy service on top. JavaScript rendering via LightPanda is maturing but not at Playwright-level reliability for complex SPAs.
+**CRW:** Screenshots need a Chrome-class renderer tier configured (LightPanda alone cannot capture). Document parsing is PDF-only, with no OCR and no DOCX. Anti-bot handling is not best-in-class — sites with aggressive bot detection will require a proxy service on top. JavaScript rendering via LightPanda is maturing but not at Playwright-level reliability for complex SPAs.
 
 **Firecrawl:** Heavy deployment — Redis is a required dependency even for simple scraping. Docker image is large. Per-request latency is the highest of the four tools. Self-hosting the full feature set requires more operational investment than the other tools.
 
@@ -359,7 +359,7 @@ Yes — Firecrawl has an open-source self-hosted version on GitHub under AGPL-3.
 
 ### Can I run CRW as a drop-in Firecrawl replacement?
 
-For HTML scraping, crawling, and structured extraction: yes. CRW implements Firecrawl's REST interface, so you change the base URL and existing client code keeps working. The gaps are honest — CRW returns HTTP 422 for screenshot requests, has no PDF/DOCX parsing, and its LightPanda JavaScript rendering is not yet at Playwright-level fidelity for complex SPAs.
+For HTML scraping, crawling, and structured extraction: yes. CRW implements Firecrawl's REST interface, so you change the base URL and existing client code keeps working. The gaps are honest — screenshots require a Chrome-class renderer tier, document parsing is PDF-only with no OCR, and LightPanda JavaScript rendering is not yet at Playwright-level fidelity for complex SPAs.
 
 ### What does it cost to run a self-hosted scraper versus a managed API?
 

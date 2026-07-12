@@ -701,9 +701,11 @@ v2 `formats` accepts a mix of bare strings and typed objects.
 
 ### Unsupported formats (graceful warning)
 
-The following formats are recognized but not yet produced by this engine. The request succeeds with the other requested formats; a `warning` field explains what was skipped:
+The following formats are recognized but not produced by this engine. The request succeeds with the other requested formats; a `warning` field explains what was skipped:
 
-`screenshot`, `images`, `attributes`, `branding`, `audio`, `query`.
+`images`, `attributes`, `branding`, `audio`, `query`.
+
+`screenshot` IS produced (returned as a `data:image/png;base64,…` URL), but it needs a capture-capable browser tier — Chrome (`chrome`, `chrome_proxy`) or Playwright. Check `screenshot.supported` on `GET /v1/capabilities` first.
 
 ---
 
@@ -758,7 +760,7 @@ The **Python SDK** exposes the same surface. Pass `base_url="https://api.fastcrw
 
 **Expecting `next` to be absent on the last page while the job is running.** `next` is always emitted while `status` is `"scraping"`, even when all buffered pages have been returned. Stop only when `status` is `"completed"` (or `"failed"`) AND `next` is null.
 
-**Sending `formats: ["screenshot"]`.** Screenshots are not yet produced. The request succeeds but `warning` explains the skip. Use `formats: ["markdown"]` instead.
+**Sending `formats: ["screenshot"]` without a capture-capable browser.** Screenshots need a Chrome or Playwright tier; LightPanda and Camoufox cannot capture. Check `screenshot.supported` on `GET /v1/capabilities` before you rely on it.
 
 **Using `/firecrawl/v2/extract`.** It works, but the engine warns you to use `POST /firecrawl/v2/scrape` with a `json` format object. Switch over to avoid future breakage.
 

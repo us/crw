@@ -106,7 +106,7 @@ Or if using fastCRW cloud:
 
 CRW is listed on the official [MCP Registry](https://registry.modelcontextprotocol.io/?q=crw), making it discoverable from any MCP-compatible client.
 
-**Limitations:** No screenshot tool (yet). For complex SPAs that need full Playwright-level browser automation, you might supplement CRW with the Playwright MCP server.
+**Limitations:** No dedicated screenshot MCP tool, though the scrape API captures screenshots on an instance with a Chrome-class renderer tier. For complex SPAs that need full Playwright-level browser automation, you might supplement CRW with the Playwright MCP server.
 
 **Best for:** Any AI agent that needs web scraping as a core capability. The lowest-friction path to giving your agent live web access.
 

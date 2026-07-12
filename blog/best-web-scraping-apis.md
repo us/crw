@@ -55,7 +55,7 @@ curl https://api.fastcrw.com/v1/scrape \
 
 **Pricing:** Self-hosted is free (AGPL-3.0). fastCRW cloud starts with a one-time lifetime 500 credits (not a monthly meter), then pay-as-you-go across Hobby, Standard, Growth, and Scale tiers — see [fastcrw.com/pricing](https://fastcrw.com/pricing) for current tiers (single source of truth). Significantly cheaper per-page than Firecrawl or proxy-based APIs at volume.
 
-**Limitations:** No screenshot support yet (on the roadmap). No PDF/DOCX parsing. Anti-bot handling is partial — sites with aggressive bot detection may need a proxy layer on top. JavaScript rendering via LightPanda is maturing but not at Playwright-level reliability for complex SPAs.
+**Limitations:** Screenshots need a Chrome-class renderer tier configured. Document parsing is PDF-only, with no OCR and no DOCX. Anti-bot handling is partial — sites with aggressive bot detection may need a proxy layer on top. JavaScript rendering via LightPanda is maturing but not at Playwright-level reliability for complex SPAs.
 
 **Best for:** AI agents needing live web access, RAG pipelines, teams wanting Firecrawl compatibility at lower cost and higher speed.
 
@@ -276,7 +276,7 @@ CRW has the strongest native AI agent support: a built-in MCP server, clean mark
 
 ### Can I use CRW as a Firecrawl replacement?
 
-For HTML scraping, crawling, and structured extraction: yes. CRW implements the Firecrawl REST API, so you change the base URL and existing code keeps working. For screenshots, PDF parsing, and complex SPAs, CRW does not yet match Firecrawl's feature coverage — a screenshot request returns HTTP 422.
+For HTML scraping, crawling, and structured extraction: yes. CRW implements the Firecrawl REST API, so you change the base URL and existing code keeps working. Screenshots and PDF parsing ship too, each with a boundary: capture needs a Chrome-class renderer tier, and document parsing is PDF-only with no OCR. Complex SPAs remain the area where CRW does not yet match Firecrawl.
 
 ### What is the cheapest web scraping API for high volume?
 

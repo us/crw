@@ -351,9 +351,20 @@ Request multiple formats in one call. Only requested formats appear in the respo
 | JSON           | json             | data.json         | LLM structured extraction; needs jsonSchema    |
 | Summary        | summary          | data.summary      | LLM prose digest; needs LLM config or BYOK     |
 | Change Tracking| changeTracking   | data.changeTracking | Diff against prior snapshot                  |
+| Screenshot     | screenshot       | data.screenshot   | base64 PNG data URL; needs a capture-capable tier |
 
 Aliases accepted (map to json): "extract", "llm-extract"
-Not supported (returns 422): "screenshot"
+Aliases accepted (map to screenshot): "screenshot@fullPage" (full-page capture)
+
+screenshot requirements: capture runs over CDP Page.captureScreenshot, so it needs a
+  chrome, chrome_proxy or playwright renderer tier. LightPanda and Camoufox cannot
+  capture — an instance holding only those refuses the request rather than returning an
+  empty image. It also requires JS rendering: renderJs:false + screenshot is a 400.
+  Check screenshot.supported on GET /v1/capabilities before requesting it.
+
+json / summary requirements: both need an LLM — a server-side key or a per-request
+  llmApiKey. GET /v1/capabilities lists them under formats.llmRequired.
+
 Not supported (returns 400): "actions" — use cssSelector or xpath instead
 
 Format selection guide:

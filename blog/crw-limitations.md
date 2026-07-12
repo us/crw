@@ -12,57 +12,37 @@
 
 Trust in developer tools is built on honesty. If we only wrote about CRW's strengths, you'd discover the gaps when they matter most — mid-project. This post documents CRW's current limitations clearly, with workarounds and roadmap status for each. Use it to make an informed decision before committing.
 
-## Limitation 1: No Screenshot Support
+## Limitation 1: Screenshots Need a Chrome-Class Browser Tier
 
-**Current state:** CRW does not capture page screenshots. The `screenshot` format from Firecrawl's API is not implemented. Passing `"formats": ["screenshot"]` returns an error.
+**Current state:** CRW captures page screenshots. `"formats": ["screenshot"]` returns a `data:image/png;base64,…` URL, and `screenshot@fullPage` captures the whole page. The catch is the browser tier underneath: capture is the CDP `Page.captureScreenshot` command, so it needs Chrome (`chrome`, `chrome_proxy`) or Playwright. LightPanda and Camoufox cannot capture.
 
-**Why it's missing:** Screenshot capture requires a headless browser to perform a full render and then invoke the Page.captureScreenshot DevTools command. CRW's current LightPanda integration can render HTML for content extraction, but the screenshot capture API isn't yet stable enough for production use in LightPanda.
+**What that means in practice:** an instance configured with only LightPanda or Camoufox refuses a screenshot request instead of returning an empty image. Screenshots also require JS rendering, so `renderJs: false` together with `screenshot` is rejected.
 
-**Who it affects:** Teams that need visual page captures for QA dashboards, visual regression monitoring, archival purposes, or any workflow where a pixel-accurate rendering matters — not just the text content.
+**Who it affects:** Teams self-hosting a minimal, LightPanda-only deployment for footprint reasons. Chrome is heavier than LightPanda, so a screenshot-capable instance costs more RAM.
 
-**Workaround:** Use Firecrawl or Crawl4AI for screenshot requirements. Because CRW is API-compatible with Firecrawl, you can route screenshot requests to Firecrawl while using CRW for content extraction. In your client code:
+**How to check before you rely on it:** `GET /v1/capabilities` reports `screenshot.supported` and lists the renderer tiers the instance actually constructed under `renderers.available`. Both are derived from the real build and config, so a `true` there means the instance can genuinely capture.
 
 ```
-const BASE_URL_CRW = "http://localhost:3000"; // or https://api.fastcrw.com for cloud
-const BASE_URL_FIRECRAWL = "https://api.firecrawl.dev";
+const caps = await fetch(`${BASE_URL}/v1/capabilities`).then((r) => r.json());
 
-async function scrape(url: string, needsScreenshot: boolean) {
-  const base = needsScreenshot ? BASE_URL_FIRECRAWL : BASE_URL_CRW;
-  const formats = needsScreenshot ? ["markdown", "screenshot"] : ["markdown"];
-  const res = await fetch(`${base}/v1/scrape`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url, formats }),
-  });
-  return res.json();
+if (caps.screenshot.supported) {
+  // safe to request formats: ["markdown", "screenshot"]
+} else {
+  // this deployment has no capture-capable tier — configure [renderer.chrome]
 }
 ```
 
-**Roadmap:** Screenshot support is planned. We'll add it once LightPanda's screenshot API stabilizes for production use. Track progress on [GitHub Issues](https://github.com/us/crw/issues).
+## Limitation 2: PDF Only, and No OCR
 
-## Limitation 2: No PDF or Document Extraction
+**Current state:** CRW parses PDFs. A PDF URL passed to `/v1/scrape` is auto-routed to the parser by content type, and files can be uploaded to the parse endpoint. It is PDF only: DOCX, XLSX, RTF and ODT are not parsed.
 
-**Current state:** CRW scrapes HTML pages only. If you pass a PDF URL to `/v1/scrape`, CRW will fetch the raw bytes but cannot parse or extract text from PDF, DOCX, XLSX, or other document formats. The response will either error or return empty content.
+**The real gap is OCR.** The parser (`pdf-inspector`, pure Rust) reads the text layer. A scanned or image-only PDF has no text layer, so it yields empty or partial text with a warning rather than an error. There is no OCR engine in the binary.
 
-**Why it's missing:** Document parsing is a separate problem domain from HTML scraping. A production-quality PDF parser (handling encrypted PDFs, multi-column layouts, tables, figures) adds significant binary size and maintenance surface. The primary CRW use case — web content extraction for LLMs — is fully served by HTML. We haven't added document parsing complexity that only a subset of users need.
+**Who it affects:** Teams indexing scanned document archives, or mixed repositories that hold Office formats alongside PDFs.
 
-**Who it affects:** Teams that need to index mixed content sources — public websites alongside corporate document repositories, uploaded PDFs, or government document archives.
+**Workaround:** Run OCR upstream (so the PDF carries a text layer before CRW sees it), or convert Office documents to PDF first. For scanned-only archives, a dedicated OCR pipeline remains the right tool.
 
-**Workaround:** For document URLs, route them to a dedicated document parser. Two good options:
-
-```
-# Python: pdfplumber for local PDF files
-
-def extract_pdf(path: str) -> str:
-    with pdfplumber.open(path) as pdf:
-        return "
-".join(page.extract_text() for page in pdf.pages)
-
-# Or use Firecrawl for PDF URLs (CRW handles the HTML portion)
-# Firecrawl handles PDFs at: POST /v1/scrape with PDF URL
-```
-
-**Roadmap:** PDF text extraction (not full layout parsing) is on the roadmap but not in the current development cycle. DOCX support is further out.
+**Check before you rely on it:** `GET /v1/capabilities` reports `documents.parsers` and `documents.fileUpload.maxBytes` (the enforced cap) for the instance you are talking to.
 
 ## Limitation 3: Anti-Bot Is Not Best-in-Class
 
@@ -249,8 +229,8 @@ async function cachedScrape(url: string) {
 
 | Limitation | Severity | Workaround Available | Roadmap Priority |
 | --- | --- | --- | --- |
-| No screenshots | Medium | ✅ Route to Firecrawl | Medium |
-| No PDF/document parsing | Medium | ✅ pdfplumber / Firecrawl | Low |
+| Screenshots need a Chrome-class tier | Low | ✅ Configure `[renderer.chrome]` | Shipped |
+| PDF only, and no OCR | Medium | ✅ OCR upstream / convert to PDF | Low |
 | Anti-bot not best-in-class | Medium | ✅ Residential proxy | Medium |
 | SPA coverage inconsistent | High | ⚠️ Fallback to Firecrawl | High |
 | No crawl progress streaming | Low | ✅ Client-side polling proxy | Medium |
@@ -293,15 +273,15 @@ docker run -p 3000:3000 ghcr.io/us/crw:latest
 
 ### What can't CRW do?
 
-The main gaps today: screenshot capture (a request for formats: ["screenshot"] returns HTTP 422), PDF and DOCX parsing, best-in-class anti-bot bypass, reliable rendering of complex SPAs, WebSocket crawl-progress streaming, persistent job storage across restarts, and automatic request retry. Each limitation has a documented workaround and most are on the roadmap. The limitations matrix in this post lays out severity and roadmap priority for each.
+The main gaps today: OCR over scanned documents, DOCX and XLSX parsing, best-in-class anti-bot bypass, reliable rendering of complex SPAs, WebSocket crawl-progress streaming, persistent job storage across restarts, and automatic request retry. Screenshots and PDF parsing do ship, each with a boundary: capture needs a Chrome-class browser tier, and PDF parsing reads the text layer only. Each limitation has a documented workaround. The limitations matrix in this post lays out severity and roadmap priority for each.
 
 ### Is CRW production-ready?
 
-CRW is production-ready for its target use cases: scraping HTML content to clean markdown, building RAG pipelines, exposing web scraping via MCP, and self-hosting a Firecrawl-compatible API. It is not the right fit for screenshot capture, PDF indexing, or scraping highly-protected sites without external proxy support. If your workflow stays within the supported use cases, the limitations listed here are unlikely to block you.
+CRW is production-ready for its target use cases: scraping HTML content to clean markdown, building RAG pipelines, exposing web scraping via MCP, and self-hosting a Firecrawl-compatible API. It is not the right fit for OCR over scanned documents, Office-format parsing, or scraping highly-protected sites without external proxy support. If your workflow stays within the supported use cases, the limitations listed here are unlikely to block you.
 
 ### Does CRW support screenshots?
 
-No. Screenshot output is not implemented — passing formats: ["screenshot"] returns an HTTP 422 error. Screenshot capture is waiting on LightPanda's screenshot API to stabilize for production use. If you need screenshots today, Firecrawl handles them well, and because CRW is API-compatible you can route screenshot requests to Firecrawl while using CRW for content extraction.
+Yes, on an instance with a Chrome-class browser tier. `formats: ["screenshot"]` returns a base64 PNG data URL, and `screenshot@fullPage` captures the full page. Capture runs over CDP, so it needs Chrome (`chrome`, `chrome_proxy`) or Playwright; LightPanda and Camoufox cannot capture, and an instance holding only those refuses the request rather than returning an empty image. Call `GET /v1/capabilities` and check `screenshot.supported` for the deployment you are pointed at.
 
 ### Can CRW scrape JavaScript-heavy sites and SPAs?
 
@@ -309,7 +289,7 @@ CRW renders many JavaScript-heavy pages through LightPanda, an experimental brow
 
 ### Does CRW support PDF parsing?
 
-No. CRW scrapes HTML pages only — passing a PDF URL to /v1/scrape fetches the raw bytes but cannot extract text from PDF, DOCX, or XLSX files, so the response errors or returns empty content. For documents, use a dedicated parser like pdfplumber in Python, or route PDF URLs to Firecrawl. PDF text extraction is on the roadmap but not in the current development cycle.
+Yes. A PDF URL passed to /v1/scrape is auto-routed to the parser by content type, and files can be uploaded to the parse endpoint. It is PDF only — DOCX and XLSX are not parsed — and there is no OCR engine, so a scanned, image-only PDF has no text layer to read and yields empty or partial text with a warning. Run OCR upstream for scanned archives, and convert Office documents to PDF first.
 
 ### How fast is CRW?
 

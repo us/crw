@@ -191,7 +191,7 @@ I want to be clear about what CRW is not, because overpromising is how you lose 
 
 CRW is **not** the best anti-bot bypass tool. There are specialized services with better proxy rotation and CAPTCHA solving for high-protection targets. If you're scraping sites with aggressive bot detection, CRW will get blocked on the same requests any standard HTTP client would fail on. fastCRW's proxy network helps, but it's not a dedicated anti-bot platform.
 
-CRW does **not** support screenshots or PDF/DOCX extraction yet. These are on the roadmap but not implemented. If your pipeline needs screenshots for visual content or PDF parsing for document libraries, Firecrawl or Crawl4AI are better fits today.
+CRW captures screenshots and parses PDFs, but both come with a boundary. Screenshots need a Chrome-class browser tier (LightPanda and Camoufox cannot capture), and PDF parsing reads the text layer only — there is no OCR, and no DOCX or XLSX. If your pipeline needs OCR over scanned documents or Office-format extraction, another tool is the better fit today.
 
 CRW's SPA support via LightPanda is functional but newer than Playwright. For the most complex JavaScript-heavy applications — single-page apps that require multiple interactions before content loads, or sites that detect headless browsers aggressively — Firecrawl or Crawl4AI may be more reliable today.
 

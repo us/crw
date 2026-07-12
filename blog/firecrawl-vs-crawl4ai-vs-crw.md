@@ -450,7 +450,7 @@ app = FirecrawlApp(
 result = app.scrape_url("https://example.com", formats=["markdown"])
 ```
 
-Watch for: `screenshot` format requests will fail on CRW (not yet supported). PDF/DOCX scraping will also fail. If your existing code uses these features, you'll need to either keep Firecrawl for those specific calls or wait for CRW to add support. For HTML-only workloads, migration is typically a one-line change.
+Watch for: `screenshot` needs a Chrome-class tier on CRW (check `screenshot.supported` on `GET /v1/capabilities`), and document parsing is PDF-only with no OCR — DOCX/XLSX will fail. If your existing code leans on those, keep Firecrawl for the specific calls. For HTML-only workloads, migration is typically a one-line change.
 
 ### Moving from Crawl4AI to CRW
 

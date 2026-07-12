@@ -43,8 +43,8 @@ impl OutputFormat {
             // `routes/v2/formats.rs`; v1 always treats it as false — see D7).
             "screenshot" | "screenshot@fullPage" => Ok(OutputFormat::Screenshot),
             other => Err(format!(
-                "Unknown format '{other}'. Valid formats: markdown, html, rawHtml, plainText, links, json, summary, changeTracking \
-                 (aliases: extract, llm-extract, change-tracking). Use formats: [\"json\"] with jsonSchema for structured extraction."
+                "Unknown format '{other}'. Valid formats: markdown, html, rawHtml, plainText, links, json, summary, changeTracking, screenshot \
+                 (aliases: extract, llm-extract, change-tracking, screenshot@fullPage). Use formats: [\"json\"] with jsonSchema for structured extraction."
             )),
         }
     }
@@ -318,8 +318,9 @@ pub struct ScrapeRequest {
     /// Whether a requested `screenshot` format should capture the full page
     /// (`screenshot@fullPage` / `{type:"screenshot", fullPage:true}`) instead of
     /// just the viewport. Carried out-of-band rather than on the (`Copy`/`Hash`)
-    /// `OutputFormat` enum so `formats.contains(&Screenshot)` stays cheap. v1
-    /// always leaves this false (see D7); v2 sets it in `routes/v2/formats.rs`.
+    /// `OutputFormat` enum so `formats.contains(&Screenshot)` stays cheap. v2
+    /// sets it from the format spec (`routes/v2/formats.rs`); a v1 caller sets
+    /// it directly (`screenshotFullPage`), defaulting to viewport-only.
     #[serde(default, alias = "screenshot_full_page")]
     pub screenshot_full_page: bool,
 }

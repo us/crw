@@ -31,7 +31,7 @@ This decision drives Phase 1 hub title selection, Phase 4 README/Show HN copy, a
 | Country | `country` (195+) | none | **gap — not supported** |
 | Categories | none | `categories: ["github"\|"research"\|"pdf"]` (max 5) | CRW-only feature |
 | Language | none directly | `lang` (e.g., `"en"`, `"tr"`) | CRW-only |
-| Answer synthesis | `include_answer` (`true`/`false`/`basic`/`advanced`) | none | **gap — no LLM answer in CRW** |
+| Answer synthesis | `include_answer` (`true`/`false`/`basic`/`advanced`) | `answer: true` on the search body | shape differs; CRW synthesizes an answer when an LLM is available (server key or per-request `llmApiKey`). Check `search.answer` on `GET /v1/capabilities` |
 | Raw content | `include_raw_content` (`true`/`false`/`markdown`/`text`) | `scrapeOptions.formats` (`markdown`/`html`/`rawHtml`/`links`) — runs scrape pipeline per result | shape differs; CRW does full scrape |
 | Images | `include_images`, `include_image_descriptions` | `sources: ["images"]` | concept differs (Tavily attaches images to results; CRW returns image bucket) |
 | Date range | `start_date`/`end_date` | none | **gap — only relative `tbs`** |
@@ -42,7 +42,7 @@ This decision drives Phase 1 hub title selection, Phase 4 README/Show HN copy, a
 | Field (Tavily) | Field (CRW flat) | Match? |
 |---|---|---|
 | `query` (echoed) | not echoed | gap |
-| `answer` | not present | gap (no synthesis) |
+| `answer` | `answer` (present when the request sets `answer: true` and an LLM is available) | ✅ |
 | `images` (top-level) | only via `sources: ["images"]` (grouped shape) | semantic differ |
 | `results[].title` | `data[].title` | ✅ |
 | `results[].url` | `data[].url` | ✅ |
@@ -123,7 +123,9 @@ class CrwTavilyShim:
     """Adapt a Tavily-style call to CRW /v1/search.
 
     Caveats vs real Tavily:
-      - No `answer` synthesis (returns "" if include_answer is set).
+      - `include_answer` maps to CRW's `answer: true`. It needs an LLM (a
+        server-side key, or a per-request `llmApiKey`); check `search.answer`
+        on `GET /v1/capabilities`. CRW has no `basic`/`advanced` depth knob.
       - No `include_domains` / `exclude_domains` / `country` filtering.
       - `topic="finance"` is not supported.
       - `score` is search-backend-derived; treat as ordinal not absolute.
@@ -143,6 +145,7 @@ class CrwTavilyShim:
         topic: str = "general",
         time_range: str | None = None,
         include_raw_content: bool | str = False,
+        include_answer: bool | str = False,
         **_unsupported,
     ) -> dict:
         sources = {"general": ["web"], "news": ["news"]}.get(topic, ["web"])
@@ -152,13 +155,16 @@ class CrwTavilyShim:
             body["tbs"] = tbs_map.get(time_range, time_range)
         if include_raw_content:
             body["scrapeOptions"] = {"formats": ["markdown"], "onlyMainContent": True}
+        if include_answer:
+            body["answer"] = True  # CRW has no basic/advanced depth knob
         r = requests.post(f"{self.base_url}/v1/search", json=body, headers=self.headers)
         r.raise_for_status()
         data = r.json()["data"]
-        web = data["web"] if isinstance(data, dict) and "web" in data else data
+        results = data["results"]
+        web = results["web"] if isinstance(results, dict) and "web" in results else results
         return {
             "query": query,
-            "answer": "",  # CRW does not synthesize answers
+            "answer": data.get("answer", ""),  # present only when answer: true
             "results": [
                 {
                     "title": item["title"],

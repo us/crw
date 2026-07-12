@@ -321,7 +321,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 </thead>
 <tbody><tr>
 <td>Screenshot output</td>
-<td>Not supported in this release</td>
+<td>Supported, but only on an instance with a capture-capable browser tier (Chrome or Playwright). Check <code>screenshot.supported</code> on <code>GET /v1/capabilities</code></td>
 </tr>
 <tr>
 <td><code>success</code> semantics</td>
@@ -347,7 +347,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <ol>
 <li>verify <code>scrape</code>, <code>crawl</code>, and <code>map</code> request bodies against real targets,</li>
 <li>confirm how your code interprets <code>success</code>, <code>warning</code>, and target-side HTTP statuses,</li>
-<li>remove dependencies on unsupported features such as screenshots,</li>
+<li>check <code>GET /v1/capabilities</code> for the features you depend on (screenshots, for example, need a capture-capable browser tier),</li>
 <li>and compare output quality, not just endpoint shape.</li>
 </ol>
 <p>Compatibility at the request level is useful, but output semantics and operational behavior matter just as much.</p>
@@ -374,7 +374,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <li>Treating <code>/firecrawl/v2</code> as the default API for a new CRW build. Use <code>/v1</code> unless you are migrating Firecrawl v2 SDK code.</li>
 <li>Assuming route-name compatibility means output semantics are identical.</li>
 <li>Migrating a whole workload before testing <code>warning</code> handling and failure cases.</li>
-<li>Ignoring unsupported capabilities such as screenshots and then discovering the gap in production.</li>
+<li>Assuming a capability is present without calling <code>GET /v1/capabilities</code>, and then discovering the gap in production.</li>
 </ul>
 <p>Use this page with <a href="/docs/output-formats">output formats</a> and <a href="/docs/error-codes">error codes</a> so your migration covers both payload shape and operational behavior.</p>
 </article>

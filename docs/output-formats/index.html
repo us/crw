@@ -761,10 +761,11 @@ max_tokens = 4096
 <li>and validate <code>data.json</code> in your own application before trusting it as final truth.</li>
 </ul>
 <p>If you are debugging extraction quality, request both <code>markdown</code> and <code>json</code> for a while. That makes it easy to compare the page text against the structured output.</p>
-<h2 id="not-supported-in-this-release">Not Supported in This Release</h2>
+<h2 id="requirements-and-limits">Requirements and Limits</h2>
 <ul>
-<li><code>screenshot</code> — not implemented. Requesting it will return a 422 error.</li>
-<li><code>actions</code> — click/scroll/wait actions are not yet supported. Sending <code>actions</code> will return a 400 error with a message suggesting <code>cssSelector</code> or <code>xpath</code> as alternatives.</li>
+<li><code>screenshot</code> — needs a browser tier that can capture: Chrome (<code>chrome</code>, <code>chrome_proxy</code>) or Playwright. LightPanda and Camoufox cannot capture, so an instance configured with only those refuses a screenshot request instead of returning an empty one. Sending <code>renderJs: false</code> together with <code>screenshot</code> is a 400 (a screenshot requires JS rendering). Check <code>screenshot.supported</code> on <code>GET /v1/capabilities</code> before requesting it.</li>
+<li><code>json</code> and <code>summary</code> — need an LLM: either a server-side key or a per-request <code>llmApiKey</code>. <code>GET /v1/capabilities</code> lists them under <code>formats.llmRequired</code>.</li>
+<li><code>actions</code> — click/scroll/wait actions are not supported. Sending <code>actions</code> returns a 400 with a message suggesting <code>cssSelector</code> or <code>xpath</code> as alternatives.</li>
 </ul>
 </article>
     </main>

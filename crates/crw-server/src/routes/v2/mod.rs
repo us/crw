@@ -25,7 +25,13 @@ use crate::state::AppState;
 
 /// All `/v2/*` routes. Merged into `app.rs`'s `api_routes` before the shared
 /// auth + rate-limit layers, so v2 inherits them for free.
-pub fn router() -> Router<AppState> {
+///
+/// `max_upload_bytes` is the effective `[document].max_upload_bytes` and becomes
+/// the per-route body limit on `/v2/parse`. It is passed in (rather than read
+/// from `AppState`) because the body-limit layer is installed at router-build
+/// time, before state is attached. `/v1/capabilities` advertises the same value,
+/// so the advertised upload cap is the enforced one.
+pub fn router(max_upload_bytes: usize) -> Router<AppState> {
     Router::new()
         .route(
             "/v2/scrape",
@@ -59,7 +65,7 @@ pub fn router() -> Router<AppState> {
             // here so JSON endpoints stay DoS-bounded.
             "/v2/parse",
             post(parse::parse)
-                .layer(DefaultBodyLimit::max(parse::MAX_UPLOAD_BYTES))
+                .layer(DefaultBodyLimit::max(max_upload_bytes))
                 .fallback(method_not_allowed),
         )
         .route(

@@ -328,7 +328,7 @@ Once Selenium calls are replaced, you can remove Chrome, chromedriver, and all b
 ### What you lose
 
 - Browser interaction (click, type, scroll) — not available via CRW
-- Screenshot capture — not yet supported in CRW
+- Screenshot capture on a LightPanda-only deployment — CRW captures over CDP, so it needs a Chrome or Playwright tier
 - Real browser fingerprint for anti-bot bypass
 - Full JavaScript execution for very complex SPAs
 
