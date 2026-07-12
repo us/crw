@@ -290,7 +290,7 @@ Authorization: Bearer YOUR_API_KEY</code></pre>
 <p>No request body. No query parameters.</p>
 <h2 id="response-shape">Response Shape</h2>
 <pre data-lang="json"><code class="language-json">{
-  &quot;version&quot;: &quot;0.16.0&quot;,
+  &quot;version&quot;: &quot;0.23.0&quot;,
   &quot;llm&quot;: {
     &quot;providers&quot;: [&quot;anthropic&quot;, &quot;openai&quot;, &quot;deepseek&quot;, &quot;openai-compatible&quot;, &quot;azure&quot;],
     &quot;supportsBaseUrl&quot;: true,
@@ -300,26 +300,57 @@ Authorization: Bearer YOUR_API_KEY</code></pre>
   &quot;formats&quot;: {
     &quot;supported&quot;: [
       &quot;markdown&quot;, &quot;html&quot;, &quot;rawHtml&quot;, &quot;plainText&quot;,
-      &quot;links&quot;, &quot;json&quot;, &quot;summary&quot;, &quot;changeTracking&quot;
+      &quot;links&quot;, &quot;json&quot;, &quot;summary&quot;, &quot;changeTracking&quot;, &quot;screenshot&quot;
     ],
-    &quot;changeTrackingModes&quot;: [&quot;gitDiff&quot;, &quot;json&quot;]
+    &quot;llmRequired&quot;: [&quot;json&quot;, &quot;summary&quot;],
+    &quot;changeTrackingModes&quot;: [&quot;gitDiff&quot;, &quot;json&quot;],
+    &quot;changeTrackingModesLlmRequired&quot;: [&quot;json&quot;]
   },
   &quot;search&quot;: {
-    &quot;answer&quot;: true,
-    &quot;summarizeResults&quot;: true
+    &quot;supported&quot;: true,
+    &quot;answer&quot;: false,
+    &quot;summarizeResults&quot;: false
+  },
+  &quot;screenshot&quot;: {
+    &quot;supported&quot;: true,
+    &quot;fullPage&quot;: true
+  },
+  &quot;renderers&quot;: {
+    &quot;available&quot;: [&quot;lightpanda&quot;, &quot;chrome&quot;],
+    &quot;mode&quot;: &quot;auto&quot;
+  },
+  &quot;extract&quot;: {
+    &quot;supported&quot;: true,
+    &quot;maxUrls&quot;: 50,
+    &quot;perFieldAttribution&quot;: false
   },
   &quot;documents&quot;: {
     &quot;parsers&quot;: [&quot;pdf&quot;],
     &quot;fileUpload&quot;: {
       &quot;supported&quot;: true,
-      &quot;endpoint&quot;: &quot;/v2/parse&quot;,
+      &quot;endpoint&quot;: &quot;/firecrawl/v2/parse&quot;,
       &quot;maxBytes&quot;: 52428800,
       &quot;types&quot;: [&quot;application/pdf&quot;],
       &quot;ocr&quot;: false
     }
+  },
+  &quot;limits&quot;: {
+    &quot;maxBatchUrls&quot;: 10000,
+    &quot;maxExtractUrls&quot;: 50,
+    &quot;searchDefaultLimit&quot;: 5,
+    &quot;searchMaxLimit&quot;: 20,
+    &quot;maxUploadBytes&quot;: 52428800
   }
 }</code></pre>
 <p>All keys use camelCase.</p>
+<h2 id="the-contract">The Contract</h2>
+<p>Every boolean in this response is <strong>derived from the real build (compiled cargo features) and the effective config</strong>. Nothing is hardcoded to <code>true</code>.</p>
+<p>A capability reads <code>true</code> only when the instance can perform the operation <strong>for a well-formed request that supplies no extra credentials</strong>. Credentials are reported separately rather than folded into the booleans:</p>
+<ul>
+<li><code>llm.serverKeyConfigured</code> tells you whether a server-side LLM key exists.</li>
+<li><code>formats.llmRequired</code> tells you which formats need an LLM at all.</li>
+</ul>
+<p>Bring-your-own-key is always accepted and cannot be turned off. So on a BYOK-only deployment you will see <code>search.supported: true</code> alongside <code>search.answer: false</code>: the instance cannot answer on its own, but a request that carries <code>llmApiKey</code> still gets an answer. <strong>Gate on <code>search.supported</code> if you supply your own key; gate on <code>search.answer</code> if you do not.</strong></p>
 <h2 id="fields">Fields</h2>
 <h3 id="version"><code>version</code></h3>
 <p><code>string</code> — The server binary&#39;s semver version (<code>CARGO_PKG_VERSION</code>).</p>
@@ -335,12 +366,12 @@ Authorization: Bearer YOUR_API_KEY</code></pre>
 <tbody><tr>
 <td><code>providers</code></td>
 <td><code>string[]</code></td>
-<td>LLM provider tags the server&#39;s dispatch layer supports. Always <code>[&quot;anthropic&quot;, &quot;openai&quot;, &quot;deepseek&quot;, &quot;openai-compatible&quot;, &quot;azure&quot;]</code> — these are compile-time constants.</td>
+<td>LLM provider tags the dispatcher accepts. Sourced from the same constant the dispatcher validates against, so the advertised list cannot drift from the accepted one.</td>
 </tr>
 <tr>
 <td><code>supportsBaseUrl</code></td>
 <td><code>boolean</code></td>
-<td>Always <code>true</code>. Any provider can be redirected to a custom base URL per request.</td>
+<td>The dispatcher accepts a custom <code>baseUrl</code> on the scrape and search paths. Note: <code>POST /v1/extract</code> rejects <code>baseUrl</code> — for that route the endpoint is configured server-side via <code>[extraction.llm] base_url</code>.</td>
 </tr>
 <tr>
 <td><code>serverKeyConfigured</code></td>
@@ -370,12 +401,22 @@ Authorization: Bearer YOUR_API_KEY</code></pre>
 <tbody><tr>
 <td><code>supported</code></td>
 <td><code>string[]</code></td>
-<td>Output formats this instance can produce. The hosted API always returns all 8: <code>markdown</code>, <code>html</code>, <code>rawHtml</code>, <code>plainText</code>, <code>links</code>, <code>json</code>, <code>summary</code>, <code>changeTracking</code>.</td>
+<td>Output formats this build and config can actually produce. Eight are always present: <code>markdown</code>, <code>html</code>, <code>rawHtml</code>, <code>plainText</code>, <code>links</code>, <code>json</code>, <code>summary</code>, <code>changeTracking</code>. A ninth, <code>screenshot</code>, appears only when a capture-capable renderer is compiled in and configured — it is listed here exactly when <code>screenshot.supported</code> is <code>true</code>.</td>
+</tr>
+<tr>
+<td><code>llmRequired</code></td>
+<td><code>string[]</code></td>
+<td>Formats that additionally need an LLM: a server key (<code>llm.serverKeyConfigured</code>) or a per-request <code>llmApiKey</code>. Requesting one without a key is a hard error, never a silent downgrade.</td>
 </tr>
 <tr>
 <td><code>changeTrackingModes</code></td>
 <td><code>string[]</code></td>
-<td>Diff modes available when <code>changeTracking</code> is in <code>supported</code>. Values: <code>gitDiff</code>, <code>json</code>. Empty on instances where <code>changeTracking</code> is unavailable.</td>
+<td>Diff modes available when <code>changeTracking</code> is in <code>supported</code>. Values: <code>gitDiff</code>, <code>json</code>.</td>
+</tr>
+<tr>
+<td><code>changeTrackingModesLlmRequired</code></td>
+<td><code>string[]</code></td>
+<td>Change-tracking modes that need an LLM. <code>gitDiff</code> is deterministic and needs none; <code>json</code> mode calls an LLM.</td>
 </tr>
 </tbody></table>
 <h3 id="search"><code>search</code></h3>
@@ -388,17 +429,92 @@ Authorization: Bearer YOUR_API_KEY</code></pre>
 </tr>
 </thead>
 <tbody><tr>
+<td><code>supported</code></td>
+<td><code>boolean</code></td>
+<td><code>POST /v1/search</code> is usable: <code>[search] enabled</code> is on and a backend URL is configured.</td>
+</tr>
+<tr>
 <td><code>answer</code></td>
 <td><code>boolean</code></td>
-<td>Whether the instance supports LLM-synthesized answers on <code>POST /v1/search</code>.</td>
+<td>LLM-synthesized answers work <strong>without a caller-supplied key</strong> — that is, <code>supported</code> is <code>true</code> <strong>and</strong> a server LLM key is configured. When this is <code>false</code> but <code>supported</code> is <code>true</code>, a request carrying <code>llmApiKey</code> still gets an answer.</td>
 </tr>
 <tr>
 <td><code>summarizeResults</code></td>
 <td><code>boolean</code></td>
-<td>Whether per-result summaries are available on the search endpoint.</td>
+<td>Per-result summaries. Same gate as <code>answer</code>.</td>
 </tr>
 </tbody></table>
-<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">The `search` object does not expose whether a SearXNG backend is reachable. A live search configuration check happens at request time — if SearXNG is missing, the `/v1/search` endpoint returns HTTP 503 with `error_code: "search_disabled"`.</div></div><h3 id="documents"><code>documents</code></h3>
+<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">`search.supported` reflects configuration, not a live health probe. A configured-but-unreachable backend still reports `true`; at request time `/v1/search` returns HTTP 503 with `error_code: "search_disabled"` when search is off, and a `422` when the backend is unreachable.</div></div><h3 id="screenshot"><code>screenshot</code></h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>supported</code></td>
+<td><code>boolean</code></td>
+<td>A capture-capable renderer is compiled in <strong>and</strong> configured. Capture runs over CDP <code>Page.captureScreenshot</code>, so it needs <code>chrome</code>, <code>chrome_proxy</code> or <code>playwright</code>. LightPanda and Camoufox cannot capture: an instance holding only those reports <code>false</code>, and the scrape path fails closed on a screenshot request rather than returning an empty image.</td>
+</tr>
+<tr>
+<td><code>fullPage</code></td>
+<td><code>boolean</code></td>
+<td>Full-page capture (<code>screenshot@fullPage</code> on v2, <code>screenshotFullPage</code> on v1). Same gate as <code>supported</code>.</td>
+</tr>
+</tbody></table>
+<h3 id="renderers"><code>renderers</code></h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>available</code></td>
+<td><code>string[]</code></td>
+<td>The JS renderer tiers this instance actually constructed, in fallback order. Reflects both the build (a binary without the <code>cdp</code> feature constructs none) and the config (a tier with no endpoint set is never built). These are exactly the values the per-request <code>renderer</code> pin accepts.</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>string</code></td>
+<td>Effective <code>[renderer] mode</code> — e.g. <code>auto</code>, <code>none</code>, or a pinned tier.</td>
+</tr>
+<tr>
+<td><code>renderJsDefault</code></td>
+<td><code>boolean?</code></td>
+<td>Effective <code>[renderer] render_js_default</code>. Omitted when unset (auto-detect).</td>
+</tr>
+</tbody></table>
+<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">`available` means "constructible and pinnable", not "always in the auto ladder". `camoufox` is built whenever its endpoint is set even when it is excluded from auto, and `chrome_proxy` is held out of the auto ladder as a hard-block recovery arm when `auto_egress_escalation` is on.</div></div><h3 id="extract"><code>extract</code></h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>supported</code></td>
+<td><code>boolean</code></td>
+<td><code>POST /v1/extract</code> (async, multi-URL) is mounted. Each URL still needs an LLM — see <code>llm.serverKeyConfigured</code> and BYOK.</td>
+</tr>
+<tr>
+<td><code>maxUrls</code></td>
+<td><code>number</code></td>
+<td>Max URLs accepted per request (<code>[crawler] max_extract_urls</code>).</td>
+</tr>
+<tr>
+<td><code>perFieldAttribution</code></td>
+<td><code>boolean</code></td>
+<td>Per-field <code>basis</code> attribution. <code>false</code> today: <code>/v1/extract</code> rejects <code>basis: true</code> outright rather than silently ignoring it.</td>
+</tr>
+</tbody></table>
+<h3 id="documents"><code>documents</code></h3>
 <table>
 <thead>
 <tr>
@@ -415,17 +531,17 @@ Authorization: Bearer YOUR_API_KEY</code></pre>
 <tr>
 <td><code>fileUpload.supported</code></td>
 <td><code>boolean</code></td>
-<td><code>true</code> when <code>POST /v2/parse</code> accepts uploads. Matches <code>parsers</code> non-empty.</td>
+<td><code>true</code> when the parse endpoint accepts uploads: a parser is compiled and enabled, and the enforced cap is above zero.</td>
 </tr>
 <tr>
 <td><code>fileUpload.endpoint</code></td>
 <td><code>string</code></td>
-<td>Always <code>/v2/parse</code> when uploads are supported.</td>
+<td>The canonical upload path, <code>/firecrawl/v2/parse</code>. The deprecated root alias <code>/v2/parse</code> is still mounted and behaves identically.</td>
 </tr>
 <tr>
 <td><code>fileUpload.maxBytes</code></td>
 <td><code>number</code></td>
-<td>Maximum accepted upload size in bytes (default 52 428 800 = 50 MiB). Set by <code>[document] max_upload_bytes</code> in config.</td>
+<td>The <strong>enforced</strong> upload cap in bytes — the same value the body-limit layer applies, i.e. <code>[document] max_upload_bytes</code> clamped by a 50 MiB in-memory ceiling. Lowering the knob lowers the enforced cap; raising it past the ceiling does not.</td>
 </tr>
 <tr>
 <td><code>fileUpload.types</code></td>
@@ -438,23 +554,57 @@ Authorization: Bearer YOUR_API_KEY</code></pre>
 <td>Always <code>false</code>. The built-in PDF parser does not include an OCR engine — scanned or image-only PDFs yield empty or partial text.</td>
 </tr>
 </tbody></table>
-<h2 id="hosted-api-values">Hosted API Values</h2>
-<p>On <code>api.fastcrw.com</code> you can expect:</p>
-<ul>
-<li><code>llm.serverKeyConfigured</code> — <code>false</code> (SaaS relies on per-request keys)</li>
-<li><code>documents.parsers</code> — <code>[&quot;pdf&quot;]</code> (PDF support is enabled)</li>
-<li><code>documents.fileUpload.maxBytes</code> — <code>52428800</code> (50 MiB)</li>
-<li><code>formats.supported</code> — all 8 formats</li>
-<li><code>search.answer</code> and <code>search.summarizeResults</code> — <code>true</code></li>
-</ul>
+<h3 id="limits"><code>limits</code></h3>
+<p>Only enforced caps appear here. Each value is the one the server actually applies, not a documented default.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>maxBatchUrls</code></td>
+<td><code>number</code></td>
+<td>Max URLs per batch-scrape submission (<code>[crawler] max_batch_urls</code>). A larger batch is rejected up front.</td>
+</tr>
+<tr>
+<td><code>maxExtractUrls</code></td>
+<td><code>number</code></td>
+<td>Max URLs per <code>/v1/extract</code> request (<code>[crawler] max_extract_urls</code>). Mirrors <code>extract.maxUrls</code>.</td>
+</tr>
+<tr>
+<td><code>searchDefaultLimit</code></td>
+<td><code>number</code></td>
+<td>The <code>limit</code> <code>/v1/search</code> uses when the request omits it.</td>
+</tr>
+<tr>
+<td><code>searchMaxLimit</code></td>
+<td><code>number</code></td>
+<td>Hard cap on the <code>/v1/search</code> <code>limit</code>.</td>
+</tr>
+<tr>
+<td><code>maxUploadBytes</code></td>
+<td><code>number</code></td>
+<td>Enforced upload cap on the parse endpoint. Mirrors <code>documents.fileUpload.maxBytes</code>.</td>
+</tr>
+</tbody></table>
+<h2 id="reading-a-deployment">Reading a Deployment</h2>
+<p>The two deployment shapes differ in exactly one interesting way — where the LLM key lives.</p>
+<p><strong>BYOK-fronted (a SaaS or gateway in front of the engine).</strong> The gateway injects an LLM key on each request, so the engine itself has none: <code>llm.serverKeyConfigured</code> is <code>false</code>, and therefore <code>search.answer</code> and <code>search.summarizeResults</code> are <code>false</code> too. <code>search.supported</code> is still <code>true</code>. This is not a missing feature — it is the honest statement that the <em>engine alone</em>, with no caller-supplied key, cannot answer. Callers that send <code>llmApiKey</code> get answers.</p>
+<p><strong>Self-hosted with a server key.</strong> <code>[extraction.llm] api_key</code> is set, so <code>llm.serverKeyConfigured</code> is <code>true</code> and <code>search.answer</code> follows <code>search.supported</code>.</p>
+<p>Everything else (renderer tiers, screenshot capture, parsers, limits) varies per deployment and cannot be predicted without asking.</p>
 <h2 id="using-capabilities-at-runtime">Using Capabilities at Runtime</h2>
 <h3 id="agents-and-sdks">Agents and SDKs</h3>
 <p>Call <code>GET /v1/capabilities</code> once on startup and cache the result. Use it to:</p>
 <ul>
 <li>decide whether to send <code>formats: [&quot;json&quot;]</code> (check <code>formats.supported</code> contains <code>&quot;json&quot;</code>)</li>
-<li>decide whether to supply <code>llmApiKey</code> in the body (check <code>llm.serverKeyConfigured</code>)</li>
-<li>decide whether to offer file-upload UI or API paths (check <code>documents.fileUpload.supported</code>)</li>
+<li>decide whether to supply <code>llmApiKey</code> in the body (check <code>llm.serverKeyConfigured</code>, and <code>formats.llmRequired</code> for which formats need one)</li>
+<li>decide whether to offer screenshots (check <code>screenshot.supported</code> — never assume it from the presence of a renderer)</li>
+<li>decide whether to offer file-upload UI or API paths (check <code>documents.fileUpload.supported</code>, and size the client-side guard from <code>limits.maxUploadBytes</code>)</li>
 <li>confirm whether <code>changeTracking</code> is available before using monitor scrapes (check <code>formats.supported</code> contains <code>&quot;changeTracking&quot;</code>)</li>
+<li>size batch requests against <code>limits.maxBatchUrls</code> instead of discovering the cap through a rejection</li>
 </ul>
 <pre data-lang="python"><code class="language-python">import httpx
 
@@ -468,7 +618,14 @@ if caps[&quot;llm&quot;][&quot;serverKeyConfigured&quot;]:
 else:
     llm_key_in_body = &quot;sk-...&quot;      # caller must supply a per-request key
 
-pdf_ok = caps[&quot;documents&quot;][&quot;fileUpload&quot;][&quot;supported&quot;]</code></pre>
+pdf_ok = caps[&quot;documents&quot;][&quot;fileUpload&quot;][&quot;supported&quot;]
+can_screenshot = caps[&quot;screenshot&quot;][&quot;supported&quot;]
+
+# Gate on `supported` when you bring your own key; on `answer` when you do not.
+if llm_key_in_body:
+    can_answer = caps[&quot;search&quot;][&quot;supported&quot;]
+else:
+    can_answer = caps[&quot;search&quot;][&quot;answer&quot;]</code></pre>
 <h3 id="self-hosted-instances">Self-Hosted Instances</h3>
 <p>Self-hosted deployments differ from the hosted API in several ways a caller cannot predict without checking:</p>
 <ul>
@@ -483,8 +640,8 @@ pdf_ok = caps[&quot;documents&quot;][&quot;fileUpload&quot;][&quot;supported&quo
 <p>On a self-hosted instance with no API keys configured, the route is public.</p>
 <h2 id="what-to-read-next">What To Read Next</h2>
 <ul>
-<li><a href="/docs/output-formats">Output Formats</a> — the 8 formats and when to use each</li>
-<li><a href="/docs/pdf-parsing">PDF Parsing</a> — the <code>POST /v2/parse</code> upload endpoint</li>
+<li><a href="/docs/output-formats">Output Formats</a> — the 9 formats and when to use each</li>
+<li><a href="/docs/pdf-parsing">PDF Parsing</a> — the <code>POST /firecrawl/v2/parse</code> upload endpoint</li>
 <li><a href="/docs/search">Search</a> — <code>POST /v1/search</code> and the LLM answer path</li>
 <li><a href="/docs/self-hosting">Self-Hosting</a> — configuration reference for <code>[document]</code>, <code>[extraction.llm]</code>, and <code>[search]</code></li>
 </ul>

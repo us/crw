@@ -79,7 +79,7 @@ documents = loader.load()
 
 **Why it's good for LLM pipelines:** The Firecrawl-compatible API means you can use existing LangChain/LlamaIndex integrations without code changes. The built-in MCP server makes it the natural choice for AI agents. The lightweight footprint means you can run it alongside your LLM inference stack without competing for resources.
 
-**Limitations:** No screenshot capture. No PDF/DOCX parsing (both on the roadmap). JavaScript rendering via LightPanda is good but not Playwright-level for complex SPAs. AGPL-3.0 license has implications for proprietary embedding.
+**Limitations:** Screenshot capture needs a Chrome-class renderer tier (LightPanda alone cannot capture). Document parsing is PDF-only with no OCR — no DOCX or XLSX. JavaScript rendering via LightPanda is good but not Playwright-level for complex SPAs. AGPL-3.0 license has implications for proprietary embedding.
 
 ### 2. Crawl4AI
 

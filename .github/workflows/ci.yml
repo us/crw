@@ -65,6 +65,13 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+      # `cargo test --workspace` unifies features, so crw-server is always built
+      # WITH `cdp` (crw-cli enables it). Run the crate on its own default feature
+      # set too, so the CDP-less build is really exercised — that is the branch
+      # where `/v1/capabilities` must report no renderers and no screenshot.
+      - name: Test crw-server without the cdp feature
+        run: cargo test -p crw-server
+
   sdk-ts:
     runs-on: ubuntu-latest
     strategy:

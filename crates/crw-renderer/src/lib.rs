@@ -119,6 +119,21 @@ pub fn render_reserve(pool_size: usize) -> usize {
     }
 }
 
+/// Whether the named renderer tier can capture a screenshot.
+///
+/// Screenshot capture is CDP `Page.captureScreenshot` on vanilla Chrome
+/// (`chrome`, `chrome_proxy`, `playwright`). LightPanda's CdpRenderer returns a
+/// ~30-byte stub and Camoufox is an HTTP sidecar that doesn't speak CDP —
+/// neither can capture.
+///
+/// SINGLE SOURCE OF TRUTH: used both by the request-time renderer filter in
+/// `FallbackRenderer::fetch_with_js` and by
+/// [`FallbackRenderer::supports_screenshot`] (which `/v1/capabilities` reports),
+/// so the advertised capability and the runtime behaviour cannot drift apart.
+pub fn renderer_can_screenshot(name: &str) -> bool {
+    name != "lightpanda" && name != "camoufox"
+}
+
 /// Whether a screenshot was requested for the current task (reads the
 /// [`REQUEST_SCREENSHOT`] task-local). `false` when unset / outside a scope.
 pub fn screenshot_requested() -> bool {
@@ -883,6 +898,21 @@ impl FallbackRenderer {
         self.js_renderers.iter().map(|r| r.name()).collect()
     }
 
+    /// Whether this instance can actually capture a screenshot: at least one
+    /// constructed JS renderer speaks CDP `Page.captureScreenshot`. Both the
+    /// build features (no CDP feature ⇒ no tier is constructable) and the
+    /// operator config (no `ws_url` ⇒ no tier) are reflected, because
+    /// `js_renderers` is only populated when both hold.
+    ///
+    /// Shares [`renderer_can_screenshot`] with the request-time filter in
+    /// [`Self::fetch_with_js`], so `/v1/capabilities` and the runtime can never
+    /// disagree about which tiers can capture.
+    pub fn supports_screenshot(&self) -> bool {
+        self.js_renderer_names()
+            .iter()
+            .any(|name| renderer_can_screenshot(name))
+    }
+
     /// Fetch a URL with smart mode: HTTP first, then JS if needed.
     ///
     /// When `render_js` is `None` (auto-detect), the renderer also escalates to
@@ -1562,15 +1592,14 @@ impl FallbackRenderer {
             }
         }
 
-        // Screenshot capture is CDP `Page.captureScreenshot` on vanilla Chrome.
-        // LightPanda's CdpRenderer returns a ~30-byte stub and Camoufox is an
-        // HTTP sidecar that doesn't speak CDP — neither can capture. Drop both
-        // and fail CLOSED if that empties the chain, rather than returning a
-        // screenshot-less result the caller asked for (mirrors the proxy retain
-        // above). Applies even to a hard pin: pinning camoufox/lightpanda +
-        // requesting a screenshot is unsatisfiable.
+        // Drop the tiers that cannot capture (see `renderer_can_screenshot` —
+        // the same predicate `/v1/capabilities` reports) and fail CLOSED if that
+        // empties the chain, rather than returning a screenshot-less result the
+        // caller asked for (mirrors the proxy retain above). Applies even to a
+        // hard pin: pinning camoufox/lightpanda + requesting a screenshot is
+        // unsatisfiable.
         if screenshot_requested() {
-            renderers.retain(|r| r.name() != "lightpanda" && r.name() != "camoufox");
+            renderers.retain(|r| renderer_can_screenshot(r.name()));
             if renderers.is_empty() {
                 return Err(CrwError::RendererError(
                     "a screenshot was requested but no CDP-capable Chrome renderer is \

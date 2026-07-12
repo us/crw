@@ -18,6 +18,30 @@ use rand::RngExt;
 use std::sync::OnceLock;
 use std::time::Duration;
 
+/// Provider tags [`dispatch`] recognises — the single source of truth for the
+/// `llm.providers` field of `GET /v1/capabilities`. Anything not listed here is
+/// rejected up-front, so the advertised list and the accepted list cannot drift.
+pub const SUPPORTED_PROVIDERS: &[&str] = &[
+    "anthropic",
+    "openai",
+    "deepseek",
+    "openai-compatible",
+    "azure",
+];
+
+/// Whether [`dispatch`] can route to this provider tag (case-insensitive).
+pub fn is_supported_provider(provider: &str) -> bool {
+    let p = provider.to_ascii_lowercase();
+    SUPPORTED_PROVIDERS.contains(&p.as_str())
+}
+
+fn unknown_provider_error(provider: &str) -> CrwError {
+    CrwError::InvalidRequest(format!(
+        "unknown LLM provider: {provider}. Supported: {}",
+        SUPPORTED_PROVIDERS.join(", ")
+    ))
+}
+
 const ANTHROPIC_DEFAULT_BASE_URL: &str = "https://api.anthropic.com/v1/messages";
 const OPENAI_DEFAULT_BASE_URL: &str = "https://api.openai.com/v1/chat/completions";
 const ANTHROPIC_VERSION: &str = "2023-06-01";
@@ -243,6 +267,11 @@ async fn dispatch(
     // D reserved lane: bound LLM-call concurrency and keep a slice for
     // interactive traffic. Read the class here (async side) and hold the permit
     // across the provider HTTP call.
+    // Reject unknown tags against SUPPORTED_PROVIDERS first, so the list served
+    // by `/v1/capabilities` is exactly the list this dispatcher accepts.
+    if !is_supported_provider(provider) {
+        return Err(unknown_provider_error(provider));
+    }
     let _llm_permit = crate::llm_gate::acquire_llm().await;
     let client = shared_client();
     match provider.to_ascii_lowercase().as_str() {
@@ -302,9 +331,10 @@ async fn dispatch(
             )
             .await
         }
-        other => Err(CrwError::InvalidRequest(format!(
-            "unknown LLM provider: {other}. Supported: anthropic, openai, deepseek, azure"
-        ))),
+        // Unreachable: the `is_supported_provider` guard above already rejected
+        // anything without an arm. Kept so a new SUPPORTED_PROVIDERS entry that
+        // forgets its arm fails loudly instead of silently routing nowhere.
+        other => Err(unknown_provider_error(other)),
     }
 }
 
@@ -654,6 +684,45 @@ fn parse_openai_usage(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn supported_providers_are_the_ones_dispatch_accepts() {
+        // `/v1/capabilities` advertises SUPPORTED_PROVIDERS verbatim, so every
+        // entry must be routable and nothing else may be.
+        for provider in SUPPORTED_PROVIDERS {
+            assert!(
+                is_supported_provider(provider),
+                "advertised provider `{provider}` is not accepted by dispatch"
+            );
+            assert!(
+                is_supported_provider(&provider.to_uppercase()),
+                "provider matching must be case-insensitive: `{provider}`"
+            );
+        }
+        assert!(!is_supported_provider("gemini"));
+        assert!(!is_supported_provider(""));
+    }
+
+    #[test]
+    fn unknown_provider_error_lists_every_supported_provider() {
+        let msg = unknown_provider_error("gemini").to_string();
+        for provider in SUPPORTED_PROVIDERS {
+            assert!(
+                msg.contains(provider),
+                "the unknown-provider error must list `{provider}`, got: {msg}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn unknown_provider_is_rejected_before_any_http_call() {
+        let err = dispatch(
+            "gemini", "key", "model", None, 128, None, None, None, "sys", "user",
+        )
+        .await
+        .expect_err("an unsupported provider must be rejected");
+        assert!(err.to_string().contains("unknown LLM provider"));
+    }
 
     #[tokio::test]
     async fn empty_api_key_errors_synchronously() {

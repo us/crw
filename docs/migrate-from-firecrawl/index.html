@@ -493,14 +493,14 @@ console.log(result.json);</code></pre></div>
 <tbody><tr>
 <td><strong><code>/v1/extract</code> route</strong></td>
 <td>Standalone async route</td>
-<td>Not implemented — use <code>/v1/scrape</code> + <code>jsonSchema</code></td>
-<td>Port single-URL extract calls (see Step 4 above). Multi-URL loops need iteration.</td>
+<td>Supported — <code>POST /v1/extract</code> returns a job id you poll on <code>GET /v1/extract/{id}</code></td>
+<td>None. <code>/v1/scrape</code> + <code>jsonSchema</code> also works for a single URL.</td>
 </tr>
 <tr>
 <td><strong>Multi-URL <code>/extract</code></strong></td>
 <td>One call → N URLs</td>
-<td>Not supported</td>
-<td>Iterate URLs in your code or use <code>/v1/crawl</code>.</td>
+<td>Supported — pass <code>urls: [...]</code> (capped by <code>limits.maxExtractUrls</code>, default 50)</td>
+<td>None. Check the cap on <code>GET /v1/capabilities</code>.</td>
 </tr>
 <tr>
 <td><strong><code>/v1/deep-research</code></strong></td>
@@ -535,8 +535,8 @@ console.log(result.json);</code></pre></div>
 <tr>
 <td><strong>Screenshot format</strong></td>
 <td>Supported</td>
-<td>Not supported — <code>/v1/scrape</code> rejects <code>&quot;screenshot&quot;</code> with HTTP 400 (<code>&quot;Unknown format &#39;screenshot&#39;&quot;</code>)</td>
-<td>Remove <code>&quot;screenshot&quot;</code> from your <code>formats</code> array.</td>
+<td>Supported on an instance with a capture-capable browser tier (Chrome or Playwright); LightPanda and Camoufox cannot capture</td>
+<td>Check <code>screenshot.supported</code> on <code>GET /v1/capabilities</code> before relying on it.</td>
 </tr>
 <tr>
 <td><strong><code>data.metadata</code> field names</strong></td>
@@ -613,8 +613,8 @@ print(&quot;All checks passed — safe to promote to production.&quot;)</code></
 <li><code>/v1/deep-research</code> (Spark model pipeline)</li>
 <li><code>/v1/agent</code> (AI agent sessions)</li>
 <li>Fire-engine proprietary anti-bot layer</li>
-<li>Rotating proxy pool (bring your own proxy via the <code>proxy</code> scrape param)</li>
 </ul>
+<p>Bring-your-own-proxy IS supported on a self-hosted instance: set a pool in <code>[proxy]</code>, or pass <code>proxy</code> on the scrape body. See <a href="/docs/proxies">Proxies</a>.</p>
 <p>For any capability not in the matrix above, check <a href="../COMPATIBILITY-firecrawl.md"><code>COMPATIBILITY-firecrawl.md</code></a> which is the authoritative reference.</p>
 </article>
     </main>

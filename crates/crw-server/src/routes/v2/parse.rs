@@ -27,10 +27,24 @@ use super::scrape::V2ScrapeResponse;
 use crate::error::AppError;
 use crate::state::AppState;
 
-/// Hard request-body cap for `/v2/parse` (50 MiB), applied as a per-route
-/// `DefaultBodyLimit` in `v2/mod.rs`. Matches the renderer's response cap and
-/// the default `[document].max_upload_bytes`.
+/// Hard request-body ceiling for `/v2/parse` (50 MiB) and the default value of
+/// `[document].max_upload_bytes`. The handler buffers each upload in memory
+/// (`upload_concurrency` of them at once), so this ceiling bounds peak RSS.
+///
+/// The ENFORCED cap is [`effective_max_upload_bytes`] — the config value,
+/// clamped by this ceiling — applied as a per-route `DefaultBodyLimit` in
+/// `v2/mod.rs`, and it is exactly the value `/v1/capabilities` advertises.
 pub const MAX_UPLOAD_BYTES: usize = 52_428_800;
+
+/// The upload cap actually enforced on `/v2/parse`: the operator's
+/// `[document].max_upload_bytes`, clamped by the [`MAX_UPLOAD_BYTES`] ceiling so
+/// raising the knob cannot blow up peak memory. Lowering it works as expected.
+///
+/// Single source of truth for the body-limit layer (`v2/mod.rs`) and for the
+/// `documents.fileUpload.maxBytes` / `limits.maxUploadBytes` capability fields.
+pub fn effective_max_upload_bytes(config: &crw_core::config::AppConfig) -> usize {
+    config.document.max_upload_bytes.min(MAX_UPLOAD_BYTES)
+}
 
 /// Bounds the number of uploads parsed concurrently. Initialized lazily from
 /// `[document].upload_concurrency` on first request.

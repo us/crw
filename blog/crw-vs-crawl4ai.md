@@ -33,7 +33,7 @@ Neither tool is universally "better." They have different design philosophies: C
 | LangChain FirecrawlLoader | ✅ Works (set api_url) | ❌ Requires custom loader |
 | Self-host deployment | Single binary / one Docker command | Python env + Playwright + Chromium |
 | Extensibility in Python | ❌ Not applicable | ✅ Rich hooks/strategies |
-| Screenshot support | ❌ Roadmap | ✅ Yes |
+| Screenshot support | ✅ (needs a Chrome-class tier) | ✅ Yes |
 | REST API design | Firecrawl-compatible, REST-first | FastAPI, Python-library-first |
 | License | AGPL-3.0 | Apache-2.0 |
 
@@ -384,7 +384,7 @@ If you are choosing between the two specifically for a REST-based workflow, CRW'
 ## Where Crawl4AI Is the Better Fit
 
 - **Python-native extensibility:** Custom hooks, extraction strategies, and event-driven control are core to Crawl4AI's design. Writing a `JsonCssExtractionStrategy` or a custom `ChunkingStrategy` in Python is something CRW simply cannot match.
-- **Screenshots and media:** Crawl4AI can capture full-page screenshots and handle media downloads. CRW does not support screenshots yet (it is on the roadmap).
+- **Screenshots and media:** both capture full-page screenshots; CRW needs a Chrome-class renderer tier for it (LightPanda cannot capture). Crawl4AI additionally handles media downloads, which CRW does not.
 - **Complex browser automation:** Full Playwright control for login flows, cookie handling, form submission, and single-page app interactions where CRW's SPA support is less mature.
 - **Deep crawl orchestration:** Crawl4AI's crawl graph and strategy system is more configurable for complex multi-step crawl jobs with conditional logic.
 - **Python AI ecosystem integration depth:** If you want tight in-process integration with LangChain or LlamaIndex — shared memory, direct object passing, no HTTP overhead — Crawl4AI's library model is a better fit.

@@ -285,46 +285,53 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
       <article id="article" role="main"><h1 id="research-api">Research API</h1>
 <p>A purpose-built research API for scientific agents: search papers, inspect
 metadata, read passages, expand the citation graph, and search research-related
-GitHub. These routes live on the <code>/firecrawl/v2</code> compatibility surface because they mirror
-Firecrawl&#39;s research API for migration work.</p>
+GitHub.</p>
 <p>On the <a href="https://fastcrw.com/benchmarks/arxivqa-research-recall">ArXivQA benchmark</a>
 this stack reaches <strong>61.0% recall — ahead of Firecrawl&#39;s Research Index (53.3%)</strong>.
-It&#39;s <strong>live</strong>: results come from merging our own SearXNG search (web + research
-mode) with live open scholarly sources, including full-text paper search — no
-self-hosted paper index.</p>
+It&#39;s <strong>live</strong>: results merge our own web and research search with live open
+scholarly sources, including full-text paper search — no self-hosted paper index.</p>
 <h2 id="authentication">Authentication</h2>
 <p>Use a Bearer token: <code>Authorization: Bearer &lt;crw_live_…&gt;</code>. Get a key from the
-<a href="https://fastcrw.com/dashboard">dashboard</a>. Self-host serves the same shapes at
-the engine path <code>/v1/search/research/*</code>.</p>
+<a href="https://fastcrw.com/dashboard">dashboard</a>.</p>
 <h2 id="endpoints">Endpoints</h2>
+<p>Both surfaces return identical shapes. The cloud API mirrors Firecrawl&#39;s research
+paths for migration work; the engine serves them natively under <code>/v1</code>. There are
+no research routes on the engine&#39;s <code>/firecrawl/v2</code> compatibility surface.</p>
 <table>
 <thead>
 <tr>
 <th>Task</th>
-<th>Endpoint</th>
+<th>Cloud (<code>https://fastcrw.com/api</code>)</th>
+<th>Self-host (engine)</th>
 </tr>
 </thead>
 <tbody><tr>
 <td>Search papers</td>
-<td><code>GET /firecrawl/v2/search/research/papers</code></td>
+<td><code>GET /v2/search/research/papers</code></td>
+<td><code>GET /v1/search/research/papers</code></td>
 </tr>
 <tr>
 <td>Inspect metadata / read passages</td>
-<td><code>GET /firecrawl/v2/search/research/papers/{id}</code></td>
+<td><code>GET /v2/search/research/papers/{id}</code></td>
+<td><code>GET /v1/search/research/papers/{id}</code></td>
 </tr>
 <tr>
 <td>Find related papers</td>
-<td><code>GET /firecrawl/v2/search/research/papers/{id}/similar</code></td>
+<td><code>GET /v2/search/research/papers/{id}/similar</code></td>
+<td><code>GET /v1/search/research/papers/{id}/similar</code></td>
 </tr>
 <tr>
 <td>Search GitHub</td>
-<td><code>GET /firecrawl/v2/search/research/github</code></td>
+<td><code>GET /v2/search/research/github</code></td>
+<td><code>GET /v1/search/research/github</code></td>
 </tr>
 </tbody></table>
+<p>The sections below name the engine&#39;s native <code>/v1</code> path; the curl examples hit the
+cloud API.</p>
 <h2 id="search-papers">Search papers</h2>
-<p><code>GET /firecrawl/v2/search/research/papers?query=&amp;k=&amp;authors=&amp;categories=&amp;from=&amp;to=</code></p>
+<p><code>GET /v1/search/research/papers?query=&amp;k=&amp;authors=&amp;categories=&amp;from=&amp;to=</code></p>
 <pre data-lang="bash"><code class="language-bash">curl -s -H &quot;Authorization: Bearer $FASTCRW_API_KEY&quot; \
-  &quot;https://api.fastcrw.com/firecrawl/v2/search/research/papers?query=diffusion%20image%20synthesis&amp;k=20&quot;</code></pre>
+  &quot;https://fastcrw.com/api/v2/search/research/papers?query=diffusion%20image%20synthesis&amp;k=20&quot;</code></pre>
 <p>Returns ranked papers. <code>paperId</code> is the canonical id (a stable work id when
 known, else <code>arxiv:&lt;id&gt;</code>); <code>primaryId</code> is the preferred source id
 (<code>arxiv:2105.05233</code>); <code>ids</code> holds the prefix-less source ids.</p>
@@ -335,17 +342,17 @@ known, else <code>arxiv:&lt;id&gt;</code>); <code>primaryId</code> is the prefer
 ] }</code></pre>
 <p>Filters: <code>authors</code> (substring), <code>categories</code>, <code>from</code> / <code>to</code> (<code>YYYY-MM-DD</code>).</p>
 <h2 id="inspect-a-paper-read-passages">Inspect a paper / read passages</h2>
-<p><code>GET /firecrawl/v2/search/research/papers/{id}</code> returns metadata (<code>authors</code>, <code>categories</code>,
+<p><code>GET /v1/search/research/papers/{id}</code> returns metadata (<code>authors</code>, <code>categories</code>,
 <code>createdDate</code>, …). Accepts an arXiv id, a work id, or a DOI. Add <code>?query=</code> to
 return the top passages answering a question:</p>
 <pre data-lang="bash"><code class="language-bash">curl -s -H &quot;Authorization: Bearer $FASTCRW_API_KEY&quot; \
-  &quot;https://api.fastcrw.com/firecrawl/v2/search/research/papers/arxiv:1706.03762?query=what%20is%20the%20attention%20mechanism&amp;k=4&quot;</code></pre>
+  &quot;https://fastcrw.com/api/v2/search/research/papers/arxiv:1706.03762?query=what%20is%20the%20attention%20mechanism&amp;k=4&quot;</code></pre>
 <h2 id="find-related-papers">Find related papers</h2>
-<p><code>GET /firecrawl/v2/search/research/papers/{id}/similar?intent=&amp;mode=similar|citers|references&amp;k=</code></p>
+<p><code>GET /v1/search/research/papers/{id}/similar?intent=&amp;mode=similar|citers|references&amp;k=</code></p>
 <p><code>intent</code> is required. <code>mode</code> selects the expansion: <code>similar</code> (recommendations),
 <code>citers</code> (papers that cite the seed), <code>references</code> (papers the seed cites).</p>
 <h2 id="search-github">Search GitHub</h2>
-<p><code>GET /firecrawl/v2/search/research/github?query=&amp;k=</code> returns repository/README hits for
+<p><code>GET /v1/search/research/github?query=&amp;k=</code> returns repository/README hits for
 implementation notes and engineering prior art.</p>
 <h2 id="sdk">SDK</h2>
 <p>The Firecrawl research SDK works unchanged — set the base URL to
@@ -356,7 +363,7 @@ c.search_papers(&quot;diffusion image synthesis&quot;, k=20)
 c.get_paper(&quot;arxiv:1706.03762&quot;, query=&quot;what is the attention mechanism&quot;)
 c.related_papers(&quot;arxiv:1706.03762&quot;, intent=&quot;efficient transformers&quot;, mode=&quot;references&quot;)
 c.search_github(&quot;flash attention implementation notes&quot;)</code></pre>
-<pre data-lang="ts"><code class="language-ts">import { CrwClient } from &quot;@fastcrw/sdk&quot;;
+<pre data-lang="ts"><code class="language-ts">import { CrwClient } from &quot;crw-sdk&quot;;
 const c = new CrwClient({ apiKey: &quot;crw_live_…&quot; });
 await c.research.searchPapers(&quot;diffusion image synthesis&quot;, { k: 20 });
 await c.research.similarPapers(&quot;arxiv:1706.03762&quot;, { intent: &quot;efficient transformers&quot;, mode: &quot;references&quot; });</code></pre>

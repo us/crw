@@ -1285,8 +1285,9 @@ const result = await crw.extract({
   &quot;tag&quot;: &quot;optional-snapshot-tag&quot;
 }</code></pre>
 <h3 id="unsupported-formats-graceful-warning">Unsupported formats (graceful warning)</h3>
-<p>The following formats are recognized but not yet produced by this engine. The request succeeds with the other requested formats; a <code>warning</code> field explains what was skipped:</p>
-<p><code>screenshot</code>, <code>images</code>, <code>attributes</code>, <code>branding</code>, <code>audio</code>, <code>query</code>.</p>
+<p>The following formats are recognized but not produced by this engine. The request succeeds with the other requested formats; a <code>warning</code> field explains what was skipped:</p>
+<p><code>images</code>, <code>attributes</code>, <code>branding</code>, <code>audio</code>, <code>query</code>.</p>
+<p><code>screenshot</code> IS produced (returned as a <code>data:image/png;base64,…</code> URL), but it needs a capture-capable browser tier — Chrome (<code>chrome</code>, <code>chrome_proxy</code>) or Playwright. Check <code>screenshot.supported</code> on <code>GET /v1/capabilities</code> first.</p>
 <hr>
 <h2 id="v2crawlstatus-shared-by-crawl-and-batch">V2CrawlStatus (shared by crawl and batch)</h2>
 <pre data-lang="json"><code class="language-json">{
@@ -1369,7 +1370,7 @@ const result = await crw.extract({
 <h2 id="common-mistakes">Common mistakes</h2>
 <p><strong>Forgetting to poll.</strong> <code>POST /firecrawl/v2/crawl</code> and <code>POST /firecrawl/v2/batch/scrape</code> return a job ID, not results. The results live in <code>GET .../{ id }</code>.</p>
 <p><strong>Expecting <code>next</code> to be absent on the last page while the job is running.</strong> <code>next</code> is always emitted while <code>status</code> is <code>&quot;scraping&quot;</code>, even when all buffered pages have been returned. Stop only when <code>status</code> is <code>&quot;completed&quot;</code> (or <code>&quot;failed&quot;</code>) AND <code>next</code> is null.</p>
-<p><strong>Sending <code>formats: [&quot;screenshot&quot;]</code>.</strong> Screenshots are not yet produced. The request succeeds but <code>warning</code> explains the skip. Use <code>formats: [&quot;markdown&quot;]</code> instead.</p>
+<p><strong>Sending <code>formats: [&quot;screenshot&quot;]</code> without a capture-capable browser.</strong> Screenshots need a Chrome or Playwright tier; LightPanda and Camoufox cannot capture. Check <code>screenshot.supported</code> on <code>GET /v1/capabilities</code> before you rely on it.</p>
 <p><strong>Using <code>/firecrawl/v2/extract</code>.</strong> It works, but the engine warns you to use <code>POST /firecrawl/v2/scrape</code> with a <code>json</code> format object. Switch over to avoid future breakage.</p>
 <p><strong>Missing <code>Content-Type: application/json</code>.</strong> All JSON endpoints require it. <code>/firecrawl/v2/parse</code> is multipart — do not set <code>Content-Type</code> manually; let the HTTP client set it with the boundary.</p>
 <hr>

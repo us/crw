@@ -44,12 +44,16 @@ pub fn create_app(state: AppState) -> Router {
     // All merged before the shared auth + rate-limit layers, so every surface
     // inherits auth, rate-limiting, body-limit and the timeout layer identically.
     // `/mcp` is version-less.
+    // The `/v2/parse` body limit is installed at router-build time, so the
+    // effective upload cap is resolved here from config and passed in. Both
+    // surfaces get the same cap, and `/v1/capabilities` advertises that value.
+    let max_upload_bytes = routes::v2::parse::effective_max_upload_bytes(&state.config);
     let firecrawl_compat = Router::new().nest(
         "/firecrawl",
-        routes::v1::router().merge(routes::v2::router()),
+        routes::v1::router().merge(routes::v2::router(max_upload_bytes)),
     );
     let api_routes = routes::v1::router()
-        .merge(routes::v2::router())
+        .merge(routes::v2::router(max_upload_bytes))
         .merge(firecrawl_compat)
         .route(
             "/mcp",

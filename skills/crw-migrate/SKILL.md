@@ -100,8 +100,8 @@ curl -X POST https://api.fastcrw.com/v1/scrape \
 
 | Firecrawl feature | fastCRW equivalent | Action |
 |---|---|---|
-| `POST /v1/extract` (standalone LLM extraction route) | No standalone `/v1/extract`. Use `POST /v1/scrape` with `formats: ["json"]` + a `jsonSchema` field. | Change call site (single-URL). |
-| `POST /v1/extract` multi-URL batch | Not supported. | Loop over URLs, call `/v1/scrape` per URL, or use `/v1/crawl`. |
+| `POST /v1/extract` (standalone LLM extraction route) | Supported. Async: returns a job id, poll `GET /v1/extract/{id}`. `POST /v1/scrape` with `formats: ["json"]` + `jsonSchema` also works inline for a single URL. | None, but switch to polling if you port the route as-is. |
+| `POST /v1/extract` multi-URL batch | Supported. Pass `urls: [...]`; the cap is `limits.maxExtractUrls` on `GET /v1/capabilities` (default 50). | None. |
 | `POST /v1/deep-research` | Not implemented — cloud-only Firecrawl feature. | No equivalent. |
 | `POST /v1/agent` (Spark models) | Not implemented. | No equivalent. |
 | `/v2/parse` — DOCX/XLSX/RTF/ODT | PDF only. fastCRW uses `pdf-inspector` (no OCR). | Keep Firecrawl for non-PDF docs, or convert to PDF first. |

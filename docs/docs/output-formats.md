@@ -259,7 +259,8 @@ Three habits keep format usage sane in production:
 
 If you are debugging extraction quality, request both `markdown` and `json` for a while. That makes it easy to compare the page text against the structured output.
 
-## Not Supported in This Release
+## Requirements and Limits
 
-- `screenshot` — not implemented. Requesting it will return a 422 error.
-- `actions` — click/scroll/wait actions are not yet supported. Sending `actions` will return a 400 error with a message suggesting `cssSelector` or `xpath` as alternatives.
+- `screenshot` — needs a browser tier that can capture: Chrome (`chrome`, `chrome_proxy`) or Playwright. LightPanda and Camoufox cannot capture, so an instance configured with only those refuses a screenshot request instead of returning an empty one. Sending `renderJs: false` together with `screenshot` is a 400 (a screenshot requires JS rendering). Check `screenshot.supported` on `GET /v1/capabilities` before requesting it.
+- `json` and `summary` — need an LLM: either a server-side key or a per-request `llmApiKey`. `GET /v1/capabilities` lists them under `formats.llmRequired`.
+- `actions` — click/scroll/wait actions are not supported. Sending `actions` returns a 400 with a message suggesting `cssSelector` or `xpath` as alternatives.

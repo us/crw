@@ -447,7 +447,7 @@
           "capabilities"
         ],
         "summary": "Server capability discovery",
-        "description": "Returns which LLM providers, output formats, search features, and document parsers this opencore instance supports. SaaS frontends call this on boot to decide which options to surface.",
+        "description": "Returns what this opencore instance actually supports: LLM providers, output formats, search features, screenshot/renderer availability, document parsers and enforced limits. Every boolean is derived from the real build features and effective config — a capability is true only when the instance can perform it for a request that supplies no extra credentials. SaaS frontends call this on boot to validate a minimum capability set before sending traffic.",
         "operationId": "capabilities",
         "security": [
           {
@@ -467,7 +467,11 @@
                     "llm",
                     "formats",
                     "search",
-                    "documents"
+                    "screenshot",
+                    "renderers",
+                    "extract",
+                    "documents",
+                    "limits"
                   ],
                   "properties": {
                     "version": {
@@ -497,11 +501,12 @@
                           ]
                         },
                         "supportsBaseUrl": {
-                          "type": "boolean"
+                          "type": "boolean",
+                          "description": "The LLM dispatcher accepts a custom baseUrl on the scrape and search paths. POST /v1/extract rejects baseUrl — configure [extraction.llm.base_url] server-side for that route."
                         },
                         "serverKeyConfigured": {
                           "type": "boolean",
-                          "description": "True when a server-side LLM API key is present; false for BYOK-only deployments"
+                          "description": "True when a server-side LLM API key is present. False on BYOK-only deploys (CRW_DISABLE_SERVER_LLM_KEY=1); callers may still pass llmApiKey per request."
                         },
                         "maxConcurrency": {
                           "type": "integer",
@@ -517,7 +522,9 @@
                       "type": "object",
                       "required": [
                         "supported",
-                        "changeTrackingModes"
+                        "llmRequired",
+                        "changeTrackingModes",
+                        "changeTrackingModesLlmRequired"
                       ],
                       "properties": {
                         "supported": {
@@ -533,8 +540,10 @@
                             "links",
                             "json",
                             "summary",
-                            "changeTracking"
-                          ]
+                            "changeTracking",
+                            "screenshot"
+                          ],
+                          "description": "Output formats this build/config can actually produce. `screenshot` is listed only when a screenshot-capable renderer (chrome / chrome_proxy / playwright) is compiled in and configured."
                         },
                         "changeTrackingModes": {
                           "type": "array",
@@ -545,21 +554,117 @@
                             "gitDiff",
                             "json"
                           ]
+                        },
+                        "llmRequired": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Formats that additionally need an LLM: a server key (llm.serverKeyConfigured) or a per-request llmApiKey. Requesting them without one is a hard error, never a silent downgrade.",
+                          "example": [
+                            "json",
+                            "summary"
+                          ]
+                        },
+                        "changeTrackingModesLlmRequired": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Change-tracking modes that need an LLM. gitDiff is deterministic; json mode calls an LLM.",
+                          "example": [
+                            "json"
+                          ]
                         }
                       }
                     },
                     "search": {
                       "type": "object",
                       "required": [
+                        "supported",
                         "answer",
                         "summarizeResults"
                       ],
                       "properties": {
+                        "supported": {
+                          "type": "boolean",
+                          "description": "POST /v1/search is usable: [search].enabled and a SearXNG URL are configured. Configured, not health-probed."
+                        },
                         "answer": {
-                          "type": "boolean"
+                          "type": "boolean",
+                          "description": "Answer synthesis works WITHOUT a caller-supplied LLM key (search configured AND a server LLM key present). When false but supported is true, a request carrying llmApiKey still gets an answer."
                         },
                         "summarizeResults": {
-                          "type": "boolean"
+                          "type": "boolean",
+                          "description": "Same gate as answer."
+                        }
+                      }
+                    },
+                    "screenshot": {
+                      "type": "object",
+                      "required": [
+                        "supported",
+                        "fullPage"
+                      ],
+                      "properties": {
+                        "supported": {
+                          "type": "boolean",
+                          "description": "A screenshot-capable renderer (chrome / chrome_proxy / playwright) is compiled in AND configured. LightPanda and Camoufox cannot capture, so an instance with only those reports false and the scrape path fails closed on a screenshot request."
+                        },
+                        "fullPage": {
+                          "type": "boolean",
+                          "description": "Full-page capture (screenshot@fullPage / screenshotFullPage). Same gate as supported."
+                        }
+                      }
+                    },
+                    "renderers": {
+                      "type": "object",
+                      "required": [
+                        "available",
+                        "mode"
+                      ],
+                      "properties": {
+                        "available": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "JS renderer tiers this instance constructed, in fallback order — reflects both the build features and the config. These are the values the per-request `renderer` pin accepts.",
+                          "example": [
+                            "lightpanda",
+                            "chrome"
+                          ]
+                        },
+                        "mode": {
+                          "type": "string",
+                          "description": "Effective [renderer].mode.",
+                          "example": "auto"
+                        },
+                        "renderJsDefault": {
+                          "type": "boolean",
+                          "description": "Effective [renderer].render_js_default; omitted when unset (auto-detect)."
+                        }
+                      }
+                    },
+                    "extract": {
+                      "type": "object",
+                      "required": [
+                        "supported",
+                        "maxUrls",
+                        "perFieldAttribution"
+                      ],
+                      "properties": {
+                        "supported": {
+                          "type": "boolean",
+                          "description": "Native async multi-URL POST /v1/extract is live. Each URL needs an LLM (server key or per-request llmApiKey)."
+                        },
+                        "maxUrls": {
+                          "type": "integer",
+                          "description": "Max URLs accepted per extract request (crawler.max_extract_urls)."
+                        },
+                        "perFieldAttribution": {
+                          "type": "boolean",
+                          "description": "Per-field `basis` attribution. False until it ships — /v1/extract rejects basis:true today."
                         }
                       }
                     },
@@ -594,10 +699,12 @@
                             },
                             "endpoint": {
                               "type": "string",
-                              "example": "/v2/parse"
+                              "description": "Canonical Firecrawl-compat upload path. The deprecated root alias /v2/parse is still mounted and behaves identically.",
+                              "example": "/firecrawl/v2/parse"
                             },
                             "maxBytes": {
-                              "type": "integer"
+                              "type": "integer",
+                              "description": "The ENFORCED body cap ([document].max_upload_bytes, clamped by the hard ceiling) — the same value the body-limit layer applies."
                             },
                             "types": {
                               "type": "array",
@@ -612,6 +719,39 @@
                               "type": "boolean"
                             }
                           }
+                        }
+                      }
+                    },
+                    "limits": {
+                      "type": "object",
+                      "required": [
+                        "maxBatchUrls",
+                        "maxExtractUrls",
+                        "searchDefaultLimit",
+                        "searchMaxLimit",
+                        "maxUploadBytes"
+                      ],
+                      "properties": {
+                        "maxBatchUrls": {
+                          "type": "integer",
+                          "description": "Max URLs per batch-scrape submission (crawler.max_batch_urls)."
+                        },
+                        "maxExtractUrls": {
+                          "type": "integer",
+                          "description": "Max URLs per /v1/extract request (crawler.max_extract_urls)."
+                        },
+                        "searchDefaultLimit": {
+                          "type": "integer",
+                          "description": "Default /v1/search limit when the request omits it."
+                        },
+                        "searchMaxLimit": {
+                          "type": "integer",
+                          "description": "Hard cap on the /v1/search limit."
+                        },
+                        "maxUploadBytes": {
+                          "type": "integer",
+                          "description": "Enforced upload cap on the parse endpoint, in bytes.",
+                          "example": 52428800
                         }
                       }
                     }

@@ -172,7 +172,7 @@ npx skills add -g us/crw         # global (user-level)
 | **Scrape** | `POST /v1/scrape` | One URL → markdown / HTML / links / schema JSON |
 | **Map** | `POST /v1/map` | Discover every URL on a site, fast |
 | **Crawl** | `POST /v1/crawl` | Async crawl of a whole site (returns a job id you poll) |
-| **Extract** | `POST /v1/scrape` `formats:["json"]` | Structured fields from a JSON Schema |
+| **Extract** | `POST /v1/extract` (async, multi-URL) or `POST /v1/scrape` `formats:["json"]` (inline, one URL) | Structured fields from a JSON Schema |
 | **Monitor** | `POST /v1/change-tracking/diff` | Diff a page vs a snapshot — the change-tracking building block behind scheduled [monitoring](https://docs.fastcrw.com/monitoring/) |
 
 SDK return shapes: `scrape` / `extract` → one object · `map` → list of URLs · `crawl` → list of result objects · `search` → list, or a dict grouped by source when `sources=[...]` is set.

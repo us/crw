@@ -128,10 +128,12 @@ renderer tier** for IP-flagged targets, with per-request country selection
 
 ## Managed cloud
 
-On the managed API (`api.fastcrw.com`) you can bring your own proxy pool on paid
-plans, or use the managed proxy network without running any proxies yourself.
-Proxied requests carry a small credit surcharge (bandwidth cost). See
-[fastcrw.com/pricing](https://fastcrw.com/pricing).
+On the managed API every request already egresses through the managed proxy
+network, so there is nothing to configure and no proxy pool to run. Bring-your-own
+proxy is a self-hosting feature; the managed API does not accept one.
+
+Proxying carries no surcharge: a scrape is 1 credit per page whatever renderer or
+egress path it takes. See [Credit costs](/docs/credit-costs).
 
 ## Verify it works
 

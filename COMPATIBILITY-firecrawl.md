@@ -21,7 +21,7 @@ This is a **capability matrix**, not an API-shape compatibility matrix (which th
 | `/v1/crawl` (multi-page) | ✅ | ✅ | ✅ |
 | `/v1/map` (URL discovery) | ✅ | ✅ | ✅ |
 | `/v1/search` (web search → grounded results) | ✅ | ⚠️ (no Fire-engine; Cloud has stronger anti-bot) | ✅ (own search backend) |
-| `/v1/extract` (LLM extraction) | ✅ (standalone route) | ⚠️ (requires LLM provider key + manual `.env`) | ⚠️ **No standalone `/v1/extract` route.** LLM extraction is exposed via `/v1/scrape` with `formats: ["json"]` + a JSON schema. Firecrawl `/extract` callers must port to `/v1/scrape` (single-URL only — multi-URL `/extract` is not matched). |
+| `/v1/extract` (LLM extraction) | ✅ (standalone route) | ⚠️ (requires LLM provider key + manual `.env`) | ✅ **Standalone `POST /v1/extract`** (async: returns a job id, poll `GET /v1/extract/{id}`). Accepts `urls: [...]` (multi-URL, capped by `limits.maxExtractUrls`). `/v1/scrape` with `formats: ["json"]` + `jsonSchema` also works for a single URL. Needs an LLM key (server-side or per-request). |
 | `/v1/deep-research` | ✅ | ❌ (Cloud-only) | ❌ |
 | `/firecrawl/v2/parse` (file upload → markdown) | ✅ (PDF/DOCX/XLSX/HTML/…) | ⚠️ (rolling out) | ✅ **PDF only** (multipart `file` + `options`; pure-Rust `pdf-inspector`, no OCR) |
 | `/v1/agent` (Spark models) | ✅ | ❌ | ❌ |
@@ -66,7 +66,7 @@ This is a **capability matrix**, not an API-shape compatibility matrix (which th
 | Field | Firecrawl | fastCRW |
 |---|---|---|
 | Request `url` | string | string ✅ |
-| Request `formats` | `["markdown", "html", ...]` | `["markdown", "html"]` ✅ (extract-as-format not supported) |
+| Request `formats` | `["markdown", "html", ...]` | `["markdown", "html", …]` ✅ (`extract` / `llm-extract` are accepted aliases for `json`) |
 | Request `onlyMainContent` | boolean | boolean ✅ |
 | Request `waitFor` (ms) | number | number ✅ |
 | Response `data.markdown` | string | string ✅ |
@@ -95,12 +95,12 @@ This is a **capability matrix**, not an API-shape compatibility matrix (which th
 
 | | Firecrawl Cloud | Firecrawl self-host | fastCRW |
 |---|---|---|---|
-| Schema-based extraction (single URL) | ✅ via `/v1/extract` | ⚠️ (requires manual LLM key in `.env`) | ✅ via `/v1/scrape` with `formats: ["json"]` + top-level `jsonSchema` (Firecrawl-compatible alias: `extract.schema`; LLM key configured in `[extraction.llm]`) |
-| Multi-URL `/extract` (one call → many URLs) | ✅ | ⚠️ | ❌ — call `/v1/scrape` per URL or use `/v1/crawl` |
+| Schema-based extraction (single URL) | ✅ via `/v1/extract` | ⚠️ (requires manual LLM key in `.env`) | ✅ via `POST /v1/extract`, or via `/v1/scrape` with `formats: ["json"]` + top-level `jsonSchema` (Firecrawl-compatible alias: `extract.schema`; LLM key configured in `[extraction.llm]` or passed per request) |
+| Multi-URL `/extract` (one call → many URLs) | ✅ | ⚠️ | ✅ via `POST /v1/extract` with `urls: [...]` (capped by `limits.maxExtractUrls`, default 50) |
 | Provider support | OpenAI, Anthropic, etc. | Same (manual config) | OpenAI, Anthropic, configurable via `[extraction.llm]` |
 | Pricing | Per call + LLM token cost | Self-paid LLM tokens only | Self-paid LLM tokens only (self-host); cloud per-call pricing on managed plans |
 
-**Honest divergence:** fastCRW does not expose a standalone `/v1/extract` route. Single-URL extraction is fully supported via `/v1/scrape` `formats: ["json"]`; Firecrawl users porting the call shape use top-level `jsonSchema` (or the `extract.schema` alias for closer Firecrawl parity). Multi-URL batched `/extract` (Firecrawl-Cloud feature) is not matched — the caller iterates URLs themselves or uses `/v1/crawl`.
+**Shape note:** fastCRW's `/v1/extract` is async — it returns a job id you poll on `GET /v1/extract/{id}`, and it accepts a `urls` array. The per-request URL cap is advertised as `limits.maxExtractUrls` on `GET /v1/capabilities` (default 50). Single-URL extraction also works inline via `/v1/scrape` `formats: ["json"]` with a top-level `jsonSchema` (or the `extract.schema` alias for closer Firecrawl parity). Per-field `basis` attribution is not implemented; `/v1/extract` rejects `basis: true` rather than silently ignoring it.
 
 ---
 
@@ -194,5 +194,5 @@ This is a **capability matrix**, not an API-shape compatibility matrix (which th
 
 - Latency claims (need own benchmark; cite parent plan Tavily benchmark or wait for Firecrawl-specific benchmark).
 - Anti-bot success-rate claims (no benchmark).
-- LLM extraction quality claims (we don't ship that feature).
+- LLM extraction quality claims (the feature ships, but no benchmark backs a quality comparison).
 - Drop-in API equivalence claims (request/response shape diff is incomplete in §3).

@@ -2,37 +2,41 @@
 
 A purpose-built research API for scientific agents: search papers, inspect
 metadata, read passages, expand the citation graph, and search research-related
-GitHub. These routes live on the `/firecrawl/v2` compatibility surface because they mirror
-Firecrawl's research API for migration work.
+GitHub.
 
 On the [ArXivQA benchmark](https://fastcrw.com/benchmarks/arxivqa-research-recall)
 this stack reaches **61.0% recall — ahead of Firecrawl's Research Index (53.3%)**.
-It's **live**: results come from merging our own SearXNG search (web + research
-mode) with live open scholarly sources, including full-text paper search — no
-self-hosted paper index.
+It's **live**: results merge our own web and research search with live open
+scholarly sources, including full-text paper search — no self-hosted paper index.
 
 ## Authentication
 
 Use a Bearer token: `Authorization: Bearer <crw_live_…>`. Get a key from the
-[dashboard](https://fastcrw.com/dashboard). Self-host serves the same shapes at
-the engine path `/v1/search/research/*`.
+[dashboard](https://fastcrw.com/dashboard).
 
 ## Endpoints
 
-| Task | Endpoint |
-|------|----------|
-| Search papers | `GET /firecrawl/v2/search/research/papers` |
-| Inspect metadata / read passages | `GET /firecrawl/v2/search/research/papers/{id}` |
-| Find related papers | `GET /firecrawl/v2/search/research/papers/{id}/similar` |
-| Search GitHub | `GET /firecrawl/v2/search/research/github` |
+Both surfaces return identical shapes. The cloud API mirrors Firecrawl's research
+paths for migration work; the engine serves them natively under `/v1`. There are
+no research routes on the engine's `/firecrawl/v2` compatibility surface.
+
+| Task | Cloud (`https://fastcrw.com/api`) | Self-host (engine) |
+|------|-----------------------------------|--------------------|
+| Search papers | `GET /v2/search/research/papers` | `GET /v1/search/research/papers` |
+| Inspect metadata / read passages | `GET /v2/search/research/papers/{id}` | `GET /v1/search/research/papers/{id}` |
+| Find related papers | `GET /v2/search/research/papers/{id}/similar` | `GET /v1/search/research/papers/{id}/similar` |
+| Search GitHub | `GET /v2/search/research/github` | `GET /v1/search/research/github` |
+
+The sections below name the engine's native `/v1` path; the curl examples hit the
+cloud API.
 
 ## Search papers
 
-`GET /firecrawl/v2/search/research/papers?query=&k=&authors=&categories=&from=&to=`
+`GET /v1/search/research/papers?query=&k=&authors=&categories=&from=&to=`
 
 ```bash
 curl -s -H "Authorization: Bearer $FASTCRW_API_KEY" \
-  "https://api.fastcrw.com/firecrawl/v2/search/research/papers?query=diffusion%20image%20synthesis&k=20"
+  "https://fastcrw.com/api/v2/search/research/papers?query=diffusion%20image%20synthesis&k=20"
 ```
 
 Returns ranked papers. `paperId` is the canonical id (a stable work id when
@@ -51,25 +55,25 @@ Filters: `authors` (substring), `categories`, `from` / `to` (`YYYY-MM-DD`).
 
 ## Inspect a paper / read passages
 
-`GET /firecrawl/v2/search/research/papers/{id}` returns metadata (`authors`, `categories`,
+`GET /v1/search/research/papers/{id}` returns metadata (`authors`, `categories`,
 `createdDate`, …). Accepts an arXiv id, a work id, or a DOI. Add `?query=` to
 return the top passages answering a question:
 
 ```bash
 curl -s -H "Authorization: Bearer $FASTCRW_API_KEY" \
-  "https://api.fastcrw.com/firecrawl/v2/search/research/papers/arxiv:1706.03762?query=what%20is%20the%20attention%20mechanism&k=4"
+  "https://fastcrw.com/api/v2/search/research/papers/arxiv:1706.03762?query=what%20is%20the%20attention%20mechanism&k=4"
 ```
 
 ## Find related papers
 
-`GET /firecrawl/v2/search/research/papers/{id}/similar?intent=&mode=similar|citers|references&k=`
+`GET /v1/search/research/papers/{id}/similar?intent=&mode=similar|citers|references&k=`
 
 `intent` is required. `mode` selects the expansion: `similar` (recommendations),
 `citers` (papers that cite the seed), `references` (papers the seed cites).
 
 ## Search GitHub
 
-`GET /firecrawl/v2/search/research/github?query=&k=` returns repository/README hits for
+`GET /v1/search/research/github?query=&k=` returns repository/README hits for
 implementation notes and engineering prior art.
 
 ## SDK
@@ -87,7 +91,7 @@ c.search_github("flash attention implementation notes")
 ```
 
 ```ts
-import { CrwClient } from "@fastcrw/sdk";
+import { CrwClient } from "crw-sdk";
 const c = new CrwClient({ apiKey: "crw_live_…" });
 await c.research.searchPapers("diffusion image synthesis", { k: 20 });
 await c.research.similarPapers("arxiv:1706.03762", { intent: "efficient transformers", mode: "references" });

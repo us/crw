@@ -19,7 +19,7 @@ How you point the SDK depends on the language: the **JS/TS SDK** honours a `/fir
 
 | Area | Current behavior |
 | --- | --- |
-| Screenshot output | Not supported in this release |
+| Screenshot output | Supported, but only on an instance with a capture-capable browser tier (Chrome or Playwright). Check `screenshot.supported` on `GET /v1/capabilities` |
 | `success` semantics | `success: false` when target returns HTTP 4xx/5xx with minimal content; `success: true` with `warning` when target returns error status but has real content |
 | JS waiting | Numeric delay only; no selector-based wait primitive |
 | `extract` format | Accepted as alias for `json`. Use `formats: ["json"]` with `jsonSchema` for structured extraction |
@@ -35,7 +35,7 @@ If you are moving an existing Firecrawl-style integration:
 
 1. verify `scrape`, `crawl`, and `map` request bodies against real targets,
 2. confirm how your code interprets `success`, `warning`, and target-side HTTP statuses,
-3. remove dependencies on unsupported features such as screenshots,
+3. check `GET /v1/capabilities` for the features you depend on (screenshots, for example, need a capture-capable browser tier),
 4. and compare output quality, not just endpoint shape.
 
 Compatibility at the request level is useful, but output semantics and operational behavior matter just as much.
@@ -67,6 +67,6 @@ It is not good enough if your current system depends on features this page alrea
 - Treating `/firecrawl/v2` as the default API for a new CRW build. Use `/v1` unless you are migrating Firecrawl v2 SDK code.
 - Assuming route-name compatibility means output semantics are identical.
 - Migrating a whole workload before testing `warning` handling and failure cases.
-- Ignoring unsupported capabilities such as screenshots and then discovering the gap in production.
+- Assuming a capability is present without calling `GET /v1/capabilities`, and then discovering the gap in production.
 
 Use this page with [output formats](/docs/output-formats) and [error codes](/docs/error-codes) so your migration covers both payload shape and operational behavior.
