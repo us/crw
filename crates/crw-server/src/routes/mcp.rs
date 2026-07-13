@@ -124,7 +124,7 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
             let id = state
                 .start_extract_job(prepared.entries, prepared.template)
                 .await;
-            Ok(json!({"success": true, "id": id.to_string(), "status": "processing", "urls": urls}))
+            Ok(json!({"id": id.to_string(), "status": "processing", "urls": urls}))
         }
         "crw_check_extract_status" => {
             use crate::routes::extract::get_extract_status;

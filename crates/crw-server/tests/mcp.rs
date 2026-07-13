@@ -8,7 +8,7 @@ use crw_core::types::{
 use crw_server::app::create_app;
 use crw_server::state::{AppState, ExtractRecord, ExtractStatus, UrlResult};
 use serde_json::{Value, json};
-use std::time::Instant;
+use std::time::{Duration, Instant, SystemTime};
 use uuid::Uuid;
 
 fn test_app() -> TestServer {
@@ -28,6 +28,29 @@ fn test_app_with_search() -> TestServer {
     let state = AppState::new(config).expect("AppState::new failed");
     let app = create_app(state);
     TestServer::new(app)
+}
+
+fn pending_extract_record(created_at: Instant) -> ExtractRecord {
+    ExtractRecord {
+        status: ExtractStatus::Processing,
+        data: None,
+        per_url: vec![UrlResult {
+            url: "https://example.com".into(),
+            status: ExtractStatus::Processing,
+            data: None,
+            error: None,
+            llm_usage: None,
+            basis: None,
+            basis_warnings: Vec::new(),
+            llm_input_hash: None,
+        }],
+        tokens_used: 0,
+        credits_used: 0,
+        error: None,
+        created_at,
+        expires_at: SystemTime::now() + Duration::from_secs(3_600),
+        claimed_index: None,
+    }
 }
 
 fn mcp_request(
@@ -158,28 +181,11 @@ async fn mcp_extract_status_and_cancel_share_canonical_http_serializer() {
     let config: AppConfig = toml::from_str("").unwrap();
     let state = AppState::new(config).unwrap();
     let id = Uuid::new_v4();
-    state.extract_jobs.write().await.insert(
-        id,
-        ExtractRecord {
-            status: ExtractStatus::Processing,
-            data: None,
-            per_url: vec![UrlResult {
-                url: "https://example.com".into(),
-                status: ExtractStatus::Processing,
-                data: None,
-                error: None,
-                llm_usage: None,
-                basis: None,
-                basis_warnings: Vec::new(),
-                llm_input_hash: None,
-            }],
-            tokens_used: 0,
-            credits_used: 0,
-            error: None,
-            created_at: Instant::now(),
-            claimed_index: None,
-        },
-    );
+    state
+        .extract_jobs
+        .write()
+        .await
+        .insert(id, pending_extract_record(Instant::now()));
     let server = TestServer::new(create_app(state));
 
     let status: Value = server
@@ -198,6 +204,13 @@ async fn mcp_extract_status_and_cancel_share_canonical_http_serializer() {
     assert_eq!(status["results"][0]["status"], "processing");
     assert!(status["expiresAt"].is_string());
     assert!(status.get("success").is_none());
+    let schema = tool_output_schema("crw_check_extract_status").unwrap();
+    let validator = jsonschema::validator_for(&schema).expect("extract schema compiles");
+    let errors: Vec<String> = validator
+        .iter_errors(status)
+        .map(|error| error.to_string())
+        .collect();
+    assert!(errors.is_empty(), "serializer/schema drift: {errors:#?}");
 
     let cancelled: Value = server
         .post("/mcp")
@@ -212,6 +225,118 @@ async fn mcp_extract_status_and_cancel_share_canonical_http_serializer() {
     let cancelled = &cancelled["result"]["structuredContent"];
     assert_eq!(cancelled["status"], "cancelled");
     assert_eq!(cancelled["results"][0]["status"], "cancelled");
+}
+
+#[tokio::test]
+async fn mcp_extract_output_schemas_match_openapi_lifecycle_components() {
+    let openapi: Value =
+        serde_json::from_str(include_str!("../openapi/openapi.json")).expect("valid OpenAPI");
+    let components = &openapi["components"]["schemas"];
+
+    let accepted = tool_output_schema("crw_extract").unwrap();
+    let openapi_accepted = &components["ExtractAccepted"];
+    assert_eq!(accepted["required"], openapi_accepted["required"]);
+    assert_eq!(
+        accepted["properties"]["status"],
+        openapi_accepted["properties"]["status"]
+    );
+    assert_eq!(
+        accepted["properties"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .collect::<Vec<_>>(),
+        openapi_accepted["properties"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .collect::<Vec<_>>()
+    );
+
+    let status = tool_output_schema("crw_check_extract_status").unwrap();
+    assert_eq!(status, tool_output_schema("crw_cancel_extract").unwrap());
+    let openapi_status = &components["ExtractStatus"];
+    assert_eq!(status["required"], openapi_status["required"]);
+    assert_eq!(
+        status["properties"]["status"],
+        openapi_status["properties"]["status"]
+    );
+
+    let result = &status["properties"]["results"]["items"];
+    let openapi_result = &components["ExtractUrlResult"];
+    assert_eq!(result["required"], openapi_result["required"]);
+    assert_eq!(
+        result["properties"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .collect::<Vec<_>>(),
+        openapi_result["properties"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .collect::<Vec<_>>()
+    );
+    for field in [
+        "url",
+        "status",
+        "data",
+        "error",
+        "llmUsage",
+        "basis",
+        "basisWarnings",
+        "llmInputHash",
+    ] {
+        assert_eq!(
+            result["properties"][field]["type"], openapi_result["properties"][field]["type"],
+            "type drift for ExtractUrlResult.{field}"
+        );
+    }
+    assert_eq!(
+        result["properties"]["status"],
+        openapi_result["properties"]["status"]
+    );
+}
+
+#[tokio::test]
+async fn mcp_extract_status_and_cancel_treat_expired_ids_as_not_found() {
+    let mut config: AppConfig = toml::from_str("").unwrap();
+    config.crawler.job_ttl_secs = 1;
+    let state = AppState::new(config).unwrap();
+    let ids = [Uuid::new_v4(), Uuid::new_v4()];
+    let expired = pending_extract_record(Instant::now() - Duration::from_secs(2));
+    {
+        let mut jobs = state.extract_jobs.write().await;
+        jobs.insert(ids[0], expired.clone());
+        jobs.insert(ids[1], expired);
+    }
+    let server = TestServer::new(create_app(state.clone()));
+
+    for (tool, id) in [
+        ("crw_check_extract_status", ids[0]),
+        ("crw_cancel_extract", ids[1]),
+    ] {
+        let response: Value = server
+            .post("/mcp")
+            .content_type("application/json")
+            .json(&mcp_request(
+                "tools/call",
+                json!(301),
+                json!({"name": tool, "arguments": {"id": id}}),
+            ))
+            .await
+            .json();
+        assert_eq!(response["result"]["isError"], true, "{tool}");
+        assert!(
+            response["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("not found"),
+            "{tool}"
+        );
+        assert!(response["result"].get("structuredContent").is_none());
+    }
+    assert!(state.extract_jobs.read().await.is_empty());
 }
 
 #[tokio::test]
