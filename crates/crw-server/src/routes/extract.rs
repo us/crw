@@ -17,7 +17,7 @@ use crw_core::evidence::{Basis, BasisWarning};
 use crw_core::types::{ExtractOptions, LlmUsage, OutputFormat, ScrapeRequest};
 
 use crate::error::AppError;
-use crate::routes::v2::adapters::expires_at_rfc3339;
+use crate::routes::v2::adapters::system_time_rfc3339;
 use crate::state::{AppState, ExtractRecord, PreparedUrl, UrlResult};
 
 /// Native extract request. camelCase like every other v1 public type.
@@ -269,12 +269,8 @@ pub struct ExtractStatusResponse {
 }
 
 /// The one canonical HTTP/MCP serializer for extract lifecycle state.
-pub(crate) fn serialize_extract_status(
-    state: &AppState,
-    id: Uuid,
-    rec: ExtractRecord,
-) -> ExtractStatusResponse {
-    let expires_at = expires_at_rfc3339(rec.created_at, state.config.crawler.job_ttl_secs);
+pub(crate) fn serialize_extract_status(id: Uuid, rec: ExtractRecord) -> ExtractStatusResponse {
+    let expires_at = system_time_rfc3339(rec.expires_at);
     ExtractStatusResponse {
         id: id.to_string(),
         status: rec.status.as_str().to_string(),
@@ -294,13 +290,8 @@ pub(crate) async fn get_extract_status(
     state: &AppState,
     id: Uuid,
 ) -> Result<ExtractStatusResponse, CrwError> {
-    let rec = {
-        let jobs = state.extract_jobs.read().await;
-        jobs.get(&id)
-            .cloned()
-            .ok_or_else(|| CrwError::NotFound(format!("Extract job {id} not found")))?
-    };
-    Ok(serialize_extract_status(state, id, rec))
+    let rec = state.get_extract_job(id).await?;
+    Ok(serialize_extract_status(id, rec))
 }
 
 pub(crate) async fn cancel_extract_status(
@@ -308,7 +299,7 @@ pub(crate) async fn cancel_extract_status(
     id: Uuid,
 ) -> Result<ExtractStatusResponse, CrwError> {
     let rec = state.cancel_extract_job(id).await?;
-    Ok(serialize_extract_status(state, id, rec))
+    Ok(serialize_extract_status(id, rec))
 }
 
 pub async fn get_extract(

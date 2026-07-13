@@ -11,7 +11,7 @@ use crw_core::config::AppConfig;
 use crw_server::app::create_app;
 use crw_server::state::{AppState, ExtractRecord, ExtractStatus, PreparedUrl, UrlResult};
 use serde_json::{Value, json};
-use std::time::Instant;
+use std::time::{Duration, Instant, SystemTime};
 use uuid::Uuid;
 
 fn test_app() -> TestServer {
@@ -130,6 +130,37 @@ async fn v1_extract_cancel_rejects_malformed_and_unknown_ids() {
         .assert_status(StatusCode::NOT_FOUND);
 }
 
+#[tokio::test]
+async fn expired_extract_ids_are_immediate_404_for_v1_get_delete_and_v2_get() {
+    let mut config: AppConfig = toml::from_str("").unwrap();
+    config.crawler.job_ttl_secs = 1;
+    let state = AppState::new(config).unwrap();
+    let ids = [Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4()];
+    let mut expired = seeded_record(&["https://expired.example"], None);
+    expired.created_at = Instant::now() - Duration::from_secs(2);
+    {
+        let mut jobs = state.extract_jobs.write().await;
+        for id in ids {
+            jobs.insert(id, expired.clone());
+        }
+    }
+    let server = TestServer::new(create_app(state.clone()));
+
+    server
+        .get(&format!("/v1/extract/{}", ids[0]))
+        .await
+        .assert_status(StatusCode::NOT_FOUND);
+    server
+        .delete(&format!("/v1/extract/{}", ids[1]))
+        .await
+        .assert_status(StatusCode::NOT_FOUND);
+    server
+        .get(&format!("/v2/extract/{}", ids[2]))
+        .await
+        .assert_status(StatusCode::NOT_FOUND);
+    assert!(state.extract_jobs.read().await.is_empty());
+}
+
 fn pending_slot(url: &str) -> UrlResult {
     UrlResult {
         url: url.into(),
@@ -152,6 +183,7 @@ fn seeded_record(urls: &[&str], claimed_index: Option<usize>) -> ExtractRecord {
         credits_used: 0,
         error: None,
         created_at: Instant::now(),
+        expires_at: SystemTime::now() + Duration::from_secs(3_600),
         claimed_index,
     }
 }
@@ -181,6 +213,32 @@ async fn cancel_before_dispatch_is_terminal_ordered_and_idempotent() {
     assert_eq!(repeated, first, "repeated DELETE returns persisted state");
     let get: Value = server.get(&format!("/v1/extract/{id}")).await.json();
     assert_eq!(get, first, "GET and DELETE share the canonical serializer");
+}
+
+#[tokio::test]
+async fn terminal_envelope_uses_the_persisted_expiry_without_recomputation() {
+    let config: AppConfig = toml::from_str("").unwrap();
+    let state = AppState::new(config).unwrap();
+    let id = Uuid::new_v4();
+    let mut record = seeded_record(&["https://done.example"], None);
+    record.status = ExtractStatus::Completed;
+    record.per_url[0].status = ExtractStatus::Completed;
+    record.per_url[0].data = Some(json!({"done": true}));
+    state.extract_jobs.write().await.insert(id, record);
+    let server = TestServer::new(create_app(state.clone()));
+
+    let first: Value = server.get(&format!("/v1/extract/{id}")).await.json();
+    // Move the monotonic admission time without changing the persisted wall
+    // expiry. The old read-time derivation would shift expiresAt by 10 seconds.
+    state
+        .extract_jobs
+        .write()
+        .await
+        .get_mut(&id)
+        .unwrap()
+        .created_at = Instant::now() - Duration::from_secs(10);
+    let repeated: Value = server.delete(&format!("/v1/extract/{id}")).await.json();
+    assert_eq!(repeated, first);
 }
 
 #[tokio::test]

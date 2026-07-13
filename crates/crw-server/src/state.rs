@@ -12,7 +12,7 @@ use crw_search::SearxngClient;
 use futures::stream::StreamExt;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::{RwLock, watch};
 use uuid::Uuid;
 
@@ -172,12 +172,19 @@ pub struct ExtractRecord {
     pub credits_used: u32,
     pub error: Option<String>,
     pub created_at: Instant,
+    /// Absolute wall-clock expiry captured once at admission. Serializers use
+    /// this persisted value so repeated lifecycle envelopes never drift.
+    pub expires_at: SystemTime,
     /// The one URL currently dispatched by the sequential worker. Cancellation
     /// cannot cross its terminal barrier until this slot has persisted.
     pub claimed_index: Option<usize>,
 }
 
 impl ExtractRecord {
+    fn is_expired(&self, ttl: Duration) -> bool {
+        self.created_at.elapsed() >= ttl
+    }
+
     /// Complete the cancellation barrier. Call only while holding the extract
     /// jobs write lock and after observing that no URL remains claimed.
     fn finish_cancellation(&mut self) {
@@ -196,6 +203,38 @@ impl ExtractRecord {
             }
         }
         self.status = ExtractStatus::Cancelled;
+    }
+
+    /// Commit the worker's final job-level write. DELETE races this method on
+    /// the same map lock, so exactly one transition can win and terminal state
+    /// is never rewritten by the loser.
+    fn finish_processing(&mut self) {
+        if self.status != ExtractStatus::Processing {
+            if self.status == ExtractStatus::Cancelling {
+                self.finish_cancellation();
+            }
+            return;
+        }
+
+        let any_ok = self
+            .per_url
+            .iter()
+            .any(|result| result.status == ExtractStatus::Completed);
+        if any_ok {
+            self.status = ExtractStatus::Completed;
+            self.data
+                .get_or_insert_with(|| serde_json::Value::Object(Default::default()));
+        } else {
+            self.status = ExtractStatus::Failed;
+            self.error = self
+                .per_url
+                .iter()
+                .rev()
+                .find_map(|result| result.error.clone());
+        }
+        // Preserve the existing one-credit floor for a naturally finished
+        // all-failed job. Cancelled jobs retain only measured usage.
+        self.credits_used = self.credits_used.max(1);
     }
 }
 
@@ -369,11 +408,9 @@ impl AppState {
                 }
                 drop(jobs);
 
-                // Prune terminal extract jobs past TTL (keep processing and the
-                // cancellation barrier in-flight).
-                let mut ejobs = cleanup_state.extract_jobs.write().await;
-                ejobs
-                    .retain(|_id, rec| !rec.status.is_terminal() || rec.created_at.elapsed() < ttl);
+                // TTL is authoritative for every extract lifecycle state. A
+                // stalled processing/cancelling job must not live forever.
+                cleanup_state.prune_expired_extract_jobs(ttl).await;
             }
         });
 
@@ -675,6 +712,10 @@ impl AppState {
             .collect();
         {
             let mut jobs = self.extract_jobs.write().await;
+            let created_at = Instant::now();
+            let wall_now = SystemTime::now();
+            let expires_at =
+                wall_now.checked_add(Duration::from_secs(self.config.crawler.job_ttl_secs));
             jobs.insert(
                 id,
                 ExtractRecord {
@@ -684,7 +725,8 @@ impl AppState {
                     tokens_used: 0,
                     credits_used: 0,
                     error: None,
-                    created_at: Instant::now(),
+                    created_at,
+                    expires_at: expires_at.unwrap_or(wall_now),
                     claimed_index: None,
                 },
             );
@@ -693,6 +735,7 @@ impl AppState {
         let renderer = self.renderer.clone();
         let config = self.config.clone();
         let extract_jobs = self.extract_jobs.clone();
+        let finalizer = self.clone();
 
         tokio::spawn(async move {
             // `/v2/extract` is a multi-URL background job — `Batch` traffic, so its
@@ -826,38 +869,7 @@ impl AppState {
                         }
                     }
 
-                    let mut jobs = extract_jobs.write().await;
-                    if let Some(rec) = jobs.get_mut(&id) {
-                        match rec.status {
-                            ExtractStatus::Processing => {
-                                let any_ok = rec
-                                    .per_url
-                                    .iter()
-                                    .any(|result| result.status == ExtractStatus::Completed);
-                                if any_ok {
-                                    rec.status = ExtractStatus::Completed;
-                                    rec.data.get_or_insert_with(|| {
-                                        serde_json::Value::Object(Default::default())
-                                    });
-                                } else {
-                                    rec.status = ExtractStatus::Failed;
-                                    rec.error = rec
-                                        .per_url
-                                        .iter()
-                                        .rev()
-                                        .find_map(|result| result.error.clone());
-                                }
-                                // Preserve the existing one-credit floor for a
-                                // naturally finished all-failed job. Cancelled
-                                // jobs retain only actually measured usage.
-                                rec.credits_used = rec.credits_used.max(1);
-                            }
-                            ExtractStatus::Cancelling => rec.finish_cancellation(),
-                            ExtractStatus::Completed
-                            | ExtractStatus::Failed
-                            | ExtractStatus::Cancelled => {}
-                        }
-                    }
+                    finalizer.finalize_extract_job(id).await;
                 })
                 .await;
         });
@@ -869,6 +881,11 @@ impl AppState {
     /// calls are idempotent; terminal jobs are never rewritten.
     pub async fn cancel_extract_job(&self, id: Uuid) -> CrwResult<ExtractRecord> {
         let mut jobs = self.extract_jobs.write().await;
+        let ttl = Duration::from_secs(self.config.crawler.job_ttl_secs);
+        if jobs.get(&id).is_some_and(|rec| rec.is_expired(ttl)) {
+            jobs.remove(&id);
+            return Err(CrwError::NotFound(format!("Extract job {id} not found")));
+        }
         let rec = jobs
             .get_mut(&id)
             .ok_or_else(|| CrwError::NotFound(format!("Extract job {id} not found")))?;
@@ -879,5 +896,185 @@ impl AppState {
             rec.finish_cancellation();
         }
         Ok(rec.clone())
+    }
+
+    /// TTL-aware canonical lookup shared by v1, v2, and MCP handlers. A write
+    /// lock makes expiry observation and removal one atomic operation.
+    pub async fn get_extract_job(&self, id: Uuid) -> CrwResult<ExtractRecord> {
+        let mut jobs = self.extract_jobs.write().await;
+        let ttl = Duration::from_secs(self.config.crawler.job_ttl_secs);
+        if jobs.get(&id).is_some_and(|rec| rec.is_expired(ttl)) {
+            jobs.remove(&id);
+            return Err(CrwError::NotFound(format!("Extract job {id} not found")));
+        }
+        jobs.get(&id)
+            .cloned()
+            .ok_or_else(|| CrwError::NotFound(format!("Extract job {id} not found")))
+    }
+
+    async fn finalize_extract_job(&self, id: Uuid) {
+        let mut jobs = self.extract_jobs.write().await;
+        if let Some(rec) = jobs.get_mut(&id) {
+            rec.finish_processing();
+        }
+    }
+
+    async fn prune_expired_extract_jobs(&self, ttl: Duration) -> usize {
+        let mut jobs = self.extract_jobs.write().await;
+        let before = jobs.len();
+        jobs.retain(|_id, rec| !rec.is_expired(ttl));
+        before - jobs.len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::routes::extract::serialize_extract_status;
+    use serde_json::json;
+    use tokio::sync::oneshot;
+
+    fn completed_record(created_at: Instant) -> ExtractRecord {
+        ExtractRecord {
+            status: ExtractStatus::Processing,
+            data: Some(json!({"last": 3})),
+            per_url: (1..=3)
+                .map(|index| UrlResult {
+                    url: format!("https://example.com/{index}"),
+                    status: ExtractStatus::Completed,
+                    data: Some(json!({"index": index})),
+                    error: None,
+                    llm_usage: None,
+                    basis: None,
+                    basis_warnings: Vec::new(),
+                    llm_input_hash: None,
+                })
+                .collect(),
+            tokens_used: 30,
+            credits_used: 3,
+            error: None,
+            created_at,
+            expires_at: SystemTime::now() + Duration::from_secs(3_600),
+            claimed_index: None,
+        }
+    }
+
+    fn spawn_final_write(
+        state: AppState,
+        id: Uuid,
+    ) -> (oneshot::Receiver<()>, tokio::task::JoinHandle<()>) {
+        let (ready_tx, ready_rx) = oneshot::channel();
+        let handle = tokio::spawn(async move {
+            let _ = ready_tx.send(());
+            state.finalize_extract_job(id).await;
+        });
+        (ready_rx, handle)
+    }
+
+    fn spawn_delete(
+        state: AppState,
+        id: Uuid,
+    ) -> (oneshot::Receiver<()>, tokio::task::JoinHandle<()>) {
+        let (ready_tx, ready_rx) = oneshot::channel();
+        let handle = tokio::spawn(async move {
+            let _ = ready_tx.send(());
+            state.cancel_extract_job(id).await.unwrap();
+        });
+        (ready_rx, handle)
+    }
+
+    async fn run_final_write_delete_race(final_write_first: bool) -> (AppState, Uuid) {
+        let config: AppConfig = toml::from_str("").unwrap();
+        let state = AppState::new(config).unwrap();
+        let id = Uuid::new_v4();
+        state
+            .extract_jobs
+            .write()
+            .await
+            .insert(id, completed_record(Instant::now()));
+
+        // Hold the exact lock used by both operations, then enqueue them in a
+        // known order. Tokio's fair write lock releases to the first waiter,
+        // making both legal race winners deterministic rather than probabilistic.
+        let gate = state.extract_jobs.write().await;
+        let ((first_ready, first), (second_ready, second)) = if final_write_first {
+            (
+                spawn_final_write(state.clone(), id),
+                spawn_delete(state.clone(), id),
+            )
+        } else {
+            (
+                spawn_delete(state.clone(), id),
+                spawn_final_write(state.clone(), id),
+            )
+        };
+        first_ready.await.unwrap();
+        second_ready.await.unwrap();
+        drop(gate);
+        first.await.unwrap();
+        second.await.unwrap();
+        (state, id)
+    }
+
+    #[tokio::test]
+    async fn final_write_versus_delete_race_covers_both_winners_and_freezes_terminal_state() {
+        for (final_write_first, expected) in [
+            (true, ExtractStatus::Completed),
+            (false, ExtractStatus::Cancelled),
+        ] {
+            let (state, id) = run_final_write_delete_race(final_write_first).await;
+            let terminal = state.get_extract_job(id).await.unwrap();
+            assert_eq!(terminal.status, expected);
+            assert_eq!(terminal.per_url.len(), 3);
+            assert_eq!(
+                terminal
+                    .per_url
+                    .iter()
+                    .map(|result| result.url.as_str())
+                    .collect::<Vec<_>>(),
+                [
+                    "https://example.com/1",
+                    "https://example.com/2",
+                    "https://example.com/3"
+                ]
+            );
+            assert!(
+                terminal
+                    .per_url
+                    .iter()
+                    .all(|result| result.status == ExtractStatus::Completed)
+            );
+
+            let frozen = serde_json::to_value(serialize_extract_status(id, terminal)).unwrap();
+            state.finalize_extract_job(id).await;
+            let repeated_delete = state.cancel_extract_job(id).await.unwrap();
+            let repeated =
+                serde_json::to_value(serialize_extract_status(id, repeated_delete)).unwrap();
+            assert_eq!(repeated, frozen, "terminal envelope must be immutable");
+        }
+    }
+
+    #[tokio::test]
+    async fn cleanup_removes_expired_nonterminal_extract_jobs() {
+        let config: AppConfig = toml::from_str("").unwrap();
+        let state = AppState::new(config).unwrap();
+        let processing_id = Uuid::new_v4();
+        let cancelling_id = Uuid::new_v4();
+        let old = Instant::now() - Duration::from_secs(5);
+        let mut cancelling = completed_record(old);
+        cancelling.status = ExtractStatus::Cancelling;
+        {
+            let mut jobs = state.extract_jobs.write().await;
+            jobs.insert(processing_id, completed_record(old));
+            jobs.insert(cancelling_id, cancelling);
+        }
+
+        assert_eq!(
+            state
+                .prune_expired_extract_jobs(Duration::from_secs(1))
+                .await,
+            2
+        );
+        assert!(state.extract_jobs.read().await.is_empty());
     }
 }

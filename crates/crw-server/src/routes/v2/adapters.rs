@@ -234,6 +234,16 @@ pub fn expires_at_rfc3339(created_at: Instant, job_ttl_secs: u64) -> String {
     rfc3339_utc(now + remaining)
 }
 
+/// Format a persisted absolute job expiry. Unlike `expires_at_rfc3339`, this
+/// does not derive a new wall-clock value at read time.
+pub fn system_time_rfc3339(expires_at: SystemTime) -> String {
+    let unix_secs = expires_at
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or(0);
+    rfc3339_utc(unix_secs)
+}
+
 /// Format a Unix-epoch second count as `YYYY-MM-DDTHH:MM:SS.000Z` (UTC).
 /// Hand-rolled (Howard Hinnant's `civil_from_days`) to avoid a chrono/time
 /// dependency.

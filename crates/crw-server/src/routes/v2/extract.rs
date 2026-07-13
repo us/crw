@@ -14,7 +14,7 @@ use uuid::Uuid;
 use crw_core::error::CrwError;
 use crw_core::types::{OutputFormat, ScrapeRequest};
 
-use super::adapters::expires_at_rfc3339;
+use super::adapters::system_time_rfc3339;
 use crate::error::AppError;
 use crate::state::{AppState, ExtractStatus, PreparedUrl};
 
@@ -113,13 +113,8 @@ pub async fn get_extract(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<V2ExtractStatusResponse>, AppError> {
-    let rec = {
-        let jobs = state.extract_jobs.read().await;
-        jobs.get(&id)
-            .cloned()
-            .ok_or_else(|| CrwError::NotFound(format!("Extract job {id} not found")))?
-    };
-    let expires_at = expires_at_rfc3339(rec.created_at, state.config.crawler.job_ttl_secs);
+    let rec = state.get_extract_job(id).await?;
+    let expires_at = system_time_rfc3339(rec.expires_at);
     Ok(Json(V2ExtractStatusResponse {
         success: !matches!(rec.status, ExtractStatus::Failed),
         status: rec.status.as_str().to_string(),

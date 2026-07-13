@@ -91,6 +91,7 @@ impl JsonRpcResponse {
 fn extract_accepted_output_schema() -> Value {
     json!({
         "type": "object",
+        "additionalProperties": false,
         "properties": {
             "id": { "type": "string" },
             "status": { "type": "string", "enum": ["processing"] },
@@ -103,12 +104,36 @@ fn extract_accepted_output_schema() -> Value {
 fn extract_status_output_schema() -> Value {
     json!({
         "type": "object",
+        "additionalProperties": false,
         "properties": {
             "id": { "type": "string" },
-            "status": { "type": "string" },
-            "results": { "type": "array", "items": { "type": "object" } },
+            "status": {
+                "type": "string",
+                "enum": ["processing", "cancelling", "completed", "failed", "cancelled"]
+            },
+            "results": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "url": { "type": "string" },
+                        "status": {
+                            "type": "string",
+                            "enum": ["processing", "completed", "failed", "cancelled"]
+                        },
+                        "data": { "type": "object", "additionalProperties": true },
+                        "error": { "type": "string" },
+                        "llmUsage": { "type": "object" },
+                        "basis": { "type": "array", "items": { "type": "object" } },
+                        "basisWarnings": { "type": "array", "items": { "type": "object" } },
+                        "llmInputHash": { "type": "string" }
+                    },
+                    "required": ["url", "status"]
+                }
+            },
             "error": { "type": "string" },
-            "expiresAt": { "type": "string" },
+            "expiresAt": { "type": "string", "format": "date-time" },
             "creditsUsed": { "type": "integer" },
             "tokensUsed": { "type": "integer" }
         },
@@ -872,9 +897,10 @@ mod tests {
     /// Phase 1 trim + Phase 3 annotations/titles + the two native extract tools the
     /// full 8-tool list was ~8017 bytes (~2673 est-tok). The canonical lifecycle
     /// adds one cancel tool plus required output schemas for start/status/cancel;
-    /// after minimizing those schemas, the 9-tool list is ~9621 bytes (~3207
-    /// est-tok). The ceiling keeps ~1.3% headroom so further growth still fails.
-    const TOOLS_LIST_TOKEN_CEILING: usize = 3250;
+    /// after closing lifecycle statuses and typing every per-URL result field,
+    /// the 9-tool list is ~10705 bytes (~3569 est-tok). The ceiling keeps ~2%
+    /// headroom so further growth still fails.
+    const TOOLS_LIST_TOKEN_CEILING: usize = 3650;
 
     #[test]
     fn tools_list_token_budget() {
