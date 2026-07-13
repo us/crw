@@ -35,6 +35,47 @@ curl -fsSL https://fastcrw.com/install | CRW_INSTALL_DIR=~/.local/bin sh
 
 Supported platforms: macOS (Intel & Apple Silicon), Linux (x64 & ARM64), Windows (via MSYS2/Git Bash).
 
+## Homebrew (macOS & Linux)
+
+```bash
+brew install us/crw/crw
+```
+
+The tap is added automatically by the fully-qualified name, so no `brew tap` step is needed.
+The REST API server and the MCP server are separate formulae:
+
+```bash
+brew install us/crw/crw-server   # REST API server
+brew install us/crw/crw-mcp      # MCP server
+```
+
+Upgrade with `brew upgrade crw`.
+
+## APT (Debian & Ubuntu)
+
+```bash
+curl -fsSL https://apt.fastcrw.com/setup.sh | sudo sh
+```
+
+This adds the signing key and the CRW repository, then installs `crw`. From then on, upgrades
+arrive with the rest of the system through `apt upgrade`.
+
+`crw-server` and `crw-mcp` are in the same repository:
+
+```bash
+sudo apt install crw-server
+sudo apt install crw-mcp
+```
+
+Packages are published for `amd64` and `arm64`. If you would rather add the repository by hand:
+
+```bash
+curl -fsSL https://apt.fastcrw.com/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/crw.gpg
+echo "deb [signed-by=/usr/share/keyrings/crw.gpg] https://apt.fastcrw.com stable main" \
+  | sudo tee /etc/apt/sources.list.d/crw.list
+sudo apt update && sudo apt install crw
+```
+
 ## From crates.io
 
 ```bash

@@ -240,7 +240,17 @@ curl http://localhost:3000/v1/scrape \
   -d '{"url":"https://example.com"}'
 ```
 
-Prefer CLI, Homebrew, Cargo, APT, or Docker Compose with a stealth tier? All install paths and
+Or install the CLI and scrape straight from your shell:
+
+```bash
+brew install us/crw/crw                            # macOS & Linux
+curl -fsSL https://apt.fastcrw.com/setup.sh | sudo sh   # Debian & Ubuntu
+curl -fsSL https://fastcrw.com/install | sh        # any platform, no package manager
+
+crw scrape https://example.com
+```
+
+Prefer Cargo, Docker Compose with a stealth tier, or building from source? All install paths and
 production hardening: [docs.fastcrw.com/installation/](https://docs.fastcrw.com/installation/) ·
 [self-hosting guide →](https://docs.fastcrw.com/#self-hosting)
 

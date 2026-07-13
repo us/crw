@@ -299,6 +299,25 @@ Native <code>/v1</code> endpoints for new CRW integrations, with <code>/firecraw
 <pre data-lang="bash"><code class="language-bash"># Install to a custom directory:
 curl -fsSL https://fastcrw.com/install | CRW_INSTALL_DIR=~/.local/bin sh</code></pre>
 <p>Supported platforms: macOS (Intel &amp; Apple Silicon), Linux (x64 &amp; ARM64), Windows (via MSYS2/Git Bash).</p>
+<h2 id="homebrew-macos-linux">Homebrew (macOS &amp; Linux)</h2>
+<pre data-lang="bash"><code class="language-bash">brew install us/crw/crw</code></pre>
+<p>The tap is added automatically by the fully-qualified name, so no <code>brew tap</code> step is needed.
+The REST API server and the MCP server are separate formulae:</p>
+<pre data-lang="bash"><code class="language-bash">brew install us/crw/crw-server   # REST API server
+brew install us/crw/crw-mcp      # MCP server</code></pre>
+<p>Upgrade with <code>brew upgrade crw</code>.</p>
+<h2 id="apt-debian-ubuntu">APT (Debian &amp; Ubuntu)</h2>
+<pre data-lang="bash"><code class="language-bash">curl -fsSL https://apt.fastcrw.com/setup.sh | sudo sh</code></pre>
+<p>This adds the signing key and the CRW repository, then installs <code>crw</code>. From then on, upgrades
+arrive with the rest of the system through <code>apt upgrade</code>.</p>
+<p><code>crw-server</code> and <code>crw-mcp</code> are in the same repository:</p>
+<pre data-lang="bash"><code class="language-bash">sudo apt install crw-server
+sudo apt install crw-mcp</code></pre>
+<p>Packages are published for <code>amd64</code> and <code>arm64</code>. If you would rather add the repository by hand:</p>
+<pre data-lang="bash"><code class="language-bash">curl -fsSL https://apt.fastcrw.com/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/crw.gpg
+echo &quot;deb [signed-by=/usr/share/keyrings/crw.gpg] https://apt.fastcrw.com stable main&quot; \
+  | sudo tee /etc/apt/sources.list.d/crw.list
+sudo apt update &amp;&amp; sudo apt install crw</code></pre>
 <h2 id="from-cratesio">From crates.io</h2>
 <pre data-lang="bash"><code class="language-bash"># CLI tool (no server required)
 cargo install crw-cli
