@@ -1,5 +1,10 @@
 """CRW SDK exceptions."""
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from crw.types import ExtractStatus, ExtractUrlResult
+
 
 class CrwError(Exception):
     """Base exception for CRW SDK."""
@@ -11,6 +16,15 @@ class CrwBinaryNotFoundError(CrwError):
 
 class CrwTimeoutError(CrwError):
     """Operation timed out."""
+
+
+class CrwExtractCancelledError(CrwError):
+    """An extract waiter reached the immutable cancelled state."""
+
+    def __init__(self, status: "ExtractStatus"):
+        super().__init__(f"Extract {status['id']} was cancelled")
+        self.status = status
+        self.results: list["ExtractUrlResult"] = status["results"]
 
 
 class CrwApiError(CrwError):

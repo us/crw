@@ -45,7 +45,9 @@ pub fn router() -> Router<AppState> {
         )
         .route(
             "/v1/extract/{id}",
-            get(routes::extract::get_extract).fallback(method_not_allowed),
+            get(routes::extract::get_extract)
+                .delete(routes::extract::cancel_extract)
+                .fallback(method_not_allowed),
         )
         .route(
             "/v1/map",

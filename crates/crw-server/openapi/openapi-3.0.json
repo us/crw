@@ -406,8 +406,22 @@
           "extract"
         ],
         "summary": "Start an async multi-URL structured extraction job",
-        "description": "Native extraction. Returns a per-URL array via GET /v1/extract/{id}. At least one of `prompt` or `schema` is required.",
+        "description": "Native extraction. Returns a fixed-cardinality per-URL array via GET /v1/extract/{id}. At least one of `prompt` or `schema` is required. SDK async starters send `Prefer: respond-async` for managed/self-hosted parity.",
         "operationId": "extractStart",
+        "parameters": [
+          {
+            "name": "Prefer",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "respond-async"
+              ]
+            },
+            "description": "Request the canonical async lifecycle across managed and self-hosted deployments."
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -463,6 +477,46 @@
                 }
               }
             }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "extract"
+        ],
+        "summary": "Cancel an extract job",
+        "description": "Idempotent. Processing becomes cancelling while a claimed URL settles, then cancelled. Completed, failed, and cancelled states are immutable.",
+        "operationId": "extractCancel",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Extract job id returned by POST /v1/extract"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Canonical job status + ordered per-URL results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtractStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -1386,14 +1440,16 @@
           "status": {
             "type": "string",
             "enum": [
+              "processing",
               "completed",
-              "failed"
+              "failed",
+              "cancelled"
             ]
           },
           "data": {
             "type": "object",
             "additionalProperties": true,
-            "description": "Extracted JSON object (present when status is completed)."
+            "description": "Extracted JSON object (present when status is completed). Untouched cancelled slots omit data, error, usage, and basis."
           },
           "error": {
             "type": "string"
@@ -1427,6 +1483,7 @@
         "required": [
           "id",
           "status",
+          "results",
           "expiresAt",
           "creditsUsed",
           "tokensUsed"
@@ -1439,8 +1496,10 @@
             "type": "string",
             "enum": [
               "processing",
+              "cancelling",
               "completed",
-              "failed"
+              "failed",
+              "cancelled"
             ]
           },
           "results": {
@@ -1448,7 +1507,7 @@
             "items": {
               "$ref": "#/components/schemas/ExtractUrlResult"
             },
-            "description": "Per-URL results in original request order."
+            "description": "Fixed-cardinality per-URL slots in original request order. Pending slots are processing; untouched terminal slots are cancelled."
           },
           "error": {
             "type": "string",

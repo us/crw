@@ -127,7 +127,7 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
             Ok(json!({"success": true, "id": id.to_string(), "status": "processing", "urls": urls}))
         }
         "crw_check_extract_status" => {
-            use crate::routes::extract::ExtractUrlResult;
+            use crate::routes::extract::get_extract_status;
             let id_str = args
                 .get("id")
                 .and_then(|v| v.as_str())
@@ -135,26 +135,24 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
             let id: Uuid = id_str
                 .parse()
                 .map_err(|_| format!("invalid extract id: {id_str}"))?;
-            let rec = {
-                let jobs = state.extract_jobs.read().await;
-                jobs.get(&id)
-                    .cloned()
-                    .ok_or(format!("extract job {id} not found"))?
-            };
-            let results: Vec<ExtractUrlResult> = rec
-                .per_url
-                .into_iter()
-                .map(ExtractUrlResult::from)
-                .collect();
-            serde_json::to_value(json!({
-                "success": !matches!(rec.status, crate::state::ExtractStatus::Failed),
-                "status": rec.status.as_str(),
-                "results": results,
-                "error": rec.error,
-                "creditsUsed": rec.credits_used,
-                "tokensUsed": rec.tokens_used,
-            }))
-            .map_err(|e| format!("serialize error: {e}"))
+            let response = get_extract_status(state, id)
+                .await
+                .map_err(|e| format!("{e}"))?;
+            serde_json::to_value(response).map_err(|e| format!("serialize error: {e}"))
+        }
+        "crw_cancel_extract" => {
+            use crate::routes::extract::cancel_extract_status;
+            let id_str = args
+                .get("id")
+                .and_then(|v| v.as_str())
+                .ok_or("missing required parameter: id")?;
+            let id: Uuid = id_str
+                .parse()
+                .map_err(|_| format!("invalid extract id: {id_str}"))?;
+            let response = cancel_extract_status(state, id)
+                .await
+                .map_err(|e| format!("{e}"))?;
+            serde_json::to_value(response).map_err(|e| format!("serialize error: {e}"))
         }
         "crw_parse_file" => {
             use base64::Engine;

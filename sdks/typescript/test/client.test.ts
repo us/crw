@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
-import { CLOUD_API_URL, CrwClient, CrwError } from "../dist/esm/index.js";
+import {
+  CLOUD_API_URL,
+  CrwClient,
+  CrwError,
+  CrwExtractCancelledError,
+  CrwTimeoutError,
+} from "../dist/esm/index.js";
 
 const origFetch = globalThis.fetch;
 const origEnv = { ...process.env };
@@ -66,6 +72,9 @@ test("HTTP-only methods throw in local mode", async () => {
   process.env.CRW_LOCAL = "1";
   const c = new CrwClient();
   await assert.rejects(() => c.extract({ urls: ["https://example.com"] }), /requires HTTP mode/);
+  await assert.rejects(() => c.startExtract({ urls: ["https://example.com"] }), /requires HTTP mode/);
+  await assert.rejects(() => c.getExtract("job-1"), /requires HTTP mode/);
+  await assert.rejects(() => c.cancelExtract("job-1"), /requires HTTP mode/);
   await assert.rejects(() => c.batchScrape(["https://example.com"]), /requires HTTP mode/);
   await assert.rejects(() => c.capabilities(), /requires HTTP mode/);
   await assert.rejects(() => c.changeTrackingDiff({ markdown: "a" }), /requires HTTP mode/);
@@ -100,11 +109,121 @@ test("extract starts a /v1/extract job and returns per-URL results", async () =>
   const postBody = JSON.parse(calls[0].init!.body as string);
   assert.deepEqual(postBody.urls, ["https://example.com"]);
   assert.equal(postBody.llmApiKey, "sk");
+  assert.equal((calls[0].init!.headers as Record<string, string>).Prefer, "respond-async");
   assert.ok(calls[1].url.startsWith(`${CLOUD_API_URL}/v1/extract/job-1`));
   assert.equal(results.length, 1);
   const r0 = results[0] as { url: string; data: { title: string } };
   assert.equal(r0.url, "https://example.com");
   assert.equal(r0.data.title, "Hi");
+});
+
+test("startExtract sends Prefer for managed and self-hosted fixtures", async () => {
+  const calls = mockFetch({ id: "job-1", status: "processing", urls: 1 });
+  const managed = new CrwClient({ apiKey: "fc-test" });
+  assert.equal((await managed.startExtract({ urls: ["https://example.com"], prompt: "x" })).id, "job-1");
+  const selfHosted = new CrwClient({ apiUrl: "http://localhost:3000" });
+  await selfHosted.startExtract({ urls: ["https://example.com"], schema: { type: "object" } });
+
+  assert.equal(calls[0].url, `${CLOUD_API_URL}/v1/extract`);
+  assert.equal(calls[1].url, "http://localhost:3000/v1/extract");
+  for (const call of calls) {
+    assert.equal((call.init!.headers as Record<string, string>).Prefer, "respond-async");
+  }
+});
+
+test("extract preserves managed synchronous fixture while requesting async", async () => {
+  const calls = mockFetch({
+    success: true,
+    results: [{ url: "https://example.com", status: "completed", data: { title: "Hi" } }],
+  });
+  const c = new CrwClient({ apiKey: "fc-test" });
+  const results = await c.extract({ urls: ["https://example.com"], prompt: "title" });
+  assert.equal(results[0].status, "completed");
+  assert.equal((calls[0].init!.headers as Record<string, string>).Prefer, "respond-async");
+});
+
+test("getExtract and cancelExtract use canonical status route", async () => {
+  const status = {
+    id: "job/one",
+    status: "cancelled",
+    results: [{ url: "https://example.com", status: "cancelled" }],
+    expiresAt: "2026-07-14T00:00:00Z",
+    creditsUsed: 0,
+    tokensUsed: 0,
+  };
+  const calls = mockFetch(status);
+  const c = new CrwClient({ apiUrl: "http://localhost:3000" });
+  assert.equal((await c.getExtract("job/one")).status, "cancelled");
+  assert.equal((await c.cancelExtract("job/one")).results.length, 1);
+  assert.equal(calls[0].url, "http://localhost:3000/v1/extract/job%2Fone");
+  assert.equal(calls[0].init!.method, "GET");
+  assert.equal(calls[1].init!.method, "DELETE");
+});
+
+test("extract treats cancelling as non-terminal then raises typed cancelled error", async () => {
+  const responses = [
+    { id: "job-1", status: "processing", urls: 2 },
+    {
+      id: "job-1",
+      status: "cancelling",
+      results: [
+        { url: "https://a.example", status: "completed", data: { title: "A" } },
+        { url: "https://b.example", status: "processing" },
+      ],
+      expiresAt: "2026-07-14T00:00:00Z",
+      creditsUsed: 1,
+      tokensUsed: 9,
+    },
+    {
+      id: "job-1",
+      status: "cancelled",
+      results: [
+        { url: "https://a.example", status: "completed", data: { title: "A" } },
+        { url: "https://b.example", status: "cancelled" },
+      ],
+      expiresAt: "2026-07-14T00:00:00Z",
+      creditsUsed: 1,
+      tokensUsed: 9,
+    },
+  ];
+  globalThis.fetch = (async () => {
+    const body = responses.shift();
+    return { ok: true, status: 200, statusText: "OK", text: async () => JSON.stringify(body) } as Response;
+  }) as typeof fetch;
+  const c = new CrwClient({ apiUrl: "http://localhost:3000" });
+  await assert.rejects(
+    () => c.extract({ urls: ["https://a.example", "https://b.example"], prompt: "x", pollInterval: 0 }),
+    (error: unknown) => {
+      assert.ok(error instanceof CrwExtractCancelledError);
+      assert.equal(error.status.status, "cancelled");
+      assert.equal(error.results[0].status, "completed");
+      return true;
+    },
+  );
+});
+
+test("extract timeout performs best-effort DELETE", async () => {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    calls.push({ url: String(url), init });
+    const body = init?.method === "POST"
+      ? { id: "job-1", status: "processing", urls: 1 }
+      : {
+          id: "job-1",
+          status: "cancelled",
+          results: [{ url: "https://example.com", status: "cancelled" }],
+          expiresAt: "2026-07-14T00:00:00Z",
+          creditsUsed: 0,
+          tokensUsed: 0,
+        };
+    return { ok: true, status: 200, statusText: "OK", text: async () => JSON.stringify(body) } as Response;
+  }) as typeof fetch;
+  const c = new CrwClient({ apiUrl: "http://localhost:3000" });
+  await assert.rejects(
+    () => c.extract({ urls: ["https://example.com"], prompt: "x", timeout: -1 }),
+    CrwTimeoutError,
+  );
+  assert.equal(calls.at(-1)?.init?.method, "DELETE");
 });
 
 test("capabilities unwraps and uses GET /v1/capabilities", async () => {

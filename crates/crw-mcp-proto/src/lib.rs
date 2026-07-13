@@ -88,6 +88,34 @@ impl JsonRpcResponse {
 
 // --- Tool definitions ---
 
+fn extract_accepted_output_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "id": { "type": "string" },
+            "status": { "type": "string", "enum": ["processing"] },
+            "urls": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["id", "status", "urls"]
+    })
+}
+
+fn extract_status_output_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "id": { "type": "string" },
+            "status": { "type": "string" },
+            "results": { "type": "array", "items": { "type": "object" } },
+            "error": { "type": "string" },
+            "expiresAt": { "type": "string" },
+            "creditsUsed": { "type": "integer" },
+            "tokensUsed": { "type": "integer" }
+        },
+        "required": ["id", "status", "results", "expiresAt", "creditsUsed", "tokensUsed"]
+    })
+}
+
 pub fn tool_definitions(proxy_mode: bool) -> Value {
     let mut tools = vec![
         json!({
@@ -298,7 +326,8 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
                     "llmModel": { "type": "string" }
                 },
                 "required": ["urls"]
-            }
+            },
+            "outputSchema": extract_accepted_output_schema()
         }),
         json!({
             "name": "crw_check_extract_status",
@@ -316,7 +345,27 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
                     "id": { "type": "string", "description": "Extract job id from crw_extract" }
                 },
                 "required": ["id"]
-            }
+            },
+            "outputSchema": extract_status_output_schema()
+        }),
+        json!({
+            "name": "crw_cancel_extract",
+            "title": "Cancel extract job",
+            "description": "Request cancellation of an extract job. Returns the canonical status; cancelling remains non-terminal until the claimed URL settles.",
+            "annotations": {
+                "readOnlyHint": false,
+                "destructiveHint": true,
+                "idempotentHint": true,
+                "openWorldHint": true
+            },
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "id": { "type": "string", "description": "Extract job id from crw_extract" }
+                },
+                "required": ["id"]
+            },
+            "outputSchema": extract_status_output_schema()
         }),
     ];
 
@@ -821,12 +870,11 @@ mod tests {
     ///
     /// Baseline before the Phase 1 trim was 8233 bytes (~2744 est-tok). After the
     /// Phase 1 trim + Phase 3 annotations/titles + the two native extract tools the
-    /// full 8-tool list is ~8017 bytes (~2673 est-tok). The ceiling is floor + ~3%
-    /// headroom so the gate catches real bloat without churning on minor edits.
-    // Raised from 2300 when the two native extract tools (crw_extract +
-    // crw_check_extract_status) were added — proportional to the existing
-    // per-tool footprint, not description bloat.
-    const TOOLS_LIST_TOKEN_CEILING: usize = 2750;
+    /// full 8-tool list was ~8017 bytes (~2673 est-tok). The canonical lifecycle
+    /// adds one cancel tool plus required output schemas for start/status/cancel;
+    /// after minimizing those schemas, the 9-tool list is ~9621 bytes (~3207
+    /// est-tok). The ceiling keeps ~1.3% headroom so further growth still fails.
+    const TOOLS_LIST_TOKEN_CEILING: usize = 3250;
 
     #[test]
     fn tools_list_token_budget() {
@@ -1306,20 +1354,14 @@ mod tests {
     }
 
     /// A1 — every tool advertises annotations + a title; crw_crawl and crw_extract
-    /// are the non-read-only / non-idempotent tools; crw_parse_file is the only closed-world.
+    /// are non-idempotent, while cancel is destructive but idempotent.
     #[test]
     fn a1_tools_advertise_annotations_and_title() {
         let defs = tool_definitions(false);
         for t in defs["tools"].as_array().unwrap() {
             assert!(t["annotations"].is_object(), "{} annotations", t["name"]);
             assert!(t["title"].is_string(), "{} title", t["name"]);
-            // destructiveHint is explicitly false everywhere (the JSON default is true).
-            assert_eq!(
-                t["annotations"]["destructiveHint"],
-                json!(false),
-                "{}",
-                t["name"]
-            );
+            assert!(t["annotations"]["destructiveHint"].is_boolean());
         }
         let crawl = tool_by_name(&defs, "crw_crawl");
         assert_eq!(crawl["annotations"]["readOnlyHint"], json!(false));
@@ -1328,6 +1370,10 @@ mod tests {
         let extract = tool_by_name(&defs, "crw_extract");
         assert_eq!(extract["annotations"]["readOnlyHint"], json!(false));
         assert_eq!(extract["annotations"]["idempotentHint"], json!(false));
+        let cancel = tool_by_name(&defs, "crw_cancel_extract");
+        assert_eq!(cancel["annotations"]["readOnlyHint"], json!(false));
+        assert_eq!(cancel["annotations"]["destructiveHint"], json!(true));
+        assert_eq!(cancel["annotations"]["idempotentHint"], json!(true));
         let scrape = tool_by_name(&defs, "crw_scrape");
         assert_eq!(scrape["annotations"]["readOnlyHint"], json!(true));
         assert_eq!(scrape["annotations"]["openWorldHint"], json!(true));
@@ -1335,7 +1381,7 @@ mod tests {
         assert_eq!(parse["annotations"]["openWorldHint"], json!(false));
     }
 
-    /// A2 — is_known_tool recognizes all 8 tool names, rejects others.
+    /// A2 — is_known_tool recognizes all 9 tool names, rejects others.
     #[test]
     fn a2_is_known_tool() {
         for name in [
@@ -1347,6 +1393,7 @@ mod tests {
             "crw_parse_file",
             "crw_extract",
             "crw_check_extract_status",
+            "crw_cancel_extract",
         ] {
             assert!(is_known_tool(name), "{name} should be known");
         }
@@ -1378,10 +1425,10 @@ mod tests {
         }
         let with = list(true);
         assert!(with.contains(&"crw_search".to_string()));
-        assert_eq!(with.len(), 8);
+        assert_eq!(with.len(), 9);
         let without = list(false);
         assert!(!without.contains(&"crw_search".to_string()));
-        assert_eq!(without.len(), 7);
+        assert_eq!(without.len(), 8);
     }
 
     /// A4 — initialize advertises server usage `instructions` (the model-facing

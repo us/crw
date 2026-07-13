@@ -165,6 +165,15 @@ for r in results:
     if r["status"] == "completed":
         print(r["url"], r["data"])
 
+# Explicit typed lifecycle. start_extract always sends Prefer: respond-async.
+accepted = client.start_extract(
+    ["https://a.example", "https://b.example"],
+    schema={"type": "object", "properties": {"title": {"type": "string"}}},
+    basis=True,
+)
+status = client.get_extract(accepted["id"])
+client.cancel_extract(accepted["id"])  # idempotent
+
 # Scrape many URLs in one async batch:
 pages = client.batch_scrape(["https://a.com", "https://b.com"], formats=["markdown"])
 

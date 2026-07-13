@@ -6,8 +6,10 @@ use crw_core::types::{
     ApiResponse, GroupedSearchData, ImageResult, SearchData, SearchResponseData, SearchResult,
 };
 use crw_server::app::create_app;
-use crw_server::state::AppState;
+use crw_server::state::{AppState, ExtractRecord, ExtractStatus, UrlResult};
 use serde_json::{Value, json};
+use std::time::Instant;
+use uuid::Uuid;
 
 fn test_app() -> TestServer {
     let config: AppConfig = toml::from_str("").unwrap();
@@ -64,7 +66,7 @@ async fn mcp_initialize_returns_capabilities() {
 
 #[tokio::test]
 async fn mcp_tools_list_returns_all_tools() {
-    // With a search backend configured, all 8 tools are advertised.
+    // With a search backend configured, all 9 tools are advertised.
     let server = test_app_with_search();
     let resp = server
         .post("/mcp")
@@ -76,8 +78,8 @@ async fn mcp_tools_list_returns_all_tools() {
     let tools = json["result"]["tools"].as_array().unwrap();
     assert_eq!(
         tools.len(),
-        8,
-        "Should have 8 tools: scrape, crawl, check, map, search, parse_file, extract, check_extract"
+        9,
+        "Should have 9 tools including extract start/status/cancel"
     );
 
     let tool_names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
@@ -89,10 +91,11 @@ async fn mcp_tools_list_returns_all_tools() {
     assert!(tool_names.contains(&"crw_parse_file"));
     assert!(tool_names.contains(&"crw_extract"));
     assert!(tool_names.contains(&"crw_check_extract_status"));
+    assert!(tool_names.contains(&"crw_cancel_extract"));
 
     // Every tool advertises annotations. Job-starting tools (crw_crawl,
     // crw_extract) have side effects and must NOT be marked read-only.
-    let non_read_only = ["crw_crawl", "crw_extract"];
+    let non_read_only = ["crw_crawl", "crw_extract", "crw_cancel_extract"];
     for t in tools {
         assert!(
             t["annotations"].is_object(),
@@ -115,6 +118,20 @@ async fn mcp_tools_list_returns_all_tools() {
     assert_eq!(crawl["annotations"]["idempotentHint"], false);
     let scrape = tools.iter().find(|t| t["name"] == "crw_scrape").unwrap();
     assert_eq!(scrape["annotations"]["readOnlyHint"], true);
+    let cancel = tools
+        .iter()
+        .find(|t| t["name"] == "crw_cancel_extract")
+        .unwrap();
+    assert_eq!(cancel["annotations"]["destructiveHint"], true);
+    assert_eq!(cancel["annotations"]["idempotentHint"], true);
+    for name in [
+        "crw_extract",
+        "crw_check_extract_status",
+        "crw_cancel_extract",
+    ] {
+        let tool = tools.iter().find(|t| t["name"] == name).unwrap();
+        assert!(tool["outputSchema"].is_object(), "{name} outputSchema");
+    }
 }
 
 /// crw_search is suppressed from tools/list when no search backend is configured,
@@ -131,9 +148,70 @@ async fn mcp_tools_list_hides_search_without_backend() {
     let json: serde_json::Value = resp.json();
     let tools = json["result"]["tools"].as_array().unwrap();
     let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
-    assert_eq!(tools.len(), 7, "crw_search hidden without a backend");
+    assert_eq!(tools.len(), 8, "crw_search hidden without a backend");
     assert!(!names.contains(&"crw_search"));
     assert!(names.contains(&"crw_scrape"));
+}
+
+#[tokio::test]
+async fn mcp_extract_status_and_cancel_share_canonical_http_serializer() {
+    let config: AppConfig = toml::from_str("").unwrap();
+    let state = AppState::new(config).unwrap();
+    let id = Uuid::new_v4();
+    state.extract_jobs.write().await.insert(
+        id,
+        ExtractRecord {
+            status: ExtractStatus::Processing,
+            data: None,
+            per_url: vec![UrlResult {
+                url: "https://example.com".into(),
+                status: ExtractStatus::Processing,
+                data: None,
+                error: None,
+                llm_usage: None,
+                basis: None,
+                basis_warnings: Vec::new(),
+                llm_input_hash: None,
+            }],
+            tokens_used: 0,
+            credits_used: 0,
+            error: None,
+            created_at: Instant::now(),
+            claimed_index: None,
+        },
+    );
+    let server = TestServer::new(create_app(state));
+
+    let status: Value = server
+        .post("/mcp")
+        .content_type("application/json")
+        .json(&mcp_request(
+            "tools/call",
+            json!(201),
+            json!({"name": "crw_check_extract_status", "arguments": {"id": id}}),
+        ))
+        .await
+        .json();
+    let status = &status["result"]["structuredContent"];
+    assert_eq!(status["id"], id.to_string());
+    assert_eq!(status["status"], "processing");
+    assert_eq!(status["results"][0]["status"], "processing");
+    assert!(status["expiresAt"].is_string());
+    assert!(status.get("success").is_none());
+
+    let cancelled: Value = server
+        .post("/mcp")
+        .content_type("application/json")
+        .json(&mcp_request(
+            "tools/call",
+            json!(202),
+            json!({"name": "crw_cancel_extract", "arguments": {"id": id}}),
+        ))
+        .await
+        .json();
+    let cancelled = &cancelled["result"]["structuredContent"];
+    assert_eq!(cancelled["status"], "cancelled");
+    assert_eq!(cancelled["results"][0]["status"], "cancelled");
 }
 
 #[tokio::test]

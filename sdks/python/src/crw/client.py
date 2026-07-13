@@ -7,11 +7,12 @@ import json
 import os
 import subprocess
 import time
-from typing import Any
+from typing import Any, cast
 from urllib.parse import quote, urlencode
 
 from crw._binary import ensure_binary
-from crw.exceptions import CrwApiError, CrwError, CrwTimeoutError
+from crw.exceptions import CrwApiError, CrwError, CrwExtractCancelledError, CrwTimeoutError
+from crw.types import ExtractAccepted, ExtractStatus, ExtractUrlResult
 
 _REQUEST_ID = 0
 
@@ -447,6 +448,90 @@ class CrwClient:
         args.update(kwargs)
         return self._tool_call("crw_parse_file", args)
 
+    def _extract_body(
+        self,
+        urls: list[str],
+        prompt: str | None = None,
+        schema: dict | None = None,
+        llm_api_key: str | None = None,
+        llm_provider: str | None = None,
+        llm_model: str | None = None,
+        basis: bool | None = None,
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {"urls": list(urls)}
+        if prompt is not None:
+            body["prompt"] = prompt
+        if schema is not None:
+            body["schema"] = schema
+        if basis is not None:
+            body["basis"] = basis
+        if llm_api_key is not None:
+            body["llmApiKey"] = llm_api_key
+        if llm_provider is not None:
+            body["llmProvider"] = llm_provider
+        if llm_model is not None:
+            body["llmModel"] = llm_model
+        return body
+
+    def _start_extract_request(self, body: dict[str, Any]) -> dict:
+        return self._http_request(
+            "POST",
+            "/v1/extract",
+            body,
+            raw=True,
+            headers={"Prefer": "respond-async"},
+        )
+
+    def start_extract(
+        self,
+        urls: list[str],
+        prompt: str | None = None,
+        schema: dict | None = None,
+        llm_api_key: str | None = None,
+        llm_provider: str | None = None,
+        llm_model: str | None = None,
+        basis: bool | None = None,
+    ) -> ExtractAccepted:
+        """Start extraction without waiting; always requests an async response."""
+        if not self._api_url:
+            raise CrwError(
+                _HTTP_ONLY_HINT.format(name="start_extract", reason="LLM extract job endpoint")
+            )
+        result = self._start_extract_request(
+            self._extract_body(
+                urls, prompt, schema, llm_api_key, llm_provider, llm_model, basis
+            )
+        )
+        if isinstance(result.get("id"), str) and result.get("status") == "processing":
+            return cast(ExtractAccepted, result)
+        raise CrwError(f"start_extract did not return an accepted job: {result}")
+
+    def get_extract(self, job_id: str) -> ExtractStatus:
+        """Return the canonical extract lifecycle envelope."""
+        if not self._api_url:
+            raise CrwError(
+                _HTTP_ONLY_HINT.format(name="get_extract", reason="LLM extract job endpoint")
+            )
+        return cast(
+            ExtractStatus,
+            self._http_request(
+                "GET", f"/v1/extract/{quote(job_id, safe='')}", raw=True, check_success=False
+            ),
+        )
+
+    def cancel_extract(self, job_id: str) -> ExtractStatus:
+        """Idempotently request cancellation and return canonical status."""
+        if not self._api_url:
+            raise CrwError(
+                _HTTP_ONLY_HINT.format(name="cancel_extract", reason="LLM extract job endpoint")
+            )
+        return cast(
+            ExtractStatus,
+            self._http_request(
+                "DELETE", f"/v1/extract/{quote(job_id, safe='')}", raw=True, check_success=False
+            ),
+        )
+
     def extract(
         self,
         urls: list[str],
@@ -457,59 +542,49 @@ class CrwClient:
         llm_model: str | None = None,
         poll_interval: float = 2.0,
         timeout: float = 120.0,
-    ) -> list[dict]:
-        """Run native multi-URL structured extraction (HTTP mode only).
+        basis: bool | None = None,
+    ) -> list[ExtractUrlResult]:
+        """Wait for native multi-URL extraction, cancelling best-effort on timeout.
 
-        Starts an async ``/v1/extract`` job, polls until completion, and returns
-        the per-URL ``results`` array (``[{url, status, data, error, llmUsage}]``)
-        in request order. Requires an LLM configured on the engine (or a BYOK key).
-
-        Args:
-            urls: URLs to extract from (at least one required).
-            prompt: Free-text extraction instruction (required unless ``schema``).
-            schema: JSON Schema describing the desired output shape.
-            llm_api_key: BYOK LLM key (self-host/local engine only).
-            llm_provider: BYOK provider.
-            llm_model: BYOK model.
+        ``cancelling`` is non-terminal. Terminal ``cancelled`` raises
+        :class:`CrwExtractCancelledError` with the status and partial results.
         """
         if not self._api_url:
             raise CrwError(_HTTP_ONLY_HINT.format(name="extract", reason="LLM extract job endpoint"))
 
-        body: dict[str, Any] = {"urls": list(urls)}
-        if prompt is not None:
-            body["prompt"] = prompt
-        if schema is not None:
-            body["schema"] = schema
-        if llm_api_key is not None:
-            body["llmApiKey"] = llm_api_key
-        if llm_provider is not None:
-            body["llmProvider"] = llm_provider
-        if llm_model is not None:
-            body["llmModel"] = llm_model
-
-        start = self._http_request("POST", "/v1/extract", body, raw=True)
+        body = self._extract_body(
+            urls, prompt, schema, llm_api_key, llm_provider, llm_model, basis
+        )
+        start = self._start_extract_request(body)
         job_id = start.get("id")
         if not job_id:
             # The managed API answers synchronously: the extraction is already
             # finished and the payload is in this first response, with no job to
             # poll. Only the async path hands back an `id`. Demanding one made
             # every managed extract() raise.
+            if start.get("status") == "cancelled":
+                raise CrwExtractCancelledError(cast(ExtractStatus, start))
             if isinstance(start.get("results"), list):
-                return start["results"]
+                return cast(list[ExtractUrlResult], start["results"])
             raise CrwError(f"extract returned neither a job id nor results: {start}")
 
         deadline = time.monotonic() + timeout
         while True:
             if time.monotonic() > deadline:
+                try:
+                    self.cancel_extract(str(job_id))
+                except Exception:
+                    # Timeout remains caller-visible; DELETE is best effort.
+                    pass
                 raise CrwTimeoutError(f"Extract {job_id} timed out after {timeout}s")
-            status_result = self._http_request(
-                "GET", f"/v1/extract/{job_id}", raw=True, check_success=False
-            )
+            status_result = self.get_extract(str(job_id))
             status = status_result.get("status")
             if status == "completed":
-                return status_result.get("results", [])
+                return status_result["results"]
             if status == "failed":
                 raise CrwError(f"Extract failed: {status_result.get('error', 'unknown')}")
+            if status == "cancelled":
+                raise CrwExtractCancelledError(status_result)
             time.sleep(poll_interval)
 
     def batch_scrape(
@@ -694,17 +769,18 @@ class CrwClient:
         *,
         raw: bool = False,
         check_success: bool = True,
+        headers: dict[str, str] | None = None,
     ) -> dict:
         import urllib.request
 
         assert self._api_url is not None
         url = f"{self._api_url.rstrip('/')}{path}"
-        headers = {"Content-Type": "application/json"}
+        request_headers = {"Content-Type": "application/json", **(headers or {})}
         if self._api_key:
-            headers["Authorization"] = f"Bearer {self._api_key}"
+            request_headers["Authorization"] = f"Bearer {self._api_key}"
 
         data = json.dumps(body).encode() if body else None
-        req = urllib.request.Request(url, data=data, headers=headers, method=method)
+        req = urllib.request.Request(url, data=data, headers=request_headers, method=method)
 
         result = _read_json_response(req)
 

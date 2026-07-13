@@ -130,6 +130,17 @@ Parameters:
 
 Returns: status and, when complete, a per-URL results array.
 
+### crw_cancel_extract
+
+Idempotently request cancellation of an extract job. A claimed URL may finish
+while status is `cancelling`; terminal `cancelled` preserves that result and
+marks every untouched ordered slot `cancelled`.
+
+Parameters:
+- `id` (required) — The extract job ID from `crw_extract`
+
+Returns the same canonical status envelope as `crw_check_extract_status`.
+
 ### crw_parse_file
 
 Parse a local file (PDF) into markdown or structured output without fetching from the web.

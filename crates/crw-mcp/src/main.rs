@@ -17,6 +17,7 @@
 //! - `crw_search` — web search (embedded: only when a search backend is configured; proxy: forwards to the remote API)
 //! - `crw_extract` — start an async multi-URL structured extraction job
 //! - `crw_check_extract_status` — poll extract job status
+//! - `crw_cancel_extract` — idempotently cancel an extract job
 //! - `crw_parse_file` — parse a local PDF (base64) to markdown
 //!
 //! # Usage
@@ -261,6 +262,8 @@ async fn proxy_call_tool(
             parse_response(resp).await
         }
         "crw_extract" => {
+            let mut headers = headers;
+            headers.insert("prefer", "respond-async".parse().unwrap());
             let resp = client
                 .post(format!("{base_url}/v1/extract"))
                 .headers(headers)
@@ -278,6 +281,20 @@ async fn proxy_call_tool(
                 .ok_or("missing required parameter: id")?;
             let resp = client
                 .get(format!("{base_url}/v1/extract/{id}"))
+                .headers(headers)
+                .timeout(TIMEOUT_CRAWL_STATUS)
+                .send()
+                .await
+                .map_err(|e| format!("HTTP request failed: {e}"))?;
+            parse_response(resp).await
+        }
+        "crw_cancel_extract" => {
+            let id = args
+                .get("id")
+                .and_then(|v| v.as_str())
+                .ok_or("missing required parameter: id")?;
+            let resp = client
+                .delete(format!("{base_url}/v1/extract/{id}"))
                 .headers(headers)
                 .timeout(TIMEOUT_CRAWL_STATUS)
                 .send()
