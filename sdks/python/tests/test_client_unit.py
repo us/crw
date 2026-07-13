@@ -195,16 +195,20 @@ class TestSearch:
         client = CrwClient(api_url="https://fastcrw.com/api", api_key="fc-test")
         mock_response = [{"url": "https://example.com", "title": "Example"}]
 
-        with patch.object(client, "_http_post", return_value=mock_response) as mock_post:
+        with patch.object(
+            client,
+            "_http_request",
+            return_value={"success": True, "data": mock_response},
+        ) as mock_request:
             result = client.search("python web scraping", limit=5)
 
-        mock_post.assert_called_once()
-        call_args = mock_post.call_args
-        assert call_args[0][0] == "/v1/search"
-        body = call_args[0][1]
-        assert body["query"] == "python web scraping"
-        assert body["limit"] == 5
-        assert result == mock_response
+        mock_request.assert_called_once_with(
+            "POST",
+            "/v1/search",
+            {"query": "python web scraping", "limit": 5},
+            raw=True,
+        )
+        assert list(result) == mock_response
 
 
 # ---------------------------------------------------------------------------
