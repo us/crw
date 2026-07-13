@@ -100,21 +100,32 @@ const MAX_CONCURRENT_CRAWLS: usize = 10;
 /// Interval between expired crawl job cleanup runs.
 const JOB_CLEANUP_INTERVAL: Duration = Duration::from_secs(60);
 
-/// Lifecycle of an async `/v2/extract` job.
+/// Canonical lifecycle of an async extract job.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExtractStatus {
     Processing,
+    Cancelling,
     Completed,
     Failed,
+    Cancelled,
 }
 
 impl ExtractStatus {
     pub fn as_str(self) -> &'static str {
         match self {
             ExtractStatus::Processing => "processing",
+            ExtractStatus::Cancelling => "cancelling",
             ExtractStatus::Completed => "completed",
             ExtractStatus::Failed => "failed",
+            ExtractStatus::Cancelled => "cancelled",
         }
+    }
+
+    pub fn is_terminal(self) -> bool {
+        matches!(
+            self,
+            ExtractStatus::Completed | ExtractStatus::Failed | ExtractStatus::Cancelled
+        )
     }
 }
 
@@ -161,6 +172,31 @@ pub struct ExtractRecord {
     pub credits_used: u32,
     pub error: Option<String>,
     pub created_at: Instant,
+    /// The one URL currently dispatched by the sequential worker. Cancellation
+    /// cannot cross its terminal barrier until this slot has persisted.
+    pub claimed_index: Option<usize>,
+}
+
+impl ExtractRecord {
+    /// Complete the cancellation barrier. Call only while holding the extract
+    /// jobs write lock and after observing that no URL remains claimed.
+    fn finish_cancellation(&mut self) {
+        if self.status != ExtractStatus::Cancelling || self.claimed_index.is_some() {
+            return;
+        }
+        for result in &mut self.per_url {
+            if result.status == ExtractStatus::Processing {
+                result.status = ExtractStatus::Cancelled;
+                result.data = None;
+                result.error = None;
+                result.llm_usage = None;
+                result.basis = None;
+                result.basis_warnings.clear();
+                result.llm_input_hash = None;
+            }
+        }
+        self.status = ExtractStatus::Cancelled;
+    }
 }
 
 /// Shared application state.
@@ -333,12 +369,11 @@ impl AppState {
                 }
                 drop(jobs);
 
-                // Prune finished extract jobs past TTL (keep in-flight ones).
+                // Prune terminal extract jobs past TTL (keep processing and the
+                // cancellation barrier in-flight).
                 let mut ejobs = cleanup_state.extract_jobs.write().await;
-                ejobs.retain(|_id, rec| {
-                    matches!(rec.status, ExtractStatus::Processing)
-                        || rec.created_at.elapsed() < ttl
-                });
+                ejobs
+                    .retain(|_id, rec| !rec.status.is_terminal() || rec.created_at.elapsed() < ttl);
             }
         });
 
@@ -617,6 +652,27 @@ impl AppState {
         template: ScrapeRequest,
     ) -> Uuid {
         let id = Uuid::new_v4();
+        // Seed the fixed-cardinality result array before the worker can run.
+        // Preflight failures are already final; valid URLs remain processing
+        // until claimed and persisted, or are converted to cancelled at the
+        // cancellation barrier.
+        let per_url = entries
+            .iter()
+            .map(|entry| UrlResult {
+                url: entry.url.clone(),
+                status: if entry.preflight_error.is_some() {
+                    ExtractStatus::Failed
+                } else {
+                    ExtractStatus::Processing
+                },
+                data: None,
+                error: entry.preflight_error.clone(),
+                llm_usage: None,
+                basis: None,
+                basis_warnings: Vec::new(),
+                llm_input_hash: None,
+            })
+            .collect();
         {
             let mut jobs = self.extract_jobs.write().await;
             jobs.insert(
@@ -624,11 +680,12 @@ impl AppState {
                 ExtractRecord {
                     status: ExtractStatus::Processing,
                     data: None,
-                    per_url: Vec::new(),
+                    per_url,
                     tokens_used: 0,
                     credits_used: 0,
                     error: None,
                     created_at: Instant::now(),
+                    claimed_index: None,
                 },
             );
         }
@@ -651,35 +708,42 @@ impl AppState {
                     let deadline_ms =
                         config.effective_deadline_ms(template.deadline_ms, template.wait_for);
 
-                    let mut merged = serde_json::Map::new();
-                    let mut per_url: Vec<UrlResult> = Vec::with_capacity(entries.len());
-                    let mut tokens = 0u32;
-                    let mut credits = 0u32;
-                    let mut last_err: Option<String> = None;
-                    let mut any_ok = false;
-
-                    for entry in entries {
-                        // Preflight-failed URLs (bad parse / SSRF) surface as
-                        // `failed` without a fetch — never silently dropped.
-                        if let Some(err) = entry.preflight_error {
-                            last_err = Some(err.clone());
-                            per_url.push(UrlResult {
-                                url: entry.url,
-                                status: ExtractStatus::Failed,
-                                data: None,
-                                error: Some(err),
-                                llm_usage: None,
-                                basis: None,
-                                basis_warnings: Vec::new(),
-                                llm_input_hash: None,
-                            });
+                    for (index, entry) in entries.into_iter().enumerate() {
+                        // Preflight failures were persisted at admission and
+                        // never count as dispatched work.
+                        if entry.preflight_error.is_some() {
                             continue;
+                        }
+
+                        // Claim exactly one slot while holding the same state
+                        // lock DELETE uses. Once cancelling is visible no new
+                        // URL can cross this point.
+                        {
+                            let mut jobs = extract_jobs.write().await;
+                            let Some(rec) = jobs.get_mut(&id) else {
+                                return;
+                            };
+                            match rec.status {
+                                ExtractStatus::Processing => {
+                                    if rec.per_url[index].status != ExtractStatus::Processing {
+                                        continue;
+                                    }
+                                    rec.claimed_index = Some(index);
+                                }
+                                ExtractStatus::Cancelling => {
+                                    rec.finish_cancellation();
+                                    return;
+                                }
+                                ExtractStatus::Completed
+                                | ExtractStatus::Failed
+                                | ExtractStatus::Cancelled => return,
+                            }
                         }
 
                         let mut req = template.clone();
                         req.url = entry.url.clone();
                         let deadline = Deadline::from_request_ms(deadline_ms);
-                        match scrape_url(
+                        let (result, merged_fields, tokens, credits) = match scrape_url(
                             &req,
                             &renderer,
                             config.extraction.llm.as_ref(),
@@ -692,64 +756,128 @@ impl AppState {
                         .await
                         {
                             Ok(d) => {
-                                any_ok = true;
-                                if let Some(serde_json::Value::Object(obj)) = &d.json {
-                                    for (k, v) in obj {
-                                        merged.insert(k.clone(), v.clone());
-                                    }
-                                }
-                                if let Some(usage) = &d.llm_usage {
-                                    tokens += usage.total_tokens;
-                                }
-                                credits += if d.credit_cost == 0 { 1 } else { d.credit_cost };
-                                per_url.push(UrlResult {
-                                    url: entry.url,
-                                    status: ExtractStatus::Completed,
-                                    data: d.json,
-                                    error: None,
-                                    llm_usage: d.llm_usage,
-                                    basis: d.basis,
-                                    basis_warnings: d.basis_warnings,
-                                    llm_input_hash: d.llm_input_hash,
-                                });
+                                let merged_fields = match &d.json {
+                                    Some(serde_json::Value::Object(obj)) => Some(obj.clone()),
+                                    _ => None,
+                                };
+                                let tokens =
+                                    d.llm_usage.as_ref().map_or(0, |usage| usage.total_tokens);
+                                let credits = if d.credit_cost == 0 { 1 } else { d.credit_cost };
+                                (
+                                    UrlResult {
+                                        url: entry.url,
+                                        status: ExtractStatus::Completed,
+                                        data: d.json,
+                                        error: None,
+                                        llm_usage: d.llm_usage,
+                                        basis: d.basis,
+                                        basis_warnings: d.basis_warnings,
+                                        llm_input_hash: d.llm_input_hash,
+                                    },
+                                    merged_fields,
+                                    tokens,
+                                    credits,
+                                )
                             }
                             Err(e) => {
                                 let msg = e.to_string();
-                                last_err = Some(msg.clone());
-                                per_url.push(UrlResult {
-                                    url: entry.url,
-                                    status: ExtractStatus::Failed,
-                                    data: None,
-                                    error: Some(msg),
-                                    llm_usage: None,
-                                    basis: None,
-                                    basis_warnings: Vec::new(),
-                                    llm_input_hash: None,
-                                });
+                                (
+                                    UrlResult {
+                                        url: entry.url,
+                                        status: ExtractStatus::Failed,
+                                        data: None,
+                                        error: Some(msg),
+                                        llm_usage: None,
+                                        basis: None,
+                                        basis_warnings: Vec::new(),
+                                        llm_input_hash: None,
+                                    },
+                                    None,
+                                    0,
+                                    0,
+                                )
                             }
+                        };
+
+                        // Persist the completed claimed slot and cumulative
+                        // measured usage before dispatching anything else.
+                        let mut jobs = extract_jobs.write().await;
+                        let Some(rec) = jobs.get_mut(&id) else {
+                            return;
+                        };
+                        if rec.status.is_terminal() || rec.claimed_index != Some(index) {
+                            return;
+                        }
+                        rec.per_url[index] = result;
+                        if let Some(fields) = merged_fields {
+                            let merged = rec.data.get_or_insert_with(|| {
+                                serde_json::Value::Object(Default::default())
+                            });
+                            if let serde_json::Value::Object(merged) = merged {
+                                merged.extend(fields);
+                            }
+                        }
+                        rec.tokens_used = rec.tokens_used.saturating_add(tokens);
+                        rec.credits_used = rec.credits_used.saturating_add(credits);
+                        rec.claimed_index = None;
+                        if rec.status == ExtractStatus::Cancelling {
+                            rec.finish_cancellation();
+                            return;
                         }
                     }
 
                     let mut jobs = extract_jobs.write().await;
                     if let Some(rec) = jobs.get_mut(&id) {
-                        if !any_ok && last_err.is_some() {
-                            rec.status = ExtractStatus::Failed;
-                            rec.error = last_err;
-                        } else {
-                            rec.status = ExtractStatus::Completed;
-                            rec.data = Some(serde_json::Value::Object(merged));
+                        match rec.status {
+                            ExtractStatus::Processing => {
+                                let any_ok = rec
+                                    .per_url
+                                    .iter()
+                                    .any(|result| result.status == ExtractStatus::Completed);
+                                if any_ok {
+                                    rec.status = ExtractStatus::Completed;
+                                    rec.data.get_or_insert_with(|| {
+                                        serde_json::Value::Object(Default::default())
+                                    });
+                                } else {
+                                    rec.status = ExtractStatus::Failed;
+                                    rec.error = rec
+                                        .per_url
+                                        .iter()
+                                        .rev()
+                                        .find_map(|result| result.error.clone());
+                                }
+                                // Preserve the existing one-credit floor for a
+                                // naturally finished all-failed job. Cancelled
+                                // jobs retain only actually measured usage.
+                                rec.credits_used = rec.credits_used.max(1);
+                            }
+                            ExtractStatus::Cancelling => rec.finish_cancellation(),
+                            ExtractStatus::Completed
+                            | ExtractStatus::Failed
+                            | ExtractStatus::Cancelled => {}
                         }
-                        rec.per_url = per_url;
-                        rec.tokens_used = tokens;
-                        // ponytail: 1-credit floor even on an all-failed job —
-                        // preflight-failed URLs add 0 (they `continue` before the
-                        // tally). SaaS settles the real cost separately.
-                        rec.credits_used = credits.max(1);
                     }
                 })
                 .await;
         });
 
         id
+    }
+
+    /// Request cancellation and return the persisted canonical state. Repeated
+    /// calls are idempotent; terminal jobs are never rewritten.
+    pub async fn cancel_extract_job(&self, id: Uuid) -> CrwResult<ExtractRecord> {
+        let mut jobs = self.extract_jobs.write().await;
+        let rec = jobs
+            .get_mut(&id)
+            .ok_or_else(|| CrwError::NotFound(format!("Extract job {id} not found")))?;
+        if rec.status == ExtractStatus::Processing {
+            rec.status = ExtractStatus::Cancelling;
+        }
+        if rec.status == ExtractStatus::Cancelling {
+            rec.finish_cancellation();
+        }
+        Ok(rec.clone())
     }
 }

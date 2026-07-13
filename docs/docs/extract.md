@@ -215,6 +215,36 @@ If the underlying page scrape is weak, the JSON extraction will also be weak.
 - Debugging extraction before confirming the underlying scrape succeeded
 - Using the async `/v1/extract` job for a single URL when a synchronous `/v1/scrape` with `formats: ["json"]` is simpler
 
+## Multi-URL lifecycle and cancellation
+
+`POST /v1/extract` creates one ordered result slot per requested URL. Poll
+`GET /v1/extract/{id}` or cancel idempotently with
+`DELETE /v1/extract/{id}`. The lifecycle is:
+
+```text
+processing -> completed | failed
+processing -> cancelling -> cancelled
+```
+
+`cancelling` is not terminal: the one URL already claimed by the sequential
+worker may finish and persist its result and measured usage. No later URL is
+started. At the terminal barrier, every untouched slot becomes `cancelled` and
+omits `data`, `error`, `llmUsage`, and `basis`. The result array always keeps the
+original URL count and order. Repeated DELETE returns the persisted state;
+DELETE after `completed`, `failed`, or `cancelled` does not rewrite it.
+
+```bash
+curl -X DELETE https://api.fastcrw.com/v1/extract/JOB_ID \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+The TypeScript SDK exposes `startExtract`, `getExtract`, and `cancelExtract`;
+Python exposes `start_extract`, `get_extract`, and `cancel_extract`. Their
+convenience `extract` waiter treats `cancelling` as non-terminal, raises a typed
+cancellation error with partial results on `cancelled`, and performs a
+best-effort DELETE on timeout. Async starters send `Prefer: respond-async` for
+managed and self-hosted parity.
+
 ## When to use something else
 
 - Use [Scrape](#scraping) when prose or markdown is enough

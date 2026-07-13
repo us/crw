@@ -53,6 +53,7 @@ CRW_LOCAL=1 node app.js
 | `search(query, opts?)` | Web search (+ optional scrape) | both¹ |
 | `parseFile(bytes, opts?)` | PDF → markdown / structured JSON | both |
 | `extract({urls, schema?})` | Structured LLM extraction | HTTP |
+| `startExtract(opts)` / `getExtract(id)` / `cancelExtract(id)` | Typed extract lifecycle | HTTP |
 | `batchScrape(urls, opts?)` | Scrape many URLs (async) | HTTP |
 | `capabilities()` | Feature-detect the engine | HTTP |
 | `changeTrackingDiff(cur, prev?)` | Diff vs a prior snapshot | HTTP |
@@ -68,6 +69,14 @@ const results = await crw.extract({
 });
 // results: [{ url, status, data, error, llmUsage }]
 for (const r of results) if (r.status === "completed") console.log(r.url, r.data);
+
+// Explicit lifecycle. startExtract always sends Prefer: respond-async.
+const accepted = await crw.startExtract({
+  urls: ["https://a.example", "https://b.example"],
+  schema: { type: "object", properties: { title: { type: "string" } } },
+});
+const status = await crw.getExtract(accepted.id);
+await crw.cancelExtract(accepted.id); // idempotent
 
 // Parse a PDF:
 import { readFileSync } from "node:fs";

@@ -18,7 +18,7 @@ use crw_core::types::{ExtractOptions, LlmUsage, OutputFormat, ScrapeRequest};
 
 use crate::error::AppError;
 use crate::routes::v2::adapters::expires_at_rfc3339;
-use crate::state::{AppState, PreparedUrl, UrlResult};
+use crate::state::{AppState, ExtractRecord, PreparedUrl, UrlResult};
 
 /// Native extract request. camelCase like every other v1 public type.
 /// NOTE: no `#[derive(Debug)]` — `llm_api_key` is a secret and must never land
@@ -268,18 +268,14 @@ pub struct ExtractStatusResponse {
     pub tokens_used: u32,
 }
 
-pub async fn get_extract(
-    State(state): State<AppState>,
-    Path(id): Path<Uuid>,
-) -> Result<Json<ExtractStatusResponse>, AppError> {
-    let rec = {
-        let jobs = state.extract_jobs.read().await;
-        jobs.get(&id)
-            .cloned()
-            .ok_or_else(|| CrwError::NotFound(format!("Extract job {id} not found")))?
-    };
+/// The one canonical HTTP/MCP serializer for extract lifecycle state.
+pub(crate) fn serialize_extract_status(
+    state: &AppState,
+    id: Uuid,
+    rec: ExtractRecord,
+) -> ExtractStatusResponse {
     let expires_at = expires_at_rfc3339(rec.created_at, state.config.crawler.job_ttl_secs);
-    Ok(Json(ExtractStatusResponse {
+    ExtractStatusResponse {
         id: id.to_string(),
         status: rec.status.as_str().to_string(),
         results: rec
@@ -291,5 +287,40 @@ pub async fn get_extract(
         expires_at,
         credits_used: rec.credits_used,
         tokens_used: rec.tokens_used,
-    }))
+    }
+}
+
+pub(crate) async fn get_extract_status(
+    state: &AppState,
+    id: Uuid,
+) -> Result<ExtractStatusResponse, CrwError> {
+    let rec = {
+        let jobs = state.extract_jobs.read().await;
+        jobs.get(&id)
+            .cloned()
+            .ok_or_else(|| CrwError::NotFound(format!("Extract job {id} not found")))?
+    };
+    Ok(serialize_extract_status(state, id, rec))
+}
+
+pub(crate) async fn cancel_extract_status(
+    state: &AppState,
+    id: Uuid,
+) -> Result<ExtractStatusResponse, CrwError> {
+    let rec = state.cancel_extract_job(id).await?;
+    Ok(serialize_extract_status(state, id, rec))
+}
+
+pub async fn get_extract(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<ExtractStatusResponse>, AppError> {
+    Ok(Json(get_extract_status(&state, id).await?))
+}
+
+pub async fn cancel_extract(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<ExtractStatusResponse>, AppError> {
+    Ok(Json(cancel_extract_status(&state, id).await?))
 }

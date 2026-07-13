@@ -1,6 +1,6 @@
 /** CRW client — cloud (default), self-hosted HTTP, or local subprocess mode. */
 
-import { CrwApiError, CrwError, CrwTimeoutError } from "./errors.js";
+import { CrwApiError, CrwError, CrwExtractCancelledError, CrwTimeoutError } from "./errors.js";
 import { LocalTransport } from "./local.js";
 import type {
   BatchResult,
@@ -12,7 +12,9 @@ import type {
   CrawlResult,
   DiffResult,
   ExtractOptions,
+  ExtractAccepted,
   ExtractResult,
+  ExtractStatus,
   Json,
   MapOptions,
   ParseFileOptions,
@@ -221,13 +223,78 @@ export class CrwClient {
   }
 
   /**
-   * Native multi-URL structured extraction (HTTP mode only). Starts an async
-   * `/v1/extract` job and polls until complete, returning a per-URL results
-   * array (`[{ url, status, data, error, llmUsage }]`) in request order.
+   * Start native multi-URL extraction without waiting. `Prefer: respond-async`
+   * is always sent so managed and self-hosted servers use the same lifecycle.
+   */
+  async startExtract(opts: ExtractOptions): Promise<ExtractAccepted> {
+    if (!this.apiUrl) throw new CrwError(httpOnlyHint("startExtract", "LLM extract job endpoint"));
+    const start = await this.startExtractRequest(opts);
+    if (typeof start.id === "string" && start.status === "processing") {
+      return start as unknown as ExtractAccepted;
+    }
+    throw new CrwError(`startExtract did not return an accepted job: ${JSON.stringify(start)}`);
+  }
+
+  /** Get the canonical lifecycle envelope for an extract job. */
+  async getExtract(id: string): Promise<ExtractStatus> {
+    if (!this.apiUrl) throw new CrwError(httpOnlyHint("getExtract", "LLM extract job endpoint"));
+    const result = await this.httpRequest("GET", `/v1/extract/${encodeURIComponent(id)}`, undefined, {
+      raw: true,
+      checkSuccess: false,
+    });
+    return result as unknown as ExtractStatus;
+  }
+
+  /** Idempotently request cancellation and return the canonical lifecycle envelope. */
+  async cancelExtract(id: string): Promise<ExtractStatus> {
+    if (!this.apiUrl) throw new CrwError(httpOnlyHint("cancelExtract", "LLM extract job endpoint"));
+    const result = await this.httpRequest("DELETE", `/v1/extract/${encodeURIComponent(id)}`, undefined, {
+      raw: true,
+      checkSuccess: false,
+    });
+    return result as unknown as ExtractStatus;
+  }
+
+  /**
+   * Convenience waiter over start/get/cancel. `cancelling` is non-terminal;
+   * terminal cancellation raises a typed error carrying partial results.
    */
   async extract(opts: ExtractOptions): Promise<ExtractResult> {
     if (!this.apiUrl) throw new CrwError(httpOnlyHint("extract", "LLM extract job endpoint"));
+    const { pollInterval = 2, timeout = 120 } = opts;
+    const start = await this.startExtractRequest(opts);
+    const jobId = start.id as string | undefined;
+    // Preserve the managed synchronous response during rollout if an older
+    // endpoint ignores Prefer. New managed/self-hosted fixtures return an id.
+    if (!jobId) {
+      if (start.status === "cancelled") {
+        throw new CrwExtractCancelledError(start as unknown as ExtractStatus);
+      }
+      if (Array.isArray(start.results)) return start.results as ExtractResult;
+      throw new CrwError(`extract returned neither a job id nor results: ${JSON.stringify(start)}`);
+    }
+    const deadline = Date.now() + timeout * 1000;
+    for (;;) {
+      if (Date.now() > deadline) {
+        try {
+          await this.cancelExtract(jobId);
+        } catch {
+          // Timeout remains the caller-visible failure; DELETE is best effort.
+        }
+        throw new CrwTimeoutError(`Extract ${jobId} timed out after ${timeout}s`);
+      }
+      const status = await this.getExtract(jobId);
+      if (status.status === "completed") return status.results;
+      if (status.status === "failed") throw new CrwError(`Extract failed: ${status.error ?? "unknown"}`);
+      if (status.status === "cancelled") throw new CrwExtractCancelledError(status);
+      await sleep(pollInterval * 1000);
+    }
+  }
+
+  private async startExtractRequest(opts: ExtractOptions): Promise<Json> {
     const { urls, prompt, schema, basis, llmApiKey, llmProvider, llmModel, pollInterval = 2, timeout = 120 } = opts;
+    void pollInterval;
+    void timeout;
     const body: Json = { urls: [...urls] };
     if (prompt !== undefined) body.prompt = prompt;
     if (schema !== undefined) body.schema = schema;
@@ -235,23 +302,10 @@ export class CrwClient {
     if (llmApiKey !== undefined) body.llmApiKey = llmApiKey;
     if (llmProvider !== undefined) body.llmProvider = llmProvider;
     if (llmModel !== undefined) body.llmModel = llmModel;
-    const start = await this.httpRequest("POST", "/v1/extract", body, { raw: true });
-    const jobId = start.id as string | undefined;
-    // The managed API answers synchronously: the extraction is already finished and
-    // the payload is in this first response, with no job to poll. Only the async
-    // path hands back an `id`. Demanding one made every managed extract() throw.
-    if (!jobId) {
-      if (Array.isArray(start.results)) return start.results as Json[];
-      throw new CrwError(`extract returned neither a job id nor results: ${JSON.stringify(start)}`);
-    }
-    const deadline = Date.now() + timeout * 1000;
-    for (;;) {
-      if (Date.now() > deadline) throw new CrwTimeoutError(`Extract ${jobId} timed out after ${timeout}s`);
-      const status = await this.httpRequest("GET", `/v1/extract/${jobId}`, undefined, { raw: true, checkSuccess: false });
-      if (status.status === "completed") return (status.results as Json[]) ?? [];
-      if (status.status === "failed") throw new CrwError(`Extract failed: ${status.error ?? "unknown"}`);
-      await sleep(pollInterval * 1000);
-    }
+    return this.httpRequest("POST", "/v1/extract", body, {
+      raw: true,
+      headers: { Prefer: "respond-async" },
+    });
   }
 
   /** Scrape many URLs in one async batch job (HTTP mode only). */
@@ -321,11 +375,18 @@ export class CrwClient {
     method: string,
     path: string,
     body?: Json,
-    { raw = false, checkSuccess = true }: { raw?: boolean; checkSuccess?: boolean } = {},
+    {
+      raw = false,
+      checkSuccess = true,
+      headers: extraHeaders,
+    }: { raw?: boolean; checkSuccess?: boolean; headers?: Record<string, string> } = {},
   ): Promise<Json> {
     if (this.apiUrl === null) throw new CrwError("internal: httpRequest in local mode");
     const url = `${this.apiUrl.replace(/\/$/, "")}${path}`;
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...extraHeaders,
+    };
     if (this.apiKey) headers.Authorization = `Bearer ${this.apiKey}`;
     const resp = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined });
     const result = await this.readJson(resp);

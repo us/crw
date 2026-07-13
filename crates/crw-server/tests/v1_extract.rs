@@ -9,8 +9,10 @@ use axum::http::StatusCode;
 use axum_test::TestServer;
 use crw_core::config::AppConfig;
 use crw_server::app::create_app;
-use crw_server::state::{AppState, ExtractStatus, PreparedUrl};
+use crw_server::state::{AppState, ExtractRecord, ExtractStatus, PreparedUrl, UrlResult};
 use serde_json::{Value, json};
+use std::time::Instant;
+use uuid::Uuid;
 
 fn test_app() -> TestServer {
     let config: AppConfig = toml::from_str("").unwrap();
@@ -118,6 +120,147 @@ async fn v1_extract_status_unknown_404() {
 }
 
 #[tokio::test]
+async fn v1_extract_cancel_rejects_malformed_and_unknown_ids() {
+    let s = test_app();
+    s.delete("/v1/extract/not-a-uuid")
+        .await
+        .assert_status(StatusCode::BAD_REQUEST);
+    s.delete("/v1/extract/00000000-0000-0000-0000-000000000000")
+        .await
+        .assert_status(StatusCode::NOT_FOUND);
+}
+
+fn pending_slot(url: &str) -> UrlResult {
+    UrlResult {
+        url: url.into(),
+        status: ExtractStatus::Processing,
+        data: None,
+        error: None,
+        llm_usage: None,
+        basis: None,
+        basis_warnings: Vec::new(),
+        llm_input_hash: None,
+    }
+}
+
+fn seeded_record(urls: &[&str], claimed_index: Option<usize>) -> ExtractRecord {
+    ExtractRecord {
+        status: ExtractStatus::Processing,
+        data: None,
+        per_url: urls.iter().map(|url| pending_slot(url)).collect(),
+        tokens_used: 0,
+        credits_used: 0,
+        error: None,
+        created_at: Instant::now(),
+        claimed_index,
+    }
+}
+
+#[tokio::test]
+async fn cancel_before_dispatch_is_terminal_ordered_and_idempotent() {
+    let config: AppConfig = toml::from_str("").unwrap();
+    let state = AppState::new(config).unwrap();
+    let id = Uuid::new_v4();
+    state.extract_jobs.write().await.insert(
+        id,
+        seeded_record(&["https://a.example", "https://b.example"], None),
+    );
+    let server = TestServer::new(create_app(state));
+
+    let first: Value = server.delete(&format!("/v1/extract/{id}")).await.json();
+    assert_eq!(first["status"], "cancelled");
+    assert_eq!(first["results"].as_array().unwrap().len(), 2);
+    assert_eq!(first["results"][0]["url"], "https://a.example");
+    assert_eq!(first["results"][1]["url"], "https://b.example");
+    for result in first["results"].as_array().unwrap() {
+        assert_eq!(result["status"], "cancelled");
+        assert_eq!(result.as_object().unwrap().len(), 2);
+    }
+
+    let repeated: Value = server.delete(&format!("/v1/extract/{id}")).await.json();
+    assert_eq!(repeated, first, "repeated DELETE returns persisted state");
+    let get: Value = server.get(&format!("/v1/extract/{id}")).await.json();
+    assert_eq!(get, first, "GET and DELETE share the canonical serializer");
+}
+
+#[tokio::test]
+async fn claimed_slot_holds_cancelling_barrier_until_its_result_persists() {
+    let config: AppConfig = toml::from_str("").unwrap();
+    let state = AppState::new(config).unwrap();
+    let id = Uuid::new_v4();
+    state.extract_jobs.write().await.insert(
+        id,
+        seeded_record(
+            &["https://claimed.example", "https://pending.example"],
+            Some(0),
+        ),
+    );
+    let server = TestServer::new(create_app(state.clone()));
+
+    let cancelling: Value = server.delete(&format!("/v1/extract/{id}")).await.json();
+    assert_eq!(cancelling["status"], "cancelling");
+    assert_eq!(cancelling["results"][0]["status"], "processing");
+    assert_eq!(cancelling["results"][1]["status"], "processing");
+    let repeated: Value = server.delete(&format!("/v1/extract/{id}")).await.json();
+    assert_eq!(repeated, cancelling);
+
+    // Model the worker's atomic final write for the already claimed URL.
+    {
+        let mut jobs = state.extract_jobs.write().await;
+        let rec = jobs.get_mut(&id).unwrap();
+        rec.per_url[0].status = ExtractStatus::Completed;
+        rec.per_url[0].data = Some(json!({"title": "persisted"}));
+        rec.tokens_used = 9;
+        rec.credits_used = 1;
+        rec.claimed_index = None;
+    }
+
+    let terminal: Value = server.delete(&format!("/v1/extract/{id}")).await.json();
+    assert_eq!(terminal["status"], "cancelled");
+    assert_eq!(terminal["results"][0]["status"], "completed");
+    assert_eq!(terminal["results"][0]["data"]["title"], "persisted");
+    assert_eq!(terminal["results"][1]["status"], "cancelled");
+    assert_eq!(terminal["tokensUsed"], 9);
+    assert_eq!(terminal["creditsUsed"], 1);
+}
+
+#[tokio::test]
+async fn delete_never_rewrites_completed_or_failed_terminal_state() {
+    let config: AppConfig = toml::from_str("").unwrap();
+    let state = AppState::new(config).unwrap();
+    let completed_id = Uuid::new_v4();
+    let failed_id = Uuid::new_v4();
+    let mut completed = seeded_record(&["https://done.example"], None);
+    completed.status = ExtractStatus::Completed;
+    completed.per_url[0].status = ExtractStatus::Completed;
+    completed.per_url[0].data = Some(json!({"ok": true}));
+    let mut failed = seeded_record(&["https://failed.example"], None);
+    failed.status = ExtractStatus::Failed;
+    failed.per_url[0].status = ExtractStatus::Failed;
+    failed.per_url[0].error = Some("failed".into());
+    failed.error = Some("failed".into());
+    {
+        let mut jobs = state.extract_jobs.write().await;
+        jobs.insert(completed_id, completed);
+        jobs.insert(failed_id, failed);
+    }
+    let server = TestServer::new(create_app(state));
+
+    let completed: Value = server
+        .delete(&format!("/v1/extract/{completed_id}"))
+        .await
+        .json();
+    assert_eq!(completed["status"], "completed");
+    assert_eq!(completed["results"][0]["data"]["ok"], true);
+    let failed: Value = server
+        .delete(&format!("/v1/extract/{failed_id}"))
+        .await
+        .json();
+    assert_eq!(failed["status"], "failed");
+    assert_eq!(failed["error"], "failed");
+}
+
+#[tokio::test]
 async fn worker_seeds_preflight_failures_in_order() {
     // The worker processes entries in original order and surfaces preflight
     // failures as `failed` results without fetching. An all-preflight-failed
@@ -177,6 +320,136 @@ async fn worker_seeds_preflight_failures_in_order() {
             .all(|r| r.status == ExtractStatus::Failed)
     );
     assert_eq!(rec.per_url[0].error.as_deref(), Some("bad-1"));
+}
+
+#[tokio::test]
+async fn worker_cancel_after_persisted_result_settles_claim_and_stops_next_dispatch() {
+    use crw_core::types::{OutputFormat, ScrapeRequest};
+    use std::time::Duration;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    unsafe {
+        std::env::set_var("CRW_ALLOW_LOOPBACK_FOR_TESTS", "1");
+    }
+    let mock = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/page-a"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_string("<html><body><h1>A</h1></body></html>"),
+        )
+        .mount(&mock)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/page-b"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string("<h1>B</h1>")
+                .set_delay(Duration::from_millis(75)),
+        )
+        .mount(&mock)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/page-c"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("<h1>C</h1>"))
+        .mount(&mock)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "content": [{
+                "type": "tool_use",
+                "id": "t1",
+                "name": "extract_data",
+                "input": { "title": "A" }
+            }],
+            "usage": { "input_tokens": 7, "output_tokens": 3 }
+        })))
+        .mount(&mock)
+        .await;
+
+    let mut config: AppConfig = toml::from_str(
+        r#"
+[extraction.llm]
+api_key = "test-key"
+provider = "anthropic"
+model = "claude-test"
+"#,
+    )
+    .unwrap();
+    config.extraction.llm.as_mut().unwrap().base_url = Some(mock.uri());
+    let state = AppState::new(config).unwrap();
+    let entries = vec![
+        PreparedUrl {
+            url: format!("{}/page-a", mock.uri()),
+            preflight_error: None,
+        },
+        PreparedUrl {
+            url: format!("{}/page-b", mock.uri()),
+            preflight_error: None,
+        },
+        PreparedUrl {
+            url: format!("{}/page-c", mock.uri()),
+            preflight_error: None,
+        },
+    ];
+    let template = ScrapeRequest {
+        formats: vec![OutputFormat::Json],
+        json_schema: Some(json!({
+            "type": "object",
+            "properties": { "title": {"type": "string"} }
+        })),
+        ..Default::default()
+    };
+    let id = state.start_extract_job(entries, template).await;
+
+    tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            let jobs = state.extract_jobs.read().await;
+            if jobs[&id].claimed_index == Some(1)
+                && jobs[&id].per_url[0].status == ExtractStatus::Completed
+            {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("second URL was never claimed after the first result persisted");
+    let cancelling = state.cancel_extract_job(id).await.unwrap();
+    assert_eq!(cancelling.status, ExtractStatus::Cancelling);
+
+    let terminal = tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            let rec = state.extract_jobs.read().await[&id].clone();
+            if rec.status == ExtractStatus::Cancelled {
+                break rec;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("cancellation barrier never reached terminal");
+    assert_eq!(terminal.per_url.len(), 3);
+    assert_eq!(terminal.per_url[0].status, ExtractStatus::Completed);
+    assert_eq!(terminal.per_url[0].data, Some(json!({"title": "A"})));
+    assert_eq!(terminal.per_url[1].status, ExtractStatus::Completed);
+    assert_eq!(terminal.per_url[2].status, ExtractStatus::Cancelled);
+    assert!(terminal.tokens_used > 0);
+    assert_eq!(terminal.credits_used, 2);
+
+    let requests = mock.received_requests().await.unwrap();
+    assert!(
+        requests
+            .iter()
+            .any(|request| request.url.path() == "/page-a")
+    );
+    assert!(
+        requests
+            .iter()
+            .all(|request| request.url.path() != "/page-c"),
+        "cancellation must prevent the next URL dispatch"
+    );
 }
 
 #[tokio::test]

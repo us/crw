@@ -26,6 +26,7 @@ MCP (Model Context Protocol) server for the [CRW](https://github.com/us/crw) web
 | `crw_map` | Discover all URLs on a website |
 | `crw_extract` | Extract structured JSON from URLs via a prompt and/or JSON schema (async job, returns job ID) |
 | `crw_check_extract_status` | Poll extract job status and retrieve results |
+| `crw_cancel_extract` | Idempotently cancel an extract job and retrieve canonical status |
 | `crw_search` | Search the web (needs a configured search backend; always available in proxy mode, available in embedded mode only when a search backend is configured) |
 | `crw_parse_file` | Parse a local PDF (base64) to markdown |
 

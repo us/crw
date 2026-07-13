@@ -129,6 +129,46 @@ export interface ExtractOptions {
   timeout?: number;
 }
 
+export type ExtractJobState =
+  | "processing"
+  | "cancelling"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export type ExtractUrlState = "processing" | "completed" | "failed" | "cancelled";
+
+/** Response from an async extract admission request. */
+export interface ExtractAccepted {
+  id: string;
+  status: "processing";
+  /** Count of URLs enqueued for fetch. */
+  urls: number;
+}
+
+/** One fixed, ordered result slot for a requested URL. */
+export interface ExtractUrlResult {
+  url: string;
+  status: ExtractUrlState;
+  data?: unknown;
+  error?: string;
+  llmUsage?: Json;
+  basis?: Basis[];
+  basisWarnings?: BasisWarning[];
+  llmInputHash?: string;
+}
+
+/** Canonical GET/DELETE extract lifecycle envelope. */
+export interface ExtractStatus {
+  id: string;
+  status: ExtractJobState;
+  results: ExtractUrlResult[];
+  error?: string;
+  expiresAt: string;
+  creditsUsed: number;
+  tokensUsed: number;
+}
+
 export interface BatchScrapeOptions {
   formats?: string[];
   pollInterval?: number;
@@ -148,7 +188,7 @@ export type CrawlResult = Json[];
 export type SearchResult = Json | Json[];
 export type ParseResult = Json;
 /** Native `/v1/extract` returns one result object per URL, in request order. */
-export type ExtractResult = Json[];
+export type ExtractResult = ExtractUrlResult[];
 export type BatchResult = Json[];
 export type Capabilities = Json;
 export type DiffResult = Json;

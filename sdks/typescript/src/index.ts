@@ -1,5 +1,11 @@
 export { CrwClient, CLOUD_API_URL, DASHBOARD_URL, DOCS_URL } from "./client.js";
-export { CrwError, CrwApiError, CrwTimeoutError, CrwBinaryNotFoundError } from "./errors.js";
+export {
+  CrwError,
+  CrwApiError,
+  CrwTimeoutError,
+  CrwExtractCancelledError,
+  CrwBinaryNotFoundError,
+} from "./errors.js";
 export type {
   ClientOptions,
   ScrapeOptions,
@@ -8,6 +14,15 @@ export type {
   SearchOptions,
   ParseFileOptions,
   ExtractOptions,
+  ExtractJobState,
+  ExtractUrlState,
+  ExtractAccepted,
+  ExtractStatus,
+  ExtractUrlResult,
+  Basis,
+  BasisWarning,
+  EvidenceCitation,
+  FieldStatus,
   BatchScrapeOptions,
   ChangeTrackingOptions,
   ScrapeResult,

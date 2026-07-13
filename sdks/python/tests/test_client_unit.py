@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from crw.client import CLOUD_API_URL, CrwClient
-from crw.exceptions import CrwApiError, CrwError, CrwTimeoutError
+from crw.exceptions import CrwApiError, CrwError, CrwExtractCancelledError, CrwTimeoutError
 
 
 @pytest.fixture(autouse=True)
@@ -346,6 +346,9 @@ class TestHttpOnlyMethods:
         "call",
         [
             lambda c: c.extract(["https://example.com"], prompt="x"),
+            lambda c: c.start_extract(["https://example.com"], prompt="x"),
+            lambda c: c.get_extract("job-1"),
+            lambda c: c.cancel_extract("job-1"),
             lambda c: c.batch_scrape(["https://example.com"]),
             lambda c: c.capabilities(),
             lambda c: c.change_tracking_diff({"markdown": "a"}),
@@ -377,6 +380,100 @@ class TestHttpOnlyMethods:
         ]
         # Native route, not the FC-legacy /v2/extract.
         assert req.call_args_list[0][0][:2] == ("POST", "/v1/extract")
+        assert req.call_args_list[0].kwargs["headers"] == {"Prefer": "respond-async"}
+
+    def test_start_extract_prefer_managed_and_self_hosted_fixtures(self) -> None:
+        accepted = {"id": "job-1", "status": "processing", "urls": 1}
+        for client in (
+            CrwClient(api_key="fc-test"),
+            CrwClient(api_url="http://localhost:3000"),
+        ):
+            with patch.object(client, "_http_request", return_value=accepted) as req:
+                result = client.start_extract(
+                    ["https://example.com"], schema={"type": "object"}, basis=True
+                )
+            assert result["id"] == "job-1"
+            assert req.call_args[0][:2] == ("POST", "/v1/extract")
+            assert req.call_args.kwargs["headers"] == {"Prefer": "respond-async"}
+            assert req.call_args[0][2]["basis"] is True
+
+    def test_extract_preserves_managed_sync_fixture_with_prefer(self) -> None:
+        client = CrwClient(api_key="fc-test")
+        sync = {
+            "success": True,
+            "results": [
+                {"url": "https://example.com", "status": "completed", "data": {"title": "Hi"}}
+            ],
+        }
+        with patch.object(client, "_http_request", return_value=sync) as req:
+            result = client.extract(["https://example.com"], prompt="title")
+        assert result[0]["status"] == "completed"
+        assert req.call_args.kwargs["headers"] == {"Prefer": "respond-async"}
+
+    def test_get_and_cancel_extract_use_canonical_route(self) -> None:
+        status = {
+            "id": "job/one",
+            "status": "cancelled",
+            "results": [{"url": "https://example.com", "status": "cancelled"}],
+            "expiresAt": "2026-07-14T00:00:00Z",
+            "creditsUsed": 0,
+            "tokensUsed": 0,
+        }
+        client = CrwClient(api_url="http://localhost:3000")
+        with patch.object(client, "_http_request", return_value=status) as req:
+            assert client.get_extract("job/one")["status"] == "cancelled"
+            assert client.cancel_extract("job/one")["results"][0]["status"] == "cancelled"
+        assert req.call_args_list[0][0][:2] == ("GET", "/v1/extract/job%2Fone")
+        assert req.call_args_list[1][0][:2] == ("DELETE", "/v1/extract/job%2Fone")
+
+    def test_extract_cancelling_then_typed_cancelled_error(self) -> None:
+        client = CrwClient(api_url="http://localhost:3000")
+        accepted = {"id": "job-1", "status": "processing", "urls": 2}
+        cancelling = {
+            "id": "job-1",
+            "status": "cancelling",
+            "results": [
+                {"url": "https://a.example", "status": "completed", "data": {"title": "A"}},
+                {"url": "https://b.example", "status": "processing"},
+            ],
+            "expiresAt": "2026-07-14T00:00:00Z",
+            "creditsUsed": 1,
+            "tokensUsed": 9,
+        }
+        cancelled = {
+            **cancelling,
+            "status": "cancelled",
+            "results": [
+                {"url": "https://a.example", "status": "completed", "data": {"title": "A"}},
+                {"url": "https://b.example", "status": "cancelled"},
+            ],
+        }
+        with patch.object(client, "_http_request", side_effect=[accepted, cancelling, cancelled]):
+            with patch("time.sleep"):
+                with pytest.raises(CrwExtractCancelledError) as exc:
+                    client.extract(
+                        ["https://a.example", "https://b.example"],
+                        prompt="x",
+                        poll_interval=0,
+                    )
+        assert exc.value.status["status"] == "cancelled"
+        assert exc.value.results[0]["status"] == "completed"
+
+    def test_extract_timeout_best_effort_deletes(self) -> None:
+        client = CrwClient(api_url="http://localhost:3000")
+        accepted = {"id": "job-1", "status": "processing", "urls": 1}
+        cancelled = {
+            "id": "job-1",
+            "status": "cancelled",
+            "results": [{"url": "https://example.com", "status": "cancelled"}],
+            "expiresAt": "2026-07-14T00:00:00Z",
+            "creditsUsed": 0,
+            "tokensUsed": 0,
+        }
+        with patch.object(client, "_http_request", side_effect=[accepted, cancelled]) as req:
+            with pytest.raises(CrwTimeoutError):
+                client.extract(["https://example.com"], prompt="x", timeout=-1)
+        assert req.call_args_list[-1][0][:2] == ("DELETE", "/v1/extract/job-1")
 
     def test_batch_scrape_returns_pages(self) -> None:
         client = CrwClient(api_url="https://fastcrw.com/api")

@@ -10,8 +10,8 @@ CRW includes a built-in MCP (Model Context Protocol) server that gives any MCP-c
 
 | Mode | When | Tools | Description |
 |------|------|-------|-------------|
-| **Embedded** (default) | No `--api-url` / `CRW_API_URL` set | scrape, crawl, check_crawl_status, map, extract, check_extract_status, parse_file + **search** (when a search backend is configured) | Self-contained. No server needed. The scraping engine runs inside the MCP process. `crw_search` is advertised only when a search backend is configured (e.g. the Docker compose sidecar). |
-| **Proxy / Server** | `--api-url` / `CRW_API_URL` set | scrape, crawl, check_crawl_status, map, extract, check_extract_status, parse_file, search | Forwards tool calls to a remote CRW server — the [fastcrw.com](https://fastcrw.com) cloud **or your own self-hosted server**. `crw_search` is always advertised in proxy mode; it works whenever the server has a search backend configured (the Docker stack enables it by default). |
+| **Embedded** (default) | No `--api-url` / `CRW_API_URL` set | scrape, crawl, check_crawl_status, map, extract, check_extract_status, cancel_extract, parse_file + **search** (when a search backend is configured) | Self-contained. No server needed. The scraping engine runs inside the MCP process. `crw_search` is advertised only when a search backend is configured (e.g. the Docker compose sidecar). |
+| **Proxy / Server** | `--api-url` / `CRW_API_URL` set | scrape, crawl, check_crawl_status, map, extract, check_extract_status, cancel_extract, parse_file, search | Forwards tool calls to a remote CRW server — the [fastcrw.com](https://fastcrw.com) cloud **or your own self-hosted server**. `crw_search` is always advertised in proxy mode; it works whenever the server has a search backend configured (the Docker stack enables it by default). |
 
 ## Where to use what
 
@@ -154,6 +154,7 @@ This yields a ~4.2 MB binary (vs ~17 MB for the default embedded build) because 
 | `crw_map` | Discover all URLs on a site | `POST /v1/map` | All modes |
 | `crw_extract` | Extract structured JSON from URLs → async job ID | `POST /v1/extract` | All modes |
 | `crw_check_extract_status` | Poll extract status and get results | `GET /v1/extract/:id` | All modes |
+| `crw_cancel_extract` | Idempotently cancel extract and return canonical status | `DELETE /v1/extract/:id` | All modes |
 | `crw_search` | Search the web → titles, URLs, descriptions | `POST /v1/search` | Always in proxy mode; embedded only when a search backend is configured |
 | `crw_parse_file` | Parse a local PDF (base64) → markdown | `POST /firecrawl/v2/parse` (multipart) | All modes |
 
