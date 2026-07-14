@@ -2,6 +2,14 @@
 
 All notable changes to CRW are documented here.
 
+## [0.24.1](https://github.com/us/crw/compare/v0.24.0...v0.24.1) (2026-07-14)
+
+
+### Bug Fixes
+
+* **engine:** drop hickory-dns so direct egress resolves in Docker ([4cf098f](https://github.com/us/crw/commit/4cf098f471307e199c09575450c42c9f88ece87e))
+* **renderer:** detect Chrome on Windows in embedded mode ([7d3bf0f](https://github.com/us/crw/commit/7d3bf0f032be394e0fc3fc63706b7f1e567c3296))
+
 ## [0.24.0](https://github.com/us/crw/compare/v0.23.0...v0.24.0) (2026-07-12)
 
 
