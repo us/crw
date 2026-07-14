@@ -387,8 +387,9 @@ pub async fn run(args: McpArgs) -> Result<(), CmdError> {
                 let browsers = browser::spawn_all_headless().await;
                 if browsers.is_empty() {
                     tracing::info!(
-                        "No browser found — JS rendering disabled. \
-                         Install LightPanda or Chrome for full SPA support."
+                        "No browser found — JS rendering disabled. Install LightPanda \
+                         or Chrome for full SPA support, or point CRW_CHROME_PATH at an \
+                         existing Chrome/Chromium executable."
                     );
                 }
                 let mut guards = Vec::new();
