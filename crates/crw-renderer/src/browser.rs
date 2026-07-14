@@ -407,30 +407,81 @@ async fn get_docker_mapped_port(container_id: &str, container_port: u16) -> Opti
 
 // --- Chrome/Chromium native ---
 
+/// Environment variables that pin the Chrome executable explicitly, in
+/// precedence order. `CHROME_PATH` is the de-facto cross-tool convention.
+const CHROME_PATH_VARS: &[&str] = &["CRW_CHROME_PATH", "CHROME_PATH"];
+
+/// Absolute install locations, then bare names resolved against `PATH`.
+/// Kept per-platform so a lookup never wastes a PATH scan on a path shape
+/// that cannot exist on this OS.
+#[cfg(target_os = "macos")]
 const CHROME_CANDIDATES: &[&str] = &[
-    // macOS
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     "/Applications/Chromium.app/Contents/MacOS/Chromium",
     "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
     "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
-    // Linux
     "google-chrome",
     "google-chrome-stable",
     "chromium",
     "chromium-browser",
 ];
 
+#[cfg(windows)]
+const CHROME_CANDIDATES: &[&str] = &[
+    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+    r"C:\Program Files\Chromium\Application\chrome.exe",
+    // Edge is Chromium-based and speaks CDP, and it ships with the OS — the
+    // last-resort renderer on a machine with no Chrome install.
+    r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+    "chrome",
+    "chromium",
+    "msedge",
+];
+
+#[cfg(all(unix, not(target_os = "macos")))]
+const CHROME_CANDIDATES: &[&str] = &[
+    "google-chrome",
+    "google-chrome-stable",
+    "chromium",
+    "chromium-browser",
+    "chrome",
+];
+
 fn find_chrome() -> Option<String> {
-    for candidate in CHROME_CANDIDATES {
-        let found = if candidate.starts_with('/') {
-            std::path::Path::new(candidate).exists()
-        } else {
-            find_in_path(candidate).is_some()
+    // 1. Explicit override always wins.
+    for var in CHROME_PATH_VARS {
+        let Some(raw) = std::env::var_os(var) else {
+            continue;
         };
-        if found {
-            return Some(candidate.to_string());
+        let path = PathBuf::from(raw);
+        if path.is_file() {
+            return Some(path.to_string_lossy().into_owned());
+        }
+        tracing::warn!("{var} is set but is not a file: {}", path.display());
+    }
+
+    // 2. Known install locations, then PATH.
+    for candidate in CHROME_CANDIDATES {
+        let path = std::path::Path::new(candidate);
+        if path.is_absolute() {
+            if path.is_file() {
+                return Some((*candidate).to_string());
+            }
+        } else if let Some(found) = find_in_path(candidate) {
+            return Some(found);
         }
     }
+
+    // 3. Windows also supports a per-user install under %LOCALAPPDATA%.
+    #[cfg(windows)]
+    if let Some(local_appdata) = std::env::var_os("LOCALAPPDATA") {
+        let path = PathBuf::from(local_appdata).join(r"Google\Chrome\Application\chrome.exe");
+        if path.is_file() {
+            return Some(path.to_string_lossy().into_owned());
+        }
+    }
+
     None
 }
 
@@ -523,15 +574,112 @@ async fn read_ws_url_from_stderr(stderr: tokio::process::ChildStderr) -> Option<
     .flatten()
 }
 
+/// Resolve `name` against the `PATH` directories, returning its absolute path.
+///
+/// Implemented against `PATH` directly rather than shelling out to `which`,
+/// which does not exist on Windows (it is `where.exe` there) — that made every
+/// PATH-based lookup silently fail on Windows.
 fn find_in_path(name: &str) -> Option<String> {
-    std::process::Command::new("which")
-        .arg(name)
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|_| name.to_string())
+    let path_var = std::env::var_os("PATH")?;
+    find_in_dirs(name, std::env::split_paths(&path_var))
+}
+
+fn find_in_dirs(name: &str, dirs: impl Iterator<Item = PathBuf>) -> Option<String> {
+    // On Windows a bare name is resolved by appending an executable extension.
+    let extensions: &[&str] = if cfg!(windows) {
+        &["", ".exe", ".cmd", ".bat"]
+    } else {
+        &[""]
+    };
+
+    for dir in dirs {
+        for ext in extensions {
+            let candidate = dir.join(format!("{name}{ext}"));
+            if is_executable_file(&candidate) {
+                return Some(candidate.to_string_lossy().into_owned());
+            }
+        }
+    }
+    None
+}
+
+fn is_executable_file(path: &std::path::Path) -> bool {
+    if !path.is_file() {
+        return false;
+    }
+    // Windows has no executable bit — the extension is the signal, and
+    // `find_in_dirs` already constrains that.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::metadata(path)
+            .map(|m| m.permissions().mode() & 0o111 != 0)
+            .unwrap_or(false)
+    }
+    #[cfg(not(unix))]
+    true
 }
 
 fn command_exists(name: &str) -> bool {
     find_in_path(name).is_some()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Create a throwaway directory holding a single fake executable.
+    fn dir_with_executable(tag: &str, file_name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("crw-find-in-dirs-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+
+        let bin = dir.join(file_name);
+        std::fs::write(&bin, b"#!/bin/sh\n").expect("write fake binary");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755))
+                .expect("chmod fake binary");
+        }
+        dir
+    }
+
+    #[test]
+    fn finds_executable_by_bare_name() {
+        // Windows resolves a bare name through an executable extension; Unix
+        // does not. Either way `find_in_dirs("fake-browser")` must resolve.
+        let file_name = if cfg!(windows) {
+            "fake-browser.exe"
+        } else {
+            "fake-browser"
+        };
+        let dir = dir_with_executable("hit", file_name);
+
+        let found = find_in_dirs("fake-browser", std::iter::once(dir.clone()))
+            .expect("executable on PATH must be found");
+        assert_eq!(PathBuf::from(found), dir.join(file_name));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn ignores_non_executable_and_missing_names() {
+        let dir = dir_with_executable("miss", "fake-browser");
+        assert!(find_in_dirs("other-browser", std::iter::once(dir.clone())).is_none());
+
+        // A plain, non-executable file must not be mistaken for a binary.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let data = dir.join("not-a-binary");
+            std::fs::write(&data, b"data").expect("write data file");
+            std::fs::set_permissions(&data, std::fs::Permissions::from_mode(0o644))
+                .expect("chmod data file");
+            assert!(find_in_dirs("not-a-binary", std::iter::once(dir.clone())).is_none());
+        }
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
