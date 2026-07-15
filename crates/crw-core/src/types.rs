@@ -708,6 +708,26 @@ pub struct ScrapeData {
     pub block: Option<BlockOutcome>,
 }
 
+impl ScrapeData {
+    /// Clear the page-content fields (markdown, HTML, text, links, and any
+    /// LLM-derived outputs), keeping `metadata`, `block`, warnings, and the
+    /// screenshot. Used on the block-response path so a detected anti-bot
+    /// interstitial returns a clean block (success:false + error + metadata)
+    /// instead of the challenge shell text as content.
+    pub fn clear_body(&mut self) {
+        self.markdown = None;
+        self.source_hash = None;
+        self.html = None;
+        self.raw_html = None;
+        self.plain_text = None;
+        self.links = None;
+        self.json = None;
+        self.basis = None;
+        self.summary = None;
+        self.chunks = None;
+    }
+}
+
 /// Typed anti-bot block verdict. `vendor` is the antibot `class_name`
 /// (cloudflare|datadome|perimeterx|generic_block|structural_failure|…);
 /// `reason` is the detector's human-readable explanation.
@@ -881,6 +901,68 @@ pub fn resolve_pinned_renderer(req: Option<RequestedRenderer>) -> Option<&'stati
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clear_body_drops_content_keeps_metadata_and_block() {
+        let mut data = ScrapeData {
+            markdown: Some("Just a moment... Humans only".into()),
+            source_hash: Some("sha256:abc".into()),
+            html: Some("<html>challenge</html>".into()),
+            raw_html: Some("<html>challenge</html>".into()),
+            plain_text: Some("challenge text".into()),
+            links: Some(vec!["https://help.example.com".into()]),
+            json: Some(serde_json::json!({"junk": true})),
+            summary: Some("a summary of junk".into()),
+            llm_usage: None,
+            chunks: None,
+            warning: Some("blocked".into()),
+            warnings: vec!["blocked".into()],
+            render_decision: None,
+            credit_cost: 0,
+            basis: None,
+            basis_warnings: Vec::new(),
+            llm_input_hash: None,
+            metadata: PageMetadata {
+                title: None,
+                description: None,
+                og_title: None,
+                og_description: None,
+                og_image: None,
+                canonical_url: None,
+                source_url: "https://www.glassdoor.com/Reviews/x.htm".into(),
+                language: None,
+                status_code: 200,
+                rendered_with: None,
+                elapsed_ms: 0,
+                page_count: None,
+                source_filename: None,
+                extra: Default::default(),
+            },
+            debug_extraction: None,
+            content_type: Some("text/html".into()),
+            change_tracking: None,
+            screenshot: Some("data:image/png;base64,AA".into()),
+            block: Some(BlockOutcome {
+                vendor: "cloudflare".into(),
+                reason: "cloudflare challenge interstitial".into(),
+            }),
+        };
+        data.clear_body();
+        // content-shell + LLM outputs cleared
+        assert!(data.markdown.is_none());
+        assert!(data.source_hash.is_none());
+        assert!(data.html.is_none());
+        assert!(data.raw_html.is_none());
+        assert!(data.plain_text.is_none());
+        assert!(data.links.is_none());
+        assert!(data.json.is_none());
+        assert!(data.summary.is_none());
+        // block verdict, metadata, warnings, screenshot kept for the caller
+        assert!(data.block.is_some());
+        assert_eq!(data.metadata.status_code, 200);
+        assert_eq!(data.warnings, vec!["blocked".to_string()]);
+        assert!(data.screenshot.is_some());
+    }
 
     fn usage(input: u32, output: u32) -> LlmUsage {
         LlmUsage {

@@ -108,6 +108,11 @@ pub async fn scrape(
     // md_empty path) so credit-refund logic is unchanged.
     if let Some(b) = data.block.clone() {
         let error_msg = b.message();
+        // Drop the interstitial/challenge shell so the caller gets a clean block
+        // instead of the "Just a moment / Humans only" wall as markdown. Runs
+        // after the http_error gate above, which reads the content lengths.
+        let mut data = data;
+        data.clear_body();
         return Ok(Json(ApiResponse {
             success: false,
             data: Some(data),

@@ -240,11 +240,19 @@ pub async fn scrape(
     // Anti-bot verdict from the choke: a blocked page is `success:false` with an
     // error string, matching v1's behaviour. Read before `to_v2_document`
     // consumes `data`.
+    // Mirror v1: the anti-bot block path is reached only when the http_error
+    // gate did not fire. Drop the challenge shell there so the caller gets a
+    // clean block instead of the interstitial text as content.
+    let is_anti_bot_block = http_error.is_none() && data.block.is_some();
     let (success, error) = match (http_error, data.block.as_ref()) {
         (Some(msg), _) => (false, Some(msg)),
         (None, Some(b)) => (false, Some(b.message())),
         (None, None) => (true, None),
     };
+    let mut data = data;
+    if is_anti_bot_block {
+        data.clear_body();
+    }
     let doc = to_v2_document(data, &tier, Uuid::new_v4().to_string());
     Ok(Json(V2ScrapeResponse {
         success,
