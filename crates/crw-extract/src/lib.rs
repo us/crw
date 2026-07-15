@@ -500,6 +500,11 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
     let meta = readability::extract_metadata(raw_html);
 
     // Step 2: Clean HTML (remove boilerplate, nav, ads, etc.).
+    // `include_tags` narrowing happens inside clean_html; when it matches
+    // nothing, clean_html empties the output and pushes `selector_no_match`.
+    // Capture that here (via the warning delta this call produced) so the rest
+    // of the pipeline can treat it exactly like an unmatched css/xpath selector.
+    let warns_before = warnings.len();
     let cleaned = clean::clean_html_with_warnings(
         raw_html,
         only_main_content,
@@ -508,16 +513,28 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
         &mut warnings,
     )
     .unwrap_or_else(|_| raw_html.to_string());
+    let include_tags_no_match = warnings[warns_before..]
+        .iter()
+        .any(|w| w == "selector_no_match");
 
     // Step 3: Apply CSS/XPath selector if provided (narrows to a specific element).
     let selected_html = apply_selector(&cleaned, css_selector, xpath)?;
-    // A user-supplied selector that matched nothing must NOT fall back to the
-    // whole page (a silent context-bloat footgun: an unmatched `--css`/
-    // `includeTags` previously returned the entire document). Treat it as an
-    // intentional narrow extraction that yielded empty output and warn.
+    // A user-requested narrowing that matched nothing must NOT fall back to the
+    // whole page (a silent context-bloat footgun: an unmatched `--css`/`--xpath`
+    // or `includeTags` previously returned the entire document). Treat it as an
+    // intentional narrow extraction that yielded empty output. `Some("")` also
+    // short-circuits the alternates ladder below, so the whole page can't sneak
+    // back in via basic_clean / structural fallbacks.
     // Domain-configured default selectors are excluded: a host default that
-    // doesn't apply should still show the page.
-    let selected_html = if user_selected && selected_html.is_none() {
+    // doesn't apply should still show the page (its no-match sets neither flag).
+    let selected_html = if include_tags_no_match {
+        // include_tags matched nothing, so `cleaned` is already empty. This
+        // takes precedence over any css/xpath applied afterwards: an xpath
+        // scalar like `count(//x)` would otherwise evaluate to "0" against the
+        // empty document and leak a bogus value. clean_html already pushed the
+        // `selector_no_match` warning, so don't push it again.
+        Some(String::new())
+    } else if user_selected && selected_html.is_none() {
         warnings.push("selector_no_match".to_string());
         Some(String::new())
     } else {
@@ -658,7 +675,9 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
     // present in the markdown — otherwise downstream recall scoring loses the
     // most important phrase on the page (the title itself).
     let md = md.map(|m| {
-        if user_selected {
+        // A narrowing that matched nothing is intentionally empty; padding it
+        // with the page title would re-leak content the caller narrowed away.
+        if user_selected || include_tags_no_match {
             return m;
         }
         let title = meta
@@ -716,7 +735,7 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
     // is already substantial, the description is short or already present,
     // or it duplicates the page title.
     let md = md.map(|m| {
-        if user_selected {
+        if user_selected || include_tags_no_match {
             return m;
         }
         if m.len() >= 1500 {
