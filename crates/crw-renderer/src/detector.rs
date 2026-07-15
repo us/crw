@@ -502,23 +502,37 @@ fn strip_tag_blocks(html: &str, tag: &str) -> String {
 /// `cf-mitigated` response header — that signal is independent of body
 /// content and is the most reliable indicator.
 pub fn looks_like_cloudflare_challenge(html: &str) -> bool {
+    // Strong markers appear ONLY on the interstitial and can sit deep in the
+    // body of a large managed-challenge page — measured at byte ~128k of a 275k
+    // Glassdoor "Just a moment" page, inside a
+    // `<script src="/cdn-cgi/challenge-platform/…/orchestrate/…">`. So scan them
+    // regardless of the 80KB weak-marker cap, bounded to the first 512KB. The
+    // markers are fixed-lowercase ASCII CF tokens, so match case-sensitively on
+    // the raw bytes (no allocation on the hot per-attempt path; mirrors
+    // `crw_crawl::single::classify_block`).
+    const STRONG_SCAN_LIMIT: usize = 512 * 1024;
+    let mut strong_end = STRONG_SCAN_LIMIT.min(html.len());
+    while strong_end > 0 && !html.is_char_boundary(strong_end) {
+        strong_end -= 1;
+    }
+    let strong_src = &html[..strong_end];
+    const STRONG: [&str; 5] = [
+        "cf-browser-verification",
+        "cf-challenge-running",
+        "/cdn-cgi/challenge-platform/",
+        "_cf_chl_opt", // substring of window._cf_chl_opt / __cf_chl_managed_tk__
+        "__cf_chl_managed_tk__",
+    ];
+    if STRONG.iter().any(|m| strong_src.contains(m)) {
+        return true;
+    }
+
+    // Weak markers can appear on legitimate Cloudflare-fronted pages, so they
+    // keep the size guard: a large page is real content, not an interstitial.
     if html.len() > 80_000 {
         return false;
     }
     let lower = html.to_lowercase();
-
-    // Strong markers: appear ONLY on the interstitial.
-    let strong = [
-        "cf-browser-verification",
-        "cf-challenge-running",
-        "/cdn-cgi/challenge-platform/",
-        "_cf_chl_opt",
-        "__cf_chl_managed_tk__",
-        "window._cf_chl_opt",
-    ];
-    if strong.iter().any(|m| lower.contains(m)) {
-        return true;
-    }
 
     // Weak markers: each can appear on legitimate Cloudflare-fronted pages.
     // "ray id:" + "cloudflare" co-occur on most CF-fronted error pages and
@@ -737,6 +751,39 @@ mod tests {
     }
 
     #[test]
+    fn cf_strong_marker_detected_on_large_page() {
+        // Modern Cloudflare managed challenge: a large (>80KB) HTML whose only
+        // machine marker is a challenge-platform <script src> deep in the body
+        // (Glassdoor served a 275KB page with the marker at byte ~128k). The old
+        // 80KB size cap made this evade detection.
+        let mut html = String::from("<html><head><title>Just a moment...</title></head><body>");
+        html.push_str(&"<p>verifying you are human, one moment please.</p>".repeat(3_000));
+        html.push_str(
+            r#"<script src="/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1?ray=abc"></script>"#,
+        );
+        html.push_str("</body></html>");
+        assert!(
+            html.len() > 80_000,
+            "fixture must exceed the weak-marker cap"
+        );
+        assert!(looks_like_cloudflare_challenge(&html));
+    }
+
+    #[test]
+    fn cf_large_real_page_with_footer_mention_not_flagged() {
+        // A large real page that merely mentions Cloudflare in a footer (no
+        // challenge markers) must NOT be flagged — the weak-marker path stays
+        // size-guarded.
+        let mut html = String::from("<html><body><article>");
+        html.push_str(&"<p>Real article content about web performance.</p>".repeat(3_000));
+        html.push_str(
+            "<footer>Hosted via Cloudflare. Ray ID: abc123</footer></article></body></html>",
+        );
+        assert!(html.len() > 80_000);
+        assert!(!looks_like_cloudflare_challenge(&html));
+    }
+
+    #[test]
     fn cf_single_weak_marker_not_enough() {
         // A page that just mentions "Cloudflare" should not trigger.
         let html = r#"<html><body><article><h1>Why we use Cloudflare</h1><p>Performance benefits.</p></article></body></html>"#;
@@ -776,11 +823,14 @@ mod tests {
     }
 
     #[test]
-    fn cf_huge_page_not_scanned() {
-        let mut html = String::from(r#"<html><body><div id="cf-browser-verification">"#);
-        html.push_str(&"<p>x</p>".repeat(20_000));
-        html.push_str("</div></body></html>");
-        assert!(html.len() > 80_000);
+    fn cf_strong_marker_beyond_scan_limit_not_flagged() {
+        // Perf bound: strong markers are scanned only within the first 512KB.
+        // A marker past that (pathologically large page) is not scanned — real
+        // CF challenge markers sit well within the first few hundred KB.
+        let mut html = String::from("<html><body>");
+        html.push_str(&"<p>x</p>".repeat(80_000)); // ~640KB of filler > 512KB
+        html.push_str(r#"<div id="cf-browser-verification"></div></body></html>"#);
+        assert!(html.len() > 512 * 1024);
         assert!(!looks_like_cloudflare_challenge(&html));
     }
 
