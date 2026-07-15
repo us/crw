@@ -191,6 +191,7 @@ impl ExtractRecord {
         if self.status != ExtractStatus::Cancelling || self.claimed_index.is_some() {
             return;
         }
+        let mut cancelled_any = false;
         for result in &mut self.per_url {
             if result.status == ExtractStatus::Processing {
                 result.status = ExtractStatus::Cancelled;
@@ -200,22 +201,25 @@ impl ExtractRecord {
                 result.basis = None;
                 result.basis_warnings.clear();
                 result.llm_input_hash = None;
+                cancelled_any = true;
             }
         }
-        self.status = ExtractStatus::Cancelled;
+        if cancelled_any {
+            // A genuine cancel: at least one in-flight URL was actually stopped.
+            self.status = ExtractStatus::Cancelled;
+        } else {
+            // Every URL had already reached a terminal state before the cancel
+            // landed. Reporting "cancelled" would contradict the per-URL results
+            // (all completed/failed with real data), so settle it as the
+            // naturally finished job it actually is.
+            self.complete_from_outcomes();
+        }
     }
 
-    /// Commit the worker's final job-level write. DELETE races this method on
-    /// the same map lock, so exactly one transition can win and terminal state
-    /// is never rewritten by the loser.
-    fn finish_processing(&mut self) {
-        if self.status != ExtractStatus::Processing {
-            if self.status == ExtractStatus::Cancelling {
-                self.finish_cancellation();
-            }
-            return;
-        }
-
+    /// Set the terminal job status from the per-URL outcomes of a job that ran
+    /// to the end: completed if any URL succeeded, otherwise failed, with the
+    /// one-credit floor a naturally finished job carries.
+    fn complete_from_outcomes(&mut self) {
         let any_ok = self
             .per_url
             .iter()
@@ -235,6 +239,20 @@ impl ExtractRecord {
         // Preserve the existing one-credit floor for a naturally finished
         // all-failed job. Cancelled jobs retain only measured usage.
         self.credits_used = self.credits_used.max(1);
+    }
+
+    /// Commit the worker's final job-level write. DELETE races this method on
+    /// the same map lock, so exactly one transition can win and terminal state
+    /// is never rewritten by the loser.
+    fn finish_processing(&mut self) {
+        if self.status != ExtractStatus::Processing {
+            if self.status == ExtractStatus::Cancelling {
+                self.finish_cancellation();
+            }
+            return;
+        }
+
+        self.complete_from_outcomes();
     }
 }
 
@@ -1018,9 +1036,13 @@ mod tests {
 
     #[tokio::test]
     async fn final_write_versus_delete_race_covers_both_winners_and_freezes_terminal_state() {
+        // Whichever of the final write or the DELETE wins, a job whose URLs all
+        // completed settles as Completed: a late cancel that stopped nothing
+        // in-flight must not relabel a finished job (the per-URL results below
+        // are all Completed in both branches).
         for (final_write_first, expected) in [
             (true, ExtractStatus::Completed),
-            (false, ExtractStatus::Cancelled),
+            (false, ExtractStatus::Completed),
         ] {
             let (state, id) = run_final_write_delete_race(final_write_first).await;
             let terminal = state.get_extract_job(id).await.unwrap();
