@@ -494,7 +494,7 @@ const REGISTRY_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 #[derive(Clone)]
 pub struct BreakerRegistry {
     config: BreakerConfig,
-    global: Arc<[(RendererKind, Arc<CircuitBreaker>); 5]>,
+    global: Arc<[(RendererKind, Arc<CircuitBreaker>); 6]>,
     host: Cache<(String, RendererKind), Arc<CircuitBreaker>>,
 }
 
@@ -518,6 +518,9 @@ impl BreakerRegistry {
                 RendererKind::Camoufox,
                 Arc::new(CircuitBreaker::new(config)),
             ),
+            // Unconditional (like every other kind). Harmless dead capacity in
+            // lean builds; a cloak failure trips only the Cloak breaker.
+            (RendererKind::Cloak, Arc::new(CircuitBreaker::new(config))),
         ]);
         let host = Cache::builder()
             .max_capacity(REGISTRY_CAPACITY)
@@ -544,7 +547,9 @@ impl BreakerRegistry {
                 return Arc::clone(breaker);
             }
         }
-        unreachable!("RendererKind is closed: Http | Lightpanda | Chrome | ChromeProxy | Camoufox")
+        unreachable!(
+            "RendererKind is closed: Http | Lightpanda | Chrome | ChromeProxy | Camoufox | Cloak"
+        )
     }
 
     pub async fn host_for(&self, host: &str, renderer: RendererKind) -> Arc<CircuitBreaker> {

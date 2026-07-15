@@ -15,6 +15,7 @@ cdp = ["crw-renderer/cdp"]
 # Opt-in Camoufox stealth renderer tier (REST). Default OFF — the lean build is
 # byte-identical. Forwards to crw-renderer/camoufox (→ crw-core/camoufox).
 camoufox = ["crw-renderer/camoufox"]
+cloak = ["crw-renderer/cloak"]
 test-utils = []
 
 [dependencies]

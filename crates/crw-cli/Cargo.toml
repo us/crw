@@ -30,6 +30,7 @@ browse = ["dep:crw-browse", "dep:rmcp", "dep:anyhow"]
 # to crw-renderer/camoufox and, when the embedded server is present, to
 # crw-server/camoufox.
 camoufox = ["crw-renderer/camoufox", "crw-server?/camoufox"]
+cloak = ["crw-renderer/cloak", "crw-server?/cloak"]
 
 [dependencies]
 # Core crates

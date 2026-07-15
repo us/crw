@@ -128,6 +128,9 @@ pub enum RequestedRenderer {
     /// `"camoufox"`, matching the internal renderer name and
     /// `RendererKind::Camoufox`.
     Camoufox,
+    /// Opt-in cloak Turnstile-solver tier. `rename_all = "lowercase"` yields
+    /// `"cloak"`, matching the internal renderer name and `RendererKind::Cloak`.
+    Cloak,
 }
 
 impl RequestedRenderer {
@@ -141,6 +144,7 @@ impl RequestedRenderer {
             RequestedRenderer::ChromeProxy => Some("chrome_proxy"),
             RequestedRenderer::Playwright => Some("playwright"),
             RequestedRenderer::Camoufox => Some("camoufox"),
+            RequestedRenderer::Cloak => Some("cloak"),
         }
     }
 }
@@ -1667,6 +1671,10 @@ pub enum RendererKind {
     /// the variant is inert in lean builds since no camoufox renderer is ever
     /// constructed there.
     Camoufox,
+    /// Opt-in cloak Turnstile-solver recovery tier (REST). `rename_all =
+    /// "lowercase"` yields `"cloak"`. Unconditional like every other kind; inert
+    /// in lean builds since no cloak renderer is ever constructed there.
+    Cloak,
 }
 
 impl RendererKind {
@@ -1677,6 +1685,7 @@ impl RendererKind {
             RendererKind::Chrome => "chrome",
             RendererKind::ChromeProxy => "chrome_proxy",
             RendererKind::Camoufox => "camoufox",
+            RendererKind::Cloak => "cloak",
         }
     }
 }

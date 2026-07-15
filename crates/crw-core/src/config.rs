@@ -197,6 +197,23 @@ pub const MAX_WAIT_FOR_MS: u64 = 60_000;
 /// and must never be charged CDP overhead.
 pub const CAMOUFOX_DEFAULT_TIMEOUT_MS: u64 = 60_000;
 
+/// Default cloak (Turnstile-solver sidecar) per-request budget (ms) — the
+/// per-attempt solve budget bounding one sidecar mirror call. A cold interactive
+/// Turnstile solve is ~21s; 35s leaves margin for the browser solve + curl_cffi
+/// replay. Used by [`RendererConfig::cloak_timeout`].
+pub const CLOAK_DEFAULT_TIMEOUT_MS: u64 = 35_000;
+
+/// Minimum remaining request budget for the cloak recovery arm to fire (ms),
+/// DECOUPLED from [`CLOAK_DEFAULT_TIMEOUT_MS`]: one cold solve (~21s) + margin.
+/// Reusing the full per-attempt budget as the floor was a design bug — the
+/// serial ladder does not short-circuit on CF detection and burns ~18s first,
+/// so a 35s floor could never be cleared under any legal deadline. `pub const`
+/// (not `pub(crate)`) so a lean build referencing it only under `#[cfg(cloak)]`
+/// does not trip `dead_code` — mirrors [`CAMOUFOX_DEFAULT_TIMEOUT_MS`].
+/// NOTE: the 24s margin assumes `chrome_challenge_max_retries` stays OFF (prod
+/// default); enabling it grows the ladder tax and this floor must be revisited.
+pub const CLOAK_ARM_FLOOR_MS: u64 = 24_000;
+
 /// Configuration for the `/v1/search` endpoint and its SearXNG backend.
 ///
 /// When `searxng_url` is unset the endpoint returns HTTP 503 with
@@ -539,6 +556,10 @@ pub enum RendererMode {
     /// build feature; a build without it rejects this mode at renderer
     /// construction time.
     Camoufox,
+    /// Opt-in cloak Turnstile-solver tier (REST recovery arm). See
+    /// [`CloakEndpoint`]. Requires the `cloak` build feature; a build without it
+    /// rejects this mode at renderer construction time.
+    Cloak,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -652,6 +673,16 @@ pub struct RendererConfig {
     /// [`CAMOUFOX_DEFAULT_TIMEOUT_MS`] when unset.
     #[serde(default)]
     pub camoufox_timeout_ms: Option<u64>,
+    /// Opt-in cloak Turnstile-solver sidecar endpoint. See [`CloakEndpoint`].
+    /// `None` = not configured (default) → the tier is never constructed and the
+    /// engine is byte-identical to a build without it. Fired only as a
+    /// CF-challenge recovery arm, never in the normal ladder.
+    #[serde(default)]
+    pub cloak: Option<CloakEndpoint>,
+    /// Per-attempt cloak solve budget override (ms). Falls back to
+    /// [`CLOAK_DEFAULT_TIMEOUT_MS`] when unset.
+    #[serde(default)]
+    pub cloak_timeout_ms: Option<u64>,
     /// Enable Chrome resource interception (`Fetch.enable` blocking of media,
     /// fonts, trackers). Default `false`; flipped after the CDP-fake suite
     /// validates pump + cleanup behaviour. See plan Phase 2.
@@ -892,6 +923,8 @@ impl Default for RendererConfig {
             chrome_proxy_timeout_ms: None,
             camoufox: None,
             camoufox_timeout_ms: None,
+            cloak: None,
+            cloak_timeout_ms: None,
             chrome_intercept_resources: false,
             chrome_intercept_stylesheets: false,
             chrome_host_intercept_disable: Vec::new(),
@@ -938,6 +971,34 @@ impl RendererConfig {
     pub fn camoufox_timeout(&self) -> u64 {
         self.camoufox_timeout_ms
             .unwrap_or(CAMOUFOX_DEFAULT_TIMEOUT_MS)
+    }
+    /// Per-attempt cloak solve budget (ms). Unconditional (no `#[cfg]`) so
+    /// `tier_timeouts_from` can reference it in every build, like
+    /// [`Self::camoufox_timeout`].
+    pub fn cloak_timeout(&self) -> u64 {
+        self.cloak_timeout_ms.unwrap_or(CLOAK_DEFAULT_TIMEOUT_MS)
+    }
+
+    /// True when the cloak REST tier participates in the *auto* ladder for the
+    /// current mode. Mirrors [`Self::camoufox_in_ladder`] exactly, including the
+    /// leading `!cfg!(feature = "cloak")` short-circuit (compiled to a constant
+    /// and dead-code-eliminated in a lean build) that keeps the unconditional
+    /// `RendererMode::Cloak` variant inert without the feature. Do NOT remove
+    /// that early return. (The cloak tier is normally a recovery arm, not a
+    /// ladder tier, so this is `true` only when explicitly pinned or opted in.)
+    pub fn cloak_in_ladder(&self) -> bool {
+        if !cfg!(feature = "cloak") || matches!(self.mode, RendererMode::None) {
+            return false;
+        }
+        let configured = |c: &CloakEndpoint| !c.base_url.trim().is_empty();
+        match self.mode {
+            RendererMode::Cloak => self.cloak.as_ref().is_some_and(configured),
+            RendererMode::Auto => self
+                .cloak
+                .as_ref()
+                .is_some_and(|c| c.include_in_auto && configured(c)),
+            _ => false,
+        }
     }
 
     /// True when the Camoufox REST tier participates in the *auto* ladder for
@@ -1061,6 +1122,14 @@ impl RendererConfig {
             sum = sum.saturating_add(self.camoufox_timeout());
         }
 
+        // Cloak REST contribution, symmetric to camoufox. `cloak_in_ladder()` is
+        // always `false` in the lean build, so this line is inert there. (The
+        // cloak tier is normally a recovery arm, not a ladder tier, so this only
+        // contributes when explicitly pinned / opted into the auto ladder.)
+        if self.cloak_in_ladder() {
+            sum = sum.saturating_add(self.cloak_timeout());
+        }
+
         // CDP tiers only contribute when the binary was built with the `cdp`
         // feature; otherwise no JS renderer is constructable at runtime and
         // including their budgets would over-extend the deadline.
@@ -1109,6 +1178,23 @@ pub struct CamoufoxEndpoint {
     /// Whether this tier joins the Auto fallback ladder. Default `false`:
     /// configured-but-not-in-auto, reachable only via an explicit pin or
     /// `mode = "camoufox"`.
+    #[serde(default)]
+    pub include_in_auto: bool,
+}
+
+/// Endpoint for the "cloak" Turnstile-solver sidecar (a `cloudflarebypassforscraping`
+/// / CloakBrowser REST server). Mirrors [`CamoufoxEndpoint`]. Absent config
+/// (`cloak = None`) means the tier is never constructed — see
+/// [`RendererConfig::cloak_in_ladder`]. The cloak tier is a CF-challenge recovery
+/// arm, not an auto-ladder tier, so `include_in_auto` is normally left `false`.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct CloakEndpoint {
+    /// Base URL of the cloak sidecar's mirror endpoint, e.g. `http://cloak-sidecar:8000`.
+    pub base_url: String,
+    /// Optional bearer token sent as `Authorization: Bearer <key>`. Empty = no auth.
+    #[serde(default)]
+    pub api_key: String,
+    /// Whether this tier joins the Auto fallback ladder. Default `false`.
     #[serde(default)]
     pub include_in_auto: bool,
 }
@@ -1680,7 +1766,10 @@ impl AppConfig {
         // its 60s budget would be clamped to the strict default and starved.
         // `camoufox_in_ladder()` is always `false` in the lean build, so
         // HTTP-only deployments keep byte-identical behaviour here.
-        if self.renderer.cdp_tier_count() == 0 && !self.renderer.camoufox_in_ladder() {
+        if self.renderer.cdp_tier_count() == 0
+            && !self.renderer.camoufox_in_ladder()
+            && !self.renderer.cloak_in_ladder()
+        {
             return default_ms;
         }
         let ladder_min = self.renderer.min_deadline_for_full_ladder_ms();
@@ -1902,6 +1991,33 @@ mod tests {
             ..Default::default()
         };
         assert!(!c.camoufox_in_ladder());
+    }
+
+    #[test]
+    fn cloak_absent_config_is_none_and_not_in_ladder() {
+        // Default config: no [renderer.cloak] → cloak is None and never in the
+        // ladder (byte-identical to a build without the tier).
+        let c = RendererConfig::default();
+        assert!(c.cloak.is_none());
+        assert!(!c.cloak_in_ladder());
+        assert_eq!(c.cloak_timeout(), CLOAK_DEFAULT_TIMEOUT_MS);
+    }
+
+    #[cfg(not(feature = "cloak"))]
+    #[test]
+    fn cloak_in_ladder_always_false_without_feature() {
+        // Without the feature the tier can never join the ladder, even if a
+        // (deserialized) endpoint is present and mode is pinned to cloak.
+        let c = RendererConfig {
+            mode: RendererMode::Cloak,
+            cloak: Some(CloakEndpoint {
+                base_url: "http://cloak-sidecar:8000".into(),
+                api_key: String::new(),
+                include_in_auto: true,
+            }),
+            ..Default::default()
+        };
+        assert!(!c.cloak_in_ladder());
     }
 
     #[cfg(feature = "camoufox")]
