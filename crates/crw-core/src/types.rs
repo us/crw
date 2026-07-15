@@ -128,9 +128,9 @@ pub enum RequestedRenderer {
     /// `"camoufox"`, matching the internal renderer name and
     /// `RendererKind::Camoufox`.
     Camoufox,
-    /// Opt-in cloak Turnstile-solver tier. `rename_all = "lowercase"` yields
-    /// `"cloak"`, matching the internal renderer name and `RendererKind::Cloak`.
-    Cloak,
+    // NOTE: there is deliberately NO `Cloak` variant here. The cloak tier is an
+    // internal CF-challenge recovery arm (RendererKind::Cloak), fired
+    // automatically — never a user-pinnable per-request `renderer`.
 }
 
 impl RequestedRenderer {
@@ -144,7 +144,6 @@ impl RequestedRenderer {
             RequestedRenderer::ChromeProxy => Some("chrome_proxy"),
             RequestedRenderer::Playwright => Some("playwright"),
             RequestedRenderer::Camoufox => Some("camoufox"),
-            RequestedRenderer::Cloak => Some("cloak"),
         }
     }
 }
