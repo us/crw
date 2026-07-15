@@ -4,11 +4,49 @@ use std::collections::HashSet;
 
 /// Clean HTML by stripping scripts, styles, and optionally non-content elements.
 /// Then apply include_tags/exclude_tags via scraper.
+///
+/// Soft-failure warnings (e.g. `selector_no_match`) are discarded. Use
+/// [`clean_html_with_warnings`] when the caller wants to surface them.
 pub fn clean_html(
     html: &str,
     only_main_content: bool,
     include_tags: &[String],
     exclude_tags: &[String],
+) -> Result<String, String> {
+    clean_html_impl(
+        html,
+        only_main_content,
+        include_tags,
+        exclude_tags,
+        &mut Vec::new(),
+    )
+}
+
+/// Like [`clean_html`], but collects soft-failure warnings into `warnings`.
+/// Currently the only warning is `selector_no_match`, emitted when one or more
+/// `include_tags` are supplied but none match any element.
+pub fn clean_html_with_warnings(
+    html: &str,
+    only_main_content: bool,
+    include_tags: &[String],
+    exclude_tags: &[String],
+    warnings: &mut Vec<String>,
+) -> Result<String, String> {
+    clean_html_impl(
+        html,
+        only_main_content,
+        include_tags,
+        exclude_tags,
+        warnings,
+    )
+}
+
+fn clean_html_impl(
+    html: &str,
+    only_main_content: bool,
+    include_tags: &[String],
+    exclude_tags: &[String],
+    warnings: &mut Vec<String>,
 ) -> Result<String, String> {
     // Phase 1: lol_html streaming removal of always-unwanted tags.
     let mut handlers = vec![
@@ -222,7 +260,7 @@ pub fn clean_html(
 
     // Phase 2: If include_tags specified, only keep content matching those selectors.
     if !include_tags.is_empty() {
-        result = keep_only_selectors(&result, include_tags);
+        result = keep_only_selectors(&result, include_tags, warnings);
     }
 
     // Phase 3: Apply exclude_tags — parse again and collect text/html without excluded.
@@ -234,7 +272,12 @@ pub fn clean_html(
 }
 
 /// Keep only the HTML of elements matching any of the given CSS selectors.
-fn keep_only_selectors(html: &str, selectors: &[String]) -> String {
+///
+/// When none of the selectors match (or all are invalid), returns an empty
+/// string and pushes `selector_no_match` into `warnings`. Previously this fell
+/// back to the entire `html`, which silently dumped the full page into the
+/// output — a footgun for LLM agents whose context fills up.
+fn keep_only_selectors(html: &str, selectors: &[String], warnings: &mut Vec<String>) -> String {
     let doc = Html::parse_document(html);
     let mut parts = Vec::new();
 
@@ -252,7 +295,8 @@ fn keep_only_selectors(html: &str, selectors: &[String]) -> String {
     }
 
     if parts.is_empty() {
-        return html.to_string();
+        warnings.push("selector_no_match".to_string());
+        return String::new();
     }
 
     parts.join("\n")
@@ -426,5 +470,23 @@ mod tests {
         assert!(result.contains("Article"));
         assert!(!result.contains("Nav"));
         assert!(!result.contains("Foot"));
+    }
+
+    #[test]
+    fn include_tags_no_match_returns_empty_and_warns() {
+        let html =
+            r#"<body><nav>Nav</nav><article><p>Article</p></article><footer>Foot</footer></body>"#;
+        let mut warnings = Vec::new();
+        let result =
+            clean_html_with_warnings(html, false, &[".does-not-exist".into()], &[], &mut warnings)
+                .unwrap();
+        assert!(
+            result.trim().is_empty(),
+            "a non-matching include_tags selector must not fall back to the whole page"
+        );
+        assert!(
+            warnings.iter().any(|w| w == "selector_no_match"),
+            "expected selector_no_match warning, got {warnings:?}"
+        );
     }
 }
