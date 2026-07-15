@@ -475,3 +475,129 @@ fn prepends_title_when_only_domain_selector_applies() {
         "domain-default selector must not suppress title prepend: {md:?}"
     );
 }
+
+// Content-rich page (title + meta description + a 2-row table + a 5-item list)
+// so every re-leak vector is live: title-prepend, description-append, AND the
+// `structural` / `basic_clean` alternates (which need >=2 table rows or >=5
+// list items to fire). Used by the selector no-match regression tests below.
+const NO_MATCH_PAGE: &str = "<html><head><title>My Page Title</title>\
+    <meta name=\"description\" content=\"A long meta description that would otherwise be appended to short output and re-leak page context to the caller.\"></head>\
+    <body><nav>Nav</nav><article><h1>Real Heading</h1><p>Real body paragraph.</p>\
+    <table><tr><td>Row1A</td><td>Row1B</td></tr><tr><td>Row2A</td><td>Row2B</td></tr></table>\
+    <ul><li>Item one</li><li>Item two</li><li>Item three</li><li>Item four</li><li>Item five</li></ul>\
+    </article><footer>Foot</footer></body></html>";
+
+fn extract_markdown(
+    include_tags: &[String],
+    css_selector: Option<&str>,
+    xpath: Option<&str>,
+) -> crw_core::types::ScrapeData {
+    crw_extract::extract(ExtractOptions {
+        raw_html: NO_MATCH_PAGE,
+        source_url: "https://example.com",
+        status_code: 200,
+        rendered_with: None,
+        elapsed_ms: 100,
+        render_decision: None,
+        credit_cost: 0,
+        warnings: Vec::new(),
+        formats: &[OutputFormat::Markdown],
+        only_main_content: true,
+        include_tags,
+        exclude_tags: &[],
+        css_selector,
+        xpath,
+        chunk_strategy: None,
+        query: None,
+        filter_mode: None,
+        top_k: None,
+        domain_selectors: None,
+        captured_responses: &[],
+        llm_fallback: None,
+        debug: false,
+        debug_sink: None,
+    })
+    .unwrap()
+}
+
+fn no_match_warning_count(data: &crw_core::types::ScrapeData) -> usize {
+    data.warnings
+        .iter()
+        .filter(|w| *w == "selector_no_match")
+        .count()
+}
+
+// A user-supplied `include_tags` selector that matches nothing must yield empty
+// output through the *full* extract pipeline (not just clean_html), and warn
+// exactly once. Regression guard: title-prepend, description-append, and the
+// alternates ladder (basic_clean / structural) previously re-leaked the page
+// and double-pushed the warning. See issue #291.
+#[test]
+fn include_tags_no_match_extract_returns_empty_single_warning() {
+    let data = extract_markdown(&[".does-not-exist".to_string()], None, None);
+    let md = data.markdown.clone().unwrap_or_default();
+    assert!(
+        md.trim().is_empty(),
+        "unmatched include_tags must not re-leak title/description/tables/lists: {md:?}"
+    );
+    assert_eq!(
+        no_match_warning_count(&data),
+        1,
+        "expected exactly one selector_no_match, got {:?}",
+        data.warnings
+    );
+}
+
+// include_tags no-match takes precedence over a later css/xpath selector applied
+// to the (now-empty) document: an xpath scalar like `count(//x)` must not leak a
+// bogus "0", and the two paths must not stack a second warning.
+#[test]
+fn include_tags_no_match_beats_trailing_xpath_scalar() {
+    let data = extract_markdown(
+        &[".does-not-exist".to_string()],
+        None,
+        Some("count(//article)"),
+    );
+    let md = data.markdown.clone().unwrap_or_default();
+    assert!(
+        md.trim().is_empty(),
+        "include_tags no-match must win over an xpath scalar: {md:?}"
+    );
+    assert_eq!(
+        no_match_warning_count(&data),
+        1,
+        "warnings: {:?}",
+        data.warnings
+    );
+}
+
+// include_tags AND css both matching nothing must still warn exactly once, not
+// once per path.
+#[test]
+fn include_tags_and_css_both_no_match_warn_once() {
+    let data = extract_markdown(&[".does-not-exist".to_string()], Some("#missing"), None);
+    let md = data.markdown.clone().unwrap_or_default();
+    assert!(md.trim().is_empty(), "both no-match must be empty: {md:?}");
+    assert_eq!(
+        no_match_warning_count(&data),
+        1,
+        "warnings: {:?}",
+        data.warnings
+    );
+}
+
+// A css selector that matches nothing (no include_tags) stays empty + one
+// warning — the behavior the base PR established, guarded here against the
+// refactor above.
+#[test]
+fn css_no_match_extract_returns_empty_single_warning() {
+    let data = extract_markdown(&[], Some(".does-not-exist"), None);
+    let md = data.markdown.clone().unwrap_or_default();
+    assert!(md.trim().is_empty(), "unmatched css must be empty: {md:?}");
+    assert_eq!(
+        no_match_warning_count(&data),
+        1,
+        "warnings: {:?}",
+        data.warnings
+    );
+}
