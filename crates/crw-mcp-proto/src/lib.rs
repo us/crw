@@ -93,11 +93,12 @@ fn extract_accepted_output_schema() -> Value {
         "type": "object",
         "additionalProperties": false,
         "properties": {
+            "success": { "type": "boolean" },
             "id": { "type": "string" },
             "status": { "type": "string", "enum": ["processing"] },
             "urls": { "type": "integer", "minimum": 0 }
         },
-        "required": ["id", "status", "urls"]
+        "required": ["success", "id", "status", "urls"]
     })
 }
 
@@ -106,6 +107,7 @@ fn extract_status_output_schema() -> Value {
         "type": "object",
         "additionalProperties": false,
         "properties": {
+            "success": { "type": "boolean" },
             "id": { "type": "string" },
             "status": {
                 "type": "string",
@@ -137,7 +139,7 @@ fn extract_status_output_schema() -> Value {
             "creditsUsed": { "type": "integer" },
             "tokensUsed": { "type": "integer" }
         },
-        "required": ["id", "status", "results", "expiresAt", "creditsUsed", "tokensUsed"]
+        "required": ["success", "id", "status", "results", "expiresAt", "creditsUsed", "tokensUsed"]
     })
 }
 

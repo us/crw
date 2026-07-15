@@ -21,6 +21,20 @@ pub async fn validate_url(url: &str) -> Result<(), String> {
     crw_core::url_safety::validate_safe_url_resolved(&parsed).await
 }
 
+/// Serialize an extract lifecycle response for MCP, re-adding the `success`
+/// field MCP clients rely on. The shared HTTP `/v1` type omits it, so it is
+/// injected only here; `success` is false only when every URL failed.
+fn extract_status_value(
+    response: crate::routes::extract::ExtractStatusResponse,
+) -> Result<Value, String> {
+    let success = response.status != "failed";
+    let mut value = serde_json::to_value(response).map_err(|e| format!("serialize error: {e}"))?;
+    if let Some(obj) = value.as_object_mut() {
+        obj.insert("success".to_string(), Value::Bool(success));
+    }
+    Ok(value)
+}
+
 pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result<Value, String> {
     match tool_name {
         "crw_scrape" => {
@@ -124,7 +138,7 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
             let id = state
                 .start_extract_job(prepared.entries, prepared.template)
                 .await;
-            Ok(json!({"id": id.to_string(), "status": "processing", "urls": urls}))
+            Ok(json!({"success": true, "id": id.to_string(), "status": "processing", "urls": urls}))
         }
         "crw_check_extract_status" => {
             use crate::routes::extract::get_extract_status;
@@ -138,7 +152,7 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
             let response = get_extract_status(state, id)
                 .await
                 .map_err(|e| format!("{e}"))?;
-            serde_json::to_value(response).map_err(|e| format!("serialize error: {e}"))
+            extract_status_value(response)
         }
         "crw_cancel_extract" => {
             use crate::routes::extract::cancel_extract_status;
@@ -152,7 +166,7 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
             let response = cancel_extract_status(state, id)
                 .await
                 .map_err(|e| format!("{e}"))?;
-            serde_json::to_value(response).map_err(|e| format!("serialize error: {e}"))
+            extract_status_value(response)
         }
         "crw_parse_file" => {
             use base64::Engine;

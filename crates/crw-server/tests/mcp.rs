@@ -203,7 +203,9 @@ async fn mcp_extract_status_and_cancel_share_canonical_http_serializer() {
     assert_eq!(status["status"], "processing");
     assert_eq!(status["results"][0]["status"], "processing");
     assert!(status["expiresAt"].is_string());
-    assert!(status.get("success").is_none());
+    // MCP keeps the `success` envelope every other MCP tool returns; it is false
+    // only for a job whose every URL failed (here the job is still processing).
+    assert_eq!(status["success"], true);
     let schema = tool_output_schema("crw_check_extract_status").unwrap();
     let validator = jsonschema::validator_for(&schema).expect("extract schema compiles");
     let errors: Vec<String> = validator
@@ -225,6 +227,8 @@ async fn mcp_extract_status_and_cancel_share_canonical_http_serializer() {
     let cancelled = &cancelled["result"]["structuredContent"];
     assert_eq!(cancelled["status"], "cancelled");
     assert_eq!(cancelled["results"][0]["status"], "cancelled");
+    // A cancelled job is not a failed one, so it still reports success: true.
+    assert_eq!(cancelled["success"], true);
 }
 
 #[tokio::test]
@@ -233,30 +237,51 @@ async fn mcp_extract_output_schemas_match_openapi_lifecycle_components() {
         serde_json::from_str(include_str!("../openapi/openapi.json")).expect("valid OpenAPI");
     let components = &openapi["components"]["schemas"];
 
+    // MCP responses carry the `success` envelope every MCP tool returns, which
+    // the native HTTP `/v1` (openapi) shape deliberately omits. Compare the data
+    // contract by ignoring that one envelope field on the MCP side.
+    let required_without_success = |schema: &Value| -> Vec<String> {
+        schema["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|v| v.as_str())
+            .filter(|s| *s != "success")
+            .map(str::to_string)
+            .collect()
+    };
+    let keys_without_success = |schema: &Value| -> Vec<String> {
+        schema["properties"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .filter(|k| *k != "success")
+            .cloned()
+            .collect()
+    };
+
     let accepted = tool_output_schema("crw_extract").unwrap();
     let openapi_accepted = &components["ExtractAccepted"];
-    assert_eq!(accepted["required"], openapi_accepted["required"]);
+    assert_eq!(
+        required_without_success(&accepted),
+        required_without_success(openapi_accepted)
+    );
     assert_eq!(
         accepted["properties"]["status"],
         openapi_accepted["properties"]["status"]
     );
     assert_eq!(
-        accepted["properties"]
-            .as_object()
-            .unwrap()
-            .keys()
-            .collect::<Vec<_>>(),
-        openapi_accepted["properties"]
-            .as_object()
-            .unwrap()
-            .keys()
-            .collect::<Vec<_>>()
+        keys_without_success(&accepted),
+        keys_without_success(openapi_accepted)
     );
 
     let status = tool_output_schema("crw_check_extract_status").unwrap();
     assert_eq!(status, tool_output_schema("crw_cancel_extract").unwrap());
     let openapi_status = &components["ExtractStatus"];
-    assert_eq!(status["required"], openapi_status["required"]);
+    assert_eq!(
+        required_without_success(&status),
+        required_without_success(openapi_status)
+    );
     assert_eq!(
         status["properties"]["status"],
         openapi_status["properties"]["status"]
