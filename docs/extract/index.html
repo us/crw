@@ -514,6 +514,26 @@ console.log(body.data.json);</code></pre></div><div class="code-tab-panel" data-
 <li>Debugging extraction before confirming the underlying scrape succeeded</li>
 <li>Using the async <code>/v1/extract</code> job for a single URL when a synchronous <code>/v1/scrape</code> with <code>formats: [&quot;json&quot;]</code> is simpler</li>
 </ul>
+<h2 id="multi-url-lifecycle-and-cancellation">Multi-URL lifecycle and cancellation</h2>
+<p><code>POST /v1/extract</code> creates one ordered result slot per requested URL. Poll
+<code>GET /v1/extract/{id}</code> or cancel idempotently with
+<code>DELETE /v1/extract/{id}</code>. The lifecycle is:</p>
+<pre data-lang="text"><code class="language-text">processing -&gt; completed | failed
+processing -&gt; cancelling -&gt; cancelled</code></pre>
+<p><code>cancelling</code> is not terminal: the one URL already claimed by the sequential
+worker may finish and persist its result and measured usage. No later URL is
+started. At the terminal barrier, every untouched slot becomes <code>cancelled</code> and
+omits <code>data</code>, <code>error</code>, <code>llmUsage</code>, and <code>basis</code>. The result array always keeps the
+original URL count and order. Repeated DELETE returns the persisted state;
+DELETE after <code>completed</code>, <code>failed</code>, or <code>cancelled</code> does not rewrite it.</p>
+<pre data-lang="bash"><code class="language-bash">curl -X DELETE https://api.fastcrw.com/v1/extract/JOB_ID \
+  -H &quot;Authorization: Bearer YOUR_API_KEY&quot;</code></pre>
+<p>The TypeScript SDK exposes <code>startExtract</code>, <code>getExtract</code>, and <code>cancelExtract</code>;
+Python exposes <code>start_extract</code>, <code>get_extract</code>, and <code>cancel_extract</code>. Their
+convenience <code>extract</code> waiter treats <code>cancelling</code> as non-terminal, raises a typed
+cancellation error with partial results on <code>cancelled</code>, and performs a
+best-effort DELETE on timeout. Async starters send <code>Prefer: respond-async</code> for
+managed and self-hosted parity.</p>
 <h2 id="when-to-use-something-else">When to use something else</h2>
 <ul>
 <li>Use <a href="/scraping">Scrape</a> when prose or markdown is enough</li>

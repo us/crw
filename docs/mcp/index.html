@@ -301,13 +301,13 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <tbody><tr>
 <td><strong>Embedded</strong> (default)</td>
 <td>No <code>--api-url</code> / <code>CRW_API_URL</code> set</td>
-<td>scrape, crawl, check_crawl_status, map, extract, check_extract_status, parse_file + <strong>search</strong> (when a search backend is configured)</td>
+<td>scrape, crawl, check_crawl_status, map, extract, check_extract_status, cancel_extract, parse_file + <strong>search</strong> (when a search backend is configured)</td>
 <td>Self-contained. No server needed. The scraping engine runs inside the MCP process. <code>crw_search</code> is advertised only when a search backend is configured (e.g. the Docker compose sidecar).</td>
 </tr>
 <tr>
 <td><strong>Proxy / Server</strong></td>
 <td><code>--api-url</code> / <code>CRW_API_URL</code> set</td>
-<td>scrape, crawl, check_crawl_status, map, extract, check_extract_status, parse_file, search</td>
+<td>scrape, crawl, check_crawl_status, map, extract, check_extract_status, cancel_extract, parse_file, search</td>
 <td>Forwards tool calls to a remote CRW server — the <a href="https://fastcrw.com">fastcrw.com</a> cloud <strong>or your own self-hosted server</strong>. <code>crw_search</code> is always advertised in proxy mode; it works whenever the server has a search backend configured (the Docker stack enables it by default).</td>
 </tr>
 </tbody></table>
@@ -493,6 +493,12 @@ claude mcp add crw \
 <td><code>crw_check_extract_status</code></td>
 <td>Poll extract status and get results</td>
 <td><code>GET /v1/extract/:id</code></td>
+<td>All modes</td>
+</tr>
+<tr>
+<td><code>crw_cancel_extract</code></td>
+<td>Idempotently cancel extract and return canonical status</td>
+<td><code>DELETE /v1/extract/:id</code></td>
 <td>All modes</td>
 </tr>
 <tr>
