@@ -464,7 +464,7 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
         elapsed_ms,
         render_decision,
         credit_cost,
-        warnings,
+        mut warnings,
         formats,
         only_main_content,
         include_tags,
@@ -500,11 +500,29 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
     let meta = readability::extract_metadata(raw_html);
 
     // Step 2: Clean HTML (remove boilerplate, nav, ads, etc.).
-    let cleaned = clean::clean_html(raw_html, only_main_content, include_tags, exclude_tags)
-        .unwrap_or_else(|_| raw_html.to_string());
+    let cleaned = clean::clean_html_with_warnings(
+        raw_html,
+        only_main_content,
+        include_tags,
+        exclude_tags,
+        &mut warnings,
+    )
+    .unwrap_or_else(|_| raw_html.to_string());
 
     // Step 3: Apply CSS/XPath selector if provided (narrows to a specific element).
     let selected_html = apply_selector(&cleaned, css_selector, xpath)?;
+    // A user-supplied selector that matched nothing must NOT fall back to the
+    // whole page (a silent context-bloat footgun: an unmatched `--css`/
+    // `includeTags` previously returned the entire document). Treat it as an
+    // intentional narrow extraction that yielded empty output and warn.
+    // Domain-configured default selectors are excluded: a host default that
+    // doesn't apply should still show the page.
+    let selected_html = if user_selected && selected_html.is_none() {
+        warnings.push("selector_no_match".to_string());
+        Some(String::new())
+    } else {
+        selected_html
+    };
     let after_selection = selected_html.as_deref().unwrap_or(&cleaned);
 
     // Step 4: If only_main_content, try to narrow further with readability scoring.
@@ -555,8 +573,14 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
             }
 
             // Alt 2: basic clean without only_main_content (no readability narrowing).
-            let basic_cleaned = clean::clean_html(raw_html, false, include_tags, exclude_tags)
-                .unwrap_or_else(|_| raw_html.to_string());
+            let basic_cleaned = clean::clean_html_with_warnings(
+                raw_html,
+                false,
+                include_tags,
+                exclude_tags,
+                &mut warnings,
+            )
+            .unwrap_or_else(|_| raw_html.to_string());
             let basic_md = markdown::html_to_markdown(&basic_cleaned);
             let basic_q = quality::analyze_md_only(&basic_md);
             candidates.push(("basic_clean", basic_md, basic_q));

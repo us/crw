@@ -44,11 +44,16 @@ fn clean_html_unicode_content() {
 
 #[test]
 fn clean_html_invalid_css_selector() {
-    // Invalid selector should warn but not crash
+    // Invalid selector should warn but not crash. It no longer falls back to
+    // the whole page (that was a footgun: an unmatched/invalid include_tags
+    // selector silently returned the entire document). It now yields empty
+    // output; clean_html_with_warnings surfaces a `selector_no_match` warning.
     let html = "<body><p>Content</p></body>";
     let result = clean_html(html, false, &["[[[invalid".into()], &[]).unwrap();
-    // Falls back to original since no valid selector matched
-    assert!(result.contains("Content"));
+    assert!(
+        result.trim().is_empty(),
+        "invalid selector must not fall back to the whole page"
+    );
 }
 
 #[test]
