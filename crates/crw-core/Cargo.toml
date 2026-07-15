@@ -23,6 +23,7 @@ cdp = []
 # auto ladder and deadline math stay byte-identical to a lean build. The
 # workspace binary enables this transitively via `crw-renderer/camoufox`.
 camoufox = []
+cloak = []
 
 [dependencies]
 crw-mcp-proto = { workspace = true }

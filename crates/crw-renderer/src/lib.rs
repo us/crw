@@ -45,6 +45,8 @@ pub mod camoufox;
 pub mod cdp;
 #[cfg(feature = "cdp")]
 pub mod cdp_conn;
+#[cfg(feature = "cloak")]
+pub mod cloak;
 pub mod detector;
 #[cfg(feature = "cdp")]
 pub mod health_telemetry;
@@ -162,6 +164,7 @@ fn renderer_kind_for(name: &str) -> Option<RendererKind> {
         "chrome" => Some(RendererKind::Chrome),
         "chrome_proxy" => Some(RendererKind::ChromeProxy),
         "camoufox" => Some(RendererKind::Camoufox),
+        "cloak" => Some(RendererKind::Cloak),
         _ => None,
     }
 }
@@ -216,6 +219,13 @@ fn tier_timeouts_from(
     m.insert(
         RendererKind::Camoufox,
         std::time::Duration::from_millis(config.camoufox_timeout()),
+    );
+    // Unconditional, same rationale as camoufox: `cloak_timeout()` exists in
+    // every build; the entry is consulted only when a cloak renderer is in the
+    // pool, so it is harmless dead capacity in lean.
+    m.insert(
+        RendererKind::Cloak,
+        std::time::Duration::from_millis(config.cloak_timeout()),
     );
     m
 }
@@ -334,6 +344,14 @@ fn is_origin_navigation_failure(e: &CrwError) -> bool {
 /// and the HTTP tier's proxy retry (`http_only`).
 pub(crate) const MIN_TIER_BUDGET: Duration = Duration::from_millis(500);
 
+/// Concurrency permits for the cloak recovery arm — sized to the sidecar's
+/// cold-solve browser cap (`CF_MAX_CONCURRENT_BROWSERS`, default 4) so the
+/// engine sheds excess with a fast clean block instead of queuing headed
+/// Turnstile solves that hold the request budget. `pub const` so it never trips
+/// `dead_code` in a lean build (referenced only under `#[cfg(feature="cloak")]`).
+#[cfg(feature = "cloak")]
+pub const CLOAK_SEM_PERMITS: usize = 4;
+
 /// Composite renderer that tries multiple backends in order.
 pub struct FallbackRenderer {
     http: Arc<dyn PageFetcher>,
@@ -399,6 +417,16 @@ pub struct FallbackRenderer {
     /// only by an explicit `renderer = "camoufox"` pin, never the auto chain.
     #[cfg(feature = "camoufox")]
     camoufox_in_auto: bool,
+    /// Cloak Turnstile-solver recovery arm, held OUT of the normal ladder and
+    /// fired only on a detected CF challenge. `None` when unconfigured. Gated so
+    /// a lean build has no such field (byte-identical).
+    #[cfg(feature = "cloak")]
+    cloak_arm: Option<Arc<dyn PageFetcher>>,
+    /// Concurrency shed for the cloak arm — sized to the sidecar's cold-solve
+    /// browser cap so the engine returns a fast clean block instead of queuing
+    /// headed-Chromium solves. Acquired non-blocking (`try_acquire_owned`).
+    #[cfg(feature = "cloak")]
+    cloak_sem: Arc<tokio::sync::Semaphore>,
 }
 
 impl std::fmt::Debug for FallbackRenderer {
@@ -468,6 +496,16 @@ impl FallbackRenderer {
             ));
         }
 
+        #[cfg(not(feature = "cloak"))]
+        if matches!(config.mode, RendererMode::Cloak) {
+            return Err(CrwError::ConfigError(
+                "renderer.mode = \"cloak\" requires the 'cloak' feature, but this build \
+                 was compiled without it. Rebuild with --features cloak or set mode = \
+                 \"auto\"/\"none\"."
+                    .into(),
+            ));
+        }
+
         #[allow(unused_mut)]
         let mut js_renderers: Vec<Arc<dyn PageFetcher>> = Vec::new();
 
@@ -504,6 +542,11 @@ impl FallbackRenderer {
                 // the (empty) ladder.
                 #[cfg(feature = "camoufox")]
                 camoufox_in_auto: false,
+                // mode=none never recovers — no cloak arm.
+                #[cfg(feature = "cloak")]
+                cloak_arm: None,
+                #[cfg(feature = "cloak")]
+                cloak_sem: Arc::new(tokio::sync::Semaphore::new(CLOAK_SEM_PERMITS)),
             });
         }
 
@@ -731,6 +774,44 @@ impl FallbackRenderer {
             }
         }
 
+        // Cloak Turnstile-solver recovery tier — held OUT of `js_renderers` (it
+        // is a CF-challenge recovery arm, not a ladder tier). Constructed with
+        // the DataImpulse base creds + default country threaded from config, so
+        // it can mint per-request sticky-sessid proxy URLs itself.
+        #[cfg(feature = "cloak")]
+        let cloak_arm: Option<Arc<dyn PageFetcher>> = {
+            if let Some(ck) = config
+                .cloak
+                .as_ref()
+                .filter(|c| !c.base_url.trim().is_empty())
+            {
+                let proxy_base = config
+                    .proxy_base_user
+                    .clone()
+                    .zip(config.proxy_base_pass.clone());
+                tracing::info!(
+                    base_url = %ck.base_url,
+                    proxy_auth = proxy_base.is_some(),
+                    "cloak recovery tier enabled"
+                );
+                Some(Arc::new(cloak::CloakRenderer::new(
+                    "cloak",
+                    &ck.base_url,
+                    &ck.api_key,
+                    config.cloak_timeout(),
+                    proxy_base,
+                    config.proxy_default_country.clone(),
+                )) as Arc<dyn PageFetcher>)
+            } else if matches!(config.mode, RendererMode::Cloak) {
+                return Err(CrwError::ConfigError(
+                    "renderer.mode = \"cloak\" but [renderer.cloak] base_url is not configured"
+                        .into(),
+                ));
+            } else {
+                None
+            }
+        };
+
         // Spawn the process-wide CDP telemetry sampler. Idempotent —
         // OnceLock guarantees a single task across all FallbackRenderer
         // instances. No-op on the `mode = none` early-return path above.
@@ -771,6 +852,10 @@ impl FallbackRenderer {
             // configured-but-not-opted-in endpoint stays out of the auto chain.
             #[cfg(feature = "camoufox")]
             camoufox_in_auto: config.camoufox_in_ladder(),
+            #[cfg(feature = "cloak")]
+            cloak_arm,
+            #[cfg(feature = "cloak")]
+            cloak_sem: Arc::new(tokio::sync::Semaphore::new(CLOAK_SEM_PERMITS)),
         })
     }
 
@@ -2316,6 +2401,30 @@ impl FallbackRenderer {
         // causes a timeout the baseline wouldn't have — the failure mode the
         // naive always-on ladder tier showed: success −2pp, p90 +69%).
         // best-result-wins: never replace usable content with an empty retry.
+        //
+        // CF-challenge routing: a managed Turnstile challenge cannot be cleared
+        // by chrome_proxy (default Chrome fingerprint), so route it STRAIGHT to
+        // the cloak recovery arm and suppress chrome_proxy for it. Re-detect the
+        // signal once from `thin_result` (the richest-HTML thin body; a CF
+        // challenge is 100-300KB so it wins the size race) — this covers both
+        // the serial and hedge paths without threading a new bool. `route_to_cloak`
+        // is a cfg-const that folds to `false` in a lean build → chrome_proxy
+        // firing is byte-identical there.
+        #[cfg(feature = "cloak")]
+        let saw_cf_challenge = thin_result
+            .as_ref()
+            .map(|r| detector::looks_like_cloudflare_challenge(&r.html))
+            .unwrap_or(false);
+        let route_to_cloak = {
+            #[cfg(feature = "cloak")]
+            {
+                saw_cf_challenge && self.cloak_arm.is_some()
+            }
+            #[cfg(not(feature = "cloak"))]
+            {
+                false
+            }
+        };
         if let Some(arm) = auto_egress_arm {
             let kind = RendererKind::ChromeProxy;
             let tier_budget = self
@@ -2327,7 +2436,7 @@ impl FallbackRenderer {
             // to chrome_timeout + 15s), but an operator can configure it lower. Take the
             // stricter of the two so no JS dispatch path can run on a degenerate budget.
             let arm_floor = tier_budget.max(MIN_TIER_BUDGET);
-            if saw_hard_block && deadline.remaining() >= arm_floor {
+            if saw_hard_block && !route_to_cloak && deadline.remaining() >= arm_floor {
                 chain.push(kind);
                 let entry = self.pick_proxy_for_url(url);
                 let attempt = REQUEST_PROXY
@@ -2381,6 +2490,78 @@ impl FallbackRenderer {
                                 target: "latency_breakdown",
                                 url, tier = "chrome_proxy", error = %e,
                                 "auto_egress fired (error)"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        // Cloak Turnstile recovery arm — fired ONLY on a detected CF challenge,
+        // with a DECOUPLED floor (`CLOAK_ARM_FLOOR_MS`, one cold solve) so it can
+        // arm even though the per-attempt budget is larger. Load-shed via
+        // `cloak_sem` (non-blocking); pre-fire read-only breaker check; and
+        // best-result-wins IDENTICAL to the chrome_proxy arm above so an Err/thin
+        // cloak result never turns the baseline CF-block into Ok(empty).
+        #[cfg(feature = "cloak")]
+        if route_to_cloak && let Some(arm) = &self.cloak_arm {
+            let kind = RendererKind::Cloak;
+            let floor = std::time::Duration::from_millis(crw_core::config::CLOAK_ARM_FLOOR_MS);
+            let permit = if deadline.remaining() >= floor
+                && !self.breakers.host_for(&host, kind).await.is_open()
+            {
+                self.cloak_sem.clone().try_acquire_owned().ok()
+            } else {
+                None
+            };
+            if let Some(_permit) = permit {
+                chain.push(kind);
+                let entry = self.pick_proxy_for_url(url);
+                let attempt = REQUEST_PROXY
+                    .scope(entry, arm.fetch(url, headers, wait_for_ms, deadline))
+                    .await;
+                match attempt {
+                    Ok(r) => {
+                        let r_ok = html_body_text_len(&r.html) >= Self::MIN_RENDERED_TEXT_LEN
+                            && detector::looks_like_failed_render(&r.html).is_none()
+                            && !detector::looks_like_loading_placeholder(&r.html)
+                            && !detector::looks_like_cloudflare_challenge(&r.html);
+                        if !host.is_empty() {
+                            let outcome = if r_ok {
+                                BreakerOutcome::Success
+                            } else {
+                                BreakerOutcome::RenderError
+                            };
+                            self.breakers.record_outcome(&host, kind, outcome).await;
+                        }
+                        let better = r_ok
+                            && match &thin_result {
+                                Some(prev) => r.html.len() > prev.html.len(),
+                                None => true,
+                            };
+                        if self.latency_breakdown {
+                            tracing::info!(
+                                target: "latency_breakdown",
+                                url, tier = "cloak",
+                                ok = r_ok, consumed = better,
+                                "cloak recovery fired"
+                            );
+                        }
+                        if better {
+                            thin_result = Some(r);
+                        }
+                    }
+                    Err(e) => {
+                        if !host.is_empty() {
+                            self.breakers
+                                .record_outcome(&host, kind, BreakerOutcome::ConnectionError)
+                                .await;
+                        }
+                        if self.latency_breakdown {
+                            tracing::info!(
+                                target: "latency_breakdown",
+                                url, tier = "cloak", error = %e,
+                                "cloak recovery fired (error)"
                             );
                         }
                     }

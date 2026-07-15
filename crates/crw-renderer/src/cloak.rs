@@ -1,0 +1,449 @@
+//! Cloak Turnstile-solver recovery tier (opt-in, REST — not CDP).
+//!
+//! Backed by a `cloudflarebypassforscraping` / CloakBrowser REST sidecar. Fired
+//! ONLY as a Cloudflare-managed-challenge recovery arm (see `lib.rs`), never in
+//! the normal ladder. Model B: the sidecar owns the stealth browser (mint), the
+//! `cf_clearance` cache, and the curl_cffi warm replay; this tier just calls its
+//! **mirror endpoint** and gets back the real upstream HTML.
+//!
+//! ## Request (mirror endpoint)
+//! `GET {base}/{path}{?query}` with headers:
+//! - `x-hostname: <host>` (required — the sidecar mirrors to `https://<host>/…`)
+//! - `x-proxy: http://<user>__cr.<cc>;sessid.stick<id>:<pass>@<host:port>`
+//!   (DataImpulse sticky exit; a **stable per-host sessid** for warm reuse, a
+//!   **fresh** one per retry for a new IP)
+//! - `x-bypass-cache: true` on the retry (force a fresh solve)
+//!
+//! The returned body is the real upstream response; a still-challenged body is
+//! re-checked with the shared [`crate::detector::looks_like_cloudflare_challenge`]
+//! accept-gate and surfaced as a retryable [`CrwError::RendererError`].
+
+use async_trait::async_trait;
+use crw_core::Deadline;
+use crw_core::error::{CrwError, CrwResult};
+use crw_core::types::FetchResult;
+use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+use crate::traits::PageFetcher;
+
+/// Budget for the `is_available` health probe.
+const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
+/// Fail-fast connect timeout so a down sidecar errors quickly instead of
+/// eating the full per-request budget.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
+/// How long a proven-good sticky sessid is remembered per host. Under the
+/// sidecar's `cf_clearance` cache TTL (29 min) so we re-mint before it dies.
+const SESSID_TTL: Duration = Duration::from_secs(29 * 60);
+/// Max solve attempts per fetch (1 sticky + 1 fresh-IP). A second COLD attempt
+/// rarely fits the recovery budget, so this mainly recovers the warm/poison
+/// case; best-result-wins leaves a clean block on exhaustion.
+const MAX_ATTEMPTS: usize = 2;
+
+/// Opt-in cloak recovery renderer. Construct via [`CloakRenderer::new`].
+pub struct CloakRenderer {
+    name: String,
+    /// Trimmed base URL, no trailing slash (e.g. `http://cloak-sidecar:8000`).
+    base_url: String,
+    /// Bearer token; empty string means no `Authorization` header is sent.
+    api_key: String,
+    /// Per-attempt solve budget (`config.cloak_timeout()`).
+    timeout: Duration,
+    /// DataImpulse base credentials `(user, pass)` from config
+    /// (`proxy_base_user`/`proxy_base_pass`). `None` on a self-host without a
+    /// proxy → the sidecar egresses direct.
+    proxy_base: Option<(String, String)>,
+    /// Default country for the `__cr.<cc>` suffix (`config.proxy_default_country`).
+    default_country: Option<String>,
+    client: reqwest::Client,
+    /// host → (proven-good sessid, minted_at). Lets a host that only works on a
+    /// fresh IP promote that sessid to the primary attempt so it warms.
+    sessid_map: Arc<Mutex<HashMap<String, (String, Instant)>>>,
+}
+
+impl CloakRenderer {
+    pub fn new(
+        name: &str,
+        base_url: &str,
+        api_key: &str,
+        timeout_ms: u64,
+        proxy_base: Option<(String, String)>,
+        default_country: Option<String>,
+    ) -> Self {
+        let client = reqwest::Client::builder()
+            .connect_timeout(CONNECT_TIMEOUT)
+            .build()
+            .unwrap_or_default();
+        Self {
+            name: name.to_string(),
+            base_url: base_url.trim_end_matches('/').to_string(),
+            api_key: api_key.to_string(),
+            timeout: Duration::from_millis(timeout_ms),
+            proxy_base,
+            default_country,
+            client,
+            sessid_map: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    fn auth(&self, rb: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        if self.api_key.is_empty() {
+            rb
+        } else {
+            rb.bearer_auth(&self.api_key)
+        }
+    }
+
+    fn call_budget(&self, deadline: &Deadline) -> Duration {
+        deadline.remaining().min(self.timeout)
+    }
+
+    /// Stable per-host sessid for the primary attempt (deterministic hash), so a
+    /// repeat request to the same host reuses the same sidecar cache key + exit
+    /// IP → warm replay.
+    fn deterministic_sessid(host: &str) -> String {
+        let mut h = DefaultHasher::new();
+        host.hash(&mut h);
+        format!("crwd{:016x}", h.finish())
+    }
+
+    /// Compose the DataImpulse sticky proxy URL for one attempt, injecting the
+    /// country suffix + `;sessid.stick<id>` into the base credentials, and the
+    /// creds into the proxy `scheme://host:port`. Returns `None` when no proxy
+    /// is configured (self-host → sidecar egresses direct). Mirrors the
+    /// `<user>__cr.<cc>` composition in `cdp.rs`.
+    fn sticky_proxy_url(&self, sessid: &str) -> Option<String> {
+        let (user, pass) = self.proxy_base.as_ref()?;
+        // Host:port comes from the request's REQUEST_PROXY entry (creds-free).
+        let server = crate::REQUEST_PROXY
+            .try_with(|p| p.as_ref().map(|e| e.chrome_proxy_server().to_string()))
+            .ok()
+            .flatten()?;
+        let cc = crate::REQUEST_COUNTRY
+            .try_with(|c| c.clone())
+            .ok()
+            .flatten()
+            .or_else(|| self.default_country.clone())
+            .map(|s| s.trim().to_lowercase())
+            .filter(|s| s.len() == 2 && s.chars().all(|c| c.is_ascii_alphabetic()));
+        let username = match cc {
+            Some(cc) => format!("{user}__cr.{cc};sessid.stick{sessid}"),
+            None => format!("{user};sessid.stick{sessid}"),
+        };
+        // server is "scheme://host:port" (no creds); inject "user:pass@".
+        Some(server.replacen("://", &format!("://{username}:{pass}@"), 1))
+    }
+
+    /// One mirror call. `bypass_cache` forces a fresh sidecar solve.
+    async fn mirror_once(
+        &self,
+        host: &str,
+        path_and_query: &str,
+        sessid: &str,
+        bypass_cache: bool,
+        deadline: &Deadline,
+    ) -> CrwResult<(u16, String)> {
+        let budget = self.call_budget(deadline);
+        if budget.is_zero() {
+            return Err(CrwError::Timeout(
+                deadline.overrun().as_millis().max(1) as u64
+            ));
+        }
+        let url = format!("{}{}", self.base_url, path_and_query);
+        let mut rb = self.auth(self.client.get(&url)).header("x-hostname", host);
+        if let Some(px) = self.sticky_proxy_url(sessid) {
+            rb = rb.header("x-proxy", px);
+        }
+        if bypass_cache {
+            rb = rb.header("x-bypass-cache", "true");
+        }
+        let resp = tokio::time::timeout(budget, rb.send())
+            .await
+            .map_err(|_| CrwError::Timeout(budget.as_millis() as u64))?
+            .map_err(|e| CrwError::RendererError(format!("cloak GET {path_and_query}: {e}")))?;
+        let status = resp.status().as_u16();
+        let body = resp.text().await.map_err(|e| {
+            CrwError::RendererError(format!("cloak GET {path_and_query} body: {e}"))
+        })?;
+        Ok((status, body))
+    }
+}
+
+#[async_trait]
+impl PageFetcher for CloakRenderer {
+    async fn fetch(
+        &self,
+        url: &str,
+        _headers: &HashMap<String, String>,
+        _wait_for_ms: Option<u64>,
+        deadline: Deadline,
+    ) -> CrwResult<FetchResult> {
+        if deadline.expired() {
+            return Err(CrwError::Timeout(
+                deadline.overrun().as_millis().max(1) as u64
+            ));
+        }
+        let start = Instant::now();
+        let parsed = url::Url::parse(url)
+            .map_err(|e| CrwError::RendererError(format!("cloak: bad url {url}: {e}")))?;
+        let host = parsed
+            .host_str()
+            .ok_or_else(|| CrwError::RendererError(format!("cloak: url has no host: {url}")))?
+            .to_string();
+        let path_and_query = match parsed.query() {
+            Some(q) => format!("{}?{}", parsed.path(), q),
+            None => parsed.path().to_string(),
+        };
+
+        // Primary sessid: a proven-good one for this host if we have it (and it
+        // hasn't aged out), else the deterministic per-host sessid.
+        let primary_sessid = {
+            let mut map = self.sessid_map.lock().expect("cloak sessid map poisoned");
+            match map.get(&host) {
+                Some((s, at)) if at.elapsed() < SESSID_TTL => s.clone(),
+                _ => {
+                    map.remove(&host);
+                    Self::deterministic_sessid(&host)
+                }
+            }
+        };
+
+        let mut last_err: Option<CrwError> = None;
+        for attempt in 0..MAX_ATTEMPTS {
+            if deadline.remaining() < crate::MIN_TIER_BUDGET {
+                break;
+            }
+            let (sessid, bypass) = if attempt == 0 {
+                (primary_sessid.clone(), false)
+            } else {
+                // Fresh random sessid = new exit IP + new sidecar cache key,
+                // with x-bypass-cache to force a fresh solve.
+                let n: u64 = rand::random();
+                (format!("crwr{n:016x}"), true)
+            };
+            match self
+                .mirror_once(&host, &path_and_query, &sessid, bypass, &deadline)
+                .await
+            {
+                // Accept any body that is NOT itself a CF challenge — the ONLY
+                // reject criterion (matches the module contract). Do NOT gate on
+                // 2xx: after the sidecar clears the challenge, the real upstream
+                // may legitimately return 403/451 (paywall/geo) with usable
+                // content, which the caller's own `r_ok` (content-quality, not
+                // status) accepts. The status is preserved in `status_code`.
+                Ok((status, body)) if !crate::detector::looks_like_cloudflare_challenge(&body) => {
+                    // Success: remember the winning sessid so future requests to
+                    // this host reuse the working exit IP (warm the cache).
+                    {
+                        let mut map = self.sessid_map.lock().expect("cloak sessid map poisoned");
+                        map.retain(|_, (_, at)| at.elapsed() < SESSID_TTL);
+                        map.insert(host.clone(), (sessid, Instant::now()));
+                    }
+                    return Ok(FetchResult {
+                        url: url.to_string(),
+                        final_url: None,
+                        status_code: status,
+                        html: body,
+                        content_type: None,
+                        raw_bytes: None,
+                        rendered_with: Some(self.name.clone()),
+                        elapsed_ms: start.elapsed().as_millis() as u64,
+                        warning: None,
+                        render_decision: None,
+                        credit_cost: 0,
+                        warnings: Vec::new(),
+                        truncated: false,
+                        deadline_exceeded: deadline.remaining().is_zero(),
+                        captured_responses: Vec::new(),
+                        screenshot: None,
+                    });
+                }
+                Ok((status, _)) => {
+                    last_err = Some(CrwError::RendererError(format!(
+                        "cloak: still challenged (HTTP {status}) for {host}"
+                    )));
+                }
+                Err(e) => last_err = Some(e),
+            }
+        }
+        // Fallback: if the loop broke before any attempt (deadline pressure),
+        // surface a Timeout so the breaker classifies it as deadline-clamped
+        // rather than a render failure — mirrors the ladder's budget-drained idiom.
+        Err(last_err
+            .unwrap_or_else(|| CrwError::Timeout(deadline.overrun().as_millis().max(1) as u64)))
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn supports_js(&self) -> bool {
+        true
+    }
+
+    /// Health probe against `GET {base}/cache/stats` (the sidecar has no
+    /// `/health` route — its catch-all mirror would 400 without `x-hostname`).
+    async fn is_available(&self) -> bool {
+        let url = format!("{}/cache/stats", self.base_url);
+        let fut = self.auth(self.client.get(&url)).send();
+        matches!(
+            tokio::time::timeout(PROBE_TIMEOUT, fut).await,
+            Ok(Ok(r)) if r.status().is_success()
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    // A body carrying a Cloudflare strong marker → looks_like_cloudflare_challenge==true.
+    const CHALLENGE_BODY: &str = "<html><head><title>Just a moment...</title></head><body>\
+        <script src=\"/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1\"></script></body></html>";
+    const REAL_BODY: &str = "<html><body><h1>Northwestern Mutual Reviews</h1>\
+        <p>real review content that is definitely not a challenge page</p></body></html>";
+
+    fn renderer(base_url: &str) -> CloakRenderer {
+        // No proxy_base → no x-proxy header (sidecar egresses direct in tests).
+        CloakRenderer::new("cloak", base_url, "", 30_000, None, None)
+    }
+
+    #[tokio::test]
+    async fn happy_path_returns_upstream_html() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/page"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(REAL_BODY))
+            .mount(&server)
+            .await;
+        let r = renderer(&server.uri())
+            .fetch(
+                &format!("{}/page", server.uri()),
+                &HashMap::new(),
+                None,
+                Deadline::from_request_ms(30_000),
+            )
+            .await
+            .expect("cloak fetch should succeed");
+        assert_eq!(r.status_code, 200);
+        assert!(r.html.contains("Northwestern Mutual"));
+        assert_eq!(r.rendered_with.as_deref(), Some("cloak"));
+    }
+
+    #[tokio::test]
+    async fn persistent_challenge_body_is_retryable_error() {
+        let server = MockServer::start().await;
+        // Every attempt gets a 200 challenge shell → the accept-gate rejects it.
+        Mock::given(method("GET"))
+            .and(path("/page"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(CHALLENGE_BODY))
+            .expect(2) // both attempts fire
+            .mount(&server)
+            .await;
+        let err = renderer(&server.uri())
+            .fetch(
+                &format!("{}/page", server.uri()),
+                &HashMap::new(),
+                None,
+                Deadline::from_request_ms(30_000),
+            )
+            .await
+            .expect_err("a persistent challenge must surface as an error, never fake success");
+        assert!(matches!(err, CrwError::RendererError(_)));
+    }
+
+    #[tokio::test]
+    async fn recovers_on_fresh_sessid_retry_with_bypass_cache() {
+        let server = MockServer::start().await;
+        // Attempt 1 carries x-bypass-cache → real body (higher priority wins).
+        Mock::given(method("GET"))
+            .and(path("/page"))
+            .and(header("x-bypass-cache", "true"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(REAL_BODY))
+            .with_priority(1)
+            .mount(&server)
+            .await;
+        // Attempt 0 (no bypass header) → challenge.
+        Mock::given(method("GET"))
+            .and(path("/page"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(CHALLENGE_BODY))
+            .with_priority(5)
+            .mount(&server)
+            .await;
+        let r = renderer(&server.uri())
+            .fetch(
+                &format!("{}/page", server.uri()),
+                &HashMap::new(),
+                None,
+                Deadline::from_request_ms(30_000),
+            )
+            .await
+            .expect("second attempt (fresh sessid + bypass) should recover");
+        assert!(r.html.contains("real review content"));
+    }
+
+    #[tokio::test]
+    async fn non_2xx_real_content_is_accepted_not_rejected() {
+        // After the sidecar clears CF, a legit upstream 403 (paywall/geo) with
+        // usable content must be RETURNED (status preserved), not discarded — the
+        // caller's r_ok judges content, not status.
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/page"))
+            .respond_with(ResponseTemplate::new(403).set_body_string(REAL_BODY))
+            .expect(1) // accepted on attempt 0, no retry
+            .mount(&server)
+            .await;
+        let r = renderer(&server.uri())
+            .fetch(
+                &format!("{}/page", server.uri()),
+                &HashMap::new(),
+                None,
+                Deadline::from_request_ms(30_000),
+            )
+            .await
+            .expect("non-2xx real content must be accepted");
+        assert_eq!(r.status_code, 403);
+        assert!(r.html.contains("real review content"));
+    }
+
+    #[tokio::test]
+    async fn expired_deadline_short_circuits_without_http() {
+        // No mock mounted: if it made an HTTP call it would error differently.
+        let r = renderer("http://127.0.0.1:1") // unroutable
+            .fetch(
+                "http://example.com/page",
+                &HashMap::new(),
+                None,
+                Deadline::from_request_ms(0),
+            )
+            .await;
+        assert!(matches!(r, Err(CrwError::Timeout(_))));
+    }
+
+    #[tokio::test]
+    async fn is_available_probes_cache_stats() {
+        let up = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/cache/stats"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "cached_entries": 0
+            })))
+            .mount(&up)
+            .await;
+        assert!(renderer(&up.uri()).is_available().await);
+
+        let down = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/cache/stats"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&down)
+            .await;
+        assert!(!renderer(&down.uri()).is_available().await);
+    }
+}

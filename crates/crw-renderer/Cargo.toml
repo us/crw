@@ -18,6 +18,9 @@ auto-browser = ["dep:dirs"]
 # lean build is byte-identical. Forwards to `crw-core/camoufox` for the
 # config-level predicate and deadline math.
 camoufox = ["crw-core/camoufox"]
+# Opt-in cloak Turnstile-solver recovery tier (REST). Feature-gated + config-gated;
+# absent from all defaults, so the lean build is byte-identical.
+cloak = ["crw-core/cloak"]
 
 [dependencies]
 crw-core = { workspace = true }
