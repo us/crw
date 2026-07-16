@@ -485,10 +485,21 @@ jobs:
       - name: Publish to MCP Registry
         # The registry intermittently returns 5xx (504 seen on v0.13.2). Retry
         # so a transient gateway error doesn't fail an otherwise-green release.
+        #
+        # "cannot publish duplicate version" (400) is not transient — it means the
+        # version is already there, which is the state we want. Retrying it burns
+        # four attempts and reports a red job for a release that is fine, and it
+        # makes the job impossible to re-run once a later step (e.g. Verify) has
+        # failed. Treat it as success so the job is idempotent.
         run: |
           set -euo pipefail
           for attempt in 1 2 3 4; do
-            if mcp-publisher publish; then exit 0; fi
+            out="$(mcp-publisher publish 2>&1)" && { echo "$out"; exit 0; }
+            echo "$out"
+            if grep -qi "cannot publish duplicate version" <<<"$out"; then
+              echo "::notice::version already present in the registry; nothing to do"
+              exit 0
+            fi
             echo "::warning::mcp-publisher publish attempt ${attempt}/4 failed (transient registry error); retrying in $((attempt * 20))s"
             sleep "$((attempt * 20))"
           done

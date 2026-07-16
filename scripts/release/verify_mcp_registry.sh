@@ -10,13 +10,15 @@ source "$SCRIPT_DIR/lib.sh"
 v="${1:?version required}"
 name="${2:-io.github.us/crw}"
 
-# The bare /v0/servers list is paginated (~30 per page, cursor-based), so our
-# server is almost never on page 1 — that check could never pass. Use the
-# search filter, which returns every version of just this server, and read the
-# nested `.server.*` schema fields.
+# Ask for the ONE version we just published. `search=` alone is still paginated
+# (30 per page, oldest first), so it returns our earliest 30 releases and the new
+# one is never on page 1 — the check then fails for a version that IS published.
+# It held only while we had <=30 releases: v0.25.0 passed as the 30th and last row
+# on page 1, and v0.25.1 became the 31st and failed. `limit=` would just move the
+# cliff to 100 (the cap). Filtering by version is O(1) and cannot page out.
 end=$((SECONDS + 180))
 while (( SECONDS < end )); do
-  if curl -fsSL "https://registry.modelcontextprotocol.io/v0/servers?search=$name" 2>/dev/null \
+  if curl -fsSL "https://registry.modelcontextprotocol.io/v0/servers?search=$name&version=$v" 2>/dev/null \
       | jq -e --arg n "$name" --arg v "$v" \
         'any(.servers[]?; .server.name == $n and .server.version == $v)' >/dev/null 2>&1; then
     notice "mcp-registry $name@$v present"
