@@ -300,3 +300,23 @@ async fn max_urls_is_never_exceeded() {
         );
     }
 }
+
+/// The seed's SSRF/DNS resolution is bounded by the overall deadline like every
+/// other awaited phase. Left unclamped it was the one step that could run past
+/// the route backstop on a stalled resolver, get the whole future dropped, and
+/// bring back the 504-with-zero-URLs. With no budget left it must fail closed
+/// with a clean `Timeout` the caller can map — never proceed, never hang, never
+/// silently skip the SSRF check.
+#[tokio::test]
+async fn seed_validation_is_bounded_by_the_overall_deadline() {
+    let r = renderer().await;
+    // A deadline already in the past: no budget remains for the seed step.
+    let past = Instant::now() - Duration::from_secs(1);
+    let err = discover_urls(opts("http://example.com/", &r, past, true))
+        .await
+        .expect_err("a past deadline must fail closed at the seed, not proceed");
+    assert!(
+        matches!(err, crw_core::error::CrwError::Timeout(_)),
+        "expected a clean Timeout from the seed budget gate, got: {err:?}"
+    );
+}

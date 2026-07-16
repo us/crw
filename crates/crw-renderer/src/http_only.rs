@@ -378,7 +378,13 @@ impl PageFetcher for HttpFetcher {
         let mut use_proxy = proxy_first;
         let mut direct_rescue_used = false;
         if proxy_first {
-            crw_core::metrics::metrics().egress_latch_hit_total.inc();
+            let m = crw_core::metrics::metrics();
+            m.egress_latch_hit_total.inc();
+            // Refresh the gauge on the hot latched path so it tracks the live
+            // latched-host count (and its TTL decay), mirroring how
+            // `host_preferences_size` is set opportunistically during a fetch.
+            m.egress_latched_hosts
+                .set(crate::egress::global().latched_hosts() as i64);
         }
 
         let resp = loop {
@@ -497,28 +503,46 @@ impl PageFetcher for HttpFetcher {
                     // caller's broken proxy demote every other caller's healthy
                     // direct traffic onto paid bandwidth.
                     if let Some(h) = &host {
-                        crate::egress::global().note_block(h).await;
+                        let eg = crate::egress::global();
+                        eg.note_block(h).await;
+                        crw_core::metrics::metrics()
+                            .egress_latched_hosts
+                            .set(eg.latched_hosts() as i64);
                     }
                     use_proxy = true;
                 }
-                // The proxy-first attempt came back blocked as well. Direct is not
-                // forbidden by a latch — only deprioritized — so spend the reserved
-                // budget on one direct attempt rather than returning the proxy's
-                // block. Keeps best-result behaviour when the proxy is the worse
-                // egress for this host (origin blocks the proxy ranges, bad geo
-                // exit, etc).
+                // The proxy-first attempt did not return a usable page. Direct is
+                // not forbidden by a latch — only deprioritized — so spend the
+                // reserved budget on one direct attempt rather than returning the
+                // proxy's result. This keeps best-result behaviour when the proxy
+                // is the worse egress for this host (origin blocks the proxy
+                // ranges, bad geo exit, a 403/5xx wall the box's own IP clears).
+                //
+                // Gate on "not a usable page", which is BROADER than the 429/cf
+                // signal the direct-side arm uses: the latch reorders and must
+                // never SUPPRESS direct, so ANY non-2xx proxy response (403, 5xx,
+                // an un-followed redirect) has to leave a direct rescue reachable,
+                // or a falsely-latched host would return the proxy's failure while
+                // direct would have served 200 — a scrape-success regression.
+                //
+                // `cf-mitigated` is folded in explicitly because a Cloudflare
+                // challenge is often served as a 200: `is_success()` alone would
+                // let that interstitial through and skip the rescue, silently
+                // narrowing the very case (`should_arm_proxy(200, true)`) the
+                // pre-existing 429 arm already treats as a block. Retriable
+                // statuses still exhaust their retries on the proxy first (that arm
+                // is matched above); a clean 2xx falls through to `break r` and
+                // never wastes the rescue.
                 Ok(Ok(r))
                     if use_proxy
                         && proxy_first
                         && !direct_rescue_used
-                        && should_arm_proxy(
-                            r.status().as_u16(),
-                            r.headers()
+                        && (!r.status().is_success()
+                            || r.headers()
                                 .get("cf-mitigated")
                                 .and_then(|v| v.to_str().ok())
                                 .map(crate::detector::is_cloudflare_mitigated_header)
-                                .unwrap_or(false),
-                        ) =>
+                                .unwrap_or(false)) =>
                 {
                     tracing::warn!(
                         "HTTP {} from {url} via proxy while latched; falling back to direct",

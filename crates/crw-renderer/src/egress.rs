@@ -33,7 +33,7 @@
 //!
 //! ## Writes are direct-only
 //!
-//! Only a block observed on a genuine [`EgressKind::Direct`] attempt may latch a
+//! Only a block observed on a genuine direct attempt may latch a
 //! host. A block seen while already egressing through a proxy says the *proxy*
 //! is blocked and says nothing about direct — latching on it would let one
 //! caller's broken proxy demote every other caller's healthy direct traffic onto
@@ -103,17 +103,6 @@ pub const MIN_BUDGET_FOR_LATCH: Duration =
 /// Maximum number of distinct hosts tracked.
 const CAPACITY: u64 = 10_000;
 
-/// How a single fetch attempt actually left the box.
-///
-/// Provenance must be recorded explicitly at the point the request is issued —
-/// it cannot be inferred from `REQUEST_PROXY.is_some()` (which reflects
-/// *selection*, not what the attempt did) nor from `rendered_with`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EgressKind {
-    Direct,
-    Proxy,
-}
-
 /// Per-host memory of hosts that hard-block direct egress. Cheap to clone.
 #[derive(Clone)]
 pub struct EgressMemory {
@@ -141,7 +130,7 @@ impl EgressMemory {
 
     /// Latch `host` onto proxy-first egress for the cooldown.
     ///
-    /// Callers MUST only invoke this for a block seen on an [`EgressKind::Direct`]
+    /// Callers MUST only invoke this for a block seen on a genuine direct
     /// attempt, and only for a strong block signal (429, `cf-mitigated`, or an
     /// antibot `classify()` verdict). A bare 401/403/503 usually means
     /// auth-required, paywall, or a transient upstream fault — none of which a
