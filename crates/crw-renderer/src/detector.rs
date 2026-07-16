@@ -7,12 +7,24 @@ static AKAMAI_REF_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"Reference #\d+\.[0-9a-f]+\.\d+\.[0-9a-f]+").expect("static regex")
 });
 
+/// Largest byte length `<= cap` that ends on a UTF-8 char boundary, so `&html[..n]`
+/// never splits a multibyte char. A fetched page longer than `cap` can place a
+/// multibyte char straddling the cap offset; slicing there would panic
+/// (`is_char_boundary` is false at that byte). Every fixed-cap prefix slice of the
+/// page HTML in this module goes through here.
+fn boundary_capped_len(html: &str, cap: usize) -> usize {
+    let mut n = cap.min(html.len());
+    while n > 0 && !html.is_char_boundary(n) {
+        n -= 1;
+    }
+    n
+}
+
 /// Heuristic: does the HTML look like an SPA shell that needs JS rendering?
 pub fn needs_js_rendering(html: &str) -> bool {
     // Check up to 500KB — some pages have huge <head> sections (CSS, preloaded data)
     // and the <body> may start well beyond 50KB.
-    let check_len = html.len().min(500_000);
-    let lower = html[..check_len].to_lowercase();
+    let lower = html[..boundary_capped_len(html, 500_000)].to_lowercase();
     let body_len = extract_body_text_len(&lower);
 
     // Very short body text + presence of JS framework indicators.
@@ -139,7 +151,7 @@ pub fn looks_like_vendor_block(html: &str) -> Option<&'static str> {
     if html.len() > 200_000 {
         return None;
     }
-    let head = &html[..html.len().min(15_000)];
+    let head = &html[..boundary_capped_len(html, 15_000)];
     let lower_head = head.to_lowercase();
 
     // Cloudflare: challenge form with cf-managed token, error code span, or
@@ -203,8 +215,7 @@ pub fn looks_like_vendor_block(html: &str) -> Option<&'static str> {
 /// on raw markup, looking for framework shells. This one is purely about
 /// outcome — does the page have *any* content for an extractor to chew on.
 pub fn looks_like_thin_html(html: &str) -> bool {
-    let check_len = html.len().min(500_000);
-    let lower = html[..check_len].to_lowercase();
+    let lower = html[..boundary_capped_len(html, 500_000)].to_lowercase();
     extract_body_text_len(&lower) < 200
 }
 
@@ -219,8 +230,7 @@ pub fn looks_like_thin_html(html: &str) -> bool {
 /// Pure-data script blocks (`application/json`, `application/ld+json`,
 /// `importmap`, `speculationrules`) never execute, so they do NOT count.
 pub fn warrants_browser_retry(html: &str) -> bool {
-    let check_len = html.len().min(500_000);
-    let lower = html[..check_len].to_lowercase();
+    let lower = html[..boundary_capped_len(html, 500_000)].to_lowercase();
 
     // Client-side redirect a browser would follow to real content. Matched per
     // <meta> tag (http-equiv refresh + a url target in the SAME tag) so an
@@ -511,11 +521,7 @@ pub fn looks_like_cloudflare_challenge(html: &str) -> bool {
     // the raw bytes (no allocation on the hot per-attempt path; mirrors
     // `crw_crawl::single::classify_block`).
     const STRONG_SCAN_LIMIT: usize = 512 * 1024;
-    let mut strong_end = STRONG_SCAN_LIMIT.min(html.len());
-    while strong_end > 0 && !html.is_char_boundary(strong_end) {
-        strong_end -= 1;
-    }
-    let strong_src = &html[..strong_end];
+    let strong_src = &html[..boundary_capped_len(html, STRONG_SCAN_LIMIT)];
     const STRONG: [&str; 5] = [
         "cf-browser-verification",
         "cf-challenge-running",
@@ -965,5 +971,59 @@ mod tests {
         // since scripts are stripped before text-length measurement.
         let html = r#"<html><body><article><h1>Real Article</h1><p>This is a real article with substantial content about the topic at hand, providing useful information.</p><script>const x = 'class="spinner"';</script></article></body></html>"#;
         assert!(!looks_like_loading_placeholder(html));
+    }
+
+    /// A page larger than the scan cap with a multibyte char straddling the cap
+    /// offset must not panic. `&html[..cap]` splits the char unless the cap is
+    /// walked back to a boundary. Regression for the fetched-page-HTML slice in
+    /// `needs_js_rendering`/`looks_like_thin_html`/`warrants_browser_retry`.
+    #[test]
+    fn multibyte_char_straddling_500kb_cap_does_not_panic() {
+        // 499_999 ASCII bytes then 'é' (C3 A9): byte 499_999 is a boundary,
+        // byte 500_000 is inside the char. Total length exceeds the 500KB cap,
+        // so the naive `&html[..500_000]` lands mid-char.
+        let mut html = String::with_capacity(500_010);
+        html.push_str(&"a".repeat(499_999));
+        html.push('é');
+        assert!(html.len() > 500_000);
+        assert!(
+            !html.is_char_boundary(500_000),
+            "byte 500_000 must be mid-char"
+        );
+        // None of these must panic on the mid-char cap.
+        let _ = needs_js_rendering(&html);
+        let _ = looks_like_thin_html(&html);
+        let _ = warrants_browser_retry(&html);
+        // A body of 499_999 'a's is far over the 200-char bar, so it reads as
+        // non-thin — proving we scanned real content, not an empty slice.
+        assert!(!looks_like_thin_html(&html));
+    }
+
+    /// Same hazard at the 15KB vendor-block cap.
+    #[test]
+    fn multibyte_char_straddling_15kb_cap_does_not_panic() {
+        // 14_999 ASCII then 'é' straddling byte 15_000, padded past the 15KB cap
+        // but under the 200KB vendor-block ceiling.
+        let mut html = String::with_capacity(20_000);
+        html.push_str(&"a".repeat(14_999));
+        html.push('é');
+        html.push_str(&"b".repeat(2_000));
+        assert!(
+            !html.is_char_boundary(15_000),
+            "byte 15_000 must be mid-char"
+        );
+        assert!(looks_like_vendor_block(&html).is_none());
+    }
+
+    #[test]
+    fn boundary_capped_len_never_splits_a_char() {
+        let s = format!("{}é{}", "a".repeat(9), "b".repeat(9)); // 'é' spans bytes 9..11
+        // Caps that would land inside 'é' (10) walk back to its start (9).
+        assert_eq!(boundary_capped_len(&s, 10), 9);
+        assert_eq!(boundary_capped_len(&s, 9), 9);
+        assert_eq!(boundary_capped_len(&s, 11), 11);
+        // A cap past the end clamps to the length.
+        assert_eq!(boundary_capped_len(&s, 10_000), s.len());
+        assert!(s.is_char_boundary(boundary_capped_len(&s, 10)));
     }
 }
