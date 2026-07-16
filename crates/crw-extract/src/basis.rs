@@ -340,7 +340,12 @@ fn contains_word(hay: &str, needle: &str, dot_joins: bool) -> bool {
         if boundary(start.checked_sub(1).map(|i| &hb[i])) && boundary(hb.get(end)) {
             return true;
         }
-        from = start + 1;
+        // Retry past this match, advancing one CHAR: `start + 1` lands inside the
+        // match's first char whenever it is multibyte, and the next iteration
+        // slices `hay[from..]` there, which panics. Both sides are page text, so
+        // a value like "日本語" embedded in a larger token ("x日本語y") reaches
+        // this on an ordinary extract.
+        from = start + hay[start..].chars().next().map_or(1, char::len_utf8);
         if from >= hay.len() {
             break;
         }
@@ -1165,5 +1170,63 @@ mod tests {
         let p = prompt_section(URL);
         assert!(p.contains(URL), "the model cannot echo a url it never saw");
         assert!(p.contains("basis"));
+    }
+
+    /// A value embedded in a larger token fails the word-boundary check, so the
+    /// scan retries past the match — and every retry must land on a char
+    /// boundary. Both the excerpt and the value are page text, so a multibyte
+    /// first char here is ordinary (CJK, accented Latin, emoji), not an edge
+    /// case. The whole ladder is exercised: no match, an embedded-only match,
+    /// and an embedded match followed by a real standalone one.
+    ///
+    /// Every value must still START with a multibyte char after
+    /// `collapse_ws_lower`, or it never reaches the hazard: Turkish 'İ'
+    /// lowercases to ASCII 'i' plus a combining dot, so an "İstanbul" row would
+    /// pass whether or not the retry is char-aware. 2-, 3- and 4-byte first
+    /// chars are all covered.
+    #[test]
+    fn a_multibyte_value_embedded_in_a_token_does_not_panic_the_scan() {
+        for (value, embedded, standalone) in [
+            ("日本語", "x日本語y", "日本語 の"),
+            ("Ölçek", "xÖlçekli", "Ölçek değeri"),
+            ("😀", "x😀y", "😀 tag"),
+        ] {
+            let needle = collapse_ws_lower(value);
+            // Embedded only: the retry path runs to exhaustion and finds nothing.
+            assert!(
+                !contains_word(&collapse_ws_lower(embedded), &needle, false),
+                "{value} is only embedded in {embedded}, so it is not carried"
+            );
+            // Embedded first, then standalone: the retry must survive the first
+            // match and still reach the second.
+            let both = collapse_ws_lower(&format!("{embedded} {standalone}"));
+            assert!(
+                contains_word(&both, &needle, false),
+                "{value} stands alone later in {both} and must be found"
+            );
+        }
+    }
+
+    /// The same retry path, reached through the real grounding entry point.
+    ///
+    /// The value must still start with a multibyte char *after* `collapse_ws_lower`
+    /// to reach the hazard: Turkish 'İ' lowercases to ASCII 'i' plus a combining
+    /// dot, so an "İstanbul" fixture here would pass whether or not the retry is
+    /// char-aware. '日' lowercases to itself.
+    #[test]
+    fn value_carried_survives_a_multibyte_value_embedded_in_the_excerpt() {
+        // The value is short, so the whole-source fallback never applies and the
+        // verdict rests purely on the excerpt scan.
+        let source = "a document that happens to mention 日本語 somewhere";
+        assert!(!value_carried(
+            &json!("日本語"),
+            "x日本語y is not the language",
+            source
+        ));
+        assert!(value_carried(
+            &json!("日本語"),
+            "x日本語y, then 日本語 itself",
+            source
+        ));
     }
 }
