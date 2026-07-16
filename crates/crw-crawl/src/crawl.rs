@@ -605,9 +605,31 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResul
     let parsed = url::Url::parse(base_url)
         .map_err(|e| crw_core::error::CrwError::InvalidRequest(format!("Invalid URL: {e}")))?;
 
-    crw_core::url_safety::validate_safe_url_resolved(&parsed)
-        .await
-        .map_err(crw_core::error::CrwError::InvalidRequest)?;
+    // The seed's SSRF/DNS resolution is an awaited phase like robots, the sitemap
+    // walk and every per-page fetch, so it honours the overall deadline too.
+    // Left unclamped it was the one hole in the "every phase is bounded"
+    // guarantee: a stalled resolver here would run past the route backstop, get
+    // the whole future dropped, and reproduce the 504-with-zero-URLs this change
+    // exists to remove — and callers without their own pre-check (the CLI `map`)
+    // have nothing else guarding it. A timeout here is fail-closed (an SSRF check
+    // cannot be skipped), so it surfaces as a clean error the caller maps, never a
+    // silent bypass.
+    let seed_budget =
+        remaining_budget(overall_deadline).ok_or(crw_core::error::CrwError::Timeout(0))?;
+    match tokio::time::timeout(
+        seed_budget,
+        crw_core::url_safety::validate_safe_url_resolved(&parsed),
+    )
+    .await
+    {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) => return Err(crw_core::error::CrwError::InvalidRequest(e)),
+        Err(_) => {
+            return Err(crw_core::error::CrwError::Timeout(
+                seed_budget.as_millis() as u64
+            ));
+        }
+    }
 
     // Use the URL's full origin (scheme + host + explicit port). Dropping the
     // port here would silently break sitemap discovery on any non-default-port
