@@ -2,6 +2,15 @@
 
 All notable changes to CRW are documented here.
 
+## [0.25.1](https://github.com/us/crw/compare/v0.25.0...v0.25.1) (2026-07-16)
+
+
+### Bug Fixes
+
+* **browse:** stop a rejected multibyte url from panicking the log path ([66a394d](https://github.com/us/crw/commit/66a394d139e8d6d14371953fef4cc04e2d919b61))
+* **extract:** stop a multibyte value from panicking the basis scan ([5efddc4](https://github.com/us/crw/commit/5efddc42f3f8ed48a311c4f6047a4c32122dab3c))
+* **renderer:** avoid panic slicing multibyte HTML at the scan-size cap ([95fe189](https://github.com/us/crw/commit/95fe1894e6d98b6e32ef58fd9110020162e2655b))
+
 ## [0.25.0](https://github.com/us/crw/compare/v0.24.1...v0.25.0) (2026-07-16)
 
 
