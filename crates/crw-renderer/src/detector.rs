@@ -7,24 +7,13 @@ static AKAMAI_REF_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"Reference #\d+\.[0-9a-f]+\.\d+\.[0-9a-f]+").expect("static regex")
 });
 
-/// Largest byte length `<= cap` that ends on a UTF-8 char boundary, so `&html[..n]`
-/// never splits a multibyte char. A fetched page longer than `cap` can place a
-/// multibyte char straddling the cap offset; slicing there would panic
-/// (`is_char_boundary` is false at that byte). Every fixed-cap prefix slice of the
-/// page HTML in this module goes through here.
-fn boundary_capped_len(html: &str, cap: usize) -> usize {
-    let mut n = cap.min(html.len());
-    while n > 0 && !html.is_char_boundary(n) {
-        n -= 1;
-    }
-    n
-}
-
 /// Heuristic: does the HTML look like an SPA shell that needs JS rendering?
 pub fn needs_js_rendering(html: &str) -> bool {
     // Check up to 500KB — some pages have huge <head> sections (CSS, preloaded data)
-    // and the <body> may start well beyond 50KB.
-    let lower = html[..boundary_capped_len(html, 500_000)].to_lowercase();
+    // and the <body> may start well beyond 50KB. Every fixed-cap prefix slice of the
+    // page HTML here goes through `floor_char_boundary`: a page longer than the cap
+    // can straddle it with a multibyte char, and slicing mid-char panics.
+    let lower = html[..html.floor_char_boundary(500_000)].to_lowercase();
     let body_len = extract_body_text_len(&lower);
 
     // Very short body text + presence of JS framework indicators.
@@ -151,7 +140,7 @@ pub fn looks_like_vendor_block(html: &str) -> Option<&'static str> {
     if html.len() > 200_000 {
         return None;
     }
-    let head = &html[..boundary_capped_len(html, 15_000)];
+    let head = &html[..html.floor_char_boundary(15_000)];
     let lower_head = head.to_lowercase();
 
     // Cloudflare: challenge form with cf-managed token, error code span, or
@@ -215,7 +204,7 @@ pub fn looks_like_vendor_block(html: &str) -> Option<&'static str> {
 /// on raw markup, looking for framework shells. This one is purely about
 /// outcome — does the page have *any* content for an extractor to chew on.
 pub fn looks_like_thin_html(html: &str) -> bool {
-    let lower = html[..boundary_capped_len(html, 500_000)].to_lowercase();
+    let lower = html[..html.floor_char_boundary(500_000)].to_lowercase();
     extract_body_text_len(&lower) < 200
 }
 
@@ -230,7 +219,7 @@ pub fn looks_like_thin_html(html: &str) -> bool {
 /// Pure-data script blocks (`application/json`, `application/ld+json`,
 /// `importmap`, `speculationrules`) never execute, so they do NOT count.
 pub fn warrants_browser_retry(html: &str) -> bool {
-    let lower = html[..boundary_capped_len(html, 500_000)].to_lowercase();
+    let lower = html[..html.floor_char_boundary(500_000)].to_lowercase();
 
     // Client-side redirect a browser would follow to real content. Matched per
     // <meta> tag (http-equiv refresh + a url target in the SAME tag) so an
@@ -521,7 +510,7 @@ pub fn looks_like_cloudflare_challenge(html: &str) -> bool {
     // the raw bytes (no allocation on the hot per-attempt path; mirrors
     // `crw_crawl::single::classify_block`).
     const STRONG_SCAN_LIMIT: usize = 512 * 1024;
-    let strong_src = &html[..boundary_capped_len(html, STRONG_SCAN_LIMIT)];
+    let strong_src = &html[..html.floor_char_boundary(STRONG_SCAN_LIMIT)];
     const STRONG: [&str; 5] = [
         "cf-browser-verification",
         "cf-challenge-running",
@@ -973,57 +962,76 @@ mod tests {
         assert!(!looks_like_loading_placeholder(html));
     }
 
-    /// A page larger than the scan cap with a multibyte char straddling the cap
-    /// offset must not panic. `&html[..cap]` splits the char unless the cap is
-    /// walked back to a boundary. Regression for the fetched-page-HTML slice in
-    /// `needs_js_rendering`/`looks_like_thin_html`/`warrants_browser_retry`.
-    #[test]
-    fn multibyte_char_straddling_500kb_cap_does_not_panic() {
-        // 499_999 ASCII bytes then 'é' (C3 A9): byte 499_999 is a boundary,
-        // byte 500_000 is inside the char. Total length exceeds the 500KB cap,
-        // so the naive `&html[..500_000]` lands mid-char.
-        let mut html = String::with_capacity(500_010);
-        html.push_str(&"a".repeat(499_999));
-        html.push('é');
-        assert!(html.len() > 500_000);
-        assert!(
-            !html.is_char_boundary(500_000),
-            "byte 500_000 must be mid-char"
-        );
-        // None of these must panic on the mid-char cap.
-        let _ = needs_js_rendering(&html);
-        let _ = looks_like_thin_html(&html);
-        let _ = warrants_browser_retry(&html);
-        // A body of 499_999 'a's is far over the 200-char bar, so it reads as
-        // non-thin — proving we scanned real content, not an empty slice.
-        assert!(!looks_like_thin_html(&html));
+    /// Pad `head` with ASCII so the multibyte `c` straddles byte `cap`, landing
+    /// `offset` bytes into it — a mid-char index a naive `&html[..cap]` panics on.
+    /// `tail` closes the page past the cap.
+    fn page_with_char_straddling(
+        head: &str,
+        cap: usize,
+        tail: &str,
+        c: char,
+        offset: usize,
+    ) -> String {
+        let mut html = String::with_capacity(cap + tail.len() + 8);
+        html.push_str(head);
+        html.push_str(&"a".repeat(cap - offset - head.len()));
+        html.push(c);
+        html.push_str(tail);
+        assert!(!html.is_char_boundary(cap), "byte {cap} must be mid-char");
+        assert!(html.len() > cap, "page must exceed the cap");
+        html
     }
 
-    /// Same hazard at the 15KB vendor-block cap.
+    /// Every fixed-cap prefix scan in this module, paired with a page that
+    /// straddles that cap with a multibyte char and the verdict a correct scan
+    /// must still reach. Slicing mid-char panics outright; a clamp that walks
+    /// back too far scans the wrong window and flips the verdict instead. Each
+    /// verdict is false on an empty window, so none of these pass vacuously.
     #[test]
-    fn multibyte_char_straddling_15kb_cap_does_not_panic() {
-        // 14_999 ASCII then 'é' straddling byte 15_000, padded past the 15KB cap
-        // but under the 200KB vendor-block ceiling.
-        let mut html = String::with_capacity(20_000);
-        html.push_str(&"a".repeat(14_999));
-        html.push('é');
-        html.push_str(&"b".repeat(2_000));
-        assert!(
-            !html.is_char_boundary(15_000),
-            "byte 15_000 must be mid-char"
-        );
-        assert!(looks_like_vendor_block(&html).is_none());
-    }
+    fn multibyte_char_straddling_a_scan_cap_keeps_the_verdict() {
+        type Verdict = fn(&str) -> bool;
+        let cases: [(&str, usize, &str, Verdict); 3] = [
+            // 500KB SPA/thin scan: an SPA marker for `needs_js_rendering`, and an
+            // inline script for `warrants_browser_retry` (drop it and that arm
+            // goes false). The body reads as empty because the cap truncates ahead
+            // of `</body>`, not because the script is stripped — the padding is
+            // what pushes the close tag out of the scanned window.
+            (
+                r#"<html><body><div id="root"></div><script>x="#,
+                500_000,
+                "\"</script></body></html>",
+                |h| needs_js_rendering(h) && looks_like_thin_html(h) && warrants_browser_retry(h),
+            ),
+            // 15KB vendor-block head scan, kept under the 200KB vendor ceiling.
+            (
+                r#"<html><head><script src="/cdn-cgi/challenge-platform/h/x"></script>"#,
+                15_000,
+                "</head></html>",
+                |h| looks_like_vendor_block(h) == Some("cloudflare"),
+            ),
+            // 512KB strong-marker scan: a managed-challenge page big enough to
+            // reach the cap, well past the 80KB weak-marker guard.
+            (
+                r#"<html><body><script src="/cdn-cgi/challenge-platform/h/b/orchestrate/j"></script>"#,
+                512 * 1024,
+                "</body></html>",
+                looks_like_cloudflare_challenge,
+            ),
+        ];
 
-    #[test]
-    fn boundary_capped_len_never_splits_a_char() {
-        let s = format!("{}é{}", "a".repeat(9), "b".repeat(9)); // 'é' spans bytes 9..11
-        // Caps that would land inside 'é' (10) walk back to its start (9).
-        assert_eq!(boundary_capped_len(&s, 10), 9);
-        assert_eq!(boundary_capped_len(&s, 9), 9);
-        assert_eq!(boundary_capped_len(&s, 11), 11);
-        // A cap past the end clamps to the length.
-        assert_eq!(boundary_capped_len(&s, 10_000), s.len());
-        assert!(s.is_char_boundary(boundary_capped_len(&s, 10)));
+        for (head, cap, tail, verdict) in cases {
+            // 'é' can only ever be split one byte in; the 4-byte emoji is the
+            // widest char and straddles at three distinct interior offsets, so a
+            // clamp that clears a single byte still splits it.
+            for c in ['é', '\u{1F600}'] {
+                for offset in 1..c.len_utf8() {
+                    let html = page_with_char_straddling(head, cap, tail, c, offset);
+                    assert!(
+                        verdict(&html),
+                        "cap {cap}, char {c:?}, straddle offset {offset}"
+                    );
+                }
+            }
+        }
     }
 }
