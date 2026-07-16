@@ -2,6 +2,26 @@
 
 All notable changes to CRW are documented here.
 
+## [0.25.0](https://github.com/us/crw/compare/v0.24.1...v0.25.0) (2026-07-16)
+
+
+### Features
+
+* **engine:** add opt-in cloak Turnstile-solver recovery tier ([41f780e](https://github.com/us/crw/commit/41f780e0ea5d4e74d363a79cd108b33663b00bb1))
+* **extract:** add canonical cancellation lifecycle ([635679f](https://github.com/us/crw/commit/635679f3c279d1961db1ad021c3eb2bd800a34c4))
+
+
+### Bug Fixes
+
+* **engine:** detect large Cloudflare challenge pages and return clean blocks ([b3e8158](https://github.com/us/crw/commit/b3e81585594c030a922df72af1a811d4fb8cc0d5))
+* **extract:** carry selector_no_match through the full pipeline for include_tags ([819372d](https://github.com/us/crw/commit/819372deb66071efbf37d6b08e5b119f6f78f7a7))
+* **extract:** don't relabel a finished job as cancelled ([cb05be2](https://github.com/us/crw/commit/cb05be2d590f7310887cb40485299c2d037cd911))
+* **extract:** enforce lifecycle expiry invariants ([903fbb9](https://github.com/us/crw/commit/903fbb9475d6c7680690653db825df0903e5c830))
+* **extract:** return empty + selector_no_match when a selector matches nothing ([7a1ac76](https://github.com/us/crw/commit/7a1ac760d30213fbcbf74cb2d8694ffc4c9fc34f))
+* **map:** bound the seed SSRF check and widen the latched direct-rescue ([b55e081](https://github.com/us/crw/commit/b55e0817c9c9cd6628d404a0fbd7572759393834))
+* **map:** stop returning 504 with zero URLs on sites without a sitemap ([159b0a3](https://github.com/us/crw/commit/159b0a34f5a273fe7ef38dd5e78cc11307b5cb46))
+* **mcp:** keep the success envelope on extract lifecycle tools ([0bff321](https://github.com/us/crw/commit/0bff32141e1711a969b6bba6f51da12fbba43636))
+
 ## [0.24.1](https://github.com/us/crw/compare/v0.24.0...v0.24.1) (2026-07-14)
 
 
