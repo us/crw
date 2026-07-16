@@ -28,20 +28,28 @@ pub struct GotoData {
     pub status: u16,
 }
 
+/// What precedes the first ':' in a rejected url, bounded to 32 bytes, for
+/// logging. The url is attacker-controlled via an LLM and could carry auth
+/// tokens, injection payloads or multi-megabyte garbage, so the query and path
+/// never reach the log; for anything url-shaped this is just the scheme. The
+/// bound keeps a percent-encoded or malformed prefix (`http%3A//`, or a 65KB
+/// non-url with no ':' at all) from ballooning the log line. Note an input with
+/// no ':' has no scheme to isolate, so it is logged as-is up to the bound.
+///
+/// The bound lands on a char boundary: the url is arbitrary text, so byte 32 can
+/// fall inside a multibyte char, and slicing there would turn a rejected url
+/// into a panic on the way to logging it.
+fn scheme_for_log(url: &str) -> &str {
+    let raw_prefix = url.split(':').next().unwrap_or("unknown");
+    &raw_prefix[..raw_prefix.floor_char_boundary(32)]
+}
+
 pub async fn handle(server: &CrwBrowse, input: GotoInput) -> Result<CallToolResult, McpError> {
     let started = Instant::now();
 
     if let Err(msg) = validate_goto_url(&input.url) {
-        // Log the scheme only, never the full URL: the URL is attacker-
-        // controlled via an LLM and could contain auth tokens, injection
-        // payloads, or multi-megabyte garbage. Even the pre-parse scheme
-        // slice is bounded to 32 bytes so a percent-encoded or malformed
-        // prefix (e.g. `http%3A//` or a 65KB non-URL with no ':' at all)
-        // can't balloon the log line.
-        let raw_prefix = input.url.split(':').next().unwrap_or("unknown");
-        let scheme_for_log = &raw_prefix[..raw_prefix.len().min(32)];
         tracing::warn!(
-            scheme = scheme_for_log,
+            scheme = scheme_for_log(&input.url),
             "goto rejected — disallowed scheme or malformed url"
         );
         return Ok(err_result(&ErrorResponse::new(ErrorCode::InvalidArgs, msg)));
@@ -385,5 +393,47 @@ mod tests {
                 "error message must not echo the bad URL: {msg}"
             );
         }
+    }
+
+    /// The rejection path logs a bounded prefix of the url. The url is arbitrary
+    /// LLM-supplied text, so that bound must not split a multibyte char — and the
+    /// "no ':' at all" case the bound exists for is exactly where it lands
+    /// mid-char.
+    ///
+    /// The char has to be placed deliberately: a repeated char only straddles
+    /// byte 32 when its width does not divide 32, so `"é".repeat(n)` (2 bytes)
+    /// and `"😀".repeat(n)` (4) land on a boundary and would pass unpatched. Pad
+    /// with ASCII instead so each width crosses the bound at every interior
+    /// offset, and assert the straddle so a fixture cannot go quietly vacuous.
+    #[test]
+    fn rejected_multibyte_url_prefix_is_bounded_on_a_char_boundary() {
+        for (c, offset) in [
+            ('é', 1),
+            ('ハ', 1),
+            ('ハ', 2),
+            ('😀', 1),
+            ('😀', 2),
+            ('😀', 3),
+        ] {
+            // No ':' anywhere, so the whole url is the prefix to be bounded.
+            let mut url = "a".repeat(32 - offset);
+            url.push(c);
+            url.push_str("tail");
+            assert!(
+                !url.is_char_boundary(32),
+                "{c:?}/{offset}: byte 32 must be mid-char"
+            );
+            assert!(validate_goto_url(&url).is_err(), "{url} must be rejected");
+
+            let logged = scheme_for_log(&url);
+            assert!(logged.len() <= 32, "{c:?}/{offset}: bound must hold");
+            assert!(url.starts_with(logged), "{c:?}/{offset}: must be a prefix");
+        }
+    }
+
+    #[test]
+    fn scheme_for_log_keeps_the_scheme_of_an_ordinary_url() {
+        assert_eq!(scheme_for_log("https://example.com/a"), "https");
+        assert_eq!(scheme_for_log("no-colon-at-all"), "no-colon-at-all");
     }
 }
