@@ -115,10 +115,19 @@ That first scrape spent 1 of your 500 free credits — [see plans →](https://f
 
 **Got one page? Crawl the whole site:** `crw.crawl("https://docs.example.com")` returns every page — then `search`, `map`, and `extract` in [Core operations](#core-operations). Full docs: [Quickstart →](https://docs.fastcrw.com/quickstart/) · [API reference →](https://docs.fastcrw.com/#rest-api)
 
+<p align="center">
+  <img src=".github/benchmarks/bench-radar.svg" alt="fastCRW vs Crawl4AI vs Firecrawl on Firecrawl's public 1,000-URL dataset: fastCRW leads truth-recall, unique recoveries, median latency, install size and recall depth" width="100%">
+</p>
+
+<p align="center"><sub>Firecrawl's own public 1,000-URL dataset, with all three tools run through the same
+matcher (<code>diagnose_3way.py</code>): a fairness control, not a looser number. The panel is
+generated from the run of record, not drawn by hand: <code>scripts/bench-radar.py</code>.
+<a href="BENCHMARKS.md">Full table and one-command repro ↓</a></sub></p>
+
 ## Why fastCRW?
 
 - **Most accurate** — the highest **truth-recall** (how much of the real page content it captures): **63.7%** on 819 labeled URLs in Firecrawl's public dataset, vs Firecrawl **56.0%** and Crawl4AI **60.0%** — and it recovers **34 pages both miss**.
-- **Fast median, tunable latency** — the fastest median latency (p50 **1914 ms** — a statistical tie with Crawl4AI's 1916 ms, ahead of Firecrawl's 2305 ms). Recall mode maximizes accuracy; *fast mode* delivers a low p90 (**4348 ms**) for latency-sensitive workloads. One config toggle — pick accuracy or latency.
+- **Fast median, tunable latency** — the fastest median latency (p50 **1914 ms** — a statistical tie with Crawl4AI's 1916 ms, ahead of Firecrawl's 2305 ms). Recall mode maximizes accuracy; *fast mode* trades the recall tail for lower latency. One config toggle — pick accuracy or latency.
 - **Lighter** — one static binary, **~50 MB RAM idle**. No Redis, no Node, no Chromium heap in the request path — it runs on a $5 VPS.
 
 Search, map, and crawl run on the same engine — built-in web search (a free self-hostable search backend), so there's **no separate search vendor and no per-query search-API bill**. [See the full benchmark →](BENCHMARKS.md)
@@ -301,6 +310,21 @@ constant-time Bearer auth, RFC 9309 robots.txt, token-bucket rate limiting, and 
 Issues and PRs welcome. `make hooks` installs the pre-commit hook; `make check` runs the same
 checks as CI. Setup, architecture, and crate layout: **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
+### Contributors
+
+<!-- contributors:start -->
+<p align="center">
+  <a href="https://github.com/us" title="us"><img src="https://github.com/us.png?size=96" width="48" height="48" alt="us"/></a>
+  <a href="https://github.com/adambenhassen" title="adambenhassen"><img src="https://github.com/adambenhassen.png?size=96" width="48" height="48" alt="adambenhassen"/></a>
+  <a href="https://github.com/paoloantinori" title="paoloantinori"><img src="https://github.com/paoloantinori.png?size=96" width="48" height="48" alt="paoloantinori"/></a>
+  <a href="https://github.com/mj520" title="mj520"><img src="https://github.com/mj520.png?size=96" width="48" height="48" alt="mj520"/></a>
+  <a href="https://github.com/santhreal" title="santhreal"><img src="https://github.com/santhreal.png?size=96" width="48" height="48" alt="santhreal"/></a>
+</p>
+<!-- contributors:end -->
+
+<p align="center"><sub>Everyone who has landed a commit, refreshed weekly from the
+<a href="https://github.com/us/crw/graphs/contributors">contributor graph</a>.</sub></p>
+
 ## License
 
 Open source under [AGPL-3.0](LICENSE). **Calling the API over the network — managed or
@@ -321,10 +345,13 @@ licenses are available — **hello@fastcrw.com**.
 [Discord](https://discord.gg/kkFh2SC8) ·
 [X](https://x.com/fast_crw)
 
-<a href="https://www.star-history.com/?repos=us%2Fcrw&type=timeline&legend=bottom-right">
+## Star History
+
+<a href="https://www.star-history.com/?repos=us%2Fcrw&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=us/crw&type=timeline&theme=dark&legend=bottom-right" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=us/crw&type=timeline&legend=bottom-right" width="70%" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=us/crw&type=date&theme=dark&legend=top-left&sealed_token=Pe6pRWL7lqTM-St9eo-Cmpk5kYNyuyun0krw9eVZQFIrm3g_R2h46IW6wfNalPXquMsWSNCgKqiar1YVo9MGy2IZmN5Lz6rjZcjBCw6bCcRHORKORFRi9A" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=us/crw&type=date&legend=top-left&sealed_token=Pe6pRWL7lqTM-St9eo-Cmpk5kYNyuyun0krw9eVZQFIrm3g_R2h46IW6wfNalPXquMsWSNCgKqiar1YVo9MGy2IZmN5Lz6rjZcjBCw6bCcRHORKORFRi9A" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=us/crw&type=date&legend=top-left&sealed_token=Pe6pRWL7lqTM-St9eo-Cmpk5kYNyuyun0krw9eVZQFIrm3g_R2h46IW6wfNalPXquMsWSNCgKqiar1YVo9MGy2IZmN5Lz6rjZcjBCw6bCcRHORKORFRi9A" />
  </picture>
 </a>
 

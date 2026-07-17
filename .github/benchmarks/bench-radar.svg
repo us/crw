@@ -1,0 +1,124 @@
+<svg viewBox="0 0 1400 660" xmlns="http://www.w3.org/2000/svg" role="img"
+  aria-label="fastCRW leads truth-recall, unique recoveries, median latency, install size and recall depth on Firecrawl's public 1,000-URL dataset">
+<defs>
+  <radialGradient id="grad" cx="50%" cy="50%" r="50%">
+    <stop offset="0%" stop-color="#16A34A" stop-opacity="0.06"/>
+    <stop offset="100%" stop-color="#16A34A" stop-opacity="0.28"/></radialGradient>
+  <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+    <feGaussianBlur stdDeviation="7" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+<rect width="1400" height="660" rx="14" fill="#141B24"/>
+<circle cx="30" cy="24" r="5.5" fill="#FF5F57"/><circle cx="50" cy="24" r="5.5" fill="#FEBC2E"/><circle cx="70" cy="24" r="5.5" fill="#28C840"/>
+<rect x="96" y="12" width="880" height="24" rx="6" fill="#0B0F14"/>
+<text x="110.0" y="29.0" fill="#8B949E" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="12" font-weight="400" text-anchor="start">fastcrw.com/benchmarks</text>
+<rect x="1236" y="12" width="140" height="24" rx="6" fill="#0B0F14" stroke="#16A34A" stroke-opacity="0.4"/>
+<text x="1306.0" y="29.0" fill="#16A34A" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11" font-weight="400" text-anchor="middle">[ 1000 URLs ]</text>
+<path d="M0 48 H1400 V646 a14 14 0 0 1 -14 14 H14 a14 14 0 0 1 -14 -14 Z" fill="#0B0F14"/>
+
+<text x="48.0" y="92.0" fill="#8B949E" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0.09em">TRUTH-RECALL</text>
+<text x="44.0" y="144.0" fill="#16A34A" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="46" font-weight="750" text-anchor="start" letter-spacing="-0.03em">63.74%</text>
+<text x="48.0" y="168.0" fill="#5C6773" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" text-anchor="start">recall mode · 522 of 819 labeled</text>
+<line x1="48" y1="178" x2="330" y2="178" stroke="#1C232B"/>
+<text x="48.0" y="206.0" fill="#8B949E" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0.09em">SCRAPE SUCCESS</text>
+<text x="44.0" y="258.0" fill="#16A34A" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="40" font-weight="750" text-anchor="start" letter-spacing="-0.03em">95.2%</text>
+<text x="48.0" y="282.0" fill="#5C6773" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" text-anchor="start">877 of 921 reachable URLs</text>
+<line x1="48" y1="288" x2="330" y2="288" stroke="#1C232B"/>
+<text x="48.0" y="316.0" fill="#8B949E" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0.09em">ORACLE CEILING</text>
+<text x="44.0" y="368.0" fill="#16A34A" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="40" font-weight="750" text-anchor="start" letter-spacing="-0.03em">92.2%</text>
+<text x="48.0" y="392.0" fill="#5C6773" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" text-anchor="start">of every URL any tool could reach</text>
+<line x1="48" y1="398" x2="330" y2="398" stroke="#1C232B"/>
+<text x="48.0" y="426.0" fill="#8B949E" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0.09em">ONLY WE RECOVER</text>
+<text x="44.0" y="478.0" fill="#16A34A" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="40" font-weight="750" text-anchor="start" letter-spacing="-0.03em">34</text>
+<text x="48.0" y="502.0" fill="#5C6773" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" text-anchor="start">vs 10 and 10 · 70% more than both</text>
+<text x="48.0" y="556.0" fill="#5C6773" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10.5" font-weight="400" text-anchor="start">diagnose_3way.py · 2026-05-08</text>
+<text x="48.0" y="574.0" fill="#5C6773" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10.5" font-weight="400" text-anchor="start">3,000 requests · 0 errors</text>
+
+<polygon points="628.0,290.5 665.6,317.8 651.2,362.0 604.8,362.0 590.4,317.8" fill="none" stroke="#1C232B" stroke-width="1"/>
+<polygon points="628.0,251.0 703.1,305.6 674.4,393.9 581.6,393.9 552.9,305.6" fill="none" stroke="#1C232B" stroke-width="1"/>
+<polygon points="628.0,211.5 740.7,293.4 697.7,425.9 558.3,425.9 515.3,293.4" fill="none" stroke="#1C232B" stroke-width="1"/>
+<polygon points="628.0,172.0 778.3,281.2 720.9,457.8 535.1,457.8 477.7,281.2" fill="none" stroke="#2C353F" stroke-width="1"/>
+<line x1="628" y1="330" x2="628.0" y2="172.0" stroke="#1C232B" stroke-width="1"/>
+<line x1="628" y1="330" x2="778.3" y2="281.2" stroke="#1C232B" stroke-width="1"/>
+<line x1="628" y1="330" x2="720.9" y2="457.8" stroke="#1C232B" stroke-width="1"/>
+<line x1="628" y1="330" x2="535.1" y2="457.8" stroke="#1C232B" stroke-width="1"/>
+<line x1="628" y1="330" x2="477.7" y2="281.2" stroke="#1C232B" stroke-width="1"/>
+<polygon points="628.0,231.7 669.7,316.4 709.7,442.5 628.0,330.0 550.6,304.8" fill="none" stroke="#0284C7" stroke-width="1.75" stroke-linejoin="round" stroke-dasharray="6 3" opacity="0.95"/>
+<circle cx="628.0" cy="231.7" r="2.8" fill="#0284C7" stroke="#0B0F14" stroke-width="1.5"/>
+<circle cx="669.7" cy="316.4" r="2.8" fill="#0284C7" stroke="#0B0F14" stroke-width="1.5"/>
+<circle cx="709.7" cy="442.5" r="2.8" fill="#0284C7" stroke="#0B0F14" stroke-width="1.5"/>
+<circle cx="628.0" cy="330.0" r="2.8" fill="#0284C7" stroke="#0B0F14" stroke-width="1.5"/>
+<circle cx="550.6" cy="304.8" r="2.8" fill="#0284C7" stroke="#0B0F14" stroke-width="1.5"/>
+<polygon points="628.0,270.4 669.7,316.4 644.0,352.1 604.4,362.5 595.6,319.5" fill="none" stroke="#EA580C" stroke-width="1.75" stroke-linejoin="round" stroke-dasharray="2 3" opacity="0.95"/>
+<circle cx="628.0" cy="270.4" r="2.8" fill="#EA580C" stroke="#0B0F14" stroke-width="1.5"/>
+<circle cx="669.7" cy="316.4" r="2.8" fill="#EA580C" stroke="#0B0F14" stroke-width="1.5"/>
+<circle cx="644.0" cy="352.1" r="2.8" fill="#EA580C" stroke="#0B0F14" stroke-width="1.5"/>
+<circle cx="604.4" cy="362.5" r="2.8" fill="#EA580C" stroke="#0B0F14" stroke-width="1.5"/>
+<circle cx="595.6" cy="319.5" r="2.8" fill="#EA580C" stroke="#0B0F14" stroke-width="1.5"/>
+<polygon points="628.0,194.3 769.9,283.9 710.1,443.0 535.1,457.8 498.5,287.9" fill="none" stroke="#16A34A" stroke-width="3" opacity="0.30" filter="url(#glow)"/>
+<polygon points="628.0,194.3 769.9,283.9 710.1,443.0 535.1,457.8 498.5,287.9" fill="url(#grad)"/>
+<polygon points="628.0,194.3 769.9,283.9 710.1,443.0 535.1,457.8 498.5,287.9" fill="none" stroke="#16A34A" stroke-width="3" stroke-linejoin="round"/>
+<circle cx="628.0" cy="194.3" r="4" fill="#16A34A" stroke="#0B0F14" stroke-width="2"/>
+<circle cx="769.9" cy="283.9" r="4" fill="#16A34A" stroke="#0B0F14" stroke-width="2"/>
+<circle cx="710.1" cy="443.0" r="4" fill="#16A34A" stroke="#0B0F14" stroke-width="2"/>
+<circle cx="535.1" cy="457.8" r="4" fill="#16A34A" stroke="#0B0F14" stroke-width="2"/>
+<circle cx="498.5" cy="287.9" r="4" fill="#16A34A" stroke="#0B0F14" stroke-width="2"/>
+<text x="628.0" y="132.8" fill="#E6EDF3" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="middle">Truth-recall</text>
+<text x="628.0" y="148.8" fill="#16A34A" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" font-weight="700" text-anchor="middle">63.74%</text>
+<text x="628.0" y="161.8" fill="#5C6773" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" font-weight="400" text-anchor="middle">centre 50.00%</text>
+<text x="809.8" y="264.9" fill="#E6EDF3" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="start">Unique recoveries</text>
+<text x="809.8" y="280.9" fill="#16A34A" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" font-weight="700" text-anchor="start">34 URLs</text>
+<text x="809.8" y="293.9" fill="#5C6773" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" font-weight="400" text-anchor="start">centre 0 URLs</text>
+<text x="740.4" y="496.7" fill="#D97706" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="start">Median latency ↓</text>
+<text x="740.4" y="512.7" fill="#16A34A" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" font-weight="700" text-anchor="start">1914 ms</text>
+<text x="740.4" y="525.7" fill="#5C6773" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" font-weight="400" text-anchor="start">centre 2400 ms</text>
+<text x="515.6" y="496.7" fill="#D97706" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="end">Install size ↓</text>
+<text x="515.6" y="512.7" fill="#16A34A" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" font-weight="700" text-anchor="end">8 MB</text>
+<text x="515.6" y="525.7" fill="#5C6773" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" font-weight="400" text-anchor="end">centre 2 GB</text>
+<text x="446.2" y="264.9" fill="#E6EDF3" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" font-weight="600" text-anchor="end">Recall depth</text>
+<text x="446.2" y="280.9" fill="#16A34A" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" font-weight="700" text-anchor="end">0.512</text>
+<text x="446.2" y="293.9" fill="#5C6773" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" font-weight="400" text-anchor="end">centre 0.400</text>
+<line x1="478" y1="616" x2="500" y2="616" stroke="#16A34A" stroke-width="3"/>
+<text x="506.0" y="620.0" fill="#E6EDF3" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="700" text-anchor="start">fastCRW</text>
+<line x1="578.4" y1="616" x2="600.4" y2="616" stroke="#0284C7" stroke-width="1.75" stroke-dasharray="6 3"/>
+<text x="606.4" y="620.0" fill="#8B949E" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="500" text-anchor="start">Crawl4AI</text>
+<line x1="686.0" y1="616" x2="708.0" y2="616" stroke="#EA580C" stroke-width="1.75" stroke-dasharray="2 3"/>
+<text x="714.0" y="620.0" fill="#8B949E" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="500" text-anchor="start">Firecrawl</text>
+<text x="628.0" y="638.0" fill="#D97706" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10.5" font-weight="400" text-anchor="middle">↓ smaller is better · every axis points outward to better</text>
+
+<line x1="960" y1="80" x2="960" y2="604" stroke="#1C232B"/>
+<text x="1000.0" y="104.0" fill="#5C6773" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10.5" font-weight="400" text-anchor="start" letter-spacing="0.09em">MEASURED HEAD TO HEAD, SAME MATCHER</text>
+<text x="1178.0" y="130.0" fill="#16A34A" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="700" text-anchor="end">fastCRW</text>
+<text x="1264.0" y="130.0" fill="#8B949E" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="500" text-anchor="end">Crawl4AI</text>
+<text x="1350.0" y="130.0" fill="#8B949E" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="500" text-anchor="end">Firecrawl</text>
+<line x1="1000" y1="140" x2="1350" y2="140" stroke="#2C353F"/>
+<text x="1000.0" y="166.0" fill="#8B949E" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" text-anchor="start">Truth-recall</text>
+<text x="1178.0" y="166.0" fill="#16A34A" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="700" text-anchor="end" style="font-variant-numeric:tabular-nums">63.74%</text>
+<text x="1264.0" y="166.0" fill="#E6EDF3" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" text-anchor="end" style="font-variant-numeric:tabular-nums">59.95%</text>
+<text x="1350.0" y="166.0" fill="#E6EDF3" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" text-anchor="end" style="font-variant-numeric:tabular-nums">56.04%</text>
+<line x1="1000" y1="177" x2="1350" y2="177" stroke="#1C232B"/>
+<text x="1000.0" y="198.0" fill="#8B949E" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" text-anchor="start">Unique recoveries</text>
+<text x="1178.0" y="198.0" fill="#16A34A" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="700" text-anchor="end" style="font-variant-numeric:tabular-nums">34 URLs</text>
+<text x="1264.0" y="198.0" fill="#E6EDF3" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" text-anchor="end" style="font-variant-numeric:tabular-nums">10 URLs</text>
+<text x="1350.0" y="198.0" fill="#E6EDF3" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" text-anchor="end" style="font-variant-numeric:tabular-nums">10 URLs</text>
+<line x1="1000" y1="209" x2="1350" y2="209" stroke="#1C232B"/>
+<text x="1000.0" y="230.0" fill="#8B949E" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" text-anchor="start">Median latency ↓</text>
+<text x="1178.0" y="230.0" fill="#16A34A" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="700" text-anchor="end" style="font-variant-numeric:tabular-nums">1914 ms</text>
+<text x="1264.0" y="230.0" fill="#E6EDF3" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" text-anchor="end" style="font-variant-numeric:tabular-nums">1916 ms</text>
+<text x="1350.0" y="230.0" fill="#E6EDF3" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" text-anchor="end" style="font-variant-numeric:tabular-nums">2305 ms</text>
+<line x1="1000" y1="241" x2="1350" y2="241" stroke="#1C232B"/>
+<text x="1000.0" y="262.0" fill="#8B949E" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" text-anchor="start">Install size ↓</text>
+<text x="1178.0" y="262.0" fill="#16A34A" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="700" text-anchor="end" style="font-variant-numeric:tabular-nums">8 MB</text>
+<text x="1264.0" y="262.0" fill="#E6EDF3" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" text-anchor="end" style="font-variant-numeric:tabular-nums">2 GB</text>
+<text x="1350.0" y="262.0" fill="#E6EDF3" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" text-anchor="end" style="font-variant-numeric:tabular-nums">500 MB</text>
+<line x1="1000" y1="273" x2="1350" y2="273" stroke="#1C232B"/>
+<text x="1000.0" y="294.0" fill="#8B949E" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" text-anchor="start">Recall depth</text>
+<text x="1178.0" y="294.0" fill="#16A34A" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="700" text-anchor="end" style="font-variant-numeric:tabular-nums">0.512</text>
+<text x="1264.0" y="294.0" fill="#E6EDF3" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" text-anchor="end" style="font-variant-numeric:tabular-nums">0.467</text>
+<text x="1350.0" y="294.0" fill="#E6EDF3" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" text-anchor="end" style="font-variant-numeric:tabular-nums">0.428</text>
+<line x1="1000" y1="368" x2="1350" y2="368" stroke="#1C232B"/>
+<text x="1000.0" y="394.0" fill="#5C6773" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10.5" font-weight="400" text-anchor="start" letter-spacing="0.09em">DATASET</text>
+<text x="1000.0" y="418.0" fill="#8B949E" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" text-anchor="start">Firecrawl's own public 1,000-URL set,</text>
+<text x="1000.0" y="436.0" fill="#8B949E" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" text-anchor="start">all three tools through one matcher.</text>
+<text x="1000.0" y="454.0" fill="#8B949E" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" text-anchor="start">Rerun it yourself: BENCHMARKS.md</text>
+</svg>

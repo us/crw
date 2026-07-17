@@ -1,0 +1,94 @@
+name: Refresh README contributors
+
+# Keeps the contributor wall current: bots and the maintainer's throwaway
+# accounts never reach the README, and a new contributor is credited without
+# anyone remembering to edit a list.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1" # Mondays, off the hour to dodge the cron rush
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A manual run firing on top of the weekly one would race the other's push to
+# main, and the loser is only a warning in the log.
+concurrency:
+  group: readme-social
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # Admin PAT so the push bypasses branch protection (the default
+          # GITHUB_TOKEN / bot cannot push to protected main).
+          token: ${{ secrets.GH_DISPATCH_PAT }}
+
+      - name: Render contributor avatars
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Bot accounts are dropped by type; this drops the maintainer's own
+          # throwaway accounts, which the API reports as ordinary users.
+          EXCLUDE: permissiontest
+        run: |
+          set -euo pipefail
+          # Unquoted on purpose: word-splits EXCLUDE into one login per line,
+          # which is the shape `grep -f` wants. Quoting it breaks multi-login.
+          printf '%s\n' ${EXCLUDE} > "$RUNNER_TEMP/exclude.txt"
+
+          # `|| true` so a throttled API or an all-excluded list falls through to
+          # the guard below with a readable error instead of a bare pipefail.
+          gh api "repos/${{ github.repository }}/contributors?per_page=100" --paginate \
+            --jq '.[] | select(.type == "User") | .login' \
+            | grep -vxF -f "$RUNNER_TEMP/exclude.txt" > "$RUNNER_TEMP/logins.txt" || true
+
+          # Never publish an empty wall: a throttled or half-read API response
+          # would silently delete every contributor from the README.
+          if [ ! -s "$RUNNER_TEMP/logins.txt" ]; then
+            echo "::error::contributors API returned nobody; refusing to blank the section"
+            exit 1
+          fi
+
+          {
+            echo '<!-- contributors:start -->'
+            echo '<p align="center">'
+            while read -r login; do
+              printf '  <a href="https://github.com/%s" title="%s"><img src="https://github.com/%s.png?size=96" width="48" height="48" alt="%s"/></a>\n' \
+                "$login" "$login" "$login" "$login"
+            done < "$RUNNER_TEMP/logins.txt"
+            echo '</p>'
+            echo '<!-- contributors:end -->'
+          } > "$RUNNER_TEMP/contributors.html"
+
+          python3 - "$RUNNER_TEMP/contributors.html" <<'PY'
+          import pathlib, re, sys
+
+          readme = pathlib.Path("README.md")
+          block = pathlib.Path(sys.argv[1]).read_text().strip()
+          text = readme.read_text()
+          text, count = re.subn(
+              r"<!-- contributors:start -->.*?<!-- contributors:end -->",
+              lambda _: block,
+              text,
+              flags=re.S,
+          )
+          if count != 1:
+              sys.exit(f"expected 1 contributors block in README.md, found {count}")
+          readme.write_text(text)
+          PY
+
+      - name: Commit refreshed README
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git diff --staged --quiet || git commit -m "chore: refresh contributor wall [skip ci]"
+          git push || echo "::warning::README refresh push blocked (branch protection); rerun manually"

@@ -16,8 +16,8 @@ tie with crawl4ai, ahead of Firecrawl), across **3,000 requests with 0 thrown er
 denominator is 819 labeled/matchable URLs.
 
 **Two modes, one config toggle.** *Recall mode* (the full renderer ladder — the numbers above)
-maximizes truth-recall. *Fast mode* (LightPanda-only, no Chrome tier) delivers a **p90 of ~4348 ms**
-for latency-sensitive workloads. Same binary, same API; pick accuracy or latency per workload.
+maximizes truth-recall. *Fast mode* (LightPanda-only, no Chrome tier) trades the recall tail for
+lower latency. Same binary, same API; pick accuracy or latency per workload.
 
 ## How the two most-cited alternatives compare
 
