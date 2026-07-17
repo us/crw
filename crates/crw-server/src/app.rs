@@ -55,6 +55,7 @@ pub fn create_app(state: AppState) -> Router {
     let api_routes = routes::v1::router()
         .merge(routes::v2::router(max_upload_bytes))
         .merge(firecrawl_compat)
+        .merge(routes::kimi::router())
         .route(
             "/mcp",
             post(routes::mcp::mcp_handler).fallback(method_not_allowed),

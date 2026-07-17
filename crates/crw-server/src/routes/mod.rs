@@ -5,6 +5,7 @@ pub mod change_tracking;
 pub mod crawl;
 pub mod extract;
 pub mod health;
+pub mod kimi;
 pub mod map;
 pub mod mcp;
 pub mod metrics;
