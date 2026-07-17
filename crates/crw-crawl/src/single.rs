@@ -1028,6 +1028,23 @@ fn classify_block(
             reason: "cloudflare challenge interstitial".to_string(),
         });
     }
+    // Wikimedia serves its datacenter-IP ban as an HTTP-200 static error shell
+    // whose error prose extracts to ~110 bytes of markdown — over the guard
+    // below — so the antibot classifier (which runs after the guard) never sees
+    // it and the block leaks as success:true. This footer sentence is unique to
+    // the Wikimedia error page, so treat it as a strong marker and classify
+    // ahead of the markdown-substantial guard, mirroring the CF markers above.
+    // Case-sensitive like CF_STRONG_MARKERS: the sentence is a fixed literal in
+    // Wikimedia's Varnish/ops error template (below the app layer, language- and
+    // wiki-independent), so its casing does not vary across requests.
+    // ponytail: one canonical sentence keeps false positives ~nil; a real
+    // article never carries it.
+    if html.contains("report this error to the Wikimedia System Administrators") {
+        return Some(BlockOutcome {
+            vendor: "generic_block".to_string(),
+            reason: "wikimedia datacenter-ip block".to_string(),
+        });
+    }
     if markdown.map(|m| m.trim().len()).unwrap_or(0) >= threshold {
         return None;
     }
@@ -1120,6 +1137,27 @@ mod tests {
         let b = classify_block(403, Some("text/html"), html, None, false, THRESH)
             .expect("DataDome block must be flagged");
         assert_eq!(b.vendor, "datadome");
+    }
+
+    #[test]
+    fn classify_block_wikimedia_200_shell_over_markdown_guard() {
+        // Regression for the silent-success bug: Wikimedia's HTTP-200 datacenter
+        // ban extracts to ~110 bytes of error prose (> THRESH), so the
+        // markdown-substantial guard would suppress the antibot verdict. The
+        // strong-marker check must classify it as a block regardless, mirroring
+        // the CF strong-marker path.
+        let html = r#"<!DOCTYPE html><html lang="en"><title>Wikimedia Error</title>
+<div class="content"><h1>Error</h1><p>Contabo networks are forbidden due to abuse.</p></div>
+<div class="footer"><p>If you report this error to the Wikimedia System Administrators, please include the details below.</p></div></html>"#;
+        // Matches what crw_extract::extract() yields for this shell (~114 bytes).
+        let md = "# Wikimedia Error\n\n# Error\n\nContabo networks are forbidden due to abuse. Contact noc@wikimedia.org for assistance.";
+        assert!(
+            md.len() >= THRESH,
+            "fixture must exceed the guard to be meaningful"
+        );
+        let b = classify_block(200, Some("text/html"), html, Some(md), false, THRESH)
+            .expect("wikimedia datacenter block must be flagged even with substantial markdown");
+        assert_eq!(b.vendor, "generic_block");
     }
 
     #[test]
