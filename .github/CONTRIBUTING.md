@@ -152,12 +152,16 @@ convert arbitrary file URLs to Markdown without a separate HTTP call.
 4. **CI must be green** — the `check` and `sdk-ts` jobs in CI are required. A PR
    with a red CI will not be reviewed.
 
-5. **One approval required** — a maintainer will review. Address feedback by pushing
+5. **Sign the CLA** — on your first PR a bot asks you to sign our
+   [Contributor License Agreement](../CLA.md). It takes one comment and covers all
+   of your future contributions. PRs can't be merged until it's signed.
+
+6. **One approval required** — a maintainer will review. Address feedback by pushing
    new commits (no force-pushes to open PRs, please).
 
-6. **Merge** — maintainers merge with rebase-and-merge to keep a linear history.
+7. **Merge** — maintainers merge with rebase-and-merge to keep a linear history.
 
-7. **Releases** — release-please opens a Release PR automatically as commits
+8. **Releases** — release-please opens a Release PR automatically as commits
    accumulate on `main`. Merging that PR creates the tag and GitHub Release. You
    do not need to do anything version-related.
 
