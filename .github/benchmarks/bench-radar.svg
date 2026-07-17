@@ -1,4 +1,4 @@
-<svg viewBox="0 0 1400 660" xmlns="http://www.w3.org/2000/svg" role="img"
+<svg viewBox="0 0 1400 612" xmlns="http://www.w3.org/2000/svg" role="img"
   aria-label="fastCRW leads truth-recall, unique recoveries, median latency, install size and recall depth on Firecrawl's public 1,000-URL dataset">
 <defs>
   <radialGradient id="grad" cx="50%" cy="50%" r="50%">
@@ -8,13 +8,8 @@
     <feGaussianBlur stdDeviation="7" result="b"/>
     <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
 </defs>
-<rect width="1400" height="660" rx="14" fill="#141B24"/>
-<circle cx="30" cy="24" r="5.5" fill="#FF5F57"/><circle cx="50" cy="24" r="5.5" fill="#FEBC2E"/><circle cx="70" cy="24" r="5.5" fill="#28C840"/>
-<rect x="96" y="12" width="880" height="24" rx="6" fill="#0B0F14"/>
-<text x="110.0" y="29.0" fill="#8B949E" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="12" font-weight="400" text-anchor="start">fastcrw.com/benchmarks</text>
-<rect x="1236" y="12" width="140" height="24" rx="6" fill="#0B0F14" stroke="#16A34A" stroke-opacity="0.4"/>
-<text x="1306.0" y="29.0" fill="#16A34A" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11" font-weight="400" text-anchor="middle">[ 1000 URLs ]</text>
-<path d="M0 48 H1400 V646 a14 14 0 0 1 -14 14 H14 a14 14 0 0 1 -14 -14 Z" fill="#0B0F14"/>
+<rect width="1400" height="612" rx="14" fill="#0B0F14"/>
+<g transform="translate(0,-48)">
 
 <text x="48.0" y="92.0" fill="#8B949E" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0.09em">TRUTH-RECALL</text>
 <text x="44.0" y="144.0" fill="#16A34A" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="46" font-weight="750" text-anchor="start" letter-spacing="-0.03em">63.74%</text>
@@ -121,4 +116,5 @@
 <text x="1000.0" y="418.0" fill="#8B949E" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" text-anchor="start">Firecrawl's own public 1,000-URL set,</text>
 <text x="1000.0" y="436.0" fill="#8B949E" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" text-anchor="start">all three tools through one matcher.</text>
 <text x="1000.0" y="454.0" fill="#8B949E" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" text-anchor="start">Rerun it yourself: BENCHMARKS.md</text>
+</g>
 </svg>
