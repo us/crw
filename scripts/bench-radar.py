@@ -74,7 +74,7 @@ AXES = [
 
 COLOR = {"crw": "#16A34A", "c4ai": "#0284C7", "fc": "#EA580C"}
 DASH = {"c4ai": "6 3", "fc": "2 3"}
-BG, CHROME = "#0B0F14", "#141B24"
+BG = "#0B0F14"
 INK, INK2, INK3 = "#E6EDF3", "#8B949E", "#5C6773"
 GRID, GRID_TOP, WARN = "#1C232B", "#2C353F", "#D97706"
 FONT = "-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
@@ -82,6 +82,7 @@ MONO = "ui-monospace,SFMono-Regular,Menlo,monospace"
 
 W, H = 1400, 660
 CX, CY, R = 628, 330, 158
+CHROME_H = 48  # height the dropped browser-chrome bar used to occupy at the top
 
 
 def norm(ax, value):
@@ -285,7 +286,11 @@ def _legend(x, y):
 
 
 def render():
-    return f"""<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" role="img"
+    # The old browser-chrome bar (traffic lights + URL + badge) is dropped. The
+    # content coordinates below still use the original H as their reference; the
+    # panel is CHROME_H shorter and everything is shifted up by that amount in
+    # one group transform, so no individual y needs touching.
+    return f"""<svg viewBox="0 0 {W} {H - CHROME_H}" xmlns="http://www.w3.org/2000/svg" role="img"
   aria-label="fastCRW leads truth-recall, unique recoveries, median latency, install size and recall depth on Firecrawl's public 1,000-URL dataset">
 <defs>
   <radialGradient id="grad" cx="50%" cy="50%" r="50%">
@@ -295,13 +300,8 @@ def render():
     <feGaussianBlur stdDeviation="7" result="b"/>
     <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
 </defs>
-<rect width="{W}" height="{H}" rx="14" fill="{CHROME}"/>
-<circle cx="30" cy="24" r="5.5" fill="#FF5F57"/><circle cx="50" cy="24" r="5.5" fill="#FEBC2E"/><circle cx="70" cy="24" r="5.5" fill="#28C840"/>
-<rect x="96" y="12" width="880" height="24" rx="6" fill="{BG}"/>
-{_text(110, 29, "fastcrw.com/benchmarks", INK2, 12, font=MONO)}
-<rect x="1236" y="12" width="140" height="24" rx="6" fill="{BG}" stroke="{COLOR["crw"]}" stroke-opacity="0.4"/>
-{_text(1306, 29, "[ 1000 URLs ]", COLOR["crw"], 11, 400, "middle", MONO)}
-<path d="M0 48 H{W} V{H - 14} a14 14 0 0 1 -14 14 H14 a14 14 0 0 1 -14 -14 Z" fill="{BG}"/>
+<rect width="{W}" height="{H - CHROME_H}" rx="14" fill="{BG}"/>
+<g transform="translate(0,{-CHROME_H})">
 
 {_stat(48, 92, "TRUTH-RECALL", "63.74%", "recall mode · 522 of 819 labeled", 46)}
 <line x1="48" y1="178" x2="330" y2="178" stroke="{GRID}"/>
@@ -324,6 +324,7 @@ def render():
 {_text(1000, 418, "Firecrawl's own public 1,000-URL set,", INK2, 11.5)}
 {_text(1000, 436, "all three tools through one matcher.", INK2, 11.5)}
 {_text(1000, 454, "Rerun it yourself: BENCHMARKS.md", INK2, 11.5)}
+</g>
 </svg>
 """
 
