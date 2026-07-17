@@ -313,11 +313,33 @@ struct JsAttemptClass {
 /// residential egress DOES recover — those still fire the arm. The `vendor_block`
 /// "cloudflare" arm is deliberately excluded (CF is matched via `cf_challenge`)
 /// so a CF error-1020 IP block is NOT wrongly suppressed.
-fn is_fingerprint_vendor_wall(cf_challenge: bool, vendor_block: Option<&str>) -> bool {
+fn is_fingerprint_vendor_wall(
+    cf_challenge: bool,
+    vendor_block: Option<&str>,
+    antibot_signal: crw_extract::antibot::AntibotSignal,
+) -> bool {
+    use crw_extract::antibot::AntibotSignal;
     cf_challenge
         || matches!(
             vendor_block,
             Some("datadome" | "perimeterx" | "kasada" | "akamai" | "imperva")
+        )
+        // `antibot::classify` recognises these vendors from visible text alone
+        // (a PerimeterX/Imperva page without its SDK marker, or a CF page with a
+        // single weak marker) that `looks_like_vendor_block` misses — yet those
+        // feed `saw_hard_block` via `antibot.signal.is_blocked()`, so without
+        // this arm the residential tier would fire on a wall it can't clear.
+        // Sucuri / NetworkSecurity / GenericBlock / RateLimited /
+        // StructuralFailure stay OUT (IP-reputation blocks a residential egress
+        // recovers).
+        || matches!(
+            antibot_signal,
+            AntibotSignal::Cloudflare
+                | AntibotSignal::Datadome
+                | AntibotSignal::PerimeterX
+                | AntibotSignal::Akamai
+                | AntibotSignal::Imperva
+                | AntibotSignal::Kasada
         )
 }
 
@@ -1441,7 +1463,8 @@ impl FallbackRenderer {
             && !cf_challenge
             && !is_status_blocked
             && !antibot_blocked;
-        let unrecoverable_wall = is_fingerprint_vendor_wall(cf_challenge, vendor_block);
+        let unrecoverable_wall =
+            is_fingerprint_vendor_wall(cf_challenge, vendor_block, antibot.signal);
         JsAttemptClass {
             text_len,
             is_placeholder,
@@ -2045,7 +2068,7 @@ impl FallbackRenderer {
                     // Phase 2: track hard-block (egress-recoverable) outcomes for
                     // the gated chrome_proxy arm. Hard-block status subset only
                     // (not 404/410/412/451/500) + interstitial walls.
-                    if is_fingerprint_vendor_wall(cf_challenge, vendor_block) {
+                    if is_fingerprint_vendor_wall(cf_challenge, vendor_block, antibot.signal) {
                         saw_unrecoverable_wall = true;
                     }
                     if matches!(result.status_code, 401 | 403 | 429 | 503)
@@ -4041,6 +4064,56 @@ mod tests {
         assert!(
             !result.html.contains("PROXY-"),
             "chrome_proxy must be suppressed on a DataDome wall, got proxy output"
+        );
+        if let Some(RenderDecision::Failover { chain, .. }) = &result.render_decision {
+            assert!(
+                !chain.contains(&RendererKind::ChromeProxy),
+                "chain must not include chrome_proxy on a DataDome wall: {chain:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn chrome_proxy_suppressed_on_antibot_only_vendor_wall() {
+        // Regression: a PerimeterX wall recognised ONLY by antibot::classify from
+        // visible text (no `window._pxAppId` SDK marker, so `looks_like_vendor_block`
+        // returns None and `looks_like_cloudflare_challenge` is false). It still
+        // sets saw_hard_block via `antibot.signal.is_blocked()`, so the arm must
+        // suppress it off the antibot signal — else the residential tier burns the
+        // deadline on a fingerprint wall it can't clear.
+        let px = format!(
+            "<html><body><h1>Access to This Page Has Been Blocked</h1>{}</body></html>",
+            "x".repeat(200)
+        );
+        let lp = Arc::new(MockFetcher {
+            name: "lightpanda",
+            behavior: MockBehavior::OkStatus(403, px.clone()),
+        }) as Arc<dyn PageFetcher>;
+        let chrome = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::OkStatus(403, px),
+        }) as Arc<dyn PageFetcher>;
+        let chrome_proxy = Arc::new(MockFetcher {
+            name: "chrome_proxy",
+            behavior: MockBehavior::Ok(rich_html("PROXY-")),
+        }) as Arc<dyn PageFetcher>;
+        let mut r = make_renderer_with_mocks(vec![lp, chrome, chrome_proxy]);
+        r.auto_egress_escalation = true; // pull chrome_proxy into the gated arm
+
+        let result = r
+            .fetch(
+                "https://example.com",
+                &HashMap::new(),
+                Some(true),
+                None,
+                Some("auto"),
+                tdl(),
+            )
+            .await
+            .unwrap();
+        assert!(
+            !result.html.contains("PROXY-"),
+            "chrome_proxy must be suppressed on an antibot-detected PerimeterX wall"
         );
     }
 
