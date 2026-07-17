@@ -111,7 +111,13 @@ jobs:
         run: cargo test --workspace
 
   publish-crates:
-    needs: [release-context, check]
+    # Gate on asset-gate, like every other publisher (pypi/npm/apt/homebrew), not
+    # on `check` alone. crates.io is the one irreversible publish that cannot be
+    # unpublished, and firing it on `check` meant it raced the binary build: a
+    # failed Windows/ARM leg would leave the release live on crates.io with no
+    # binaries and no other registry — a broken half-release. Waiting for
+    # asset-gate costs the binary-build time but never ships crates.io alone.
+    needs: [release-context, asset-gate]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -328,7 +334,7 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 20
+          node-version: 22
           registry-url: https://registry.npmjs.org
 
       - name: Download platform release assets
@@ -470,8 +476,12 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # No `cache-to: type=gha`: it writes into the tag ref's cache scope, and a
+          # tag run can only read its own ref plus the default branch. main carries
+          # no buildkit-blob, so no release could ever read another's — ~2.2GB was
+          # written every release and never restored (build times are flat across a
+          # patch release, confirming the cold rebuild). `cache-from` is dropped
+          # with it since there is now nothing to read.
 
   publish-mcp-registry:
     needs: [release-context, publish-docker]
@@ -571,7 +581,7 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 20
+          node-version: 22
           registry-url: https://registry.npmjs.org
 
       - name: Build + test
