@@ -8,6 +8,16 @@ The source of truth is the repository root changelog. Do not edit this docs page
 
 All notable changes to CRW are documented here.
 
+## [0.25.2](https://github.com/us/crw/compare/v0.25.1...v0.25.2) (2026-07-17)
+
+
+### Bug Fixes
+
+* **release:** stop the mcp-registry verify failing on a published version ([24cebb0](https://github.com/us/crw/commit/24cebb001cd23e1b7b0a31024795a75d82349de0))
+* **renderer:** fire chrome_proxy recovery arm under the default deadline ([e6c19a1](https://github.com/us/crw/commit/e6c19a1fc71b1ee422f8c6391737f3503f8b684f))
+* **renderer:** suppress chrome_proxy on antibot-detected fingerprint walls ([ff09f30](https://github.com/us/crw/commit/ff09f3004c76290ed9cd9b376ed774ed20ae626b))
+* surface and recover HTTP-200 Wikimedia datacenter block shell ([a148f60](https://github.com/us/crw/commit/a148f609fd15e430481352a794eaacde6851bd8c))
+
 ## [0.25.1](https://github.com/us/crw/compare/v0.25.0...v0.25.1) (2026-07-16)
 
 
