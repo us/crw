@@ -98,7 +98,23 @@ pub fn looks_like_generic_bot_wall(html: &str) -> bool {
         return false;
     }
     let lower = html.to_lowercase();
-    let body_stripped = body_html_without_scripts_lower(&lower);
+    // Most block shells wrap their text in <body>; extracting body-only text
+    // keeps a phrase buried in a JS bundle from false-positiving. A few shells
+    // (Wikimedia's Varnish error page) omit <body> entirely — the text sits in
+    // <div>s directly under <html>, so body-only extraction returns "" and no
+    // phrase can ever match. When an HTML document has no <body> tag, fall back
+    // to the whole document with <script>/<style> stripped. The fallback is
+    // gated on an <html>/<!doctype html> marker so a directly-scraped JSON / XML
+    // / plain-text response (which never carries <body>) is NOT scanned — else a
+    // small `{"error":"access_denied"}` payload would trip an existing phrase.
+    // The 600-char cap below still guards against real articles.
+    let body_stripped = if lower.contains("<body") {
+        body_html_without_scripts_lower(&lower)
+    } else if lower.contains("<html") || lower.contains("<!doctype html") {
+        strip_tag_blocks(&strip_tag_blocks(&lower, "script"), "style")
+    } else {
+        return false;
+    };
     let body_text = visible_text_from_stripped_html(&body_stripped);
     if body_text.chars().filter(|c| !c.is_whitespace()).count() > 600 {
         return false;
@@ -120,6 +136,10 @@ pub fn looks_like_generic_bot_wall(html: &str) -> bool {
         // Akamai / AWS-style geo-block phrasing — also surfaces on some
         // origin-side firewall pages that don't say "blocked" outright.
         "configured to block access",
+        // Wikimedia serves its datacenter-IP ban as an HTTP-200 static error
+        // shell (no <body> tag). This canonical footer sentence is unique to
+        // that page — a real article never carries it.
+        "if you report this error to the wikimedia system administrators",
     ];
     phrases.iter().any(|p| body_text.contains(p))
 }
@@ -850,6 +870,62 @@ mod tests {
         let html = r#"<html><body><h1>403</h1>
             <p>Our firewall is configured to block access from this region.</p></body></html>"#;
         assert!(looks_like_generic_bot_wall(html));
+    }
+
+    /// The Wikimedia Varnish error shell, reproducing the real structure: an
+    /// HTTP-200 static page with NO <body>/<head> tags, one inline <style>, and
+    /// the content in <div>s directly under <html> (source: Wikimedia
+    /// operations/puppet error templates).
+    fn wikimedia_block_html() -> &'static str {
+        r#"<!DOCTYPE html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Wikimedia Error</title>
+<style>body{font-family:sans-serif}</style>
+<meta name="color-scheme" content="light dark">
+<div class="content" role="main">
+<h1>Error</h1>
+<p>Contabo networks are forbidden due to abuse. Contact noc@wikimedia.org for assistance.</p>
+</div>
+<div class="footer">
+<p>If you report this error to the Wikimedia System Administrators, please include the details below.</p>
+<p class="text-muted"><code>Request served via cp6016, Varnish XID 12345<br>Error: 403, Contabo networks are forbidden due to abuse.<br><details><summary>Sensitive client information</summary>IP address: 207.180.230.151</details></code></p>
+</div>
+</html>"#
+    }
+
+    #[test]
+    fn wikimedia_http200_block_shell_is_bot_wall() {
+        // Regression for the silent-success bug: the Wikimedia error page is
+        // HTTP-200, scriptless, and crucially has NO <body> tag. Body-only text
+        // extraction returned "" here, so the phrase list never matched. The
+        // no-<body> fallback must let the canonical footer phrase trip.
+        assert!(looks_like_generic_bot_wall(wikimedia_block_html()));
+    }
+
+    #[test]
+    fn json_api_error_without_body_is_not_bot_wall() {
+        // Regression: a directly-scraped JSON/plain-text error response has no
+        // <body> AND no <html> marker, so the no-<body> fallback must not scan
+        // it — otherwise the existing "access denied" phrase would wrongly flag
+        // a legitimate small API payload as a block.
+        let json = r#"{"error":"access_denied","message":"Access Denied: insufficient permissions for this resource"}"#;
+        assert!(!looks_like_generic_bot_wall(json));
+        let xml = r#"<?xml version="1.0"?><Error><Code>AccessDenied</Code><Message>Access Denied</Message></Error>"#;
+        assert!(!looks_like_generic_bot_wall(xml));
+    }
+
+    #[test]
+    fn real_wikipedia_article_is_not_bot_wall() {
+        // A real article (>600 visible chars, normal <body>) must NOT trip.
+        let html = format!(
+            "<html><body><article><h1>Radcliffe College</h1>{}</article></body></html>",
+            "<p>Radcliffe College was a women's liberal arts college in Cambridge, \
+             Massachusetts, and functioned as the female coordinate institution for \
+             the all-male Harvard College.</p>"
+                .repeat(6)
+        );
+        assert!(!looks_like_generic_bot_wall(&html));
     }
 
     #[test]
