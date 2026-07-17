@@ -2,6 +2,12 @@
 
 Contributions are welcome — issues and PRs both.
 
+## Contributor License Agreement
+
+On your first pull request a bot will ask you to sign our
+[Contributor License Agreement](CLA.md). It takes one comment and covers all of
+your future contributions. We can't merge PRs until it's signed.
+
 ## Development setup
 
 1. Fork the repository
