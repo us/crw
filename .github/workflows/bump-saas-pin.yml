@@ -1,0 +1,134 @@
+name: Bump crw-saas engine pin
+
+# When this repo's CI passes on main, bump deploy/opencore.pin in the PRIVATE
+# crw-saas repo to this commit, so the production engine ships automatically.
+#
+# SECURITY: this is a PUBLIC repo writing to a PRIVATE one. workflow_run runs in
+# the privileged default-branch context WITH secrets, even when the upstream run
+# came from a fork that had none. A fork PR can be pushed from a branch named
+# "main", so head_branch alone is not a trust signal — the job guards on
+# head_repository == this repo AND event == push. It never checks out or runs
+# any opencore code; it only rewrites one line in crw-saas and pushes. The
+# opencore SHA/subject are treated as untrusted (passed via env, never
+# interpolated into a run: script, SHA re-validated as 40-hex).
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bump-saas-pin
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    # All four conditions required. head_repository + event==push exclude fork /
+    # PR-origin runs that also carry secrets; conclusion + branch scope it to a
+    # green main build.
+    if: >-
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Check out crw-saas (the pin target, NOT opencore)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: us/crw-saas
+          ref: main
+          token: ${{ secrets.SAAS_PIN_TOKEN }}
+          persist-credentials: true
+
+      - name: Rewrite the engine pin and push
+        env:
+          # Untrusted inputs pass through env, never interpolated into the script.
+          OPENCORE_SHA: ${{ github.event.workflow_run.head_sha }}
+          OPENCORE_SUBJECT: ${{ github.event.workflow_run.head_commit.message }}
+          # Read-only token for the compare API below (opencore is public).
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # Scalar (not line-oriented) validation: exactly 40 lowercase hex, no
+          # embedded newline. Must pass before the value reaches sed/git.
+          if ! [[ ${#OPENCORE_SHA} == 40 && $OPENCORE_SHA != *[!0-9a-f]* ]]; then
+            echo "::error::head_sha is not a 40-hex commit: '$OPENCORE_SHA'"
+            exit 1
+          fi
+
+          PIN=deploy/opencore.pin
+          # Exactly one OPENCORE_SHA= line must exist (a malformed pin is a bug).
+          n=$(grep -cE '^OPENCORE_SHA=' "$PIN" || true)
+          if [ "$n" != 1 ]; then
+            echo "::error::expected exactly one OPENCORE_SHA= line in $PIN, found $n"
+            exit 1
+          fi
+          current=$(sed -n 's/^OPENCORE_SHA=//p' "$PIN")
+          if [ "$current" = "$OPENCORE_SHA" ]; then
+            echo "pin already at $OPENCORE_SHA — nothing to do"
+            exit 0
+          fi
+
+          # Monotonic guard: only move the pin FORWARD. An older CI run can finish
+          # (or be re-run) after a newer one; without this it would rebase cleanly
+          # and overwrite the pin with an older engine. Compare in opencore: the
+          # new SHA must be strictly ahead of the current pin.
+          status=$(gh api "repos/${GITHUB_REPOSITORY}/compare/${current}...${OPENCORE_SHA}" --jq .status 2>/dev/null || echo unknown)
+          if [ "$status" != "ahead" ]; then
+            echo "skip: new SHA is '$status' relative to current pin (not 'ahead') — refusing to move the pin backward"
+            exit 0
+          fi
+
+          # Rewrite ONLY the OPENCORE_SHA line; OPENCORE_REMOTE is a security
+          # boundary and must never be touched here.
+          tmp=$(mktemp)
+          sed "s/^OPENCORE_SHA=.*/OPENCORE_SHA=${OPENCORE_SHA}/" "$PIN" > "$tmp"
+          mv "$tmp" "$PIN"
+          if ! grep -qE "^OPENCORE_SHA=${OPENCORE_SHA}$" "$PIN"; then
+            echo "::error::pin rewrite failed"
+            exit 1
+          fi
+
+          # First line of the opencore commit message, as the pin commit body.
+          # Read from env via a file to avoid any shell interpretation of contents.
+          subject=$(printf '%s' "$OPENCORE_SUBJECT" | head -1)
+          short=$(printf '%s' "$OPENCORE_SHA" | cut -c1-12)
+
+          git config user.name us
+          git config user.email rahmetsaritekin@gmail.com
+
+          printf 'chore(deploy): bump engine pin to %s\n\nengine: %s\n' "$short" "$subject" > /tmp/msg
+          git add "$PIN"
+          git commit -F /tmp/msg
+
+          # Retry against a racing push (a human bump or a second CI run).
+          for attempt in 1 2 3 4 5; do
+            if git push origin HEAD:main; then
+              echo "pushed pin bump to $OPENCORE_SHA"
+              exit 0
+            fi
+            echo "push rejected (attempt $attempt) — rebasing on latest main"
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort; exit 1; }
+          done
+          echo "::error::could not push pin bump after retries"
+          exit 1
+
+      - name: Alert on failure
+        if: failure()
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+          OPENCORE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -u
+          [ -n "${TG_TOKEN:-}" ] && [ -n "${TG_CHAT:-}" ] || exit 0
+          curl -s -m 10 "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TG_CHAT}" \
+            --data-urlencode "text=🔴 bump-saas-pin FAILED to push — opencore ${OPENCORE_SHA} did NOT ship" \
+            >/dev/null 2>&1 || true
