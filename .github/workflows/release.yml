@@ -55,6 +55,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      # Must match ci.yml's `check`: rust-cache hashes CARGO_*/RUST_* env into the
+      # key, so a mismatch here would silently miss the shared cache below.
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -65,15 +69,24 @@ jobs:
         with:
           components: clippy, rustfmt
 
+      # This job runs the same dev/test build as ci.yml's `check`, so it wants
+      # exactly that cache — `shared-key` says so instead of leaving it to
+      # rust-cache's job-id default (both jobs are literally named `check`, so the
+      # default would collide by accident rather than share by intent).
+      #
+      # It used to restore the old `Linux-cargo-` key, which conformance filled
+      # with a RELEASE target this job cannot use — so it rebuilt the dev tree from
+      # scratch every release while still paying to download 815MB. Restoring main's
+      # dev cache instead is a straight win on the release critical path
+      # (publish-crates/binaries/docker all `needs: check`).
+      #
+      # save-if is false because this only ever runs on a tag ref, and tag-scoped
+      # caches can never be restored by a later run — saving one is pure quota burn.
       - name: Cache cargo registry & build
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+          shared-key: dev-check
+          save-if: false
 
       - name: Install uv (for preflight scripts)
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2

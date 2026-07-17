@@ -9,9 +9,24 @@ on:
 permissions:
   contents: read
 
+# A force-push (our normal rebase flow) otherwise leaves the superseded run to
+# finish, burning ~26 runner-min and writing cache entries that compete for the
+# 10GB quota. Only cancel PR runs; main-push runs must not cancel each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      # Debug info is the largest part of a debug target dir, and this job stacks
+      # a 12-16GB target on a runner with ~20GB free — see the cache note below.
+      # `line-tables-only` keeps file:line in panic backtraces (how we diagnose a
+      # CI-only failure) while dropping the rest. Env form, so local builds are
+      # untouched. `cargo test` uses the test profile, which inherits dev.
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -20,15 +35,34 @@ jobs:
         with:
           components: clippy, rustfmt
 
+      # Was `actions/cache` on `target/` with a key shared with `conformance` and
+      # a bare `-cargo-` restore-key. Two bugs came out of that:
+      #
+      #  1. actions/cache does not save on an exact key hit, so whichever job
+      #     finished first defined the contents. conformance won, so the cache
+      #     held a RELEASE target — which this job cannot use. Measured on one
+      #     commit: conformance compiled 10 crates, `check` compiled 616, from
+      #     proc-macro2 up, every run. It then stacked a 12-16GB debug target on
+      #     the restored release one, on ~20GB of runner disk, and died with
+      #     "No space left on device" / "ld terminated with signal 7".
+      #  2. The bare restore-key resurrected the previous lock's target and saved
+      #     the union. actions/cache never prunes and cargo never GCs target/, so
+      #     it grew monotonically (491MB -> 819MB in 16h).
+      #
+      # rust-cache keys per job, prunes stale artifacts before saving, and skips
+      # workspace crates. `save-if` keeps PR refs from each minting their own
+      # copy: caches are branch-scoped, so saving on every ref is what blew the
+      # quota. PRs still restore main's cache, which is the whole win.
+      #
+      # `shared-key` because release.yml's `check` runs the same dev/test build
+      # and wants this exact cache. Both jobs are literally named `check`, so
+      # rust-cache's job-id default would have shared it by accident; naming it
+      # makes that a decision, and one that survives renaming either job.
       - name: Cache cargo registry & build
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+          shared-key: dev-check
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Check formatting
         run: cargo fmt --all -- --check
@@ -74,6 +108,7 @@ jobs:
 
   sdk-ts:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -113,21 +148,23 @@ jobs:
   # deterministic. (Run `compare` locally with a SearXNG up to gate search too.)
   conformance:
     runs-on: ubuntu-latest
+    # Generous: the first run after a cache-key change rebuilds the whole tree
+    # with `lto = true, codegen-units = 1`, i.e. a single-threaded fat-LTO link.
+    # The uncached release binaries measure ~10 min, so this is ~2.5x that.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
 
+      # See the note on `check`: these two jobs shared one key while building
+      # different profiles. rust-cache keys on the job id, so they no longer
+      # collide, and this job stops handing `check` a release target it can't use.
       - name: Cache cargo registry & build
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
@@ -141,6 +178,10 @@ jobs:
           echo $! > /tmp/crw.pid
           for i in $(seq 1 30); do
             if curl -sf http://localhost:3000/health >/dev/null; then echo "crw up"; break; fi
+            # Without this the loop just falls through after 30 failed probes and
+            # `compare` runs against a dead server, reporting a confusing diff
+            # instead of "the server never came up".
+            if [ "$i" -eq 30 ]; then echo "::error::crw serve never became healthy"; exit 1; fi
             sleep 1
           done
 

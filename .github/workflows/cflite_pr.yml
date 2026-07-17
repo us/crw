@@ -2,13 +2,36 @@ name: ClusterFuzzLite PR
 on:
   pull_request:
     branches: [main]
+    # This is the critical path of every PR: 678s wall, of which 519s (76%) is an
+    # uncached container build and 123s is the actual fuzzing. It has no business
+    # gating a docs or SDK PR.
+    #
+    # Excluding rather than listing the crates that feed the harness: the target
+    # reaches crw-extract -> crw-core -> crw-mcp-proto, and the fuzzed function is
+    # `htmd::convert`, whose version lives in the ROOT Cargo.toml — so an allowlist
+    # would silently skip fuzzing on a dep bump, the single most fuzz-relevant
+    # change we get. There is no cron leg to catch what a PR filter drops, so the
+    # filter must not be able to go quietly wrong. Everything below contains no
+    # Rust that can reach the harness.
+    paths-ignore:
+      - "docs/**"
+      - "sdks/**"
+      - "mcp/**" # npm packages; the crate is crates/crw-mcp-proto
+      - "conformance/**" # python
+      - "bench/**"
+      - "**.md"
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   fuzzing:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     permissions:
       security-events: write
     steps:
