@@ -137,6 +137,7 @@ pub async fn run(mut args: CrawlArgs) -> Result<(), CmdError> {
         Format::Rawhtml => OutputFormat::RawHtml,
         Format::Text => OutputFormat::PlainText,
         Format::Links => OutputFormat::Links,
+        Format::Images => OutputFormat::Images,
     };
 
     let crawl_req = CrawlRequest {
@@ -210,6 +211,14 @@ pub async fn run(mut args: CrawlArgs) -> Result<(), CmdError> {
                 Format::Rawhtml => data.raw_html.clone().unwrap_or_default(),
                 Format::Text => data.plain_text.clone().unwrap_or_default(),
                 Format::Links => data.links.clone().unwrap_or_default().join("\n"),
+                Format::Images => data
+                    .images
+                    .clone()
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|i| i.url.clone())
+                    .collect::<Vec<_>>()
+                    .join("\n"),
             };
 
             if !content.is_empty() {

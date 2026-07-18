@@ -27,6 +27,10 @@ pub struct V2Document {
     /// link objects — see `V2Link`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub links: Option<Vec<String>>,
+    /// Firecrawl-compat: `images` is a flat array of URL strings (the native
+    /// `/v1` surface returns `{url, alt}` objects; we flatten to URLs here).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub images: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub json: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -108,6 +112,10 @@ pub fn to_v2_document(data: ScrapeData, proxy_used: &str, scrape_id: String) -> 
         html: data.html,
         raw_html: data.raw_html,
         links: data.links,
+        // Flatten native {url, alt} objects to Firecrawl's flat string[] of URLs.
+        images: data
+            .images
+            .map(|imgs| imgs.into_iter().map(|i| i.url).collect()),
         json: data.json,
         summary: data.summary,
         change_tracking: data.change_tracking,
@@ -297,6 +305,7 @@ mod tests {
             raw_html: None,
             plain_text: None,
             links: None,
+            images: None,
             json: None,
             summary: None,
             llm_usage: None,
@@ -421,5 +430,34 @@ mod tests {
         assert_eq!(p.status, "scraping");
         // SDK must keep polling forward even though we returned all buffered docs.
         assert!(p.next.is_some());
+    }
+
+    #[test]
+    fn v2_images_flatten_to_url_strings() {
+        // Firecrawl-compat: native {url, alt} objects flatten to a flat string[]
+        // of URLs on the v2 surface (alt is dropped).
+        let mut data = fake_doc("https://example.com");
+        data.images = Some(vec![
+            crw_core::types::ScrapedImage {
+                url: "https://example.com/a.png".into(),
+                alt: Some("A".into()),
+            },
+            crw_core::types::ScrapedImage {
+                url: "https://example.com/b.png".into(),
+                alt: None,
+            },
+        ]);
+        let doc = to_v2_document(data, "basic", "id".to_string());
+        assert_eq!(
+            doc.images,
+            Some(vec![
+                "https://example.com/a.png".to_string(),
+                "https://example.com/b.png".to_string(),
+            ])
+        );
+        // Serialized shape is a plain string array, not objects.
+        let v = serde_json::to_value(&doc).unwrap();
+        assert_eq!(v["images"][0], "https://example.com/a.png");
+        assert!(v["images"][0].is_string());
     }
 }

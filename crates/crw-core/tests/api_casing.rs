@@ -46,6 +46,10 @@ fn sample_scrape_data() -> ScrapeData {
         raw_html: Some("<html></html>".into()),
         plain_text: Some("hi".into()),
         links: Some(vec!["https://example.com".into()]),
+        images: Some(vec![crw_core::types::ScrapedImage {
+            url: "https://example.com/a.png".into(),
+            alt: Some("a".into()),
+        }]),
         json: None,
         summary: Some("s".into()),
         llm_usage: Some(LlmUsage {
