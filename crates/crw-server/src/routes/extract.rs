@@ -3,7 +3,8 @@
 //! every URL's JSON into one object, last-write-wins), the native route returns
 //! a **per-URL array** (`results:[{url,status,data,error,llmUsage}]`) that keeps
 //! each URL's object distinct and carries per-URL LLM usage for downstream
-//! billing. No FC envelope (`success`/`urlTrace`/deprecation warning).
+//! billing. Carries the standard native `success` envelope (like every other
+//! `/v1` response), but none of the FC-legacy `urlTrace`/deprecation warning.
 
 use axum::Json;
 use axum::extract::rejection::JsonRejection;
@@ -18,7 +19,7 @@ use crw_core::types::{ExtractOptions, LlmUsage, OutputFormat, ScrapeRequest};
 
 use crate::error::AppError;
 use crate::routes::v2::adapters::system_time_rfc3339;
-use crate::state::{AppState, ExtractRecord, PreparedUrl, UrlResult};
+use crate::state::{AppState, ExtractRecord, ExtractStatus, PreparedUrl, UrlResult};
 
 /// Native extract request. camelCase like every other v1 public type.
 /// NOTE: no `#[derive(Debug)]` — `llm_api_key` is a secret and must never land
@@ -62,6 +63,10 @@ pub struct ExtractRequest {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtractStartResponse {
+    /// Response envelope carried by every native `/v1` response (and required by
+    /// the MCP `crw_extract` outputSchema, which the stdio/CLI proxies validate
+    /// this body against). Always `true` here — a rejected start is a 4xx error.
+    pub success: bool,
     pub id: String,
     pub status: String,
     /// Count of URLs actually enqueued for fetch (preflight-failed URLs are in
@@ -80,6 +85,7 @@ pub async fn start_extract(
         .start_extract_job(prepared.entries, prepared.template)
         .await;
     Ok(Json(ExtractStartResponse {
+        success: true,
         id: id.to_string(),
         status: "processing".to_string(),
         urls,
@@ -256,6 +262,11 @@ impl From<UrlResult> for ExtractUrlResult {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtractStatusResponse {
+    /// Response envelope carried by every native `/v1` response (and required by
+    /// the MCP `crw_check_extract_status` / `crw_cancel_extract` outputSchema,
+    /// which the stdio/CLI proxies validate this body against). `false` only when
+    /// the whole job failed.
+    pub success: bool,
     pub id: String,
     pub status: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -272,6 +283,7 @@ pub struct ExtractStatusResponse {
 pub(crate) fn serialize_extract_status(id: Uuid, rec: ExtractRecord) -> ExtractStatusResponse {
     let expires_at = system_time_rfc3339(rec.expires_at);
     ExtractStatusResponse {
+        success: rec.status != ExtractStatus::Failed,
         id: id.to_string(),
         status: rec.status.as_str().to_string(),
         results: rec
@@ -314,4 +326,31 @@ pub async fn cancel_extract(
     Path(id): Path<Uuid>,
 ) -> Result<Json<ExtractStatusResponse>, AppError> {
     Ok(Json(cancel_extract_status(&state, id).await?))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The stdio/CLI MCP proxies ship the raw `/v1/extract` start body verbatim as
+    // `structuredContent`, so this serialized shape must satisfy the advertised
+    // `crw_extract` outputSchema — regression lock for issue #318 (a start body
+    // missing `success` failed strict-client validation).
+    #[test]
+    fn start_response_satisfies_mcp_output_schema() {
+        let body = serde_json::to_value(ExtractStartResponse {
+            success: true,
+            id: "d1e2f3".to_string(),
+            status: "processing".to_string(),
+            urls: 2,
+        })
+        .unwrap();
+        let schema = crw_core::mcp::tool_output_schema("crw_extract").unwrap();
+        let validator = jsonschema::validator_for(&schema).unwrap();
+        let errors: Vec<String> = validator
+            .iter_errors(&body)
+            .map(|e| e.to_string())
+            .collect();
+        assert!(errors.is_empty(), "start body vs schema: {errors:#?}");
+    }
 }

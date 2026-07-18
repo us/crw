@@ -231,15 +231,68 @@ async fn mcp_extract_status_and_cancel_share_canonical_http_serializer() {
     assert_eq!(cancelled["success"], true);
 }
 
+/// The stdio/CLI MCP proxies ship the raw `GET /v1/extract/{id}` REST body
+/// verbatim as `structuredContent`, which strict clients validate against the
+/// advertised `crw_check_extract_status` outputSchema. Regression lock for issue
+/// #318: that REST body was missing the `success` envelope, so every poll failed
+/// client-side validation. Also pins `success = (status != failed)` across all
+/// five statuses. (The in-server `/mcp` path is covered above; this exercises the
+/// REST endpoint the proxies actually call.)
+#[tokio::test]
+async fn v1_extract_status_rest_body_matches_mcp_output_schema() {
+    let config: AppConfig = toml::from_str("").unwrap();
+    let state = AppState::new(config).unwrap();
+    let server = TestServer::new(create_app(state.clone()));
+    let schema = tool_output_schema("crw_check_extract_status").unwrap();
+    let validator = jsonschema::validator_for(&schema).expect("extract schema compiles");
+
+    for status in [
+        ExtractStatus::Processing,
+        ExtractStatus::Cancelling,
+        ExtractStatus::Completed,
+        ExtractStatus::Failed,
+        ExtractStatus::Cancelled,
+    ] {
+        let id = Uuid::new_v4();
+        let mut rec = pending_extract_record(Instant::now());
+        rec.status = status;
+        state.extract_jobs.write().await.insert(id, rec);
+
+        let body: Value = server.get(&format!("/v1/extract/{id}")).await.json();
+        let errors: Vec<String> = validator
+            .iter_errors(&body)
+            .map(|e| e.to_string())
+            .collect();
+        assert!(
+            errors.is_empty(),
+            "{status:?} REST body vs schema: {errors:#?}"
+        );
+        assert_eq!(
+            body["success"],
+            Value::Bool(status != ExtractStatus::Failed),
+            "success mapping wrong for {status:?}"
+        );
+    }
+}
+
 #[tokio::test]
 async fn mcp_extract_output_schemas_match_openapi_lifecycle_components() {
     let openapi: Value =
         serde_json::from_str(include_str!("../openapi/openapi.json")).expect("valid OpenAPI");
     let components = &openapi["components"]["schemas"];
 
-    // MCP responses carry the `success` envelope every MCP tool returns, which
-    // the native HTTP `/v1` (openapi) shape deliberately omits. Compare the data
-    // contract by ignoring that one envelope field on the MCP side.
+    // Both the MCP outputSchema and the native `/v1` (openapi) shape carry the
+    // `success` envelope (issue #318). Its presence+requiredness is asserted on
+    // every component below; the field is then stripped so the *rest* of the data
+    // contract must still match field-for-field between the two surfaces.
+    let has_required_success = |schema: &Value| -> bool {
+        schema["properties"]["success"]["type"] == "boolean"
+            && schema["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|v| v == "success")
+    };
     let required_without_success = |schema: &Value| -> Vec<String> {
         schema["required"]
             .as_array()
@@ -262,6 +315,14 @@ async fn mcp_extract_output_schemas_match_openapi_lifecycle_components() {
 
     let accepted = tool_output_schema("crw_extract").unwrap();
     let openapi_accepted = &components["ExtractAccepted"];
+    assert!(
+        has_required_success(&accepted),
+        "MCP crw_extract missing success"
+    );
+    assert!(
+        has_required_success(openapi_accepted),
+        "openapi ExtractAccepted missing success"
+    );
     assert_eq!(
         required_without_success(&accepted),
         required_without_success(openapi_accepted)
@@ -278,6 +339,14 @@ async fn mcp_extract_output_schemas_match_openapi_lifecycle_components() {
     let status = tool_output_schema("crw_check_extract_status").unwrap();
     assert_eq!(status, tool_output_schema("crw_cancel_extract").unwrap());
     let openapi_status = &components["ExtractStatus"];
+    assert!(
+        has_required_success(&status),
+        "MCP crw_check_extract_status missing success"
+    );
+    assert!(
+        has_required_success(openapi_status),
+        "openapi ExtractStatus missing success"
+    );
     assert_eq!(
         required_without_success(&status),
         required_without_success(openapi_status)

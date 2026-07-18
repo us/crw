@@ -87,7 +87,7 @@ of calling scrape N times:
 }
 ```
 
-It returns `{ "id", "status": "processing", "urls": 2 }`; poll `GET /v1/extract/{id}` for
+It returns `{ "success": true, "id", "status": "processing", "urls": 2 }`; poll `GET /v1/extract/{id}` for
 a `results` array (one `{ url, status, data, error }` per URL, in request order). Capped
 by `crawler.max_extract_urls` (default 50) since each URL triggers an LLM call.
 On the hosted service at `api.fastcrw.com` this is handled automatically.
