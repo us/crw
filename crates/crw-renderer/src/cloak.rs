@@ -160,6 +160,12 @@ impl CloakRenderer {
         if bypass_cache {
             rb = rb.header("x-bypass-cache", "true");
         }
+        // Propagate our per-call budget so the sidecar can deliver a slow cold
+        // solve in-band (up to what we will actually wait) instead of fail-opening
+        // at its conservative default. UNCONDITIONAL: must be sent on every mirror
+        // call, including attempt 0 (bypass=false) — the generous-deadline
+        // first-request case this exists for. `budget` is guarded non-zero above.
+        rb = rb.header("x-deadline-ms", budget.as_millis().to_string());
         let resp = tokio::time::timeout(budget, rb.send())
             .await
             .map_err(|_| CrwError::Timeout(budget.as_millis() as u64))?
