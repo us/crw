@@ -388,15 +388,29 @@ fn is_origin_navigation_failure(e: &CrwError) -> bool {
 /// and the HTTP tier's proxy retry (`http_only`).
 pub(crate) const MIN_TIER_BUDGET: Duration = Duration::from_millis(500);
 
-/// Minimum remaining deadline to dispatch the `chrome_proxy` auto-egress
-/// recovery arm. Deliberately decoupled from `chrome_proxy_timeout()` (the
-/// per-attempt ceiling ≈ `chrome_timeout + 15s` = 45s on prod): that ceiling
-/// exceeds the ~15-20s request deadline, so gating on it kept the arm
-/// permanently inert (the residential-egress recovery never fired). The arm's
-/// fetch is already deadline-bounded, so this floor only refuses a residential
-/// dispatch too small to plausibly complete. ~8s fires under both the 15s and
-/// 20s prod deadlines once the ladder has failed fast; tune via the p90 bench.
-pub(crate) const CHROME_PROXY_ARM_FLOOR_MS: u64 = 8_000;
+/// Fresh render budget the `chrome_proxy` auto-egress recovery arm gets when it
+/// fires, instead of the shared request deadline. The HTTP/LightPanda/Chrome
+/// ladder routinely burns a ~15s scrape deadline down to ~2s before the arm, far
+/// below what a residential connect and nav need — so gating the arm on
+/// `deadline.remaining()` (any floor) kept it permanently inert on real scrapes
+/// (prod-measured: remaining ~2s). The arm's fetch is dispatched with a fresh
+/// `Deadline::now_plus(this)` so recovery is actually attempted; only
+/// hard-blocked scrapes (which would otherwise fail) pay the extra time, and the
+/// SaaS→engine fetch tolerates up to 120s (`crw-client.ts TIMEOUT_MS`).
+///
+/// ponytail: the EFFECTIVE render budget is `min(this, chrome_nav_budget_ms)`
+/// (cdp.rs `nav_budget = self.nav_budget.min(deadline.remaining())`), and
+/// `chrome_nav_budget_ms` defaults to 12_000 — keep the two equal; raising this
+/// above `chrome_nav_budget_ms` does nothing until that also moves.
+pub(crate) const CHROME_PROXY_ARM_BUDGET_MS: u64 = 12_000;
+
+// Concurrency permits for the chrome_proxy auto-egress recovery arm are sized to
+// `config.pool_size` at construction (see `chrome_proxy_arm_sem`). The residential
+// chrome_proxy pool blocking-acquires a small (~pool_size) slot set; without a
+// non-blocking load-shed a burst of datacenter-blocked URLs (batch/crawl) would
+// queue every page on it for up to the SaaS 120s timeout, collapsing throughput
+// for co-tenant traffic. The arm `try_acquire_owned`s a permit and skips recovery
+// (returns the block) when none is free — best-effort recovery that never queues.
 
 /// Concurrency permits for the cloak recovery arm — sized to the sidecar's
 /// cold-solve browser cap (`CF_MAX_CONCURRENT_BROWSERS`, default 4) so the
@@ -424,6 +438,11 @@ pub struct FallbackRenderer {
     /// with `try_acquire` (no permit → serial fallback; blocking would defeat the
     /// latency win).
     hedge_sem: Arc<tokio::sync::Semaphore>,
+    /// Load-shed for the chrome_proxy auto-egress recovery arm — non-blocking
+    /// `try_acquire_owned` so a burst of datacenter-blocked URLs never queues on
+    /// the residential pool (see [`CHROME_PROXY_ARM_BUDGET_MS`]). Sized to
+    /// `pool_size` so at most a poolful of arms run and none blocks.
+    chrome_proxy_arm_sem: Arc<tokio::sync::Semaphore>,
     /// Per-host renderer preference learning (auto-mode only).
     preferences: Arc<HostPreferences>,
     /// Per-host + global circuit breakers per renderer.
@@ -578,6 +597,9 @@ impl FallbackRenderer {
                 auto_egress_escalation: config.auto_egress_escalation,
                 chrome_hedge: config.chrome_hedge,
                 hedge_sem: Arc::new(tokio::sync::Semaphore::new((config.pool_size / 2).max(1))),
+                chrome_proxy_arm_sem: Arc::new(tokio::sync::Semaphore::new(
+                    config.pool_size.max(1),
+                )),
                 preferences: Arc::new(HostPreferences::with_defaults()),
                 breakers: Arc::new(BreakerRegistry::with_defaults()),
                 tier_timeouts: tier_timeouts_from(config),
@@ -887,6 +909,7 @@ impl FallbackRenderer {
             auto_egress_escalation: config.auto_egress_escalation,
             chrome_hedge: config.chrome_hedge,
             hedge_sem: Arc::new(tokio::sync::Semaphore::new((config.pool_size / 2).max(1))),
+            chrome_proxy_arm_sem: Arc::new(tokio::sync::Semaphore::new(config.pool_size.max(1))),
             preferences: Arc::new(HostPreferences::with_defaults()),
             breakers: Arc::new(BreakerRegistry::with_defaults()),
             tier_timeouts: tier_timeouts_from(config),
@@ -2500,25 +2523,6 @@ impl FallbackRenderer {
         };
         if let Some(arm) = auto_egress_arm {
             let kind = RendererKind::ChromeProxy;
-            let arm_floor = std::time::Duration::from_millis(CHROME_PROXY_ARM_FLOOR_MS);
-            // TEMP DIAG (fix/arm-skip-promoted-host): measure the promoted (serial,
-            // hedge_done=false) vs hedged remaining budget at the arm to confirm or
-            // refute the budget-starvation root cause. Reverted after one capture.
-            {
-                let brk = self.breakers.host_for(&host, kind).await.is_open();
-                tracing::warn!(
-                    target: "arm_diag",
-                    url,
-                    hedge_done,
-                    saw_hard_block,
-                    saw_unrecoverable_wall,
-                    remaining_ms = deadline.remaining().as_millis() as u64,
-                    arm_floor_ms = arm_floor.as_millis() as u64,
-                    breaker_open = brk,
-                    chain_len = chain.len(),
-                    "ARM_DIAG gate"
-                );
-            }
             // chrome_proxy is default-Chrome + residential IP: it recovers
             // IP-reputation blocks (429 / IP-ban 403 / generic bot walls / CF
             // error-1020 / Wikimedia origin bans) but CANNOT clear a
@@ -2532,16 +2536,55 @@ impl FallbackRenderer {
             // in a lean (no-cloak) build where `route_to_cloak` is always false,
             // and unlike re-detecting from `thin_result` it can't miss a small
             // vendor shell that the largest-HTML stitch dropped mid-chain.
-            if saw_hard_block
+            //
+            // Load-shed (non-blocking, mirrors the cloak arm): the residential
+            // pool blocking-acquires ~pool_size slots, so a burst of
+            // datacenter-blocked URLs (batch/crawl) would otherwise queue every
+            // page on it for up to the SaaS 120s timeout and collapse co-tenant
+            // throughput. No permit → skip recovery and return the block. There is
+            // deliberately NO `deadline.remaining()` gate: the ladder leaves the
+            // shared deadline near-exhausted (~2s of a 15s scrape deadline), which
+            // starved the arm below any floor and is exactly why it never fired.
+            //
+            // The `arm_sem == chrome_proxy conn_semaphore == pool_size` sizing makes
+            // "a permit implies a free pool slot" hold on the managed prod path,
+            // where `chrome_proxy` is arm-EXCLUSIVE (`!proxy_active` retained it out
+            // of the ladder). In a mixed self-host config that ALSO runs
+            // `chrome_proxy` in-ladder (a per-request proxy / pin / screenshot), an
+            // arm can win a permit yet briefly wait on `conn_semaphore` behind
+            // in-ladder traffic — still bounded by the arm's own ~12s fetch timeout,
+            // never a deadlock or a 120s queue.
+            let arm_wanted = saw_hard_block
                 && !route_to_cloak
                 && !saw_unrecoverable_wall
-                && deadline.remaining() >= arm_floor
-                && !self.breakers.host_for(&host, kind).await.is_open()
-            {
+                && !self.breakers.host_for(&host, kind).await.is_open();
+            let arm_permit = if arm_wanted {
+                self.chrome_proxy_arm_sem.clone().try_acquire_owned().ok()
+            } else {
+                None
+            };
+            if arm_wanted && arm_permit.is_none() {
+                // Wanted to recover but the residential pool was saturated — shed
+                // (return the block) rather than queue. Counted so the shed rate is
+                // observable: a rising `armShed` is the signal the chrome_proxy pool
+                // is undersized under sustained hard-block load.
+                metrics()
+                    .render_route_decision_total
+                    .with_label_values(&[kind.as_str(), "armShed"])
+                    .inc();
+            }
+            if let Some(_permit) = arm_permit {
                 chain.push(kind);
                 let entry = self.pick_proxy_for_url(url);
+                // Fresh budget (not the exhausted shared deadline) so the
+                // residential connect + nav + render can actually complete; the
+                // SaaS→engine fetch tolerates up to 120s. Effective render budget
+                // is min(CHROME_PROXY_ARM_BUDGET_MS, chrome_nav_budget_ms).
+                let arm_deadline = crw_core::Deadline::now_plus(std::time::Duration::from_millis(
+                    CHROME_PROXY_ARM_BUDGET_MS,
+                ));
                 let attempt = REQUEST_PROXY
-                    .scope(entry, arm.fetch(url, headers, wait_for_ms, deadline))
+                    .scope(entry, arm.fetch(url, headers, wait_for_ms, arm_deadline))
                     .await;
                 match attempt {
                     Ok(r) => {
@@ -3955,11 +3998,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn chrome_proxy_arm_fires_under_realistic_deadline() {
-        // Regression lock for the budget-gate bug: a non-CF hard block under a
-        // realistic 15s deadline must still reach chrome_proxy. The old floor
-        // (chrome_proxy_timeout ≈ 45s) exceeded the deadline and kept the
-        // residential-egress recovery arm permanently inert.
+    async fn chrome_proxy_arm_fires_below_old_floor() {
+        // Regression lock for the budget-STARVATION bug: a non-CF hard block with
+        // only ~2s of request deadline left (real prod: the ladder burns a 15s
+        // scrape deadline to ~2s before the arm) must STILL fire chrome_proxy. The
+        // arm now runs on a fresh `Deadline::now_plus(ARM_BUDGET)`, so any floor
+        // against `deadline.remaining()` is gone. Old 8s-floor code fails here.
         let lp = Arc::new(MockFetcher {
             name: "lightpanda",
             behavior: MockBehavior::Ok(network_security_block_html()),
@@ -3986,15 +4030,71 @@ mod tests {
                 Some(true),
                 None,
                 Some("auto"),
-                crw_core::Deadline::from_request_ms(15_000),
+                crw_core::Deadline::from_request_ms(2_000),
             )
             .await
             .unwrap();
         assert!(
             result.html.contains("PROXY-"),
-            "chrome_proxy must fire under a 15s deadline, got: {}",
+            "chrome_proxy must fire even with ~2s deadline left (fresh arm budget), got: {}",
             result.html
         );
+    }
+
+    #[tokio::test]
+    async fn chrome_proxy_arm_load_shed_when_pool_saturated() {
+        // Load-shed: when the arm's permits are all held (a burst of
+        // datacenter-blocked URLs already saturating the residential pool), the
+        // arm must NOT fire — a blocking acquire would queue the request for up
+        // to the SaaS 120s timeout and collapse co-tenant throughput. No permit →
+        // return the block, no chrome_proxy in the chain.
+        let lp = Arc::new(MockFetcher {
+            name: "lightpanda",
+            behavior: MockBehavior::Ok(network_security_block_html()),
+        }) as Arc<dyn PageFetcher>;
+        let chrome = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Ok(network_security_block_html()),
+        }) as Arc<dyn PageFetcher>;
+        let chrome_proxy = Arc::new(MockFetcher {
+            name: "chrome_proxy",
+            behavior: MockBehavior::Ok(rich_html("PROXY-")),
+        }) as Arc<dyn PageFetcher>;
+        let mut r = make_renderer_with_mocks(vec![lp, chrome, chrome_proxy]);
+        r.auto_egress_escalation = true;
+        // Drain every arm permit so try_acquire_owned() returns None.
+        let held: Vec<_> = (0..r.chrome_proxy_arm_sem.available_permits())
+            .map(|_| {
+                r.chrome_proxy_arm_sem
+                    .clone()
+                    .try_acquire_owned()
+                    .expect("permit")
+            })
+            .collect();
+        assert_eq!(r.chrome_proxy_arm_sem.available_permits(), 0);
+
+        let result = r
+            .fetch(
+                "https://example.com",
+                &HashMap::new(),
+                Some(true),
+                None,
+                Some("auto"),
+                tdl(),
+            )
+            .await
+            .unwrap();
+        drop(held);
+        assert!(
+            !result.html.contains("PROXY-"),
+            "arm must be load-shed (skipped) when no permit is free"
+        );
+        if let Some(RenderDecision::Failover { chain, .. }) = &result.render_decision {
+            assert!(
+                !chain.contains(&RendererKind::ChromeProxy),
+                "chain must not include chrome_proxy when load-shed: {chain:?}"
+            );
+        }
     }
 
     #[tokio::test]
