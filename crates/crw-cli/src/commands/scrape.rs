@@ -17,6 +17,7 @@ pub enum Format {
     Rawhtml,
     Text,
     Links,
+    Images,
 }
 
 #[derive(Args)]
@@ -232,6 +233,7 @@ pub async fn run(mut args: ScrapeArgs) -> Result<(), CmdError> {
             Format::Rawhtml => vec![OutputFormat::RawHtml],
             Format::Text => vec![OutputFormat::PlainText],
             Format::Links => vec![OutputFormat::Links],
+            Format::Images => vec![OutputFormat::Images],
         }
     };
 
@@ -488,6 +490,13 @@ pub async fn run(mut args: ScrapeArgs) -> Result<(), CmdError> {
         Format::Rawhtml => data.raw_html.unwrap_or_default(),
         Format::Text => data.plain_text.unwrap_or_default(),
         Format::Links => data.links.unwrap_or_default().join("\n"),
+        Format::Images => data
+            .images
+            .unwrap_or_default()
+            .iter()
+            .map(|i| i.url.clone())
+            .collect::<Vec<_>>()
+            .join("\n"),
     };
 
     match args.output {
@@ -658,6 +667,8 @@ async fn run_local_file(args: &ScrapeArgs) -> Result<(), CmdError> {
             Format::Html | Format::Rawhtml => vec![OutputFormat::Markdown],
             Format::Text => vec![OutputFormat::PlainText],
             Format::Links => vec![OutputFormat::Links],
+            // PDFs carry no HTML image sources; request it anyway (returns empty).
+            Format::Images => vec![OutputFormat::Images],
         }
     };
 
@@ -716,6 +727,13 @@ async fn run_local_file(args: &ScrapeArgs) -> Result<(), CmdError> {
             }
             Format::Text => data.plain_text.unwrap_or_default(),
             Format::Links => data.links.unwrap_or_default().join("\n"),
+            Format::Images => data
+                .images
+                .unwrap_or_default()
+                .iter()
+                .map(|i| i.url.clone())
+                .collect::<Vec<_>>()
+                .join("\n"),
         }
     };
 

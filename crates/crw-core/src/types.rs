@@ -14,6 +14,7 @@ pub enum OutputFormat {
     RawHtml,
     PlainText,
     Links,
+    Images,
     Json,
     Summary,
     ChangeTracking,
@@ -34,6 +35,7 @@ impl OutputFormat {
             "rawHtml" => Ok(OutputFormat::RawHtml),
             "plainText" => Ok(OutputFormat::PlainText),
             "links" => Ok(OutputFormat::Links),
+            "images" => Ok(OutputFormat::Images),
             "json" | "extract" | "llm-extract" => Ok(OutputFormat::Json),
             "summary" => Ok(OutputFormat::Summary),
             "changeTracking" | "change-tracking" => Ok(OutputFormat::ChangeTracking),
@@ -45,7 +47,7 @@ impl OutputFormat {
             // is accepted but does NOT widen the capture.
             "screenshot" | "screenshot@fullPage" => Ok(OutputFormat::Screenshot),
             other => Err(format!(
-                "Unknown format '{other}'. Valid formats: markdown, html, rawHtml, plainText, links, json, summary, changeTracking, screenshot \
+                "Unknown format '{other}'. Valid formats: markdown, html, rawHtml, plainText, links, images, json, summary, changeTracking, screenshot \
                  (aliases: extract, llm-extract, change-tracking, screenshot@fullPage). Use formats: [\"json\"] with jsonSchema for structured extraction."
             )),
         }
@@ -616,6 +618,22 @@ pub struct ChunkResult {
     pub index: usize,
 }
 
+/// A single image discovered on a scraped page, returned when `formats`
+/// includes `images`. `url` is resolved to an absolute URL (or kept verbatim for
+/// `data:`/`blob:`); `alt` is the `<img alt>` text when available (most non-img
+/// sources — meta, icons, poster, background — carry no alt).
+///
+/// The native `/v1` surface serializes these objects. The Firecrawl-compat
+/// `/v2` surface flattens them to a plain `Vec<String>` of URLs in
+/// `routes/v2/adapters.rs::to_v2_document` (Firecrawl's `images` is `string[]`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ScrapedImage {
+    pub url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub alt: Option<String>,
+}
+
 /// Data returned for a single scraped page.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -637,6 +655,10 @@ pub struct ScrapeData {
     pub plain_text: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub links: Option<Vec<String>>,
+    /// Images discovered on the page; populated when `formats` includes
+    /// `images`. Native `/v1` shape; v2 flattens to `Vec<String>`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub images: Option<Vec<ScrapedImage>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub json: Option<serde_json::Value>,
     /// Per-field evidence for `json`; populated only when the request set
@@ -724,6 +746,7 @@ impl ScrapeData {
         self.raw_html = None;
         self.plain_text = None;
         self.links = None;
+        self.images = None;
         self.json = None;
         self.basis = None;
         self.summary = None;
@@ -914,6 +937,10 @@ mod tests {
             raw_html: Some("<html>challenge</html>".into()),
             plain_text: Some("challenge text".into()),
             links: Some(vec!["https://help.example.com".into()]),
+            images: Some(vec![ScrapedImage {
+                url: "https://help.example.com/logo.png".into(),
+                alt: Some("logo".into()),
+            }]),
             json: Some(serde_json::json!({"junk": true})),
             summary: Some("a summary of junk".into()),
             llm_usage: None,
@@ -958,6 +985,7 @@ mod tests {
         assert!(data.raw_html.is_none());
         assert!(data.plain_text.is_none());
         assert!(data.links.is_none());
+        assert!(data.images.is_none());
         assert!(data.json.is_none());
         assert!(data.summary.is_none());
         // block verdict, metadata, warnings, screenshot kept for the caller

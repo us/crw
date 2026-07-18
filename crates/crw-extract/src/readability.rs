@@ -1,4 +1,8 @@
+use crw_core::types::ScrapedImage;
+use once_cell::sync::Lazy;
+use regex::Regex;
 use scraper::{Html, Selector};
+use std::collections::HashMap;
 
 /// When a priority selector is "too broad" (>90% of body), drill down into it
 /// to find a narrower content element.
@@ -532,6 +536,267 @@ pub fn extract_links(html: &str, base_url: &str) -> Vec<String> {
         .collect()
 }
 
+/// `background-image: url(...)` extractor. Mirrors Firecrawl's `URL_REGEX`
+/// (`apps/api/native/src/html.rs`) verbatim, including its `[^'")]+` stop — a
+/// `)` inside a `data:` SVG can truncate the match. Kept for byte-for-byte
+/// parity with the v2 drop-in surface.
+// ponytail: naive `[^'")]+`; a CSS-value parser is the upgrade path if a real
+// page needs it, but that would diverge the v2 URL set from Firecrawl.
+static BG_URL_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"url\(['"]?([^'")]+)['"]?\)"#).unwrap());
+
+/// Extract candidate URL tokens from an HTML `srcset` per the WHATWG parse
+/// algorithm's URL step: each candidate's URL is a leading run of NON-whitespace
+/// characters, so an internal comma in a `data:` URI stays part of the URL
+/// rather than splitting it. After the URL, an optional descriptor runs to the
+/// next top-level comma (parens tracked for `calc()` widths). For ordinary
+/// `a.jpg 480w, b.jpg 1080w` srcsets this yields exactly `["a.jpg", "b.jpg"]`,
+/// identical to a naive comma split; it only differs on comma-bearing URLs.
+fn srcset_url_tokens(srcset: &str) -> Vec<&str> {
+    fn is_ws(c: u8) -> bool {
+        matches!(c, b' ' | b'\t' | b'\n' | b'\r' | 0x0c)
+    }
+    let b = srcset.as_bytes();
+    let n = b.len();
+    let mut i = 0;
+    let mut urls = Vec::new();
+    while i < n {
+        while i < n && (is_ws(b[i]) || b[i] == b',') {
+            i += 1;
+        }
+        if i >= n {
+            break;
+        }
+        let start = i;
+        while i < n && !is_ws(b[i]) {
+            i += 1;
+        }
+        let mut url = &srcset[start..i];
+        if url.ends_with(',') {
+            // Trailing commas mean this candidate had no descriptor.
+            url = url.trim_end_matches(',');
+        } else {
+            // Skip the descriptor up to the next top-level comma.
+            let mut depth: i32 = 0;
+            while i < n {
+                match b[i] {
+                    b'(' => depth += 1,
+                    b')' => depth = depth.saturating_sub(1),
+                    b',' if depth == 0 => break,
+                    _ => {}
+                }
+                i += 1;
+            }
+        }
+        if !url.is_empty() {
+            urls.push(url);
+        }
+    }
+    urls
+}
+
+/// Normalize an optional `alt`: trim and treat empty as absent.
+fn norm_alt(alt: Option<&str>) -> Option<String> {
+    alt.map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+}
+
+/// Extract all images discovered on the page.
+///
+/// The **URL set mirrors Firecrawl's `_extract_images`** exactly (same sources,
+/// resolution, filters, and srcset/background parsing — bugs included) so the v2
+/// surface, which flattens these to a plain `Vec<String>`, stays a Firecrawl
+/// drop-in from this single pass. The only native-`/v1` enrichment is the `alt`
+/// field, which does not affect the URL set.
+///
+/// Deduplicated by URL in document order; a later duplicate carrying a non-empty
+/// `alt` upgrades an earlier `None` (lazy-load and `<picture>`+`<img>` commonly
+/// put the good `alt` on the second sighting).
+pub fn extract_images(html: &str, base_url: &str) -> Vec<ScrapedImage> {
+    let document = Html::parse_document(html);
+
+    // Join base: honor `<base href>` when present, else the scrape source URL.
+    // A `<base href>` may itself be relative (`/cdn/`) or absolute; resolve it
+    // against the document URL (matching Firecrawl's `new URL(baseHref, baseUrl)`
+    // fallback) so relative bases aren't silently dropped. A malformed base
+    // degrades to `None` (absolute-only) rather than panicking.
+    let doc_base = url::Url::parse(base_url).ok();
+    // `<base href>` join base: relative or absolute, resolved against the doc URL;
+    // `doc_base` itself is kept for protocol-relative (`//`) page-scheme joins.
+    let base = select_attr(&document, "base[href]", "href")
+        .and_then(|h| doc_base.as_ref().and_then(|b| b.join(&h).ok()))
+        .or_else(|| doc_base.clone());
+
+    // Resolve a raw src, mirroring Firecrawl's `resolve_image_url` branch-for-
+    // branch so the v2 URL set stays a drop-in:
+    //   data:/blob:    -> verbatim
+    //   http(s):// abs -> verbatim (Firecrawl does NOT canonicalize absolutes)
+    //   //host/x       -> inherit the PAGE scheme (join against the doc URL)
+    //   relative       -> join against `<base href>` (falls back to the doc URL)
+    // Then Firecrawl's final filter: drop `javascript:` (case-insensitive) and
+    // any non-`data:`/`blob:` result that won't `Url::parse`.
+    let resolve = |src: &str| -> Option<String> {
+        // Deliberate, recall-neutral divergence from Firecrawl on degenerate
+        // input: trim whitespace and skip an empty `src`. Firecrawl uses the raw
+        // value, so its native resolver turns `src=""` into `base_href.join("")`
+        // = the PAGE URL and emits it as an "image" (junk no drop-in client
+        // wants), and keeps whitespace-padded URLs verbatim. We never drop a real
+        // image here, so v2 recall is unaffected; we only omit that junk.
+        let src = src.trim();
+        if src.is_empty() {
+            return None;
+        }
+        // Kept verbatim (Firecrawl does not canonicalize these). The
+        // `http(s)://` prefix check is case-sensitive, exactly like Firecrawl —
+        // an uppercase scheme (`HTTPS://`) intentionally falls through to
+        // `join`, matching Firecrawl's `resolve_image_url`.
+        let candidate = if src.starts_with("data:")
+            || src.starts_with("blob:")
+            || src.starts_with("http://")
+            || src.starts_with("https://")
+        {
+            src.to_string()
+        } else if src.starts_with("//") {
+            // Protocol-relative: inherit the PAGE scheme (join against doc URL).
+            doc_base.as_ref()?.join(src).ok()?.to_string()
+        } else {
+            base.as_ref()?.join(src).ok()?.to_string()
+        };
+        if candidate.to_ascii_lowercase().starts_with("javascript:") {
+            return None;
+        }
+        if !candidate.starts_with("data:")
+            && !candidate.starts_with("blob:")
+            && url::Url::parse(&candidate).is_err()
+        {
+            return None;
+        }
+        Some(candidate)
+    };
+
+    // Dedup by URL in traversal order via a url->index map (O(1) per push, so a
+    // page with many repeated URLs stays linear). Traversal order is the fixed
+    // source-category order below (img, then picture, meta, icons, poster,
+    // background) and DOM order within each — deterministic, matching Firecrawl.
+    // A later duplicate carrying a non-empty `alt` upgrades an earlier `None`.
+    let mut index: HashMap<String, usize> = HashMap::new();
+    let mut images: Vec<ScrapedImage> = Vec::new();
+    let mut push = |url: String, alt: Option<String>| match index.get(&url) {
+        None => {
+            index.insert(url.clone(), images.len());
+            images.push(ScrapedImage { url, alt });
+        }
+        Some(&i) => {
+            if let Some(new_alt) = alt
+                && images[i].alt.is_none()
+            {
+                images[i].alt = Some(new_alt);
+            }
+        }
+    };
+
+    // Extract candidate URLs from a `srcset`, resolved. Uses the WHATWG URL
+    // step (`srcset_url_tokens`) rather than a naive `split(',')`: identical to
+    // the naive result for ordinary `url 480w, url 1080w` srcsets, but a comma
+    // INSIDE a `data:` URI no longer splits it into phantom fragments (a real
+    // lazy-load placeholder pattern — see the smashingmagazine.com regression
+    // test). Recall-neutral: it never drops a real image, only avoids junk.
+    let srcset_urls = |srcset: &str| -> Vec<String> {
+        srcset_url_tokens(srcset)
+            .into_iter()
+            .filter_map(&resolve)
+            .collect()
+    };
+
+    // 1. <img src|data-src|srcset> — carries the img's alt.
+    if let Ok(sel) = Selector::parse("img") {
+        for el in document.select(&sel) {
+            let alt = norm_alt(el.value().attr("alt"));
+            if let Some(src) = el.value().attr("src")
+                && let Some(url) = resolve(src)
+            {
+                push(url, alt.clone());
+            }
+            if let Some(src) = el.value().attr("data-src")
+                && let Some(url) = resolve(src)
+            {
+                push(url, alt.clone());
+            }
+            if let Some(srcset) = el.value().attr("srcset") {
+                for url in srcset_urls(srcset) {
+                    push(url, alt.clone());
+                }
+            }
+        }
+    }
+
+    // 2. <picture><source srcset> — no alt.
+    if let Ok(sel) = Selector::parse("picture source") {
+        for el in document.select(&sel) {
+            if let Some(srcset) = el.value().attr("srcset") {
+                for url in srcset_urls(srcset) {
+                    push(url, None);
+                }
+            }
+        }
+    }
+
+    // 3. OG / Twitter / itemprop meta images (read `content`) — no alt.
+    if let Ok(sel) = Selector::parse(
+        r#"meta[property="og:image"], meta[property="og:image:url"], meta[property="og:image:secure_url"], meta[name="twitter:image"], meta[name="twitter:image:src"], meta[itemprop="image"]"#,
+    ) {
+        for el in document.select(&sel) {
+            if let Some(content) = el.value().attr("content")
+                && let Some(url) = resolve(content)
+            {
+                push(url, None);
+            }
+        }
+    }
+
+    // 4. Icon / image_src links (read `href`, substring `*=` like Firecrawl) — no alt.
+    if let Ok(sel) = Selector::parse(
+        r#"link[rel*="icon"], link[rel*="apple-touch-icon"], link[rel*="image_src"]"#,
+    ) {
+        for el in document.select(&sel) {
+            if let Some(href) = el.value().attr("href")
+                && let Some(url) = resolve(href)
+            {
+                push(url, None);
+            }
+        }
+    }
+
+    // 5. <video poster> — no alt.
+    if let Ok(sel) = Selector::parse("video[poster]") {
+        for el in document.select(&sel) {
+            if let Some(poster) = el.value().attr("poster")
+                && let Some(url) = resolve(poster)
+            {
+                push(url, None);
+            }
+        }
+    }
+
+    // 6. Inline background-image styles — no alt.
+    if let Ok(sel) = Selector::parse(r#"[style*="background"]"#) {
+        for el in document.select(&sel) {
+            if let Some(style) = el.value().attr("style") {
+                for cap in BG_URL_REGEX.captures_iter(style) {
+                    if let Some(m) = cap.get(1)
+                        && let Some(url) = resolve(m.as_str())
+                    {
+                        push(url, None);
+                    }
+                }
+            }
+        }
+    }
+
+    images
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -541,6 +806,44 @@ mod tests {
         let html = r#"<html><body><nav>Nav</nav><article><p>Main content</p></article><footer>Foot</footer></body></html>"#;
         let content = extract_main_content(html);
         assert!(content.contains("Main content"));
+    }
+
+    #[test]
+    fn srcset_url_tokens_ordinary() {
+        assert_eq!(
+            srcset_url_tokens("a.jpg 480w, b.jpg 1080w, c.jpg 2x"),
+            vec!["a.jpg", "b.jpg", "c.jpg"]
+        );
+    }
+
+    #[test]
+    fn srcset_url_tokens_no_descriptors() {
+        // Trailing-comma candidates (no descriptor) still split correctly.
+        assert_eq!(srcset_url_tokens("a.jpg, b.jpg"), vec!["a.jpg", "b.jpg"]);
+    }
+
+    #[test]
+    fn srcset_url_tokens_data_uri_comma_kept() {
+        // The comma inside the data: URI does NOT split the token.
+        assert_eq!(
+            srcset_url_tokens("data:image/avif;base64,AAAA== 1x, /real.jpg 2x"),
+            vec!["data:image/avif;base64,AAAA==", "/real.jpg"]
+        );
+    }
+
+    #[test]
+    fn srcset_url_tokens_paren_descriptor() {
+        // A descriptor containing a comma inside parens isn't a candidate split.
+        assert_eq!(
+            srcset_url_tokens("a.jpg 100w, b.jpg calc(50vw - 10px)"),
+            vec!["a.jpg", "b.jpg"]
+        );
+    }
+
+    #[test]
+    fn srcset_url_tokens_empty() {
+        assert!(srcset_url_tokens("").is_empty());
+        assert!(srcset_url_tokens("   ").is_empty());
     }
 
     #[test]

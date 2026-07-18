@@ -535,6 +535,8 @@ fn build_scrape_data(
             None
         },
         links,
+        // PDFs carry no HTML <img>/meta image sources.
+        images: None,
         json: None,
         summary: None,
         llm_usage: None,

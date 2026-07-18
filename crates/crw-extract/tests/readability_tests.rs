@@ -1,4 +1,6 @@
-use crw_extract::readability::{extract_links, extract_main_content, extract_metadata};
+use crw_extract::readability::{
+    extract_images, extract_links, extract_main_content, extract_metadata,
+};
 
 // ── Main Content Extraction ──
 
@@ -344,4 +346,220 @@ mod listing_gate {
     // Listing-trigger fixtures (card_grid, smartcompany_homepage, docs_toc)
     // removed: gate is now disabled (returns false unconditionally) so these
     // would always fail. See dom_util::is_listing_container for context.
+}
+
+// ── Image Extraction ──
+
+/// Collect just the URLs, in order.
+fn img_urls(imgs: &[crw_core::types::ScrapedImage]) -> Vec<String> {
+    imgs.iter().map(|i| i.url.clone()).collect()
+}
+
+#[test]
+fn extract_images_img_src_and_alt() {
+    let html = r#"<html><body><img src="/pic.png" alt="A cat"></body></html>"#;
+    let imgs = extract_images(html, "https://example.com/dir/");
+    assert_eq!(imgs.len(), 1);
+    assert_eq!(imgs[0].url, "https://example.com/pic.png");
+    assert_eq!(imgs[0].alt.as_deref(), Some("A cat"));
+}
+
+#[test]
+fn extract_images_relative_and_protocol_relative_resolved() {
+    let html = r#"<html><body>
+        <img src="a.png"><img src="/b.png"><img src="//cdn.example.net/c.png">
+        </body></html>"#;
+    let urls = img_urls(&extract_images(html, "https://example.com/dir/"));
+    assert!(urls.contains(&"https://example.com/dir/a.png".to_string()));
+    assert!(urls.contains(&"https://example.com/b.png".to_string()));
+    assert!(urls.contains(&"https://cdn.example.net/c.png".to_string()));
+}
+
+#[test]
+fn extract_images_keeps_data_and_blob_drops_javascript() {
+    let html = r#"<html><body>
+        <img src="data:image/png;base64,AAAA">
+        <img src="blob:https://example.com/xyz">
+        <img src="javascript:alert(1)">
+        <img src="JavaScript:alert(2)">
+        </body></html>"#;
+    let urls = img_urls(&extract_images(html, "https://example.com"));
+    assert!(urls.contains(&"data:image/png;base64,AAAA".to_string()));
+    assert!(urls.iter().any(|u| u.starts_with("blob:")));
+    // both case variants of javascript: are dropped
+    assert!(
+        !urls
+            .iter()
+            .any(|u| u.to_lowercase().contains("javascript:"))
+    );
+}
+
+#[test]
+fn extract_images_srcset_first_token() {
+    let html = r#"<html><body>
+        <img srcset="/small.png 480w, /large.png 1080w" alt="responsive">
+        </body></html>"#;
+    let urls = img_urls(&extract_images(html, "https://example.com"));
+    assert!(urls.contains(&"https://example.com/small.png".to_string()));
+    assert!(urls.contains(&"https://example.com/large.png".to_string()));
+}
+
+#[test]
+fn extract_images_srcset_data_uri_not_split_into_phantoms() {
+    // Regression (smashingmagazine.com): a `data:` URI in srcset contains a
+    // comma; the WHATWG URL parse keeps it whole instead of splitting it into
+    // a truncated `data:...;base64` + a phantom `<base>/AAAA...` path.
+    let html = r#"<html><body><picture>
+        <source srcset="data:image/avif;base64,AAAABBBBCCCC== 1x, /real.jpg 2x">
+        </picture></body></html>"#;
+    let urls = img_urls(&extract_images(html, "https://example.com/page"));
+    assert!(
+        urls.contains(&"data:image/avif;base64,AAAABBBBCCCC==".to_string()),
+        "data URI must be kept whole: {urls:?}"
+    );
+    assert!(urls.contains(&"https://example.com/real.jpg".to_string()));
+    // No phantom URL built from the base64 payload.
+    assert!(
+        !urls
+            .iter()
+            .any(|u| u.contains("AAAABBBBCCCC") && u.starts_with("http")),
+        "no phantom base64-as-path URL: {urls:?}"
+    );
+}
+
+#[test]
+fn extract_images_srcset_ordinary_matches_naive() {
+    // Ordinary descriptor srcset yields exactly the URL tokens (parity with the
+    // old naive split, and with Firecrawl).
+    let html = r#"<html><body><img srcset="/a.jpg 480w, /b.jpg 1080w, /c.jpg 2x"></body></html>"#;
+    let urls = img_urls(&extract_images(html, "https://example.com"));
+    for e in [
+        "https://example.com/a.jpg",
+        "https://example.com/b.jpg",
+        "https://example.com/c.jpg",
+    ] {
+        assert!(urls.contains(&e.to_string()), "missing {e}: {urls:?}");
+    }
+}
+
+#[test]
+fn extract_images_picture_source_no_alt() {
+    let html = r#"<html><body><picture>
+        <source srcset="/hero.webp 1x">
+        <img src="/hero.png" alt="hero">
+        </picture></body></html>"#;
+    let imgs = extract_images(html, "https://example.com");
+    let webp = imgs.iter().find(|i| i.url.ends_with("hero.webp")).unwrap();
+    assert_eq!(webp.alt, None);
+}
+
+#[test]
+fn extract_images_meta_and_icon_and_poster_and_background() {
+    let html = r#"<html><head>
+        <meta property="og:image" content="/og.png">
+        <meta name="twitter:image" content="https://example.com/tw.png">
+        <link rel="mask-icon" href="/mask.svg">
+        <link rel="apple-touch-icon" href="/touch.png">
+        </head><body>
+        <video poster="/poster.jpg"></video>
+        <div style="background-image: url('/bg.png')"></div>
+        </body></html>"#;
+    let urls = img_urls(&extract_images(html, "https://example.com"));
+    for expected in [
+        "https://example.com/og.png",
+        "https://example.com/tw.png",
+        "https://example.com/mask.svg", // rel*="icon" must catch mask-icon
+        "https://example.com/touch.png",
+        "https://example.com/poster.jpg",
+        "https://example.com/bg.png",
+    ] {
+        assert!(urls.contains(&expected.to_string()), "missing {expected}");
+    }
+}
+
+#[test]
+fn extract_images_dedup_preserves_order_and_upgrades_alt() {
+    // Same URL first with no alt (lazy placeholder), then with a real alt.
+    let html = r#"<html><body>
+        <img src="/x.png">
+        <img src="/y.png" alt="Y">
+        <img src="/x.png" alt="Real X">
+        </body></html>"#;
+    let imgs = extract_images(html, "https://example.com");
+    let urls = img_urls(&imgs);
+    // x appears once, keeping its first-seen position (before y)
+    assert_eq!(
+        urls,
+        vec![
+            "https://example.com/x.png".to_string(),
+            "https://example.com/y.png".to_string(),
+        ]
+    );
+    // and its alt was upgraded from None to the later non-empty one
+    assert_eq!(imgs[0].alt.as_deref(), Some("Real X"));
+}
+
+#[test]
+fn extract_images_empty_alt_is_none() {
+    let html = r#"<html><body><img src="/p.png" alt="   "></body></html>"#;
+    let imgs = extract_images(html, "https://example.com");
+    assert_eq!(imgs[0].alt, None);
+}
+
+#[test]
+fn extract_images_none_found_is_empty() {
+    let html = r#"<html><body><p>no images here</p></body></html>"#;
+    assert!(extract_images(html, "https://example.com").is_empty());
+}
+
+#[test]
+fn extract_images_empty_src_skipped_not_page_url() {
+    // An empty/whitespace src must NOT resolve to the page URL (Firecrawl's
+    // native resolver would emit `base` here; we skip it as junk).
+    let html = r#"<html><body><img src=""><img src="   "><img src="/real.png"></body></html>"#;
+    let urls = img_urls(&extract_images(html, "https://example.com/page"));
+    assert_eq!(urls, vec!["https://example.com/real.png".to_string()]);
+}
+
+#[test]
+fn extract_images_honors_base_href() {
+    let html = r#"<html><head><base href="https://cdn.example.net/assets/"></head>
+        <body><img src="pic.png"></body></html>"#;
+    let urls = img_urls(&extract_images(html, "https://example.com/page"));
+    assert!(urls.contains(&"https://cdn.example.net/assets/pic.png".to_string()));
+}
+
+#[test]
+fn extract_images_honors_relative_base_href() {
+    // A relative <base href> resolves against the document URL (not dropped).
+    let html = r#"<html><head><base href="/cdn/"></head>
+        <body><img src="pic.png"></body></html>"#;
+    let urls = img_urls(&extract_images(html, "https://example.com/a/b"));
+    assert!(
+        urls.contains(&"https://example.com/cdn/pic.png".to_string()),
+        "relative base href must resolve against the doc URL: {urls:?}"
+    );
+}
+
+#[test]
+fn extract_images_absolute_url_returned_verbatim() {
+    // Firecrawl parity: absolute http(s) URLs are NOT canonicalized (host case,
+    // explicit port, etc. preserved) so v2 strings match exactly. Uses a
+    // lowercase scheme (Firecrawl's prefix check, like ours, is case-sensitive).
+    let html = r#"<html><body><img src="https://CDN.Example.COM:8443/Logo.PNG"></body></html>"#;
+    let urls = img_urls(&extract_images(html, "https://example.com"));
+    assert!(urls.contains(&"https://CDN.Example.COM:8443/Logo.PNG".to_string()));
+}
+
+#[test]
+fn extract_images_protocol_relative_uses_page_scheme() {
+    // `//host/x` inherits the PAGE scheme, even when <base href> has a different
+    // scheme (matches Firecrawl, which joins protocol-relative against the page).
+    let html = r#"<html><head><base href="http://other.example/"></head>
+        <body><img src="//cdn.example.net/p.png"></body></html>"#;
+    let urls = img_urls(&extract_images(html, "https://example.com/page"));
+    assert!(
+        urls.contains(&"https://cdn.example.net/p.png".to_string()),
+        "protocol-relative must inherit the page (https) scheme: {urls:?}"
+    );
 }

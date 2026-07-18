@@ -36,9 +36,51 @@ fn extract_markdown_format() {
     assert!(data.raw_html.is_none());
     assert!(data.plain_text.is_none());
     assert!(data.links.is_none());
+    // images must be gated off unless the format is requested.
+    assert!(data.images.is_none());
     assert!(data.json.is_none());
     assert_eq!(data.metadata.status_code, 200);
     assert_eq!(data.metadata.source_url, "https://example.com");
+}
+
+#[test]
+fn extract_images_format_populates_from_raw_html() {
+    let html = "<html><head><meta property=\"og:image\" content=\"https://example.com/og.png\"></head>\
+        <body><article><img src=\"/pic.png\" alt=\"Pic\"></article></body></html>";
+    let data = crw_extract::extract(ExtractOptions {
+        raw_html: html,
+        source_url: "https://example.com",
+        status_code: 200,
+        rendered_with: None,
+        elapsed_ms: 100,
+        render_decision: None,
+        credit_cost: 0,
+        warnings: Vec::new(),
+        formats: &[OutputFormat::Images],
+        only_main_content: true,
+        include_tags: &[],
+        exclude_tags: &[],
+        css_selector: None,
+        xpath: None,
+        chunk_strategy: None,
+        query: None,
+        filter_mode: None,
+        top_k: None,
+        domain_selectors: None,
+        captured_responses: &[],
+        llm_fallback: None,
+        debug: false,
+        debug_sink: None,
+    })
+    .unwrap();
+
+    let images = data.images.expect("images populated");
+    let urls: Vec<_> = images.iter().map(|i| i.url.as_str()).collect();
+    // Extracts from the FULL raw HTML (og:image + <img>), not just main content.
+    assert!(urls.contains(&"https://example.com/pic.png"));
+    assert!(urls.contains(&"https://example.com/og.png"));
+    let pic = images.iter().find(|i| i.url.ends_with("pic.png")).unwrap();
+    assert_eq!(pic.alt.as_deref(), Some("Pic"));
 }
 
 #[test]

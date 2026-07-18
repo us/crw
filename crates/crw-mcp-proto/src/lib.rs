@@ -164,7 +164,7 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
                     },
                     "formats": {
                         "type": "array",
-                        "items": { "type": "string", "enum": ["markdown", "html", "links"] },
+                        "items": { "type": "string", "enum": ["markdown", "html", "links", "images"] },
                         "description": "Output formats (default [\"markdown\"])"
                     },
                     "onlyMainContent": {
@@ -448,7 +448,7 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
                     "properties": {
                         "formats": {
                             "type": "array",
-                            "items": { "type": "string", "enum": ["markdown", "html", "rawHtml", "links"] }
+                            "items": { "type": "string", "enum": ["markdown", "html", "rawHtml", "links", "images"] }
                         },
                         "onlyMainContent": {
                             "type": "boolean",
@@ -512,7 +512,7 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
                 },
                 "formats": {
                     "type": "array",
-                    "items": { "type": "string", "enum": ["markdown", "plainText", "links", "json", "summary"] },
+                    "items": { "type": "string", "enum": ["markdown", "plainText", "links", "images", "json", "summary"] },
                     "description": "Output formats (default [\"markdown\"]); json/summary need a server LLM"
                 },
                 "jsonSchema": {

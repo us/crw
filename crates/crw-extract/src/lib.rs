@@ -836,6 +836,12 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
         None
     };
 
+    let images = if formats.contains(&OutputFormat::Images) {
+        Some(readability::extract_images(raw_html, source_url))
+    } else {
+        None
+    };
+
     // JSON extraction is handled asynchronously in scrape_url after extract() returns.
     let json = None;
 
@@ -905,6 +911,7 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
         raw_html: raw,
         plain_text: plain,
         links,
+        images,
         json,
         summary: None,
         llm_usage: None,
