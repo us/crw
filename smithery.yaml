@@ -1,0 +1,27 @@
+# Smithery configuration — https://smithery.ai/docs/build/publish
+# Local stdio server: Smithery launches `crw-mcp` from npm and clients run it
+# locally. The hosted remote endpoint (https://fastcrw.com/mcp, streamable HTTP
+# + OAuth) is listed separately via Smithery's URL method, no repo file needed.
+startCommand:
+  type: stdio
+  configSchema:
+    # JSON Schema for the config Smithery collects from the user at install time.
+    type: object
+    properties:
+      crwApiKey:
+        type: string
+        title: fastCRW API key
+        description: >-
+          API key from https://fastcrw.com for the hosted API. Optional — the
+          free tier works without one. Self-hosters can leave it blank and set
+          CRW_API_URL in their own environment.
+  commandFunction:
+    # Produces the CLI command Smithery runs to start the MCP server on stdio.
+    |-
+    (config) => ({
+      command: 'npx',
+      args: ['-y', 'crw-mcp'],
+      env: config.crwApiKey ? { CRW_API_KEY: config.crwApiKey } : {}
+    })
+  exampleConfig:
+    crwApiKey: crw_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
