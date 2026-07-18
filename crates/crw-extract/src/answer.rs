@@ -8,9 +8,10 @@
 
 use crate::llm::{self, LlmCallResult};
 use crate::untrusted;
+use crate::{chunking, filter};
 use crw_core::config::LlmConfig;
 use crw_core::error::{CrwError, CrwResult};
-use crw_core::types::{Citation, LlmUsage};
+use crw_core::types::{ChunkStrategy, Citation, FilterMode, LlmUsage};
 
 /// Per-source server-side hard ceiling. The request's
 /// `max_chars_per_source` is clamped to this regardless of value.
@@ -208,6 +209,107 @@ fn truncate_on_char_boundary(s: &str, max_bytes: usize) -> &str {
     &s[..idx]
 }
 
+/// Worst-case separator between two kept chunks ("\n[...]\n"). Accounted
+/// conservatively so the assembled output never exceeds `cap` before the final
+/// truncate; the leftover slack is reclaimed by the partial-fill step.
+const GAP_MARKER: &str = "\n[...]\n";
+
+/// Add whole chunk `i` to `keep` if it fits the remaining byte budget (charging
+/// the worst-case separator). Whole-chunk only; the partial tail is handled by
+/// the caller's fill step.
+fn try_keep_chunk(
+    chunks: &[String],
+    keep: &mut std::collections::BTreeSet<usize>,
+    used: &mut usize,
+    i: usize,
+    cap: usize,
+) {
+    if keep.contains(&i) {
+        return;
+    }
+    let clen = chunks[i].len();
+    if *used + GAP_MARKER.len() + clen > cap {
+        return;
+    }
+    keep.insert(i);
+    *used += GAP_MARKER.len() + clen;
+}
+
+/// Fit an over-budget source into `cap` bytes by RELEVANCE, not by position.
+/// A blind head-truncation drops the answer when it sits deep in the page (a
+/// stats table at char 12k, a fact at char 55k); scoring passages against the
+/// query and keeping the best ones recovers those. Reuses the engine's sentence
+/// chunker + BM25 ranker.
+///
+/// Two passes, so this NEVER feeds the model less content than a plain
+/// head-truncation would (the hard "don't regress recall" invariant): first pack
+/// the highest-BM25 chunks (the answer-bearing passage, even if deep, gets in
+/// ahead of filler), then FILL the remaining budget with the rest in original
+/// order. The lead chunk (page lede / SERP snippet) is always kept. Non-adjacent
+/// kept chunks are joined with a `[...]` gap marker so the model does not read two
+/// distant passages as one continuous span. Falls back to head-truncation if the
+/// text won't chunk.
+fn select_relevant_passages(md: &str, query: &str, cap: usize) -> String {
+    if md.len() <= cap || query.trim().is_empty() {
+        return truncate_on_char_boundary(md, cap).to_string();
+    }
+    let strategy = ChunkStrategy::Sentence {
+        max_chars: Some(700),
+        overlap_chars: None,
+        dedupe: Some(false),
+    };
+    let chunks = chunking::chunk_text(md, &strategy);
+    if chunks.is_empty() {
+        return truncate_on_char_boundary(md, cap).to_string();
+    }
+    let scored = filter::filter_chunks_scored(&chunks, query, &FilterMode::Bm25, chunks.len());
+    let mut keep: std::collections::BTreeSet<usize> = std::collections::BTreeSet::new();
+    keep.insert(0); // lead chunk always kept: page lede / snippet lives here
+    let mut used = chunks[0].len();
+    // Priority pass: query-relevant chunks first (BM25 > 0), highest score first.
+    for sc in &scored {
+        if sc.score > 0.0 {
+            try_keep_chunk(&chunks, &mut keep, &mut used, sc.index, cap);
+        }
+    }
+    // Fill pass: pack the rest in original order until the budget is full, so the
+    // model never sees less than a head-truncation would have given it.
+    for i in 0..chunks.len() {
+        try_keep_chunk(&chunks, &mut keep, &mut used, i, cap);
+    }
+    // Join in original order; mark gaps between non-adjacent kept chunks.
+    let mut out = String::new();
+    let mut prev: Option<usize> = None;
+    for &i in &keep {
+        if let Some(p) = prev {
+            out.push_str(if i == p + 1 { "\n" } else { GAP_MARKER });
+        }
+        out.push_str(&chunks[i]);
+        prev = Some(i);
+    }
+    // Partial-fill: if budget remains (e.g. an unselected chunk was an unbreakable
+    // blob too big to keep whole, or slack from conservative separator charging),
+    // append a byte-slice of the best remaining chunk so we never feed LESS than a
+    // head-truncation would. Prefer the highest-BM25 unselected chunk, else the
+    // first in original order.
+    if out.len() + GAP_MARKER.len() < cap {
+        let next = scored
+            .iter()
+            .map(|s| s.index)
+            .chain(0..chunks.len())
+            .find(|i| !keep.contains(i));
+        if let Some(i) = next {
+            let room = cap - out.len() - GAP_MARKER.len();
+            let slice = truncate_on_char_boundary(&chunks[i], room);
+            if !slice.is_empty() {
+                out.push_str(GAP_MARKER);
+                out.push_str(slice);
+            }
+        }
+    }
+    truncate_on_char_boundary(&out, cap).to_string() // hard-enforce the byte cap
+}
+
 /// Hard server-side cap on the caller-supplied prompt addition. See
 /// `crate::summary::MAX_USER_PROMPT_CHARS` for rationale.
 pub const MAX_USER_PROMPT_CHARS: usize = 500;
@@ -226,6 +328,10 @@ pub async fn synthesize(
     calibrated: bool,
     guarded: bool,
     list_format: bool,
+    // When false, over-budget sources are head-truncated (byte-identical to the
+    // pre-passage-select behavior). When true, they are reduced to their
+    // query-relevant passages. Gated by `search.answer_bm25_select` (default off).
+    bm25_select: bool,
 ) -> CrwResult<AnswerResult> {
     if sources.is_empty() {
         return Err(CrwError::InvalidRequest(
@@ -243,7 +349,14 @@ pub async fn synthesize(
         if was_truncated {
             any_truncated = true;
         }
-        let body = truncate_on_char_boundary(md, cap);
+        // Relevance-select passages when over budget (keeps deep answers a blind
+        // head-cut would drop); within budget this is a no-op passthrough. Gated:
+        // off = byte-identical head-truncation.
+        let body = if bm25_select {
+            select_relevant_passages(md, query, cap)
+        } else {
+            truncate_on_char_boundary(md, cap).to_string()
+        };
         let source_block = format!("Source #{idx}\nURL: {url}\nTitle: {title}\n\n{body}");
         parts.push(untrusted::wrap(&source_block, "SOURCE", &nonce, Some(idx)));
     }
@@ -437,6 +550,7 @@ pub async fn synthesize_selected(
         calibrated,
         guarded,
         list_format,
+        false, // sources already LLM-reduced; head-truncate the remainder
     )
     .await
 }
@@ -446,7 +560,10 @@ fn parse_answer_and_citations(
     sources: &[Source],
 ) -> (String, Vec<Citation>, Vec<String>) {
     let mut warnings = Vec::new();
-    let Some((answer_part, cite_part)) = raw.split_once("===CITATIONS===") else {
+    // rsplit: the model's citations block is always LAST, so split on the final
+    // marker — a source that itself quotes "===CITATIONS===" cannot then truncate
+    // the answer or divert the citation parse to an earlier fake block.
+    let Some((answer_part, cite_part)) = raw.rsplit_once("===CITATIONS===") else {
         warnings.push("model omitted citations marker; returning answer without citations".into());
         return (raw.trim().to_string(), Vec::new(), warnings);
     };
@@ -660,5 +777,73 @@ mod tests {
         let both = system_prompt(true, false, true);
         assert!(both.contains("ranked list"));
         assert!(both.contains("give the direct answer confidently"));
+    }
+
+    #[test]
+    fn passage_select_keeps_deep_answer_within_cap() {
+        let lead = "Intro paragraph about the football season.";
+        let filler = (0..80)
+            .map(|i| format!("Filler sentence {i} about various unrelated topics and clubs."))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let answer = "Leeds United finished with 38 points at the end of the season.";
+        let page = format!("{lead} {filler} {answer}");
+        let cap = 1500;
+        assert!(page.len() > cap);
+        let out = select_relevant_passages(&page, "Which team finished with 38 points", cap);
+        assert!(out.len() <= cap, "must respect the byte cap");
+        assert!(
+            out.contains("Leeds United"),
+            "deep answer must survive relevance selection"
+        );
+    }
+
+    #[test]
+    fn passage_select_fills_budget_never_less_than_head_truncation() {
+        // No query-term overlap anywhere -> BM25 all-zero. The fill pass must still
+        // pack the budget (never feed the model less than a head-truncation would).
+        let page = "Completely unrelated boilerplate about widgets. ".repeat(400);
+        let cap = 4000;
+        assert!(page.len() > cap);
+        let out = select_relevant_passages(&page, "xyzzy plugh nonexistent", cap);
+        assert!(out.len() > 2000, "budget must be filled, got {}", out.len());
+        assert!(out.len() <= cap, "must respect the byte cap");
+    }
+
+    #[test]
+    fn passage_select_fills_budget_even_when_no_whole_chunk_fits_the_tail() {
+        // Bin-packing remainder: after packing whole chunks, the small leftover
+        // budget is too tight for ANY remaining whole chunk, so whole-chunk-only
+        // packing would underfill (feed less than a head-truncation). The
+        // partial-fill step must still fill the cap AND surface relevant content.
+        let filler = "generic filler words about other topics here. ".repeat(120);
+        let blob = "answerword ".repeat(500); // ~5500 chars, query-relevant
+        let page = format!("Intro sentence. {filler} {blob}");
+        let cap = 4000;
+        assert!(page.len() > cap);
+        let out = select_relevant_passages(&page, "answerword", cap);
+        assert!(out.len() <= cap, "must respect the byte cap");
+        assert!(
+            out.len() > cap - 800,
+            "budget must be ~filled, got {}",
+            out.len()
+        );
+        assert!(
+            out.contains("answerword"),
+            "relevant blob must be surfaced (at least partially)"
+        );
+    }
+
+    #[test]
+    fn passage_select_passthrough_when_within_budget_or_no_query() {
+        // within budget -> returned whole
+        assert_eq!(
+            select_relevant_passages("a short source", "some query", 8192),
+            "a short source"
+        );
+        // no query -> plain head-truncation, never panics
+        let long = "x".repeat(20_000);
+        let out = select_relevant_passages(&long, "   ", 100);
+        assert_eq!(out.len(), 100);
     }
 }
