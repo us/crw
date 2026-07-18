@@ -2501,6 +2501,24 @@ impl FallbackRenderer {
         if let Some(arm) = auto_egress_arm {
             let kind = RendererKind::ChromeProxy;
             let arm_floor = std::time::Duration::from_millis(CHROME_PROXY_ARM_FLOOR_MS);
+            // TEMP DIAG (fix/arm-skip-promoted-host): measure the promoted (serial,
+            // hedge_done=false) vs hedged remaining budget at the arm to confirm or
+            // refute the budget-starvation root cause. Reverted after one capture.
+            {
+                let brk = self.breakers.host_for(&host, kind).await.is_open();
+                tracing::warn!(
+                    target: "arm_diag",
+                    url,
+                    hedge_done,
+                    saw_hard_block,
+                    saw_unrecoverable_wall,
+                    remaining_ms = deadline.remaining().as_millis() as u64,
+                    arm_floor_ms = arm_floor.as_millis() as u64,
+                    breaker_open = brk,
+                    chain_len = chain.len(),
+                    "ARM_DIAG gate"
+                );
+            }
             // chrome_proxy is default-Chrome + residential IP: it recovers
             // IP-reputation blocks (429 / IP-ban 403 / generic bot walls / CF
             // error-1020 / Wikimedia origin bans) but CANNOT clear a
