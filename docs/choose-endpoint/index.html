@@ -411,7 +411,7 @@ of calling scrape N times:</p>
   &quot;prompt&quot;: &quot;extract the product title and price&quot;,
   &quot;schema&quot;: { &quot;type&quot;: &quot;object&quot;, &quot;properties&quot;: { &quot;title&quot;: {&quot;type&quot;:&quot;string&quot;}, &quot;price&quot;: {&quot;type&quot;:&quot;string&quot;} } }
 }</code></pre>
-<p>It returns <code>{ &quot;id&quot;, &quot;status&quot;: &quot;processing&quot;, &quot;urls&quot;: 2 }</code>; poll <code>GET /v1/extract/{id}</code> for
+<p>It returns <code>{ &quot;success&quot;: true, &quot;id&quot;, &quot;status&quot;: &quot;processing&quot;, &quot;urls&quot;: 2 }</code>; poll <code>GET /v1/extract/{id}</code> for
 a <code>results</code> array (one <code>{ url, status, data, error }</code> per URL, in request order). Capped
 by <code>crawler.max_extract_urls</code> (default 50) since each URL triggers an LLM call.
 On the hosted service at <code>api.fastcrw.com</code> this is handled automatically.</p>
