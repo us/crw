@@ -45,7 +45,7 @@ Scrape a single URL and return clean content.
 
 Parameters:
 - `url` (required) — The URL to scrape
-- `formats` — Output formats: `markdown` (default), `html`, `links`
+- `formats` — Output formats: `markdown` (default), `html`, `links`, `images`
 - `onlyMainContent` — Strip navs/footers/sidebars. Default: `true`
 - `includeTags` — Only include content matching these CSS selectors (e.g. `["article", "main"]`)
 - `excludeTags` — Exclude content matching these CSS selectors (e.g. `["nav", "footer"]`)
@@ -148,7 +148,7 @@ Parse a local file (PDF) into markdown or structured output without fetching fro
 Parameters:
 - `contentBase64` (required) — Base64-encoded file contents
 - `filename` — Original filename (optional, e.g. `"report.pdf"`)
-- `formats` — Output formats: `markdown` (default), `plainText`, `links`, `json`, `summary` (json/summary need a server LLM)
+- `formats` — Output formats: `markdown` (default), `plainText`, `links`, `images`, `json`, `summary` (json/summary need a server LLM)
 - `jsonSchema` — JSON schema for LLM extraction (when `formats` includes `json`)
 - `parsers` — Document parsers to apply. Default: `["pdf"]`
 - `maxLength` — Truncate output to this many chars. `0` = unbounded. Default: ~15 000
