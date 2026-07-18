@@ -94,6 +94,29 @@ fn evidence_excerpt(data: &SearchData, max_sources: usize, per_chars: usize) -> 
     out
 }
 
+/// True when a short scraped body is really a block / error shell (e.g. a page
+/// that 403'd to a "Wikimedia Error" datacenter-block, or a bot wall) rather
+/// than content. Grounding the answer on such text is worse than useless, so
+/// snippet-first drops the body and keeps only the clean SERP snippet. Size-gated
+/// so a real article that merely quotes one of these phrases can't false-positive.
+fn is_block_shell(md: &str) -> bool {
+    if md.len() >= 2000 {
+        return false;
+    }
+    let l = md.to_lowercase();
+    [
+        "wikimedia error",
+        "are forbidden",
+        "access denied",
+        "request blocked",
+        "just a moment",
+        "attention required",
+        "enable javascript and cookies",
+    ]
+    .iter()
+    .any(|p| l.contains(p))
+}
+
 /// Merge freshly-scraped scout rows into the flat answer pool (dedup by URL,
 /// only rows that actually carry markdown). Returns true if any were added.
 /// Grouped data (the explicit-`sources` path) is left untouched — multi-round
@@ -483,6 +506,7 @@ pub async fn search_inner(
                         &data,
                         &leg_cfg,
                         state.config.search.passage_select,
+                        state.config.search.answer_bm25_select,
                         state.config.search.answer_calibrated,
                         state.config.search.snippet_fallback,
                         state.config.search.answer_guarded,
@@ -566,6 +590,7 @@ pub async fn search_inner(
                                             &data,
                                             &leg_cfg,
                                             state.config.search.passage_select,
+                                            state.config.search.answer_bm25_select,
                                             state.config.search.answer_calibrated,
                                             state.config.search.snippet_fallback,
                                             state.config.search.answer_guarded,
@@ -820,6 +845,7 @@ async fn synthesize_answer(
     data: &SearchData,
     cfg: &LlmConfig,
     passage_select: bool,
+    bm25_select: bool,
     calibrated: bool,
     snippet_fallback: bool,
     guarded: bool,
@@ -863,21 +889,41 @@ async fn synthesize_answer(
     let scraped: Vec<answer::Source> = pool
         .iter()
         .filter_map(|r| {
-            if let Some(md) = r.markdown.as_ref() {
-                Some((r.url.clone(), r.title.clone(), md.clone()))
-            } else if snippet_fallback {
-                // Scrape failed/empty — instead of dropping the result (which
-                // can lose the answer-bearing page, Pattern A), fall back to the
-                // SearXNG snippet. It's verbatim upstream text, so it can only
-                // surface a fact already present, never invent one.
-                let desc = r.description.trim();
-                if desc.is_empty() {
-                    None
-                } else {
+            // Legacy path (snippet_fallback off): markdown-only, BYTE-IDENTICAL to
+            // the pre-change behavior — a result with markdown is kept as-is (even
+            // a block shell), so the multi-round scout still sees it and can
+            // recover. Block-guard + snippet-first apply ONLY when snippet_fallback
+            // is on (there the clean snippet replaces the dropped block body).
+            if !snippet_fallback {
+                return r
+                    .markdown
+                    .as_ref()
+                    .map(|md| (r.url.clone(), r.title.clone(), md.clone()));
+            }
+            let md = r.markdown.as_deref().map(str::trim).unwrap_or("");
+            // Block-guard: a fetched-but-blocked page ("Wikimedia Error", bot wall)
+            // is noise, not content — drop the body and lean on the clean snippet.
+            let body = if md.is_empty() || is_block_shell(md) {
+                ""
+            } else {
+                md
+            };
+            // Snippet-first: the SERP snippet is the engine's own query-relevant
+            // answer passage, so put it FIRST (it then survives the per-source
+            // passage budget) and always include it; append the body for depth.
+            // Verbatim upstream text can only surface a present fact, never invent.
+            let desc = r.description.trim();
+            match (desc.is_empty(), body.is_empty()) {
+                (true, true) => None,
+                (false, true) => {
                     Some((r.url.clone(), r.title.clone(), format!("[snippet] {desc}")))
                 }
-            } else {
-                None
+                (true, false) => Some((r.url.clone(), r.title.clone(), body.to_string())),
+                (false, false) => Some((
+                    r.url.clone(),
+                    r.title.clone(),
+                    format!("[snippet] {desc}\n\n{body}"),
+                )),
             }
         })
         .take(top_n)
@@ -918,6 +964,7 @@ async fn synthesize_answer(
             calibrated,
             guarded,
             list_format,
+            bm25_select,
         )
         .await
     }
@@ -1269,6 +1316,23 @@ fn apply_scrape_to_result(slot: &mut SearchResult, data: ScrapeData, formats: &[
 mod tests {
     use super::*;
     use crw_core::types::SearchSource;
+
+    #[test]
+    fn block_shell_detected_but_not_real_articles() {
+        assert!(is_block_shell(
+            "# Wikimedia Error\nError: 403, Contabo networks are forbidden."
+        ));
+        assert!(is_block_shell("Just a moment... Attention Required"));
+        // a long real article that merely contains a phrase is not a block shell
+        let long = format!(
+            "Access denied is a common HTTP concept. {}",
+            "x".repeat(2100)
+        );
+        assert!(!is_block_shell(&long));
+        assert!(!is_block_shell(
+            "Radcliffe College was a women's liberal arts college."
+        ));
+    }
 
     fn req(q: &str) -> SearchRequest {
         SearchRequest {

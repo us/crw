@@ -311,6 +311,16 @@ pub struct SearchConfig {
     /// `false` (gated); answer prompt + plain path untouched.
     #[serde(default)]
     pub passage_select: bool,
+    /// Cheap BM25 variant of `passage_select` for the plain answer path: when a
+    /// scraped source exceeds `max_chars_per_source`, keep its query-relevant
+    /// passages (sentence-chunked, BM25-ranked, no LLM call) instead of a blind
+    /// head-truncation that drops answers buried deep in the page. Two-pass so it
+    /// NEVER feeds less than a head-truncation (fills the budget after ranking),
+    /// so it is monotone-safe on recall. Defaults to `false` (gated); off =
+    /// byte-identical head-truncation, A/B keep/revert in prod. Ignored when
+    /// `passage_select` is on (that path LLM-reduces sources instead).
+    #[serde(default)]
+    pub answer_bm25_select: bool,
     /// Page-2 fallback for the LLM answer / summarize path: if the reranked
     /// (junk-filtered, deduped) candidate pool comes back thinner than the
     /// answer needs (`< answer_top_n`), fetch the SAME query's SearXNG page 2
@@ -362,13 +372,17 @@ pub struct SearchConfig {
     /// the wrong-non-abstain invariant before flip.
     #[serde(default)]
     pub wikidata_lookup: bool,
-    /// Snippet fallback for the LLM answer path (gated): when a top-N result's
-    /// scrape failed (empty `markdown`), the result is normally dropped from the
-    /// answer pool — if it was the answer-bearing page, crw abstains though
-    /// retrieval succeeded (diagnosed Pattern A). With this on, such results
-    /// fall back to their SearXNG `description` snippet as a thin source instead
-    /// of vanishing. The snippet is verbatim upstream text, so it cannot inject
-    /// a fact not already present — near-zero INCORRECT exposure. Default false.
+    /// Snippet-first grounding for the LLM answer path (gated). With this on, the
+    /// SearXNG `description` snippet is prepended to EVERY answer source as
+    /// `[snippet] <desc>\n\n<body>` (not merely a fallback for failed scrapes):
+    /// the snippet is the engine's own query-relevant answer passage, so putting
+    /// it first means it survives the per-source passage budget. It also block-
+    /// guards the body — a fetched-but-blocked page ("Wikimedia Error", a bot
+    /// wall) is dropped in favor of the clean snippet. When a scrape returned no
+    /// markdown at all, the snippet still keeps the result in the pool instead of
+    /// dropping the (possibly answer-bearing) page. The snippet is verbatim
+    /// upstream text, so it cannot inject a fact not already present — near-zero
+    /// INCORRECT exposure. Default false; off = markdown-only (legacy), A/B in prod.
     #[serde(default)]
     pub snippet_fallback: bool,
     /// Relevance gate for the LLM answer / summarize re-rank (gated). After the
@@ -415,6 +429,7 @@ impl Default for SearchConfig {
             pipeline_overlap: false,
             multi_round: false,
             passage_select: false,
+            answer_bm25_select: false,
             page2_fallback: false,
             answer_calibrated: false,
             answer_guarded: false,
