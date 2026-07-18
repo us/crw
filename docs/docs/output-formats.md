@@ -11,6 +11,7 @@ crw supports 9 output formats. Request multiple formats in a single scrape call.
 | Raw HTML | `rawHtml` | Original unmodified HTML |
 | Plain Text | `plainText` | Stripped to plain text, no formatting |
 | Links | `links` | All `<a href>` links extracted (excludes `#` and `javascript:`) |
+| Images | `images` | All images discovered on the page. On `/v1`, an array of `{ url, alt }` objects; on `/v2`, a flat array of URL strings |
 | JSON | `json` | LLM structured extraction with JSON schema validation |
 | Summary | `summary` | LLM-generated prose summary of the page |
 | Change Tracking | `changeTracking` | Diff-based change detection against a prior snapshot |
