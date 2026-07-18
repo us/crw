@@ -119,7 +119,7 @@ Parameters:
 - `llmProvider` — LLM provider (used with `llmApiKey`)
 - `llmModel` — LLM model (used with `llmApiKey`)
 
-Returns: `{ "id": "job-uuid" }` — use this ID with crw_check_extract_status.
+Returns: `{ "success": true, "id": "job-uuid", "status": "processing", "urls": 1 }` — use the ID with crw_check_extract_status.
 
 ### crw_check_extract_status
 
