@@ -25,20 +25,9 @@ pub async fn validate_url(url: &str) -> Result<(), String> {
     crw_core::url_safety::validate_safe_url_resolved(&parsed).await
 }
 
-/// Serialize an extract lifecycle response for MCP, re-adding the `success`
-/// field MCP clients rely on. The shared HTTP `/v1` type omits it, so it is
-/// injected only here; `success` is false only when every URL failed.
-fn extract_status_value(
-    response: crate::routes::extract::ExtractStatusResponse,
-) -> Result<Value, String> {
-    let success = response.status != "failed";
-    let mut value = serde_json::to_value(response).map_err(|e| format!("serialize error: {e}"))?;
-    if let Some(obj) = value.as_object_mut() {
-        obj.insert("success".to_string(), Value::Bool(success));
-    }
-    Ok(value)
-}
-
+/// Dispatch an MCP `tools/call` to the matching engine operation and return its
+/// result value. Extract lifecycle responses carry `success` on the shared `/v1`
+/// struct itself, so no per-tool envelope patching happens here.
 pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result<Value, String> {
     match tool_name {
         "crw_scrape" => {
@@ -138,7 +127,7 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
             serde_json::to_value(&resp).map_err(|e| format!("serialize error: {e}"))
         }
         "crw_extract" => {
-            use crate::routes::extract::{ExtractRequest, prepare_extract};
+            use crate::routes::extract::{ExtractRequest, ExtractStartResponse, prepare_extract};
             let req: ExtractRequest =
                 serde_json::from_value(args).map_err(|e| format!("invalid arguments: {e}"))?;
             // Same validation + SSRF preflight + template as POST /v1/extract.
@@ -149,7 +138,15 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
             let id = state
                 .start_extract_job(prepared.entries, prepared.template)
                 .await;
-            Ok(json!({"success": true, "id": id.to_string(), "status": "processing", "urls": urls}))
+            // Same shape as POST /v1/extract (single source), so this in-server
+            // path and the proxy pass-through can never drift from the schema.
+            serde_json::to_value(ExtractStartResponse {
+                success: true,
+                id: id.to_string(),
+                status: "processing".to_string(),
+                urls,
+            })
+            .map_err(|e| format!("serialize error: {e}"))
         }
         "crw_check_extract_status" => {
             use crate::routes::extract::get_extract_status;
@@ -163,7 +160,7 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
             let response = get_extract_status(state, id)
                 .await
                 .map_err(|e| format!("{e}"))?;
-            extract_status_value(response)
+            serde_json::to_value(response).map_err(|e| format!("serialize error: {e}"))
         }
         "crw_cancel_extract" => {
             use crate::routes::extract::cancel_extract_status;
@@ -177,7 +174,7 @@ pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result
             let response = cancel_extract_status(state, id)
                 .await
                 .map_err(|e| format!("{e}"))?;
-            extract_status_value(response)
+            serde_json::to_value(response).map_err(|e| format!("serialize error: {e}"))
         }
         "crw_parse_file" => {
             use base64::Engine;

@@ -1407,11 +1407,15 @@
       "ExtractAccepted": {
         "type": "object",
         "required": [
+          "success",
           "id",
           "status",
           "urls"
         ],
         "properties": {
+          "success": {
+            "type": "boolean"
+          },
           "id": {
             "type": "string"
           },
@@ -1481,6 +1485,7 @@
       "ExtractStatus": {
         "type": "object",
         "required": [
+          "success",
           "id",
           "status",
           "results",
@@ -1489,6 +1494,9 @@
           "tokensUsed"
         ],
         "properties": {
+          "success": {
+            "type": "boolean"
+          },
           "id": {
             "type": "string"
           },

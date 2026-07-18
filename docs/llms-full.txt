@@ -548,7 +548,7 @@ Parameters:
   llmProvider     string    opt       BYOK provider
   llmModel        string    opt       BYOK model
 
-Returns: {"id": "job-uuid", "status": "processing", "urls": N}
+Returns: {"success": true, "id": "job-uuid", "status": "processing", "urls": N}
 
 ────────────────────────────────────────────────────────────────────────────────
 ### Tool: crw_check_extract_status  →  GET /v1/extract/:id
