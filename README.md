@@ -31,7 +31,6 @@
   <a href="https://crates.io/crates/crw-server"><img src="https://img.shields.io/crates/v/crw-server.svg" alt="crates.io"></a>
   <a href="https://pypi.org/project/crw/"><img src="https://img.shields.io/pypi/v/crw.svg?label=pypi" alt="PyPI"></a>
   <a href="https://www.npmjs.com/package/crw-mcp"><img src="https://img.shields.io/npm/v/crw-mcp.svg?label=npm%20mcp" alt="npm crw-mcp"></a>
-  <a href="https://smithery.ai/servers/fastcrw/crw"><img src="https://smithery.ai/badge/fastcrw/crw" alt="Smithery"></a>
   <a href="https://github.com/us/crw/actions/workflows/ci.yml"><img src="https://github.com/us/crw/actions/workflows/ci.yml/badge.svg?branch=main&event=push" alt="CI"></a>
   <a href="https://www.bestpractices.dev/projects/13533"><img src="https://www.bestpractices.dev/projects/13533/badge" alt="OpenSSF Best Practices"></a>
   <a href="https://scorecard.dev/viewer/?uri=github.com/us/crw"><img src="https://api.scorecard.dev/projects/github.com/us/crw/badge" alt="OpenSSF Scorecard"></a>
