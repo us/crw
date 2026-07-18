@@ -319,6 +319,11 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <td>All <code>&lt;a href&gt;</code> links extracted (excludes <code>#</code> and <code>javascript:</code>)</td>
 </tr>
 <tr>
+<td>Images</td>
+<td><code>images</code></td>
+<td>All images discovered on the page. On <code>/v1</code>, an array of <code>{ url, alt }</code> objects; on <code>/v2</code>, a flat array of URL strings</td>
+</tr>
+<tr>
 <td>JSON</td>
 <td><code>json</code></td>
 <td>LLM structured extraction with JSON schema validation</td>
