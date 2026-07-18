@@ -1803,20 +1803,6 @@ impl FallbackRenderer {
             None
         };
 
-        // TEMP DIAG (diag/chrome-proxy-arm): why does the residential recovery
-        // arm never fire on prod? Log the construction inputs once per request.
-        tracing::warn!(
-            target: "egress_diag",
-            url,
-            auto_egress_escalation = self.auto_egress_escalation,
-            is_user_pinned,
-            proxy_active,
-            screenshot = screenshot_requested(),
-            chrome_proxy_in_pool = self.js_renderers.iter().any(|r| r.name() == "chrome_proxy"),
-            arm_is_some = auto_egress_arm.is_some(),
-            "EGRESS_DIAG arm construction"
-        );
-
         // Auto mode: if this host has been promoted, try Chrome first.
         if !is_user_pinned
             && let Some(RendererKind::Chrome) = self.preferences.preferred(&host).await
@@ -2515,22 +2501,6 @@ impl FallbackRenderer {
         if let Some(arm) = auto_egress_arm {
             let kind = RendererKind::ChromeProxy;
             let arm_floor = std::time::Duration::from_millis(CHROME_PROXY_ARM_FLOOR_MS);
-            // TEMP DIAG (diag/chrome-proxy-arm): dump each gate condition so we
-            // see exactly which one suppresses the residential recovery attempt.
-            // Compute the breaker state OUTSIDE the macro — an `.await` inside a
-            // tracing macro makes the future non-Send (breaks crw-crawl's Box::pin).
-            let diag_breaker_open = self.breakers.host_for(&host, kind).await.is_open();
-            tracing::warn!(
-                target: "egress_diag",
-                url,
-                saw_hard_block,
-                route_to_cloak,
-                saw_unrecoverable_wall,
-                remaining_ms = deadline.remaining().as_millis() as u64,
-                arm_floor_ms = arm_floor.as_millis() as u64,
-                breaker_open = diag_breaker_open,
-                "EGRESS_DIAG arm gate"
-            );
             // chrome_proxy is default-Chrome + residential IP: it recovers
             // IP-reputation blocks (429 / IP-ban 403 / generic bot walls / CF
             // error-1020 / Wikimedia origin bans) but CANNOT clear a
