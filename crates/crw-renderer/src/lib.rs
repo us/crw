@@ -877,6 +877,7 @@ impl FallbackRenderer {
                     config.cloak_timeout(),
                     proxy_base,
                     config.proxy_default_country.clone(),
+                    config.cloak_proxy_host.clone(),
                 )) as Arc<dyn PageFetcher>)
             } else if matches!(config.mode, RendererMode::Cloak) {
                 return Err(CrwError::ConfigError(
