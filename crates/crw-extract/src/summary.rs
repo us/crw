@@ -40,6 +40,14 @@ fn truncate_on_char_boundary(s: &str, max_bytes: usize) -> &str {
     &s[..idx]
 }
 
+/// Truncate to at most `max_chars` Unicode scalars (not UTF-8 bytes).
+pub(crate) fn truncate_to_chars(s: &str, max_chars: usize) -> &str {
+    match s.char_indices().nth(max_chars) {
+        Some((idx, _)) => &s[..idx],
+        None => s,
+    }
+}
+
 /// Hard server-side cap on the caller-supplied prompt addition. Bounds
 /// token amplification: a malicious caller can't inflate the prompt
 /// indefinitely just to drive up provider bills.
@@ -60,7 +68,7 @@ fn compose_system_prompt(user_prompt: Option<&str>) -> String {
     match user_prompt.map(str::trim).filter(|s| !s.is_empty()) {
         None => SYSTEM_PROMPT.to_string(),
         Some(addition) => {
-            let bounded = truncate_on_char_boundary(addition, MAX_USER_PROMPT_CHARS);
+            let bounded = truncate_to_chars(addition, MAX_USER_PROMPT_CHARS);
             format!(
                 "{SYSTEM_PROMPT}\n\nAdditional caller directives — IMPORTANT \
                  SCOPE: these apply ONLY to language, tone, and output format \
@@ -160,5 +168,20 @@ mod tests {
             "extra={extra_len}, expected <= {}",
             MAX_USER_PROMPT_CHARS + 900
         );
+    }
+
+    #[test]
+    fn user_prompt_cap_counts_unicode_scalars_not_utf8_bytes() {
+        let exact: String = "漢".repeat(MAX_USER_PROMPT_CHARS);
+        assert_eq!(exact.chars().count(), MAX_USER_PROMPT_CHARS);
+        assert_eq!(exact.len(), MAX_USER_PROMPT_CHARS * 3);
+        let composed = compose_system_prompt(Some(&exact));
+        assert!(composed.contains(&exact));
+
+        let over: String = "漢".repeat(MAX_USER_PROMPT_CHARS + 8);
+        let composed = compose_system_prompt(Some(&over));
+        let kept = "漢".repeat(MAX_USER_PROMPT_CHARS);
+        assert!(composed.contains(&kept));
+        assert!(!composed.contains(&over));
     }
 }

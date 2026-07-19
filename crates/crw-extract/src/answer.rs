@@ -7,6 +7,7 @@
 //! in the input list.
 
 use crate::llm::{self, LlmCallResult};
+use crate::summary::truncate_to_chars;
 use crate::untrusted;
 use crate::{chunking, filter};
 use crw_core::config::LlmConfig;
@@ -376,7 +377,7 @@ pub async fn synthesize(
          on the line after the marker. Only include source_ids you actually used."
     );
     if let Some(extra) = user_prompt.map(str::trim).filter(|s| !s.is_empty()) {
-        let bounded = truncate_on_char_boundary(extra, MAX_USER_PROMPT_CHARS);
+        let bounded = truncate_to_chars(extra, MAX_USER_PROMPT_CHARS);
         augmented_prompt.push_str(
             "\n\nAdditional caller directives — IMPORTANT SCOPE: these apply \
              ONLY to language, tone, and output format (length, paragraphing, \
