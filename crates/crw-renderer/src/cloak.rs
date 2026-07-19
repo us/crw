@@ -58,6 +58,11 @@ pub struct CloakRenderer {
     proxy_base: Option<(String, String)>,
     /// Default country for the `__cr.<cc>` suffix (`config.proxy_default_country`).
     default_country: Option<String>,
+    /// Proxy `scheme://host:port` for cloak to self-provision a residential exit
+    /// when the per-request `REQUEST_PROXY` is absent (creds come from
+    /// `proxy_base`). `None` (unset/empty) keeps today's REQUEST_PROXY-only
+    /// behavior, so a build without this configured is byte-identical.
+    proxy_host: Option<String>,
     client: reqwest::Client,
     /// host → (proven-good sessid, minted_at). Lets a host that only works on a
     /// fresh IP promote that sessid to the primary attempt so it warms.
@@ -72,6 +77,7 @@ impl CloakRenderer {
         timeout_ms: u64,
         proxy_base: Option<(String, String)>,
         default_country: Option<String>,
+        proxy_host: Option<String>,
     ) -> Self {
         let client = reqwest::Client::builder()
             .connect_timeout(CONNECT_TIMEOUT)
@@ -84,6 +90,7 @@ impl CloakRenderer {
             timeout: Duration::from_millis(timeout_ms),
             proxy_base,
             default_country,
+            proxy_host: proxy_host.filter(|h| !h.trim().is_empty()),
             client,
             sessid_map: Arc::new(Mutex::new(HashMap::new())),
         }
@@ -118,10 +125,15 @@ impl CloakRenderer {
     fn sticky_proxy_url(&self, sessid: &str) -> Option<String> {
         let (user, pass) = self.proxy_base.as_ref()?;
         // Host:port comes from the request's REQUEST_PROXY entry (creds-free).
+        // Prefer the per-request managed proxy; fall back to the configured cloak
+        // proxy host so the recovery arm still gets a residential exit when no
+        // managed proxy was injected (the common case). Unset host => None => the
+        // `?` returns None => no x-proxy, exactly like today.
         let server = crate::REQUEST_PROXY
             .try_with(|p| p.as_ref().map(|e| e.chrome_proxy_server().to_string()))
             .ok()
-            .flatten()?;
+            .flatten()
+            .or_else(|| self.proxy_host.clone())?;
         let cc = crate::REQUEST_COUNTRY
             .try_with(|c| c.clone())
             .ok()
@@ -316,7 +328,58 @@ mod tests {
 
     fn renderer(base_url: &str) -> CloakRenderer {
         // No proxy_base → no x-proxy header (sidecar egresses direct in tests).
-        CloakRenderer::new("cloak", base_url, "", 30_000, None, None)
+        CloakRenderer::new("cloak", base_url, "", 30_000, None, None, None)
+    }
+
+    // With no REQUEST_PROXY scoped, sticky_proxy_url falls back to the configured
+    // cloak proxy host + proxy_base creds + default country. (No task-local scope
+    // here → try_with is Err → .ok() None → the or_else fallback fires.)
+    #[tokio::test]
+    async fn self_provisions_proxy_from_host_when_request_proxy_absent() {
+        let r = CloakRenderer::new(
+            "cloak",
+            "http://sidecar:8000",
+            "",
+            30_000,
+            Some(("user".to_string(), "pass".to_string())),
+            Some("us".to_string()),
+            Some("http://gw.dataimpulse.com:823".to_string()),
+        );
+        assert_eq!(
+            r.sticky_proxy_url("abc").unwrap(),
+            "http://user__cr.us;sessid.stickabc:pass@gw.dataimpulse.com:823"
+        );
+    }
+
+    // Unset proxy host + no REQUEST_PROXY → None (byte-identical to pre-change).
+    #[tokio::test]
+    async fn no_host_and_no_request_proxy_yields_none() {
+        let r = CloakRenderer::new(
+            "cloak",
+            "http://sidecar:8000",
+            "",
+            30_000,
+            Some(("user".to_string(), "pass".to_string())),
+            Some("us".to_string()),
+            None,
+        );
+        assert!(r.sticky_proxy_url("abc").is_none());
+    }
+
+    // Empty-string host is normalized to None at construction (no accidental
+    // "://:@..." when the env is set-but-empty).
+    #[tokio::test]
+    async fn empty_host_normalizes_to_none() {
+        let r = CloakRenderer::new(
+            "cloak",
+            "http://sidecar:8000",
+            "",
+            30_000,
+            Some(("user".to_string(), "pass".to_string())),
+            Some("us".to_string()),
+            Some("   ".to_string()),
+        );
+        assert!(r.sticky_proxy_url("abc").is_none());
     }
 
     #[tokio::test]

@@ -698,6 +698,13 @@ pub struct RendererConfig {
     /// [`CLOAK_DEFAULT_TIMEOUT_MS`] when unset.
     #[serde(default)]
     pub cloak_timeout_ms: Option<u64>,
+    /// Proxy `scheme://host:port` (creds-free, e.g. `http://gw.dataimpulse.com:823`)
+    /// for the cloak arm to self-provision a residential exit when no per-request
+    /// managed proxy was injected. Creds come from `proxy_base_user`/`_pass`.
+    /// `None`/empty = the cloak arm uses only the per-request proxy (today's
+    /// behavior) — so an unset value is byte-identical.
+    #[serde(default)]
+    pub cloak_proxy_host: Option<String>,
     /// Enable Chrome resource interception (`Fetch.enable` blocking of media,
     /// fonts, trackers). Default `false`; flipped after the CDP-fake suite
     /// validates pump + cleanup behaviour. See plan Phase 2.
@@ -940,6 +947,7 @@ impl Default for RendererConfig {
             camoufox_timeout_ms: None,
             cloak: None,
             cloak_timeout_ms: None,
+            cloak_proxy_host: None,
             chrome_intercept_resources: false,
             chrome_intercept_stylesheets: false,
             chrome_host_intercept_disable: Vec::new(),
