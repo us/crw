@@ -8,6 +8,23 @@ The source of truth is the repository root changelog. Do not edit this docs page
 
 All notable changes to CRW are documented here.
 
+## [0.26.0](https://github.com/us/crw/compare/v0.25.2...v0.26.0) (2026-07-19)
+
+
+### Features
+
+* **extract:** expose extracted images in scrape response ([7d632ef](https://github.com/us/crw/commit/7d632ef56cd20fd9a30784bb400b19593cdad74e))
+* **renderer:** let the cloak arm self-provision its residential proxy ([35bc472](https://github.com/us/crw/commit/35bc4728913628f310f0872573c3bb7b5b93b87f))
+* **renderer:** send x-deadline-ms to the cloak sidecar mirror call ([0de10e2](https://github.com/us/crw/commit/0de10e276a4e04ffa595ff0adc06e146bedc725c))
+* **search:** passage-select + snippet-first for the answer path ([88f2e93](https://github.com/us/crw/commit/88f2e93bc43469990f3fc197f2652f7e74565f49))
+* **server:** add Kimi Code compat routes (/kimi/search, /kimi/fetch) ([5a241e5](https://github.com/us/crw/commit/5a241e5f2fd810d18d7fa077f3b3e036a92ec5fd))
+
+
+### Bug Fixes
+
+* **renderer:** give chrome_proxy recovery arm its own budget and load-shed it ([1a3942b](https://github.com/us/crw/commit/1a3942b02efe659377e8dcde6986b9b2ea09db6f))
+* **server:** add success field to /v1/extract responses ([4f386ed](https://github.com/us/crw/commit/4f386ed2acd404b2b7b5b540bcb2079dab4451be)), closes [#318](https://github.com/us/crw/issues/318)
+
 ## [0.25.2](https://github.com/us/crw/compare/v0.25.1...v0.25.2) (2026-07-17)
 
 
