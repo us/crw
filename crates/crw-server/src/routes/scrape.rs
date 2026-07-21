@@ -11,9 +11,21 @@ use crate::state::{AppState, validate_renderer_pin};
 
 pub async fn scrape(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
     body: Result<Json<ScrapeRequest>, JsonRejection>,
 ) -> Result<Json<ApiResponse<ScrapeData>>, AppError> {
-    let Json(req) = body.map_err(AppError::from)?;
+    let Json(mut req) = body.map_err(AppError::from)?;
+    // `force_cloak` is `skip_deserializing`, so it is never read from the body.
+    // The only source is this trusted, SaaS-set header (the engine is not
+    // internet-exposed in the managed deployment), so a caller cannot force the
+    // expensive cloak tier.
+    req.force_cloak = Some(
+        headers
+            .get("x-crw-force-cloak")
+            .and_then(|v| v.to_str().ok())
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false),
+    );
     let parsed_url = url::Url::parse(&req.url)
         .map_err(|e| CrwError::InvalidRequest(format!("Invalid URL: {e}")))?;
     crw_core::url_safety::validate_safe_url_resolved(&parsed_url)

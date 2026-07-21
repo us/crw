@@ -1097,6 +1097,33 @@ impl FallbackRenderer {
         requested_renderer: Option<&str>,
         deadline: crw_core::Deadline,
     ) -> CrwResult<FetchResult> {
+        self.fetch_hinted(
+            url,
+            headers,
+            render_js,
+            wait_for_ms,
+            requested_renderer,
+            false,
+            deadline,
+        )
+        .await
+    }
+
+    /// `fetch` plus the server-injected `force_cloak` routing hint. Kept separate
+    /// so the ~dozen existing `fetch` callers (crawl, discovery, tests) stay
+    /// unchanged and pass `force_cloak = false` implicitly; only the scrape path
+    /// that carries a per-request verdict opts in.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn fetch_hinted(
+        &self,
+        url: &str,
+        headers: &HashMap<String, String>,
+        render_js: Option<bool>,
+        wait_for_ms: Option<u64>,
+        requested_renderer: Option<&str>,
+        force_cloak: bool,
+        deadline: crw_core::Deadline,
+    ) -> CrwResult<FetchResult> {
         // Phase 0 (latency-qn): time the whole fetch and emit a structured
         // breakdown event so bench runs can attribute p90 to a tier. The flag
         // is off by default, so the only cost on the hot path is one cheap
@@ -1110,6 +1137,7 @@ impl FallbackRenderer {
                     render_js,
                     wait_for_ms,
                     requested_renderer,
+                    force_cloak,
                     deadline,
                 )
                 .await;
@@ -1122,6 +1150,7 @@ impl FallbackRenderer {
                 render_js,
                 wait_for_ms,
                 requested_renderer,
+                force_cloak,
                 deadline,
             )
             .await;
@@ -1146,6 +1175,7 @@ impl FallbackRenderer {
         out
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn fetch_inner(
         &self,
         url: &str,
@@ -1153,6 +1183,7 @@ impl FallbackRenderer {
         render_js: Option<bool>,
         wait_for_ms: Option<u64>,
         requested_renderer: Option<&str>,
+        force_cloak: bool,
         deadline: crw_core::Deadline,
     ) -> CrwResult<FetchResult> {
         // Per-eTLD+1 rate-limit + concurrency cap. Held across the entire
@@ -1219,6 +1250,135 @@ impl FallbackRenderer {
             requested_renderer,
             "FallbackRenderer::fetch dispatching"
         );
+        // Cloak-first routing hint: for a domain the SaaS registry learned is
+        // Cloudflare-managed, try the cloak Turnstile arm BEFORE the ladder with
+        // the FULL deadline, so the ~39s cold solve fits in-band on request #1
+        // instead of the ladder (lightpanda->chrome, which cannot clear CF)
+        // burning the budget first. Reuses the recovery arm's floor+breaker+sem
+        // guards verbatim; on ANY miss (floor not cleared / breaker open / no
+        // permit / thin / challenge / error) it falls through to the normal
+        // dispatch below, so a mis-flag can only cost time, never content (the
+        // recall invariant). Screenshot requests skip it (cloak replays HTTP and
+        // has no DOM to capture). `cloak_attempted` is threaded to
+        // `fetch_with_js` so the post-ladder recovery arm is suppressed and one
+        // page never burns two `cloak_sem` permits.
+        let cloak_attempted: bool = {
+            #[cfg(feature = "cloak")]
+            {
+                let mut attempted = false;
+                // Eligible only for auto/unpinned requests that allow JS: a hard
+                // renderer pin or `renderJs:false` is an explicit caller contract
+                // ("no silent fallback" / "HTTP only") that cloak-first must not
+                // silently break. Screenshots also skip it (cloak replays HTTP and
+                // has no DOM to capture).
+                let cloak_first_eligible = force_cloak
+                    && !screenshot_requested()
+                    && effective != Some(false)
+                    && !matches!(requested_renderer, Some(name) if name != "auto");
+                if cloak_first_eligible && let Some(arm) = &self.cloak_arm {
+                    let host = host_of(url);
+                    let kind = RendererKind::Cloak;
+                    let floor =
+                        std::time::Duration::from_millis(crw_core::config::CLOAK_ARM_FLOOR_MS);
+                    // Reserve budget for the ladder: cloak-first runs on the SHARED
+                    // deadline, so a slow/failed solve on a mis-flagged non-CF domain
+                    // would otherwise starve the ladder into a Timeout (recall
+                    // regression). Fire only with room for a full solve AND the
+                    // reserve, and cap the cloak call at `remaining - reserve`.
+                    let reserve = std::time::Duration::from_millis(
+                        crw_core::config::CLOAK_FIRST_LADDER_RESERVE_MS,
+                    );
+                    let permit = if deadline.remaining() >= floor + reserve
+                        && !self.breakers.host_for(&host, kind).await.is_open()
+                    {
+                        self.cloak_sem.clone().try_acquire_owned().ok()
+                    } else {
+                        None
+                    };
+                    if let Some(_permit) = permit {
+                        attempted = true;
+                        let cloak_deadline = crw_core::Deadline::now_plus(
+                            deadline.remaining().saturating_sub(reserve),
+                        );
+                        let entry = self.pick_proxy_for_url(url);
+                        let attempt = REQUEST_PROXY
+                            .scope(entry, arm.fetch(url, headers, wait_for_ms, cloak_deadline))
+                            .await;
+                        match attempt {
+                            Ok(mut r) => {
+                                // `arm_ok` = the recovery arm's exact content gate;
+                                // it drives the breaker outcome so a body that only
+                                // the stricter ship gate rejects cannot skew the
+                                // shared Cloak breaker toward open (which would
+                                // suppress BOTH cloak paths for the host).
+                                let arm_ok = html_body_text_len(&r.html)
+                                    >= Self::MIN_RENDERED_TEXT_LEN
+                                    && detector::looks_like_failed_render(&r.html).is_none()
+                                    && !detector::looks_like_loading_placeholder(&r.html)
+                                    && !detector::looks_like_cloudflare_challenge(&r.html);
+                                // Ship only a fully-rendered body: a curl_cffi shell
+                                // that passes `arm_ok` but is thin still falls
+                                // through to chrome (RED-2).
+                                let ship_ok = arm_ok && !detector::looks_like_thin_html(&r.html);
+                                if !host.is_empty() {
+                                    let outcome = if arm_ok {
+                                        BreakerOutcome::Success
+                                    } else {
+                                        BreakerOutcome::RenderError
+                                    };
+                                    self.breakers.record_outcome(&host, kind, outcome).await;
+                                }
+                                if self.latency_breakdown {
+                                    tracing::info!(
+                                        target: "latency_breakdown",
+                                        url, tier = "cloak", ok = ship_ok, consumed = ship_ok,
+                                        "cloak-first fired"
+                                    );
+                                }
+                                if ship_ok {
+                                    // Stamp the routing metadata + flat page credit
+                                    // the recovery-arm accept path also stamps
+                                    // (cloak.rs emits credit_cost:0 / decision:None).
+                                    r.credit_cost = credit_for(kind);
+                                    r.render_decision = Some(RenderDecision::Failover {
+                                        chain: vec![kind],
+                                        reason: FailoverErrorKind::Other,
+                                    });
+                                    return Ok(r);
+                                }
+                                // thin -> fall through to the ladder.
+                            }
+                            Err(_e) => {
+                                if !host.is_empty() {
+                                    self.breakers
+                                        .record_outcome(
+                                            &host,
+                                            kind,
+                                            BreakerOutcome::ConnectionError,
+                                        )
+                                        .await;
+                                }
+                                if self.latency_breakdown {
+                                    tracing::info!(
+                                        target: "latency_breakdown",
+                                        url, tier = "cloak", error = %_e,
+                                        "cloak-first fired (error)"
+                                    );
+                                }
+                                // error -> fall through to the ladder.
+                            }
+                        }
+                    }
+                }
+                attempted
+            }
+            #[cfg(not(feature = "cloak"))]
+            {
+                let _ = force_cloak;
+                false
+            }
+        };
+
         // A non-"auto" pinned renderer is a hard pin — failures must surface.
         let is_hard_pinned = matches!(requested_renderer, Some(name) if name != "auto");
         match effective {
@@ -1270,8 +1430,15 @@ impl FallbackRenderer {
                     stamp_http_decision(&mut result, requested_renderer);
                     Ok(result)
                 } else {
-                    self.fetch_with_js(url, headers, wait_for_ms, requested_renderer, deadline)
-                        .await
+                    self.fetch_with_js(
+                        url,
+                        headers,
+                        wait_for_ms,
+                        requested_renderer,
+                        cloak_attempted,
+                        deadline,
+                    )
+                    .await
                 }
             }
             None => {
@@ -1294,7 +1461,14 @@ impl FallbackRenderer {
                             "HTTP fetch failed, escalating to JS renderer"
                         );
                         return self
-                            .fetch_with_js(url, headers, wait_for_ms, requested_renderer, deadline)
+                            .fetch_with_js(
+                                url,
+                                headers,
+                                wait_for_ms,
+                                requested_renderer,
+                                cloak_attempted,
+                                deadline,
+                            )
                             .await
                             .map_err(|js_err| {
                                 tracing::warn!("Both HTTP and JS failed: http={e}, js={js_err}");
@@ -1396,7 +1570,14 @@ impl FallbackRenderer {
                         );
                     }
                     match self
-                        .fetch_with_js(url, headers, wait_for_ms, requested_renderer, deadline)
+                        .fetch_with_js(
+                            url,
+                            headers,
+                            wait_for_ms,
+                            requested_renderer,
+                            cloak_attempted,
+                            deadline,
+                        )
                         .await
                     {
                         Ok(js_result) => Ok(js_result),
@@ -1716,6 +1897,10 @@ impl FallbackRenderer {
         headers: &HashMap<String, String>,
         wait_for_ms: Option<u64>,
         requested_renderer: Option<&str>,
+        // True when the pre-ladder cloak-first hint already fired a cloak attempt
+        // this request; suppresses the post-ladder recovery arm so one page never
+        // burns two `cloak_sem` permits.
+        cloak_attempted: bool,
         deadline: crw_core::Deadline,
     ) -> CrwResult<FetchResult> {
         let host = host_of(url);
@@ -2515,10 +2700,14 @@ impl FallbackRenderer {
         let route_to_cloak = {
             #[cfg(feature = "cloak")]
             {
-                saw_cf_challenge && self.cloak_arm.is_some()
+                // `!cloak_attempted`: if the pre-ladder cloak-first hint already
+                // fired a cloak attempt this request, do NOT fire the recovery arm
+                // again (one page, one cloak permit).
+                saw_cf_challenge && self.cloak_arm.is_some() && !cloak_attempted
             }
             #[cfg(not(feature = "cloak"))]
             {
+                let _ = cloak_attempted;
                 false
             }
         };
@@ -3177,6 +3366,7 @@ mod tests {
                 &HashMap::new(),
                 None,
                 None,
+                false,
                 crw_core::Deadline::from_request_ms(0),
             )
             .await
@@ -3253,6 +3443,7 @@ mod tests {
                 &HashMap::new(),
                 None,
                 None,
+                false,
                 crw_core::Deadline::from_request_ms(1_500),
             )
             .await
@@ -3345,7 +3536,14 @@ mod tests {
         let r = make_renderer_with_mocks(vec![mock]);
 
         let res = r
-            .fetch_with_js("https://example.com", &HashMap::new(), None, None, tdl())
+            .fetch_with_js(
+                "https://example.com",
+                &HashMap::new(),
+                None,
+                None,
+                false,
+                tdl(),
+            )
             .await
             .expect("healthy budget must render");
         assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
@@ -3380,6 +3578,7 @@ mod tests {
                     &HashMap::new(),
                     None,
                     None,
+                    false,
                     crw_core::Deadline::from_request_ms(5000),
                 )
                 .await
@@ -3412,6 +3611,7 @@ mod tests {
                     &HashMap::new(),
                     None,
                     None,
+                    false,
                     crw_core::Deadline::from_request_ms(5000),
                 )
                 .await
@@ -4319,5 +4519,332 @@ mod tests {
             }),
             "chrome must escalate straight to chrome_proxy, skipping lightpanda"
         );
+    }
+
+    // ---- Phase 2a: cloak-first routing hint (`force_cloak`) ----
+
+    /// A cloak-arm stub that returns a caller-chosen body and counts its calls,
+    /// so a test can assert both the body handling AND that the arm fired exactly
+    /// once (the double-fire guard).
+    #[cfg(feature = "cloak")]
+    struct CountingBodyFetcher {
+        name: &'static str,
+        calls: Arc<std::sync::atomic::AtomicUsize>,
+        html: String,
+        fail: bool,
+    }
+
+    #[cfg(feature = "cloak")]
+    #[async_trait::async_trait]
+    impl PageFetcher for CountingBodyFetcher {
+        async fn fetch(
+            &self,
+            url: &str,
+            _headers: &HashMap<String, String>,
+            _wait_for_ms: Option<u64>,
+            _deadline: crw_core::Deadline,
+        ) -> CrwResult<FetchResult> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if self.fail {
+                return Err(CrwError::RendererError("cloak stub failure".into()));
+            }
+            Ok(FetchResult {
+                url: url.to_string(),
+                final_url: None,
+                status_code: 200,
+                html: self.html.clone(),
+                content_type: Some("text/html".to_string()),
+                raw_bytes: None,
+                rendered_with: Some(self.name.to_string()),
+                elapsed_ms: 0,
+                warning: None,
+                render_decision: None,
+                credit_cost: 0,
+                warnings: Vec::new(),
+                truncated: false,
+                deadline_exceeded: false,
+                captured_responses: Vec::new(),
+                screenshot: None,
+            })
+        }
+        fn name(&self) -> &str {
+            self.name
+        }
+        fn supports_js(&self) -> bool {
+            true
+        }
+        async fn is_available(&self) -> bool {
+            true
+        }
+    }
+
+    #[cfg(feature = "cloak")]
+    fn renderer_with_cloak(
+        cloak: Arc<dyn PageFetcher>,
+        ladder: Vec<Arc<dyn PageFetcher>>,
+    ) -> FallbackRenderer {
+        let cfg = base_cfg(RendererMode::None);
+        let mut r =
+            FallbackRenderer::new(&cfg, "crw-test", None, &StealthConfig::default()).unwrap();
+        r.js_renderers = ladder;
+        r.cloak_arm = Some(cloak);
+        r
+    }
+
+    /// (i) force_cloak + cleared budget + a content-OK cloak arm: cloak fires
+    /// FIRST and the ladder never runs.
+    #[cfg(feature = "cloak")]
+    #[tokio::test]
+    async fn cloak_first_fires_before_ladder_on_success() {
+        let ladder_calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let ladder = Arc::new(CountingFetcher {
+            name: "chrome",
+            calls: ladder_calls.clone(),
+        });
+        let cloak = Arc::new(MockFetcher {
+            name: "cloak",
+            behavior: MockBehavior::Ok(rich_html("CLOAKED")),
+        });
+        let r = renderer_with_cloak(cloak, vec![ladder]);
+        let res = r
+            .fetch_hinted(
+                "https://glassdoor.com/x",
+                &HashMap::new(),
+                Some(true),
+                None,
+                None,
+                true,
+                tdl(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.rendered_with.as_deref(), Some("cloak"));
+        assert!(res.html.contains("CLOAKED"));
+        assert_eq!(
+            res.credit_cost, 1,
+            "cloak-first success must stamp the flat 1-credit page cost"
+        );
+        assert!(
+            res.render_decision.is_some(),
+            "cloak-first success must stamp routing metadata"
+        );
+        assert_eq!(
+            ladder_calls.load(std::sync::atomic::Ordering::SeqCst),
+            0,
+            "ladder must not run when cloak-first succeeds"
+        );
+    }
+
+    /// (ii) RED-1: a caller deadline below CLOAK_ARM_FLOOR_MS (24s) must make the
+    /// hint a no-op so the request runs today's ladder (recall-safe).
+    #[cfg(feature = "cloak")]
+    #[tokio::test]
+    async fn cloak_first_skipped_when_deadline_below_floor() {
+        let cloak_calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let cloak = Arc::new(CountingFetcher {
+            name: "cloak",
+            calls: cloak_calls.clone(),
+        });
+        let ladder = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Ok(rich_html("LADDER")),
+        });
+        let r = renderer_with_cloak(cloak, vec![ladder]);
+        let res = r
+            .fetch_hinted(
+                "https://glassdoor.com/x",
+                &HashMap::new(),
+                Some(true),
+                None,
+                None,
+                true,
+                // 5s: below the 24s cloak floor (hint ignored) but above the
+                // ladder's own MIN_TIER_BUDGET so the ladder still renders.
+                crw_core::Deadline::from_request_ms(5_000),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            cloak_calls.load(std::sync::atomic::Ordering::SeqCst),
+            0,
+            "cloak-first must not fire below the floor"
+        );
+        assert!(res.html.contains("LADDER"));
+    }
+
+    /// (v) RED-2: a thin cloak body must NOT be shipped; it falls through to the
+    /// ladder, which returns the fuller render.
+    #[cfg(feature = "cloak")]
+    #[tokio::test]
+    async fn cloak_first_falls_through_to_ladder_on_thin() {
+        let cloak = Arc::new(MockFetcher {
+            name: "cloak",
+            behavior: MockBehavior::Ok("<html><body>hi</body></html>".to_string()),
+        });
+        let ladder = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Ok(rich_html("LADDER")),
+        });
+        let r = renderer_with_cloak(cloak, vec![ladder]);
+        let res = r
+            .fetch_hinted(
+                "https://glassdoor.com/x",
+                &HashMap::new(),
+                Some(true),
+                None,
+                None,
+                true,
+                tdl(),
+            )
+            .await
+            .unwrap();
+        assert!(
+            res.html.contains("LADDER"),
+            "thin cloak result must fall through to the ladder"
+        );
+        assert_eq!(res.rendered_with.as_deref(), Some("chrome"));
+    }
+
+    /// (vi) Double-fire guard: cloak-first fires (thin) and falls through; the
+    /// ladder returns a CF challenge; the post-ladder recovery arm must NOT fire
+    /// the cloak arm a second time (one page, one cloak permit).
+    #[cfg(feature = "cloak")]
+    #[tokio::test]
+    async fn cloak_first_suppresses_post_ladder_recovery_arm() {
+        let cloak_calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let cloak = Arc::new(CountingBodyFetcher {
+            name: "cloak",
+            calls: cloak_calls.clone(),
+            html: "<html><body>hi</body></html>".to_string(), // thin -> fall through
+            fail: false,
+        });
+        let challenge = format!(
+            "<html><head><script>window._cf_chl_opt={{cvId:'3'}};</script></head><body>{}</body></html>",
+            "x".repeat(300)
+        );
+        let ladder = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Ok(challenge),
+        });
+        let r = renderer_with_cloak(cloak, vec![ladder]);
+        let _ = r
+            .fetch_hinted(
+                "https://glassdoor.com/x",
+                &HashMap::new(),
+                Some(true),
+                None,
+                None,
+                true,
+                tdl(),
+            )
+            .await;
+        assert_eq!(
+            cloak_calls.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "cloak arm must fire exactly once (no double-fire via the recovery arm)"
+        );
+    }
+
+    /// (vi-b) Same suppression when cloak-first ERRORS (not just thin): the arm
+    /// still fired (attempted=true), so the post-ladder recovery arm is suppressed.
+    #[cfg(feature = "cloak")]
+    #[tokio::test]
+    async fn cloak_first_error_still_suppresses_recovery_arm() {
+        let cloak_calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let cloak = Arc::new(CountingBodyFetcher {
+            name: "cloak",
+            calls: cloak_calls.clone(),
+            html: String::new(),
+            fail: true, // Err -> fall through
+        });
+        let challenge = format!(
+            "<html><head><script>window._cf_chl_opt={{cvId:'3'}};</script></head><body>{}</body></html>",
+            "x".repeat(300)
+        );
+        let ladder = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Ok(challenge),
+        });
+        let r = renderer_with_cloak(cloak, vec![ladder]);
+        let _ = r
+            .fetch_hinted(
+                "https://glassdoor.com/x",
+                &HashMap::new(),
+                Some(true),
+                None,
+                None,
+                true,
+                tdl(),
+            )
+            .await;
+        assert_eq!(
+            cloak_calls.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "cloak-first Err must still suppress the recovery arm (fired once)"
+        );
+    }
+
+    /// (viii) renderJs:false is an explicit caller contract; the hint must not
+    /// silently run a browser-class cloak solve. Cloak-first is skipped.
+    #[cfg(feature = "cloak")]
+    #[tokio::test]
+    async fn cloak_first_skipped_when_render_js_false() {
+        let cloak_calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let cloak = Arc::new(CountingFetcher {
+            name: "cloak",
+            calls: cloak_calls.clone(),
+        });
+        let r = renderer_with_cloak(cloak, vec![]);
+        // render_js = Some(false): the request must stay HTTP-only.
+        let _ = r
+            .fetch_hinted(
+                "https://glassdoor.com/x",
+                &HashMap::new(),
+                Some(false),
+                None,
+                None,
+                true,
+                tdl(),
+            )
+            .await;
+        assert_eq!(
+            cloak_calls.load(std::sync::atomic::Ordering::SeqCst),
+            0,
+            "cloak-first must not fire when the caller set renderJs:false"
+        );
+    }
+
+    /// (vii) force_cloak=false is byte-identical to today: cloak never pre-fires.
+    #[cfg(feature = "cloak")]
+    #[tokio::test]
+    async fn force_cloak_false_never_fires_cloak() {
+        let cloak_calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let cloak = Arc::new(CountingFetcher {
+            name: "cloak",
+            calls: cloak_calls.clone(),
+        });
+        let ladder = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Ok(rich_html("LADDER")),
+        });
+        let r = renderer_with_cloak(cloak, vec![ladder]);
+        let res = r
+            .fetch_hinted(
+                "https://glassdoor.com/x",
+                &HashMap::new(),
+                Some(true),
+                None,
+                None,
+                false,
+                tdl(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            cloak_calls.load(std::sync::atomic::Ordering::SeqCst),
+            0,
+            "force_cloak=false must never fire cloak"
+        );
+        assert!(res.html.contains("LADDER"));
     }
 }

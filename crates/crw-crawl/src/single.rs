@@ -216,24 +216,26 @@ async fn scrape_url_inner(
                     .or_insert(effective_ua);
             }
             renderer
-                .fetch(
+                .fetch_hinted(
                     &req.url,
                     &merged_headers,
                     effective_render_js_request,
                     req.wait_for,
                     pinned,
+                    req.force_cloak.unwrap_or(false),
                     deadline,
                 )
                 .await?
         }
     } else {
         renderer
-            .fetch(
+            .fetch_hinted(
                 &req.url,
                 &req.headers,
                 effective_render_js_request,
                 req.wait_for,
                 pinned,
+                req.force_cloak.unwrap_or(false),
                 deadline,
             )
             .await?

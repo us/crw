@@ -284,6 +284,21 @@ pub struct ScrapeRequest {
     /// value implies `renderJs:true` unless `renderJs:false` is set explicitly.
     #[serde(default)]
     pub renderer: Option<RequestedRenderer>,
+    /// Internal, server-set hint (NOT a public knob): route this request STRAIGHT
+    /// to the cloak Turnstile recovery arm before the normal ladder, with the full
+    /// deadline, for a domain the SaaS routing registry has learned is
+    /// Cloudflare-managed. Honored only when the `cloak` feature is built and a
+    /// cloak arm is configured, and only when the remaining deadline clears the
+    /// cloak floor + ladder reserve; on any miss it falls through to today's ladder
+    /// (recall-safe). Absent/`None` is byte-identical to today.
+    ///
+    /// `skip_deserializing`: this can NEVER be set from a request body. A caller's
+    /// `{"forceCloak": true}` is ignored; the value comes exclusively from the
+    /// trusted `x-crw-force-cloak` header, which only the SaaS front-end sets (the
+    /// engine is not internet-exposed in the managed deployment). This makes the
+    /// "server-only" contract structural rather than relying on a downstream strip.
+    #[serde(default, skip_deserializing, skip_serializing_if = "Option::is_none")]
+    pub force_cloak: Option<bool>,
     /// End-to-end deadline budget in milliseconds. When unset, the configured
     /// `request.deadline_ms_default` (8000) applies. The SLO p95 metric is
     /// computed only over requests with `deadline_ms <= 8000`; longer values
@@ -444,6 +459,7 @@ impl Default for ScrapeRequest {
             summary_prompt: None,
             max_content_chars: None,
             renderer: None,
+            force_cloak: None,
             deadline_ms: None,
             debug: None,
             change_tracking: None,
