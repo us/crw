@@ -240,6 +240,12 @@ features instead of operating a scraper.
 | Cost | Free tier, then plans from **$11/mo** — [pricing](https://fastcrw.com/pricing) | $0 license — you pay for the infra and your team's time |
 | License | You call an API — **no copyleft on your code** | AGPL-3.0 — copyleft if you bundle the engine or run a modified public service |
 
+> **Air-gapped note:** the crw engine itself makes no telemetry calls. The default
+> Docker Compose stack disables the LightPanda renderer's third-party telemetry
+> (`LIGHTPANDA_DISABLE_TELEMETRY=true`). If you run a fully air-gapped deployment,
+> verify egress for any renderer sidecars you enable and pin their images to a digest.
+> See [self-hosting hardening](https://docs.fastcrw.com/self-hosting-hardening/).
+
 ### Self-host in one command
 
 ```bash

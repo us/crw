@@ -9,6 +9,12 @@ port = 3000
 # the default ladder_min.
 request_timeout_secs = 120
 rate_limit_rps = 10              # Max requests/second (global). 0 = unlimited.
+# Cross-origin allowlist for browser callers. Empty (default) = NO CORS headers
+# are sent, so browsers block cross-origin JS access — the safe default for a
+# server-to-server API. Set explicit origins only if a browser app must call the
+# engine directly. A literal "*" is rejected (that is the permissive wildcard
+# this setting replaces). Env: CRW_SERVER__CORS_ALLOWED_ORIGINS="https://a,https://b".
+# cors_allowed_origins = ["https://app.example.com"]
 
 # [request]
 # deadline_ms_default = 8000

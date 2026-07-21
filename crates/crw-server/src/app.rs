@@ -1,7 +1,7 @@
 use axum::Router;
 use axum::body::Body;
 use axum::extract::DefaultBodyLimit;
-use axum::http::{Request, StatusCode};
+use axum::http::{HeaderValue, Method, Request, StatusCode, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -28,6 +28,7 @@ pub fn create_app(state: AppState) -> Router {
     // by the outer layer before the inner deadline fires. See issue #35.
     let timeout = Duration::from_secs(state.config.effective_request_timeout_secs());
     let rate_limit_rps = state.config.server.rate_limit_rps;
+    let cors_origins = state.config.server.cors_allowed_origins.clone();
 
     // Native vs Firecrawl-compat surface split.
     //
@@ -59,6 +60,23 @@ pub fn create_app(state: AppState) -> Router {
         .route(
             "/mcp",
             post(routes::mcp::mcp_handler).fallback(method_not_allowed),
+        )
+        // Ops + admin surfaces live INSIDE the auth boundary. When
+        // `[auth].api_keys` is set they require a valid Bearer token; with no
+        // keys configured (default self-host) they stay open, exactly like the
+        // scraper API. Previously these were mounted on the base router below,
+        // bypassing `auth_middleware` even on key-secured deployments.
+        .route(
+            "/metrics",
+            get(routes::metrics::metrics).fallback(method_not_allowed),
+        )
+        .route(
+            "/metrics/renderer-breakers",
+            get(routes::breakers::renderer_breakers).fallback(method_not_allowed),
+        )
+        .route(
+            "/admin/breakers/reset",
+            post(routes::breakers::reset_breakers).fallback(method_not_allowed),
         );
 
     let api_routes = if api_keys.is_empty() {
@@ -78,7 +96,10 @@ pub fn create_app(state: AppState) -> Router {
         None
     };
 
-    Router::new()
+    // Base router: only liveness + public schema stay OUTSIDE the auth boundary.
+    // Ops/admin routes now live in `api_routes` above. `health`/`ready` take
+    // `State<AppState>`, so `.with_state(state)` still belongs here.
+    let app = Router::new()
         .route(
             "/health",
             get(routes::health::health).fallback(method_not_allowed),
@@ -95,18 +116,6 @@ pub fn create_app(state: AppState) -> Router {
             "/ready",
             get(routes::health::ready).fallback(method_not_allowed),
         )
-        .route(
-            "/metrics",
-            get(routes::metrics::metrics).fallback(method_not_allowed),
-        )
-        .route(
-            "/metrics/renderer-breakers",
-            get(routes::breakers::renderer_breakers).fallback(method_not_allowed),
-        )
-        .route(
-            "/admin/breakers/reset",
-            post(routes::breakers::reset_breakers).fallback(method_not_allowed),
-        )
         .with_state(state)
         .merge(api_routes)
         .layer(axum::middleware::from_fn(move |req, next| {
@@ -119,15 +128,90 @@ pub fn create_app(state: AppState) -> Router {
             timeout,
         ))
         .layer(SetResponseHeaderLayer::overriding(
-            axum::http::header::X_CONTENT_TYPE_OPTIONS,
-            axum::http::HeaderValue::from_static("nosniff"),
+            header::X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
         ))
         .layer(SetResponseHeaderLayer::overriding(
-            axum::http::header::X_FRAME_OPTIONS,
-            axum::http::HeaderValue::from_static("DENY"),
-        ))
-        .layer(CorsLayer::permissive())
-        .layer(TraceLayer::new_for_http())
+            header::X_FRAME_OPTIONS,
+            HeaderValue::from_static("DENY"),
+        ));
+
+    // CORS is opt-in via `server.cors_allowed_origins`. Empty (default) = no
+    // layer at all, so no `Access-Control-Allow-Origin` is emitted and browsers
+    // block cross-origin JS reads — the safe default for a server-to-server API,
+    // replacing the old blanket `CorsLayer::permissive()`. (The `/openapi*`
+    // handlers still set `ACAO: *` themselves — an intentional public-schema
+    // exception unaffected by this layer.)
+    let app = match build_cors_layer(&cors_origins) {
+        Some(cors) => app.layer(cors),
+        None => app,
+    };
+
+    app.layer(TraceLayer::new_for_http())
+}
+
+/// Build a CORS layer from the configured origin allowlist. Returns `None` when
+/// the allowlist is empty (or yields no valid origin), so the caller omits the
+/// layer entirely and no CORS headers are emitted. Only explicit
+/// `scheme://host` origins are accepted; `*`, `null`, and schemeless entries are
+/// rejected (see the inline notes) so the setting can never silently widen back
+/// into a permissive or opaque-origin allowance.
+fn build_cors_layer(origins: &[String]) -> Option<CorsLayer> {
+    let allow: Vec<HeaderValue> = origins
+        .iter()
+        .filter_map(|origin| {
+            let origin = origin.trim();
+            if origin.is_empty() {
+                return None;
+            }
+            // Reject footguns before building the allowlist entry:
+            //   `*`    — the wildcard permissive default this setting replaces;
+            //            `AllowOrigin::list(["*"])` also panics in tower-http.
+            //   `null` — the opaque-origin token; allowing it grants access to
+            //            sandboxed iframes and `file://` contexts.
+            //   no `://` — a real Origin is `scheme://host[:port]`, so a
+            //            schemeless entry can never match and would silently
+            //            leave CORS disabled.
+            let lower = origin.to_ascii_lowercase();
+            if lower == "*" || lower == "null" || !origin.contains("://") {
+                tracing::warn!(
+                    origin,
+                    "server.cors_allowed_origins: not a valid explicit origin \
+                     (expected scheme://host, never `*` or `null`); ignoring entry"
+                );
+                return None;
+            }
+            match HeaderValue::from_str(origin) {
+                Ok(value) => Some(value),
+                Err(_) => {
+                    tracing::warn!(
+                        origin,
+                        "server.cors_allowed_origins: invalid origin, ignoring"
+                    );
+                    None
+                }
+            }
+        })
+        .collect();
+
+    if allow.is_empty() {
+        if !origins.is_empty() {
+            // Configured but nothing survived (all blank/`*`/malformed) — warn so
+            // an operator who fat-fingered their only origin doesn't get a
+            // silently CORS-less server.
+            tracing::warn!(
+                "server.cors_allowed_origins was set but yielded no valid origin; no CORS layer applied"
+            );
+        }
+        return None;
+    }
+
+    Some(
+        CorsLayer::new()
+            .allow_origin(allow)
+            .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
+            .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE]),
+    )
 }
 
 /// Simple token-bucket rate limiter using atomic counters.

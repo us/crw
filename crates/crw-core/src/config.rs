@@ -521,6 +521,15 @@ pub struct ServerConfig {
     /// Maximum requests per second (global). 0 = unlimited.
     #[serde(default = "default_rate_limit_rps")]
     pub rate_limit_rps: u64,
+    /// Cross-origin allowlist for browser callers. Empty (default) = NO CORS
+    /// headers are emitted, so browsers block cross-origin JS access — the safe
+    /// default for a server-to-server API. Populate only if a browser app must
+    /// call the engine directly (e.g. `["https://app.example.com"]`). A literal
+    /// `"*"` is rejected: wildcard CORS is exactly the permissive default this
+    /// setting replaces. Accepts a TOML array or a comma-separated env string via
+    /// `CRW_SERVER__CORS_ALLOWED_ORIGINS`.
+    #[serde(default, deserialize_with = "deserialize_string_vec")]
+    pub cors_allowed_origins: Vec<String>,
 }
 
 impl Default for ServerConfig {
@@ -530,6 +539,7 @@ impl Default for ServerConfig {
             port: default_port(),
             request_timeout_secs: default_request_timeout(),
             rate_limit_rps: default_rate_limit_rps(),
+            cors_allowed_origins: Vec::new(),
         }
     }
 }

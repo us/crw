@@ -31,9 +31,9 @@ fastCRW validates every outbound URL before fetching it (`crw-core/src/url_safet
 
 The env var `CRW_ALLOW_LOOPBACK_FOR_TESTS=1` disables the loopback and private-range checks so integration tests can target mock servers at `127.0.0.1:<random>`. It is **not a runtime configuration option** — it exists solely to make integration tests pass in CI without a public network. Setting it in a production process removes the SSRF guard for all outbound fetches and is never safe to do.
 
-## Unauthenticated Admin and Ops Endpoints
+## Admin and Ops Endpoints
 
-Three endpoints are registered in `crates/crw-server/src/app.rs` **outside** the authenticated `api_routes` block and therefore bypass the `auth_middleware` entirely, even when `[auth].api_keys` is configured:
+Three operational endpoints expose internal state:
 
 | Endpoint | Method | Purpose |
 |---|---|---|
@@ -41,25 +41,36 @@ Three endpoints are registered in `crates/crw-server/src/app.rs` **outside** the
 | `/metrics/renderer-breakers` | `GET` | JSON snapshot of all circuit-breaker states |
 | `/admin/breakers/reset` | `POST` | Resets all circuit breakers; returns count of host entries cleared |
 
-These endpoints have no authentication built in. Anyone who can reach the process on its listen port can read internal metrics or reset circuit breakers.
+These endpoints sit **inside** the authentication boundary. When you configure `[auth].api_keys`, they require a valid `Authorization: Bearer <key>` header, exactly like the scraper API. With **no** keys configured (the default self-host case), they are open — same as every other route — so restrict the service by network in that mode.
 
-**How to protect them:**
+**Breaking change (key-secured deployments):** if you scrape `/metrics` with a Prometheus job and have `api_keys` set, the scrape now needs the token. Add it to your scrape config:
 
-Option 1 — network policy (preferred for most deployments): bind fastCRW to a non-public interface or port and allow only your monitoring system (Prometheus scraper, internal ops tooling) to reach it. In Docker Compose the default `ports` block should only publish to localhost (`127.0.0.1:<port>:<port>`), never `0.0.0.0`.
-
-Option 2 — reverse-proxy access control: if the process must be reachable on a shared interface, configure your reverse proxy to block or require HTTP Basic / mutual-TLS on the `/metrics` and `/admin` path prefixes before traffic reaches fastCRW. Example (nginx):
-
-```nginx
-location ~ ^/(metrics|admin)/ {
-    # Only allow your Prometheus scraper and ops CIDR
-    allow 10.0.0.0/8;
-    deny  all;
-}
+```yaml
+scrape_configs:
+  - job_name: crw
+    authorization:
+      type: Bearer
+      credentials: "<your-api-key>"
+    static_configs:
+      - targets: ["crw:3000"]
 ```
 
-Option 3 — firewall rule: drop inbound traffic to the fastCRW port except from trusted source IPs (iptables/nftables/cloud security group).
+**Defense in depth (recommended regardless of auth):**
 
-All three options can be layered.
+- Network policy: bind fastCRW to a non-public interface or port and allow only your monitoring system to reach it. In Docker Compose publish only to localhost (`127.0.0.1:<port>:<port>`), never `0.0.0.0`.
+- Reverse-proxy access control: block or require HTTP Basic / mutual-TLS on the `/metrics` and `/admin` path prefixes before traffic reaches fastCRW.
+- Firewall rule: drop inbound traffic to the fastCRW port except from trusted source IPs.
+
+## Cross-Origin (CORS)
+
+By default the engine sends **no** CORS headers, so browsers block cross-origin JavaScript from reading API responses — the safe posture for a server-to-server API. If a browser app must call the engine directly, set an explicit allowlist:
+
+```toml
+[server]
+cors_allowed_origins = ["https://app.example.com"]
+```
+
+or `CRW_SERVER__CORS_ALLOWED_ORIGINS="https://app.example.com,https://admin.example.com"`. A literal `"*"` is rejected — wildcard CORS is exactly what this setting replaces. (The `/openapi.json` schema endpoint is intentionally readable cross-origin so SDK generators can fetch it.)
 
 ## Runtime Isolation
 

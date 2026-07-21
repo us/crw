@@ -17,9 +17,12 @@ GitHub release.
 
 **Please do not open a public GitHub issue for security vulnerabilities.**
 
-Report security issues by emailing the maintainers at:
+Report privately through either channel:
 
-**security@fastcrw.com**
+- **GitHub Private Vulnerability Reporting** (preferred): open a report from the
+  [Security tab](https://github.com/us/crw/security/advisories/new) of this
+  repository. This routes straight to the maintainers and keeps the details private.
+- **Email**: **security@fastcrw.com**
 
 Include as much detail as you can:
 
