@@ -310,8 +310,8 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 </ul>
 <h3 id="crw_allow_loopback_for_tests-never-enable-in-production"><code>CRW_ALLOW_LOOPBACK_FOR_TESTS</code> — never enable in production</h3>
 <p>The env var <code>CRW_ALLOW_LOOPBACK_FOR_TESTS=1</code> disables the loopback and private-range checks so integration tests can target mock servers at <code>127.0.0.1:&lt;random&gt;</code>. It is <strong>not a runtime configuration option</strong> — it exists solely to make integration tests pass in CI without a public network. Setting it in a production process removes the SSRF guard for all outbound fetches and is never safe to do.</p>
-<h2 id="unauthenticated-admin-and-ops-endpoints">Unauthenticated Admin and Ops Endpoints</h2>
-<p>Three endpoints are registered in <code>crates/crw-server/src/app.rs</code> <strong>outside</strong> the authenticated <code>api_routes</code> block and therefore bypass the <code>auth_middleware</code> entirely, even when <code>[auth].api_keys</code> is configured:</p>
+<h2 id="admin-and-ops-endpoints">Admin and Ops Endpoints</h2>
+<p>Three operational endpoints expose internal state:</p>
 <table>
 <thead>
 <tr>
@@ -336,17 +336,26 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <td>Resets all circuit breakers; returns count of host entries cleared</td>
 </tr>
 </tbody></table>
-<p>These endpoints have no authentication built in. Anyone who can reach the process on its listen port can read internal metrics or reset circuit breakers.</p>
-<p><strong>How to protect them:</strong></p>
-<p>Option 1 — network policy (preferred for most deployments): bind fastCRW to a non-public interface or port and allow only your monitoring system (Prometheus scraper, internal ops tooling) to reach it. In Docker Compose the default <code>ports</code> block should only publish to localhost (<code>127.0.0.1:&lt;port&gt;:&lt;port&gt;</code>), never <code>0.0.0.0</code>.</p>
-<p>Option 2 — reverse-proxy access control: if the process must be reachable on a shared interface, configure your reverse proxy to block or require HTTP Basic / mutual-TLS on the <code>/metrics</code> and <code>/admin</code> path prefixes before traffic reaches fastCRW. Example (nginx):</p>
-<pre data-lang="nginx"><code class="language-nginx">location ~ ^/(metrics|admin)/ {
-    # Only allow your Prometheus scraper and ops CIDR
-    allow 10.0.0.0/8;
-    deny  all;
-}</code></pre>
-<p>Option 3 — firewall rule: drop inbound traffic to the fastCRW port except from trusted source IPs (iptables/nftables/cloud security group).</p>
-<p>All three options can be layered.</p>
+<p>These endpoints sit <strong>inside</strong> the authentication boundary. When you configure <code>[auth].api_keys</code>, they require a valid <code>Authorization: Bearer &lt;key&gt;</code> header, exactly like the scraper API. With <strong>no</strong> keys configured (the default self-host case), they are open — same as every other route — so restrict the service by network in that mode.</p>
+<p><strong>Breaking change (key-secured deployments):</strong> if you scrape <code>/metrics</code> with a Prometheus job and have <code>api_keys</code> set, the scrape now needs the token. Add it to your scrape config:</p>
+<pre data-lang="yaml"><code class="language-yaml">scrape_configs:
+  - job_name: crw
+    authorization:
+      type: Bearer
+      credentials: &quot;&lt;your-api-key&gt;&quot;
+    static_configs:
+      - targets: [&quot;crw:3000&quot;]</code></pre>
+<p><strong>Defense in depth (recommended regardless of auth):</strong></p>
+<ul>
+<li>Network policy: bind fastCRW to a non-public interface or port and allow only your monitoring system to reach it. In Docker Compose publish only to localhost (<code>127.0.0.1:&lt;port&gt;:&lt;port&gt;</code>), never <code>0.0.0.0</code>.</li>
+<li>Reverse-proxy access control: block or require HTTP Basic / mutual-TLS on the <code>/metrics</code> and <code>/admin</code> path prefixes before traffic reaches fastCRW.</li>
+<li>Firewall rule: drop inbound traffic to the fastCRW port except from trusted source IPs.</li>
+</ul>
+<h2 id="cross-origin-cors">Cross-Origin (CORS)</h2>
+<p>By default the engine sends <strong>no</strong> CORS headers, so browsers block cross-origin JavaScript from reading API responses — the safe posture for a server-to-server API. If a browser app must call the engine directly, set an explicit allowlist:</p>
+<pre data-lang="toml"><code class="language-toml">[server]
+cors_allowed_origins = [&quot;https://app.example.com&quot;]</code></pre>
+<p>or <code>CRW_SERVER__CORS_ALLOWED_ORIGINS=&quot;https://app.example.com,https://admin.example.com&quot;</code>. A literal <code>&quot;*&quot;</code> is rejected — wildcard CORS is exactly what this setting replaces. (The <code>/openapi.json</code> schema endpoint is intentionally readable cross-origin so SDK generators can fetch it.)</p>
 <h2 id="runtime-isolation">Runtime Isolation</h2>
 <p>Treat page fetching and browser rendering as higher-risk components than your application logic.</p>
 <ul>
