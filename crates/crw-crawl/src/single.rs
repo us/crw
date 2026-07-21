@@ -1013,10 +1013,16 @@ fn classify_block(
     // substring search avoids allocating a lowercased copy on every scrape.
     // Runs before the markdown-substantial guard: a challenge is a block even if
     // it yields boilerplate text.
-    // ponytail: strong-markers-only keeps false positives ~nil; a real page that
-    // cleared the challenge no longer carries _cf_chl_opt / challenge-platform.
-    const CF_STRONG_MARKERS: [&str; 5] = [
-        "/cdn-cgi/challenge-platform/",
+    //
+    // `/cdn-cgi/challenge-platform/` is deliberately NOT in this list: Cloudflare
+    // re-injects that telemetry loader into the CLEARED page too (measured at byte
+    // ~782k of a real post-solve 783k Glassdoor page that carries NO _cf_chl_opt),
+    // so a full-html scan for it false-positives every managed site the cloak arm
+    // successfully solves — emptying real content back to a challenge block. The
+    // remaining markers are interstitial-only: window._cf_chl_opt (the challenge
+    // config object) and the older cf-*/managed-token strings are absent once the
+    // page clears.
+    const CF_STRONG_MARKERS: [&str; 4] = [
         "_cf_chl_opt",
         "cf-challenge-running",
         "cf-browser-verification",
@@ -1129,6 +1135,36 @@ mod tests {
         let b = classify_block(200, Some("text/html"), &html, Some(&md), false, THRESH)
             .expect("Turnstile 200 interstitial must be flagged");
         assert_eq!(b.vendor, "cloudflare");
+    }
+
+    #[test]
+    fn classify_block_no_block_on_cleared_managed_page_with_trailing_platform_script() {
+        // Real prod regression (cloak arm): a managed-Turnstile site the cloak
+        // tier successfully SOLVED returns the real page (~783KB Glassdoor), but
+        // Cloudflare re-injects the `/cdn-cgi/challenge-platform/` telemetry loader
+        // near the END of the cleared body (measured at byte ~782k) with NO
+        // `_cf_chl_opt`. A full-html scan for challenge-platform false-positived it
+        // as an interstitial and emptied the recovered content. The cleared page
+        // must NOT be flagged: it carries content markers and no interstitial-only
+        // token.
+        let mut html = String::from(
+            r#"<!DOCTYPE html><html><head><title>Working at Google | Glassdoor</title></head><body>"#,
+        );
+        html.push_str(&"<p>Real reviews and salaries content.</p>".repeat(10_000)); // >512KB
+        html.push_str(
+            r#"<script src="/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1?ray=abc"></script></body></html>"#,
+        );
+        assert!(
+            html.contains("/cdn-cgi/challenge-platform/") && !html.contains("_cf_chl_opt"),
+            "fixture must reproduce the cleared-page shape"
+        );
+        // Substantial recovered markdown too — the real content extracts fine.
+        let md = "Real reviews and salaries content. ".repeat(50);
+        assert!(
+            classify_block(200, Some("text/html"), &html, Some(&md), false, THRESH).is_none(),
+            "a cleared managed page with a trailing challenge-platform telemetry \
+             script (but no _cf_chl_opt) must not be misflagged as a challenge"
+        );
     }
 
     #[test]
