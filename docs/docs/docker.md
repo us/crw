@@ -41,7 +41,7 @@ The bundled `docker-compose.yml` starts these services:
 
 ² `searxng:8080` is internal to the Compose network only — `localhost:8080` on the host will not connect. Search traffic flows exclusively through crw's `/v1/search` endpoint. For direct debug access, add `ports: ["127.0.0.1:8888:8080"]` in `docker-compose.override.yml`.
 
-³ The host port defaults to `3000` but is overridable without editing the Compose file: set `CRW_HOST_PORT` in `.env` (e.g. `CRW_HOST_PORT=3055`) if something else already holds 3000 on the box. The container port stays `3000`. Note: Compose interpolates `CRW_HOST_PORT` on the host into the port mapping only; unlike the `CRW_*` config keys elsewhere it is not delivered into the container, so the engine never reads it.
+³ The host bind address and port are overridable without editing the Compose file: set `CRW_HOST_PORT` in `.env` (e.g. `CRW_HOST_PORT=3055`) if something else already holds 3000 on the box, and `CRW_BIND_ADDRESS` (e.g. `CRW_BIND_ADDRESS=127.0.0.1`) to stop publishing on public interfaces. Both default to today's behavior (`0.0.0.0:3000`) and the container port stays `3000`. Note: Compose interpolates these on the host into the port mapping only; unlike the `CRW_*` config keys elsewhere they are not delivered into the container, so the engine never reads them.
 
 The `crw` service reads its configuration from the mounted `config.docker.toml` (via
 `CRW_CONFIG=config.docker`), which already points each renderer and the search backend at the matching
@@ -184,7 +184,9 @@ never used.
   by default. The `chrome-stealth` service binds only to `127.0.0.1:9224`. Audit
   `ports:` entries before exposing to a public interface.
 - **Reverse proxy TLS**: Run crw behind nginx/Caddy with TLS termination and
-  `CRW_AUTH__API_KEYS` set. Do not expose port 3000 directly to the internet.
+  `CRW_AUTH__API_KEYS` set. Do not expose port 3000 directly to the internet. When
+  a proxy fronts crw, set `CRW_BIND_ADDRESS=127.0.0.1` in `.env` so the API only
+  publishes on loopback instead of every host interface (see footnote ³).
 
 ## LightPanda Restart Policy
 
