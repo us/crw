@@ -8,6 +8,15 @@ The source of truth is the repository root changelog. Do not edit this docs page
 
 All notable changes to CRW are documented here.
 
+## [0.26.1](https://github.com/us/crw/compare/v0.26.0...v0.26.1) (2026-07-21)
+
+
+### Bug Fixes
+
+* **extract:** count MAX_USER_PROMPT_CHARS as Unicode scalars ([ea798f5](https://github.com/us/crw/commit/ea798f5abf9df7b4448cb1d5732b8ac5511d37b6))
+* **extract:** count maxChars as Unicode scalars ([f319de6](https://github.com/us/crw/commit/f319de682a274e2b2c62f514fe19834deb581cad))
+* **server:** require auth on admin and metrics routes, restrict CORS ([1a66247](https://github.com/us/crw/commit/1a662473da9a98173c4f7e6d42280049799d3895))
+
 ## [0.26.0](https://github.com/us/crw/compare/v0.25.2...v0.26.0) (2026-07-19)
 
 
