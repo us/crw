@@ -31,7 +31,7 @@ The bundled `docker-compose.yml` starts these services:
 
 | Service | Internal Port | Published to host? | Default? | Description |
 |---------|---------------|--------------------|----------|-------------|
-| **crw** | 3000 | ✅ `0.0.0.0:3000` | ✅ | API server (loads `config.docker.toml`) |
+| **crw** | 3000 | ✅ `0.0.0.0:3000`³ | ✅ | API server (loads `config.docker.toml`) |
 | **searxng** | 8080 | ❌ internal only² | ✅ | SearXNG meta-search backend for `/v1/search` |
 | **lightpanda** | 9222 | ❌ internal only | ✅ | Lightweight headless browser for JS rendering |
 | **chrome** | 9222 | ❌ internal only | `--profile heavy` | Full Chromium fallback for complex SPAs |
@@ -40,6 +40,8 @@ The bundled `docker-compose.yml` starts these services:
 ¹ `chrome-stealth` listens on container port 3000 (browserless default) and is published to the host as `127.0.0.1:9224` — loopback only, for a host-run `crw-server` during development. The composed `crw` service reaches it via the Docker bridge as `chrome-stealth:3000` and does not use the host port.
 
 ² `searxng:8080` is internal to the Compose network only — `localhost:8080` on the host will not connect. Search traffic flows exclusively through crw's `/v1/search` endpoint. For direct debug access, add `ports: ["127.0.0.1:8888:8080"]` in `docker-compose.override.yml`.
+
+³ The host port defaults to `3000` but is overridable without editing the Compose file: set `CRW_HOST_PORT` in `.env` (e.g. `CRW_HOST_PORT=3055`) if something else already holds 3000 on the box. The container port stays `3000`. Note: Compose interpolates `CRW_HOST_PORT` on the host into the port mapping only; unlike the `CRW_*` config keys elsewhere it is not delivered into the container, so the engine never reads it.
 
 The `crw` service reads its configuration from the mounted `config.docker.toml` (via
 `CRW_CONFIG=config.docker`), which already points each renderer and the search backend at the matching
