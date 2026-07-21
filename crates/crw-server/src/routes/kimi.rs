@@ -141,7 +141,15 @@ async fn kimi_fetch(
         };
 
     // Reuse the scrape handler verbatim: SSRF validation + anti-bot envelope.
-    match crate::routes::scrape::scrape(State(state), Ok(Json(scrape_req))).await {
+    // Empty headers -> no `x-crw-force-cloak` -> force_cloak stays off for this
+    // internal reuse (the hint is only ever set by the SaaS front-end).
+    match crate::routes::scrape::scrape(
+        State(state),
+        axum::http::HeaderMap::new(),
+        Ok(Json(scrape_req)),
+    )
+    .await
+    {
         Err(e) => e.into_response(),
         Ok(Json(resp)) => match resp.data.and_then(|d| d.markdown) {
             Some(md) if resp.success && !md.is_empty() => (

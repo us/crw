@@ -214,6 +214,17 @@ pub const CLOAK_DEFAULT_TIMEOUT_MS: u64 = 35_000;
 /// default); enabling it grows the ladder tax and this floor must be revisited.
 pub const CLOAK_ARM_FLOOR_MS: u64 = 24_000;
 
+/// Budget (ms) the cloak-FIRST hint reserves for the normal ladder when it fires
+/// before the ladder. Unlike the post-ladder recovery arm (which runs last, so
+/// eating the deadline is harmless), cloak-first runs first on the SHARED
+/// deadline; without a reserve a slow/failed solve on a MIS-flagged non-CF domain
+/// would starve the ladder and turn a would-be success into a Timeout (recall
+/// regression). The cloak-first entry gate requires `CLOAK_ARM_FLOOR_MS + this`,
+/// and the cloak call is capped at `remaining - this`, so the ladder always keeps
+/// at least this much to render a mis-flagged page. `pub const` for the same
+/// lean-build `dead_code` reason as [`CLOAK_ARM_FLOOR_MS`].
+pub const CLOAK_FIRST_LADDER_RESERVE_MS: u64 = 8_000;
+
 /// Configuration for the `/v1/search` endpoint and its SearXNG backend.
 ///
 /// When `searxng_url` is unset the endpoint returns HTTP 503 with
