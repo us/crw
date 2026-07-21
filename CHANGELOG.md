@@ -2,6 +2,20 @@
 
 All notable changes to CRW are documented here.
 
+## [0.27.0](https://github.com/us/crw/compare/v0.26.1...v0.27.0) (2026-07-21)
+
+
+### Features
+
+* **docker:** make published bind address configurable ([79ac8f7](https://github.com/us/crw/commit/79ac8f700895694a05d7c2f097617930e0784892))
+* **renderer:** route learned CF-managed domains straight to cloak ([884ed63](https://github.com/us/crw/commit/884ed635b19af2dd3b80092deb83072ff2f1982a))
+
+
+### Bug Fixes
+
+* **compose:** make crw host port overridable via CRW_HOST_PORT ([3f0a1eb](https://github.com/us/crw/commit/3f0a1ebbdc7d0e749c29460c99a6953b171932d3))
+* **crawl:** stop flagging cleared managed pages as CF challenges ([9d81efe](https://github.com/us/crw/commit/9d81efebd33d7ad34f0c1b64f73f6bc64bbc8f7b))
+
 ## [0.26.1](https://github.com/us/crw/compare/v0.26.0...v0.26.1) (2026-07-21)
 
 
