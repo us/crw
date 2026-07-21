@@ -350,7 +350,7 @@ the link step: <code>CARGO_BUILD_JOBS=1 docker compose build crw</code>, then
 </tbody></table>
 <p>¹ <code>chrome-stealth</code> listens on container port 3000 (browserless default) and is published to the host as <code>127.0.0.1:9224</code> — loopback only, for a host-run <code>crw-server</code> during development. The composed <code>crw</code> service reaches it via the Docker bridge as <code>chrome-stealth:3000</code> and does not use the host port.</p>
 <p>² <code>searxng:8080</code> is internal to the Compose network only — <code>localhost:8080</code> on the host will not connect. Search traffic flows exclusively through crw&#39;s <code>/v1/search</code> endpoint. For direct debug access, add <code>ports: [&quot;127.0.0.1:8888:8080&quot;]</code> in <code>docker-compose.override.yml</code>.</p>
-<p>³ The host port defaults to <code>3000</code> but is overridable without editing the Compose file: set <code>CRW_HOST_PORT</code> in <code>.env</code> (e.g. <code>CRW_HOST_PORT=3055</code>) if something else already holds 3000 on the box. The container port stays <code>3000</code>. Note: Compose interpolates <code>CRW_HOST_PORT</code> on the host into the port mapping only; unlike the <code>CRW_*</code> config keys elsewhere it is not delivered into the container, so the engine never reads it.</p>
+<p>³ The host bind address and port are overridable without editing the Compose file: set <code>CRW_HOST_PORT</code> in <code>.env</code> (e.g. <code>CRW_HOST_PORT=3055</code>) if something else already holds 3000 on the box, and <code>CRW_BIND_ADDRESS</code> (e.g. <code>CRW_BIND_ADDRESS=127.0.0.1</code>) to stop publishing on public interfaces. Both default to today&#39;s behavior (<code>0.0.0.0:3000</code>) and the container port stays <code>3000</code>. Note: Compose interpolates these on the host into the port mapping only; unlike the <code>CRW_*</code> config keys elsewhere they are not delivered into the container, so the engine never reads them.</p>
 <p>The <code>crw</code> service reads its configuration from the mounted <code>config.docker.toml</code> (via
 <code>CRW_CONFIG=config.docker</code>), which already points each renderer and the search backend at the matching
 service name on Compose&#39;s default bridge network (<code>lightpanda:9222</code>, <code>chrome:9222</code>, <code>searxng:8080</code>). You
@@ -475,7 +475,9 @@ write access.</li>
 by default. The <code>chrome-stealth</code> service binds only to <code>127.0.0.1:9224</code>. Audit
 <code>ports:</code> entries before exposing to a public interface.</li>
 <li><strong>Reverse proxy TLS</strong>: Run crw behind nginx/Caddy with TLS termination and
-<code>CRW_AUTH__API_KEYS</code> set. Do not expose port 3000 directly to the internet.</li>
+<code>CRW_AUTH__API_KEYS</code> set. Do not expose port 3000 directly to the internet. When
+a proxy fronts crw, set <code>CRW_BIND_ADDRESS=127.0.0.1</code> in <code>.env</code> so the API only
+publishes on loopback instead of every host interface (see footnote ³).</li>
 </ul>
 <h2 id="lightpanda-restart-policy">LightPanda Restart Policy</h2>
 <p>LightPanda uses <code>restart: unless-stopped</code> and this is <strong>load-bearing</strong>. LightPanda can
