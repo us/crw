@@ -783,9 +783,11 @@
                 "rawHtml",
                 "plainText",
                 "links",
+                "images",
                 "json",
                 "summary",
-                "changeTracking"
+                "changeTracking",
+                "screenshot"
               ]
             },
             "default": [
@@ -816,6 +818,11 @@
           "judgeEnabled": {
             "type": "boolean",
             "description": "Run the LLM meaningful-change judge on a changed page (requires goal)"
+          },
+          "screenshotFullPage": {
+            "type": "boolean",
+            "default": false,
+            "description": "Capture the whole page rather than the viewport, for `formats: [\"screenshot\"]`."
           }
         }
       },

@@ -1,7 +1,8 @@
 name: Docs Format Snapshot
 
-# Asserts that the docs tables for OutputFormat and RequestedRenderer list
-# exactly the variants defined in crates/crw-core/src/types.rs.
+# Asserts that the docs tables for OutputFormat and RequestedRenderer, and the
+# OpenAPI ScrapeRequest.formats enum, list exactly the variants defined in
+# crates/crw-core/src/types.rs.
 #
 # Triggers on: any push to main, any PR that touches the Rust types or either
 # doc. Does NOT modify docs-guards.sh or docs-guards.yml.
@@ -15,6 +16,8 @@ on:
       - "crates/crw-core/src/types.rs"
       - "docs/docs/output-formats.md"
       - "docs/docs/js-rendering.md"
+      - "docs/openapi.json"
+      - "crates/crw-server/openapi/**"
       - "scripts/check-format-tables.sh"
 
 permissions:

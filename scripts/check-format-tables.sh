@@ -21,6 +21,7 @@ cd "${CHECK_REPO_ROOT:-$(dirname "$0")/..}"
 TYPES_RS="crates/crw-core/src/types.rs"
 OUTPUT_FORMATS_DOC="docs/docs/output-formats.md"
 JS_RENDERING_DOC="docs/docs/js-rendering.md"
+OPENAPI_SPEC="docs/openapi.json"
 
 FAIL=0
 
@@ -350,6 +351,95 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+
+if [ "$FAIL" -ne 0 ]; then
+  echo >&2
+  echo "FAIL: format/renderer table drift detected." >&2
+  echo "      Update the docs tables to match crates/crw-core/src/types.rs." >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# 5. Check the OpenAPI spec's ScrapeRequest.formats enum lists exactly the
+#    OutputFormat wire keys.
+#
+#    This is the gap that let `screenshot` and `images` sit in the enum in
+#    types.rs while the published spec said they did not exist, for long enough
+#    that our own marketing copied the omission as a missing feature.
+#    `check-openapi.sh` cannot catch it: it only compares the committed spec
+#    against the copy the binary embeds, which is the same file.
+#
+#    Aliases are stripped for the same reason as the markdown tables: they are
+#    documented in the property description, not as enum members.
+# ---------------------------------------------------------------------------
+
+echo "==> Checking ${OPENAPI_SPEC} OutputFormat enum"
+
+if [ ! -f "$OPENAPI_SPEC" ]; then
+  echo "FAIL: ${OPENAPI_SPEC} not found" >&2
+  FAIL=1
+else
+  # Reads the single `OutputFormat` component and asserts every ScrapeRequest-
+  # style formats array points at it by $ref rather than inlining a copy. An
+  # inlined enum is how `screenshot` and `images` could sit in types.rs while
+  # the published spec said they did not exist — long enough that our own
+  # marketing copied the omission as a missing feature.
+  #
+  # `check-openapi.sh` cannot catch this: it only compares the committed spec
+  # against the copy the binary embeds, which is the same bytes.
+  spec_format_keys_raw=$(python3 - "$OPENAPI_SPEC" 2>&1 <<'PYEOF'
+import json, sys
+
+spec = json.load(open(sys.argv[1]))
+schemas = spec["components"]["schemas"]
+enum = schemas.get("OutputFormat", {}).get("enum")
+if not enum:
+    sys.exit("components.schemas.OutputFormat has no enum")
+
+# Every formats array that is meant to carry the full set must $ref it.
+REF = "#/components/schemas/OutputFormat"
+for name in ("ScrapeRequest", "BatchScrapeRequest"):
+    items = schemas[name]["properties"]["formats"].get("items", {})
+    if items.get("$ref") != REF:
+        sys.exit(
+            f"{name}.formats.items must be a $ref to OutputFormat, not an inline "
+            f"copy (found: {items})"
+        )
+
+print("\n".join(enum))
+PYEOF
+  ) || {
+    echo "FAIL: ${OPENAPI_SPEC} formats check failed: ${spec_format_keys_raw}" >&2
+    FAIL=1
+    spec_format_keys_raw=""
+  }
+
+  spec_format_keys=()
+  while IFS= read -r k; do
+    [ -n "$k" ] && spec_format_keys+=("$k")
+  done <<< "$spec_format_keys_raw"
+
+  if [ "${#spec_format_keys[@]}" -eq 0 ]; then
+    FAIL=1
+  else
+    echo "  Spec enum: ${spec_format_keys[*]}"
+    if ! diff_sets "OutputFormat (openapi.json)" \
+         "${output_format_keys[*]}" \
+         "${spec_format_keys[*]}"; then
+      echo "      The spec is what SDKs and agents read. A format missing here" >&2
+      echo "      reads as unsupported even when the engine implements it." >&2
+      FAIL=1
+    fi
+  fi
+fi
+
+# The crate copy is what the binary serves; it must stay byte-identical.
+echo "==> Checking the embedded spec copy matches ${OPENAPI_SPEC}"
+if ! diff -q "$OPENAPI_SPEC" crates/crw-server/openapi/openapi.json >/dev/null; then
+  echo "FAIL: docs/openapi.json and crates/crw-server/openapi/openapi.json differ." >&2
+  echo "      The binary embeds the crate copy; they must be identical." >&2
+  FAIL=1
+fi
 
 if [ "$FAIL" -ne 0 ]; then
   echo >&2

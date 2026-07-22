@@ -346,7 +346,7 @@
           "change-tracking"
         ],
         "summary": "Diff current scrape content against a previous snapshot",
-        "description": "Stateless: opencore stores nothing — the caller supplies the `previous` snapshot. Accepts a single body or a `batch` array (presence of `batch` selects batch mode). The crawl-path workhorse for monitors.",
+        "description": "Stateless: opencore stores nothing \u2014 the caller supplies the `previous` snapshot. Accepts a single body or a `batch` array (presence of `batch` selects batch mode). The crawl-path workhorse for monitors.",
         "operationId": "changeTrackingDiff",
         "requestBody": {
           "required": true,
@@ -447,7 +447,7 @@
           "capabilities"
         ],
         "summary": "Server capability discovery",
-        "description": "Returns what this opencore instance actually supports: LLM providers, output formats, search features, screenshot/renderer availability, document parsers and enforced limits. Every boolean is derived from the real build features and effective config — a capability is true only when the instance can perform it for a request that supplies no extra credentials. SaaS frontends call this on boot to validate a minimum capability set before sending traffic.",
+        "description": "Returns what this opencore instance actually supports: LLM providers, output formats, search features, screenshot/renderer availability, document parsers and enforced limits. Every boolean is derived from the real build features and effective config \u2014 a capability is true only when the instance can perform it for a request that supplies no extra credentials. SaaS frontends call this on boot to validate a minimum capability set before sending traffic.",
         "operationId": "capabilities",
         "security": [
           {
@@ -502,7 +502,7 @@
                         },
                         "supportsBaseUrl": {
                           "type": "boolean",
-                          "description": "The LLM dispatcher accepts a custom baseUrl, but only as part of a BYOK request: the per-request LLM config that carries it is only built when the request also supplies llmApiKey. Sending baseUrl without a key leaves the server's own endpoint in force (the server never points its own key at a caller-chosen host). POST /v1/extract rejects baseUrl outright — configure [extraction.llm.base_url] server-side for that route. Build-invariant: no config turns this off."
+                          "description": "The LLM dispatcher accepts a custom baseUrl, but only as part of a BYOK request: the per-request LLM config that carries it is only built when the request also supplies llmApiKey. Sending baseUrl without a key leaves the server's own endpoint in force (the server never points its own key at a caller-chosen host). POST /v1/extract rejects baseUrl outright \u2014 configure [extraction.llm.base_url] server-side for that route. Build-invariant: no config turns this off."
                         },
                         "serverKeyConfigured": {
                           "type": "boolean",
@@ -629,7 +629,7 @@
                           "items": {
                             "type": "string"
                           },
-                          "description": "JS renderer tiers this instance constructed, in fallback order — reflects both the build features and the config. These are the values the per-request `renderer` pin accepts.",
+                          "description": "JS renderer tiers this instance constructed, in fallback order \u2014 reflects both the build features and the config. These are the values the per-request `renderer` pin accepts.",
                           "example": [
                             "lightpanda",
                             "chrome"
@@ -664,7 +664,7 @@
                       "properties": {
                         "supported": {
                           "type": "boolean",
-                          "description": "POST /v1/extract works for a request that carries no credentials of its own. The route is ALWAYS mounted, but it needs an LLM: false means a server LLM key is absent, or llm.requireByokHeader is set (which makes the server key insufficient). false does NOT mean 'not implemented' — a request carrying llmApiKey still extracts on a self-hosted instance."
+                          "description": "POST /v1/extract works for a request that carries no credentials of its own. The route is ALWAYS mounted, but it needs an LLM: false means a server LLM key is absent, or llm.requireByokHeader is set (which makes the server key insufficient). false does NOT mean 'not implemented' \u2014 a request carrying llmApiKey still extracts on a self-hosted instance."
                         },
                         "maxUrls": {
                           "type": "integer",
@@ -712,7 +712,7 @@
                             },
                             "maxBytes": {
                               "type": "integer",
-                              "description": "The ENFORCED body cap ([document].max_upload_bytes, clamped by the hard ceiling) — the same value the body-limit layer applies."
+                              "description": "The ENFORCED body cap ([document].max_upload_bytes, clamped by the hard ceiling) \u2014 the same value the body-limit layer applies."
                             },
                             "types": {
                               "type": "array",
@@ -1037,7 +1037,8 @@
             "type": "boolean",
             "default": true
           }
-        }
+        },
+        "description": "Per-result enrichment for `/v1/search`. The search result envelope only carries these formats; `plainText` and `json` are rejected outright."
       },
       "FieldStatus": {
         "type": "string",
@@ -1147,17 +1148,7 @@
           "formats": {
             "type": "array",
             "items": {
-              "type": "string",
-              "enum": [
-                "markdown",
-                "html",
-                "rawHtml",
-                "plainText",
-                "links",
-                "json",
-                "summary",
-                "changeTracking"
-              ]
+              "$ref": "#/components/schemas/OutputFormat"
             },
             "default": [
               "markdown"
@@ -1169,8 +1160,10 @@
             "description": "Strip navigation, ads, and boilerplate; keep main article content only"
           },
           "renderJs": {
-            "type": "boolean",
-            "nullable": true,
+            "type": [
+              "boolean",
+              "null"
+            ],
             "description": "null = auto-detect, true = force JS rendering, false = skip JS rendering"
           },
           "waitFor": {
@@ -1272,7 +1265,7 @@
           "actions": {
             "type": "object",
             "additionalProperties": true,
-            "description": "Unsupported Firecrawl parameter — returns a clear error if supplied"
+            "description": "Unsupported Firecrawl parameter \u2014 returns a clear error if supplied"
           },
           "extract": {
             "$ref": "#/components/schemas/ExtractOptions",
@@ -1318,7 +1311,8 @@
               "lightpanda",
               "chrome",
               "chrome_proxy",
-              "playwright"
+              "playwright",
+              "camoufox"
             ],
             "description": "Pin this request to a specific renderer. Non-auto implies renderJs:true unless renderJs:false is set."
           },
@@ -1351,6 +1345,11 @@
               "$ref": "#/components/schemas/ParserSpec"
             },
             "description": "Document parser directives. Omit = auto-parse PDFs. Empty array = disable parsing."
+          },
+          "screenshotFullPage": {
+            "type": "boolean",
+            "default": false,
+            "description": "Capture the whole page rather than the viewport, for `formats: [\"screenshot\"]`."
           }
         }
       },
@@ -1404,8 +1403,13 @@
                 }
               },
               "renderDecision": {
-                "type": "string",
-                "description": "Which renderer ran (e.g. 'http', 'browser')"
+                "type": "object",
+                "description": "How the renderer was chosen. A tagged object: `kind` is one of `userPinned`, `autoDefault`, `autoPromoted`, `breakerSkipped`, `failover`, and the remaining fields depend on it.",
+                "properties": {
+                  "kind": {
+                    "type": "string"
+                  }
+                }
               },
               "creditCost": {
                 "type": "number"
@@ -1426,6 +1430,52 @@
               "llmInputHash": {
                 "type": "string",
                 "description": "'sha256:'-prefixed hash of the canonical text sent to the extraction LLM. The independent record a consumer checks a citation's sourceHash against, so the check is not circular."
+              },
+              "sourceHash": {
+                "type": "string",
+                "description": "Fingerprint of the canonical markdown, for dedup and caching."
+              },
+              "plainText": {
+                "type": "string",
+                "description": "Plain-text view; present when `formats` includes `plainText`."
+              },
+              "images": {
+                "$ref": "#/components/schemas/ScrapedImages"
+              },
+              "summary": {
+                "type": "string",
+                "description": "LLM summary; present when `formats` includes `summary`."
+              },
+              "llmUsage": {
+                "type": "object",
+                "description": "Token usage for the LLM call, when one ran."
+              },
+              "chunks": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                },
+                "description": "Chunked content, when a `chunkStrategy` was requested."
+              },
+              "contentType": {
+                "type": "string",
+                "description": "MIME type of the fetched resource."
+              },
+              "changeTracking": {
+                "type": "object",
+                "description": "Diff result; present when `formats` includes `changeTracking`."
+              },
+              "screenshot": {
+                "type": "string",
+                "description": "PNG capture as a `data:image/png;base64,...` URL; present when `formats` includes `screenshot`."
+              },
+              "block": {
+                "type": "object",
+                "description": "Anti-bot verdict. Present only when the page was a block or challenge shell, in which case `success` is false."
+              },
+              "debugExtraction": {
+                "type": "object",
+                "description": "Extraction trace; present only when `debug: true`."
               }
             }
           }
@@ -1532,7 +1582,62 @@
             "default": 2
           },
           "scrapeOptions": {
-            "$ref": "#/components/schemas/ScrapeOptions"
+            "$ref": "#/components/schemas/CrawlScrapeOptions"
+          },
+          "formats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrawlOutputFormat"
+            },
+            "default": [
+              "markdown"
+            ]
+          },
+          "onlyMainContent": {
+            "type": "boolean",
+            "default": true
+          },
+          "jsonSchema": {
+            "type": "object"
+          },
+          "renderJs": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "waitFor": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "renderer": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "lightpanda",
+              "chrome",
+              "chrome_proxy",
+              "playwright",
+              "camoufox"
+            ]
+          },
+          "country": {
+            "type": "string",
+            "description": "2-letter ISO 3166-1 alpha-2 proxy egress country."
+          },
+          "proxyList": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "proxyRotation": {
+            "type": "string",
+            "enum": [
+              "round_robin",
+              "random",
+              "sticky_per_host"
+            ]
           }
         }
       },
@@ -1807,7 +1912,7 @@
           },
           "firstObservation": {
             "type": "boolean",
-            "description": "True when no previous was supplied — caller maps to 'new'"
+            "description": "True when no previous was supplied \u2014 caller maps to 'new'"
           },
           "contentHash": {
             "type": "string"
@@ -2154,38 +2259,45 @@
         }
       },
       "BatchScrapeRequest": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/ScrapeOptions"
+        "type": "object",
+        "description": "Every `/v1/scrape` body field except `url` is accepted here and applied to each URL. See `ScrapeRequest` for the full set.",
+        "required": [
+          "urls"
+        ],
+        "properties": {
+          "urls": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uri"
+            },
+            "minItems": 1,
+            "description": "URLs to scrape. Each is SSRF-validated; invalid entries are reported in invalidUrls."
           },
-          {
-            "type": "object",
-            "required": [
-              "urls"
-            ],
-            "properties": {
-              "urls": {
-                "type": "array",
-                "items": {
-                  "type": "string",
-                  "format": "uri"
-                },
-                "minItems": 1,
-                "description": "URLs to scrape. Each is SSRF-validated; invalid entries are reported in invalidUrls."
-              },
-              "ignoreInvalidUrls": {
-                "type": "boolean",
-                "default": true,
-                "description": "When false, a single invalid URL rejects the whole submit with 400."
-              },
-              "maxConcurrency": {
-                "type": "integer",
-                "minimum": 1,
-                "description": "How many URLs the job scrapes concurrently. Clamped server-side to crawler.max_batch_concurrency."
-              }
-            }
+          "ignoreInvalidUrls": {
+            "type": "boolean",
+            "default": true,
+            "description": "When false, a single invalid URL rejects the whole submit with 400."
+          },
+          "maxConcurrency": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "How many URLs the job scrapes concurrently. Clamped server-side to crawler.max_batch_concurrency."
+          },
+          "formats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OutputFormat"
+            },
+            "default": [
+              "markdown"
+            ]
+          },
+          "onlyMainContent": {
+            "type": "boolean",
+            "default": true
           }
-        ]
+        }
       },
       "BatchScrapeAccepted": {
         "type": "object",
@@ -2208,6 +2320,89 @@
               "type": "string"
             },
             "description": "Submitted URLs rejected by parsing or the SSRF guard, verbatim."
+          }
+        }
+      },
+      "OutputFormat": {
+        "type": "string",
+        "enum": [
+          "markdown",
+          "html",
+          "rawHtml",
+          "plainText",
+          "links",
+          "images",
+          "json",
+          "summary",
+          "changeTracking",
+          "screenshot"
+        ],
+        "description": "Aliases accepted in addition to these: `extract` and `llm-extract` for `json`, `change-tracking` for `changeTracking`, `screenshot@fullPage` for `screenshot`."
+      },
+      "CrawlOutputFormat": {
+        "type": "string",
+        "enum": [
+          "markdown",
+          "html",
+          "rawHtml",
+          "plainText",
+          "links",
+          "images",
+          "json"
+        ],
+        "description": "The crawl path runs extraction and the optional LLM `json` pass. It does not produce `summary`, `screenshot` or inline `changeTracking`; use `/v1/scrape` for those."
+      },
+      "ScrapedImages": {
+        "type": "array",
+        "description": "Present when `formats` includes `images`.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "alt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "url"
+          ]
+        }
+      },
+      "CrawlScrapeOptions": {
+        "type": "object",
+        "description": "Per-page scrape settings. Every key here may also be sent at the top level; an explicit top-level value wins.",
+        "properties": {
+          "formats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrawlOutputFormat"
+            },
+            "default": [
+              "markdown"
+            ]
+          },
+          "onlyMainContent": {
+            "type": "boolean",
+            "default": true
+          },
+          "jsonSchema": {
+            "type": "object",
+            "description": "JSON Schema for structured extraction, with `formats: [\"json\"]`."
+          },
+          "renderJs": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "null = auto-detect, true = force JS, false = never use a browser tier."
+          },
+          "waitFor": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Milliseconds to wait after JS rendering on each page."
           }
         }
       }
