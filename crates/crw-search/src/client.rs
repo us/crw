@@ -130,6 +130,19 @@ pub struct SearxngResponse {
     pub suggestions: Vec<String>,
     #[serde(default)]
     pub unresponsive_engines: Vec<serde_json::Value>,
+    /// Explicit degraded flag an upstream orchestrator may set. A plain
+    /// SearXNG backend never sets this, hence the serde default.
+    #[serde(default)]
+    pub degraded: bool,
+}
+
+impl SearxngResponse {
+    /// True when the backend answered with nothing AND reported that engines
+    /// failed. Emptiness is a PREREQUISITE for both signals: a response that
+    /// some later leg rescued into a non-empty pool is never degraded.
+    pub fn is_degraded(&self) -> bool {
+        self.results.is_empty() && (self.degraded || !self.unresponsive_engines.is_empty())
+    }
 }
 
 /// Thin async client for SearXNG. One instance per server; reuse across
@@ -229,5 +242,39 @@ impl SearxngClient {
         let buf = read_capped(response, MAX_RESPONSE_BYTES).await?;
         serde_json::from_slice::<SearxngResponse>(&buf)
             .map_err(|e| SearchError::InvalidResponse(e.to_string()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_degraded_true_on_empty_results_with_unresponsive_engines() {
+        let resp = SearxngResponse {
+            unresponsive_engines: vec![serde_json::json!(["google", "timeout"])],
+            ..Default::default()
+        };
+        assert!(resp.is_degraded());
+    }
+
+    #[test]
+    fn is_degraded_false_on_genuine_zero_results() {
+        // Empty results, no unresponsive engines, no degraded flag: a real
+        // zero-result query, not a backend failure — must stay a normal 200.
+        let resp = SearxngResponse::default();
+        assert!(!resp.is_degraded());
+    }
+
+    #[test]
+    fn is_degraded_false_when_results_non_empty() {
+        // Emptiness is a prerequisite: a later leg that rescued the pool into
+        // non-empty results is never degraded, even if engines failed.
+        let resp: SearxngResponse = serde_json::from_value(serde_json::json!({
+            "results": [{"url": "https://example.com", "title": "Example", "engine": "google"}],
+            "unresponsive_engines": [["google", "timeout"]],
+        }))
+        .unwrap();
+        assert!(!resp.is_degraded());
     }
 }

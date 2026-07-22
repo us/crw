@@ -43,6 +43,12 @@ const SCOUT_FETCH_LIMIT: u32 = 6;
 /// `multi_round` adds.
 const MULTI_ROUND_MIN_BUDGET_MS: u64 = 20_000;
 
+/// Customer-facing text for "the backend could not answer", used both as the
+/// non-LLM error and as the LLM-path warning. A single constant because the
+/// multi-round leg has to be able to REMOVE it again by value when a later
+/// round rescues the request. Names no backend, engine, or provider.
+const DEGRADED_MESSAGE: &str = "The search backend could not answer this query. Retry shortly.";
+
 /// Heuristic: did the synthesized answer ABSTAIN (sources lacked the fact)?
 /// Aligned with `answer.rs`'s calibrated clause ("ONLY if the sources genuinely
 /// do not contain the information, say so plainly"). Triggers the adaptive
@@ -268,6 +274,17 @@ pub async fn search_inner(
             .map_err(|e| map_search_error(e, state.config.search.timeout_ms, client.base_url()))?
     };
 
+    // The backend can answer HTTP 200 with an empty result set for two very
+    // different reasons: the query genuinely has no results, or the backend
+    // itself couldn't answer (engines failed / upstream flagged degraded).
+    // `is_degraded()` distinguishes the two. Off the LLM path `response` is
+    // final (every rescue leg below is gated on `llm_path`), so a degraded
+    // empty response can be rejected outright. On the LLM path, page-2 and
+    // Wikidata rescues still run, so we only warn and let the request continue.
+    if !llm_path && response.is_degraded() {
+        return Err(CrwError::SearchDegraded(DEGRADED_MESSAGE.into()));
+    }
+
     let has_sources = req.sources.as_ref().is_some_and(|s| !s.is_empty());
     // The LLM answer / summarize path feeds the top-N flat sources straight to
     // the model, so it must receive a clean, query-relevant pool. Re-rank the
@@ -387,6 +404,20 @@ pub async fn search_inner(
 
     let mut warning: Option<String> = None;
     let mut warnings: Vec<String> = Vec::new();
+    // Re-evaluated here, NOT carried over from the check above: both LLM-path
+    // rescues run in between, and a rescued request must not ship a "backend
+    // could not answer" warning alongside genuine results.
+    //   - page-2 pushes rows into `response.results`, which `is_degraded()`
+    //     already self-corrects on (it requires emptiness).
+    //   - Wikidata / structured facts populate `structured_sources` WITHOUT
+    //     touching `response.results`, so that rescue needs its own term — and
+    //     only counts when `answer` is set, since answer synthesis is the sole
+    //     consumer of `structured_sources`. A `summarizeResults`-only request
+    //     is NOT rescued by them and must still get the warning.
+    let structured_rescue = req.answer.unwrap_or(false) && !structured_sources.is_empty();
+    if response.is_degraded() && !structured_rescue {
+        warnings.push(DEGRADED_MESSAGE.into());
+    }
     if let Some(opts) = req.scrape_options.as_ref() {
         match enrich_with_scrape(&mut data, opts, state).await {
             Ok(()) => {}
@@ -624,6 +655,12 @@ pub async fn search_inner(
                                         ans = ans2;
                                         cites = cites2;
                                         warnings.append(&mut warns2);
+                                        // Round 2 answered. Its scout rows land
+                                        // in `data`, never in `response.results`,
+                                        // so the degraded warning pushed earlier
+                                        // would otherwise ship next to a real
+                                        // answer telling the caller to retry.
+                                        warnings.retain(|w| w != DEGRADED_MESSAGE);
                                     }
                                 }
                             }
