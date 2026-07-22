@@ -27,7 +27,7 @@ console.log(res.markdown);
 
 ```ts
 // ...or pass the key explicitly
-const crw = new CrwClient({ apiKey: "fc-..." });
+const crw = new CrwClient({ apiKey: "crw_live_..." });
 ```
 
 ## Self-hosting

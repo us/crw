@@ -20,8 +20,8 @@ version = "0.27.0"
 edition = "2024"
 license = "AGPL-3.0"
 repository = "https://github.com/us/crw"
-homepage = "https://us.github.io/crw"
-keywords = ["web-scraper", "web-crawler", "firecrawl", "mcp", "llm"]
+homepage = "https://fastcrw.com"
+keywords = ["web-scraper", "web-crawler", "mcp", "llm"]
 categories = ["web-programming", "command-line-utilities"]
 
 [workspace.dependencies]

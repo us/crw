@@ -51,6 +51,65 @@ is already being actively exploited, we may move faster.
 
 ---
 
+## Verifying a release
+
+Every release publishes a `SHA256SUMS` file covering all binary assets, plus a
+keyless [Sigstore](https://www.sigstore.dev/) signature over that file
+(`SHA256SUMS.sigstore.json`).
+
+The Python SDK, and the npm launcher on Windows, download a prebuilt binary on
+first use. Before extracting it they fetch `SHA256SUMS` for their own release
+tag and compare it against the archive they received, and they abort if it does
+not match or if the release publishes no checksums at all. They ask only for the
+tag they were published alongside, never a mutable `latest`.
+
+On macOS and Linux, `npm install crw-mcp` normally pulls a prebuilt platform
+package instead, so the download path is usually unused there. Those binaries are
+checked against the same `SHA256SUMS` in CI before the packages are published,
+and npm's own integrity hash covers the install. An install that skips optional
+dependencies still falls back to the verified download path.
+
+Two limits worth stating plainly:
+
+- Once a binary is in the local cache, later runs execute it without re-hashing.
+  Anything that can write to your cache directory can therefore substitute it.
+  Closing that properly needs a digest baked into the wrapper at build time,
+  which we do not do yet.
+- `SHA256SUMS` is fetched from the same release as the archive, so this protects
+  against transfer corruption, truncation, and a mismatched or re-uploaded
+  asset. It is not a defence against someone who can write to the release
+  itself; that is what the signature is for, and verifying it is a manual step
+  today.
+
+To check a download yourself (requires cosign v3 or newer for step 2):
+
+```sh
+# 1. Integrity: the archive matches what the release records.
+curl -fsSLO https://github.com/us/crw/releases/download/vX.Y.Z/SHA256SUMS
+sha256sum -c SHA256SUMS --ignore-missing
+# macOS has no sha256sum; check just the file you downloaded:
+#   shasum -a 256 crw-darwin-arm64.tar.gz
+#   grep crw-darwin-arm64.tar.gz SHA256SUMS
+
+# 2. Authenticity: the checksums were produced by our release workflow.
+curl -fsSLO https://github.com/us/crw/releases/download/vX.Y.Z/SHA256SUMS.sigstore.json
+cosign verify-blob \
+  --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity-regexp '^https://github\.com/us/crw/\.github/workflows/release\.yml@refs/(tags/v.*|heads/main)$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  SHA256SUMS
+```
+
+The identity is a regexp because keyless signing binds the certificate to the
+workflow ref: normally the release tag, or `main` when a release is re-run
+manually for recovery.
+
+Note on older releases: `v0.21.2` and `v0.21.3` carry per-asset `.sig`/`.pem`
+files instead, and releases from `v0.22.0` through `v0.27.0` are unsigned. The
+cosign version is now pinned explicitly.
+
+---
+
 ## Scope
 
 In scope for this policy:

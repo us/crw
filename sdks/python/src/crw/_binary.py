@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import json
+import hashlib
+import importlib.metadata
 import os
 import stat
 import tarfile
@@ -17,51 +18,74 @@ from crw._platform import BINARY_NAME, get_asset_name
 from crw.exceptions import CrwBinaryNotFoundError
 
 GITHUB_REPO = "us/crw"
-GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+_RELEASES = f"https://github.com/{GITHUB_REPO}/releases/download"
+
+_HINT = (
+    "Set CRW_BINARY=/path/to/crw-mcp to use a binary you already have, "
+    "or install one with: cargo install crw-mcp"
+)
 
 
-def _get_latest_version() -> str:
-    """Fetch the latest release tag from GitHub API."""
-    req = Request(GITHUB_API, headers={
-        "User-Agent": "crw-python",
-        "Accept": "application/vnd.github+json",
-    })
-    with urlopen(req, timeout=10) as resp:
-        data = json.loads(resp.read())
-    tag = data.get("tag_name", "")
-    return tag.lstrip("v")
+def _release_tag() -> str:
+    """Git tag of the release this SDK was published alongside.
+
+    Resolved from our own installed version rather than the mutable
+    `releases/latest`, so a wrapper only ever asks for the tag it shipped with.
+    """
+    try:
+        version = importlib.metadata.version("crw")
+    except importlib.metadata.PackageNotFoundError as e:
+        raise CrwBinaryNotFoundError(
+            f"crw is importable but not installed as a distribution, so its "
+            f"release tag cannot be determined. {_HINT}"
+        ) from e
+
+    # Every tag this project has published is a plain vX.Y.Z. If a prerelease
+    # ever ships, PEP 440 normalisation (v0.28.0-alpha1 -> 0.28.0a1) will make
+    # this 404 loudly on first use, which beats reconstructing a tag by guess.
+    return "v" + version
 
 
-def _cache_dir(version: str) -> Path:
-    return Path(user_cache_dir("crw")) / f"v{version}"
+def _cache_dir(tag: str) -> Path:
+    return Path(user_cache_dir("crw")) / tag
 
 
-def _find_cached_latest() -> tuple[Path, str] | None:
-    """Find the newest cached binary version."""
-    cache_root = Path(user_cache_dir("crw"))
-    if not cache_root.is_dir():
-        return None
+def _expected_digest(tag: str, asset: str) -> str:
+    """SHA-256 recorded for `asset` in the release's SHA256SUMS.
 
-    def _version_key(name: str) -> tuple[int, ...]:
-        try:
-            return tuple(int(part) for part in name.lstrip("v").split("."))
-        except ValueError:
-            return (0,)
+    Fails closed: a missing or unlisted checksum aborts rather than falling
+    through to an unverified download.
+    """
+    url = f"{_RELEASES}/{tag}/SHA256SUMS"
+    req = Request(url, headers={"User-Agent": f"crw-python/{tag}"})
+    try:
+        with urlopen(req, timeout=30) as resp:
+            text = resp.read().decode("utf-8", "replace")
+    except OSError as e:
+        # HTTPError is an OSError. Only 404 maps to a different user action:
+        # this release predates SHA256SUMS, so pin a newer one.
+        if getattr(e, "code", None) == 404:
+            raise CrwBinaryNotFoundError(
+                f"release {tag} publishes no SHA256SUMS, so {asset} cannot be "
+                f"verified. {_HINT}"
+            ) from e
+        raise CrwBinaryNotFoundError(
+            f"could not reach GitHub to fetch SHA256SUMS for {tag}: {e}. {_HINT}"
+        ) from e
 
-    versions = sorted(
-        (d.name for d in cache_root.iterdir() if d.is_dir() and d.name.startswith("v")),
-        key=_version_key,
-        reverse=True,
+    for line in text.splitlines():
+        parts = line.split()
+        # coreutils writes "<hash>  <name>" or "<hash> *<name>" in binary mode.
+        if len(parts) == 2 and parts[1].lstrip("*") == asset:
+            return parts[0].lower()
+
+    raise CrwBinaryNotFoundError(
+        f"{asset} is not listed in SHA256SUMS for {tag}. {_HINT}"
     )
-    for v in versions:
-        binary = cache_root / v / BINARY_NAME
-        if binary.is_file() and os.access(binary, os.X_OK):
-            return binary, v.lstrip("v")
-    return None
 
 
-def _download_binary(version: str) -> Path:
-    """Download the binary from GitHub Releases and cache it."""
+def _download_binary(tag: str) -> Path:
+    """Download the release asset, verify it, then unpack it into the cache."""
     asset = get_asset_name()
     if asset is None:
         raise CrwBinaryNotFoundError(
@@ -69,21 +93,39 @@ def _download_binary(version: str) -> Path:
             "Install from source: cargo install crw-mcp"
         )
 
-    url = f"https://github.com/{GITHUB_REPO}/releases/download/v{version}/{asset}"
-    cache = _cache_dir(version)
+    expected = _expected_digest(tag, asset)
+
+    url = f"{_RELEASES}/{tag}/{asset}"
+    req = Request(url, headers={"User-Agent": f"crw-python/{tag}"})
+    try:
+        with urlopen(req, timeout=120) as resp:
+            data = resp.read()
+    except OSError as e:
+        raise CrwBinaryNotFoundError(
+            f"could not download {asset} from {tag}: {e}. {_HINT}"
+        ) from e
+
+    # Verified before anything touches disk: the archive is already fully in
+    # memory, so an unverified byte is never written at all.
+    actual = hashlib.sha256(data).hexdigest()
+    if actual != expected:
+        raise CrwBinaryNotFoundError(
+            f"checksum mismatch for {asset} from {tag}: expected {expected}, "
+            f"got {actual}. Refusing to run it."
+        )
+
+    cache = _cache_dir(tag)
     cache.mkdir(parents=True, exist_ok=True)
 
-    req = Request(url, headers={"User-Agent": f"crw-python/{version}"})
-    with urlopen(req, timeout=120) as resp:
-        data = resp.read()
-
-    # Extract binary from archive
     if asset.endswith(".tar.gz"):
         with tarfile.open(fileobj=BytesIO(data), mode="r:gz") as tar:
             for member in tar.getmembers():
-                if member.name.endswith("crw-mcp"):
-                    member.name = BINARY_NAME
-                    tar.extract(member, path=cache)
+                # isreg() refuses links and devices, and we choose the
+                # destination path, so traversal is impossible by construction.
+                # This needs no `filter=`, which only exists on 3.10.12+ while
+                # we support >=3.10.
+                if member.isreg() and member.name.endswith("crw-mcp"):
+                    (cache / BINARY_NAME).write_bytes(tar.extractfile(member).read())
                     break
             else:
                 raise CrwBinaryNotFoundError(f"crw-mcp not found in {asset}")
@@ -117,7 +159,7 @@ def _is_native_binary(path: Path) -> bool:
 
 
 def ensure_binary() -> Path:
-    """Return path to crw-mcp binary, downloading latest if necessary."""
+    """Return path to the crw-mcp binary, downloading it if necessary."""
     # 1. Check CRW_BINARY env override
     env_path = os.environ.get("CRW_BINARY")
     if env_path:
@@ -128,27 +170,24 @@ def ensure_binary() -> Path:
 
     # 2. Check if crw-mcp native binary is on PATH (e.g. cargo install)
     for directory in os.environ.get("PATH", "").split(os.pathsep):
+        # An empty PATH entry means "current directory"; a trailing colon is
+        # common enough that this would otherwise exec ./crw-mcp from any cwd.
+        if not directory:
+            continue
         candidate = Path(directory) / BINARY_NAME
         if candidate.is_file() and _is_native_binary(candidate):
             return candidate
 
-    # 3. Try to get latest version and check cache
-    try:
-        version = _get_latest_version()
-    except Exception:
-        # Offline — use newest cached version if available
-        cached = _find_cached_latest()
-        if cached:
-            return cached[0]
-        raise CrwBinaryNotFoundError(
-            "Cannot reach GitHub API and no cached binary found. "
-            "Install manually: cargo install crw-mcp"
-        )
-
-    # 4. Check if latest is already cached
-    binary = _cache_dir(version) / BINARY_NAME
+    # 3. Already downloaded and verified for this exact version. No network
+    #    call happens on a cache hit, which is also the offline path.
+    #    ponytail: this trusts the cache. Re-hashing against a sidecar digest
+    #    would not help, since anything able to rewrite the binary can rewrite
+    #    the sidecar too; closing it properly needs a digest baked into the
+    #    wrapper at build time. Documented in SECURITY.md rather than faked.
+    tag = _release_tag()
+    binary = _cache_dir(tag) / BINARY_NAME
     if binary.is_file() and os.access(binary, os.X_OK):
         return binary
 
-    # 5. Download latest
-    return _download_binary(version)
+    # 4. Download and verify.
+    return _download_binary(tag)
