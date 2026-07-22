@@ -4201,10 +4201,13 @@ mod tests {
     #[tokio::test]
     async fn chrome_proxy_arm_fires_below_old_floor() {
         // Regression lock for the budget-STARVATION bug: a non-CF hard block with
-        // only ~2s of request deadline left (real prod: the ladder burns a 15s
-        // scrape deadline to ~2s before the arm) must STILL fire chrome_proxy. The
-        // arm now runs on a fresh `Deadline::now_plus(ARM_BUDGET)`, so any floor
-        // against `deadline.remaining()` is gone. Old 8s-floor code fails here.
+        // only a sliver of request deadline left (real prod: the ladder burns a
+        // 15s scrape deadline down to ~2s before the arm) must STILL fire
+        // chrome_proxy. The arm now runs on a fresh `Deadline::now_plus(ARM_BUDGET)`,
+        // so any floor against `deadline.remaining()` is gone. Old 8s-floor code
+        // fails here — the budget below only has to stay under that floor, so it
+        // carries enough headroom to survive a loaded machine (a 2s budget made
+        // this flake ~1 run in 3 when the whole suite runs in parallel).
         let lp = Arc::new(MockFetcher {
             name: "lightpanda",
             behavior: MockBehavior::Ok(network_security_block_html()),
@@ -4231,13 +4234,13 @@ mod tests {
                 Some(true),
                 None,
                 Some("auto"),
-                crw_core::Deadline::from_request_ms(2_000),
+                crw_core::Deadline::from_request_ms(6_000),
             )
             .await
             .unwrap();
         assert!(
             result.html.contains("PROXY-"),
-            "chrome_proxy must fire even with ~2s deadline left (fresh arm budget), got: {}",
+            "chrome_proxy must fire well below the old 8s floor (fresh arm budget), got: {}",
             result.html
         );
     }
