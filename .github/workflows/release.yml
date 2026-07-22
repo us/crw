@@ -142,7 +142,6 @@ jobs:
     needs: [release-context, check]
     permissions:
       contents: write
-      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -250,37 +249,30 @@ jobs:
               "${bin}-${{ matrix.platform }}-${{ matrix.arch_label }}.${ext}" --clobber
           done
 
-      - name: Install cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
-
-      - name: Sign artifacts (keyless)
-        continue-on-error: true
-        shell: bash
-        env:
-          RELEASE_TAG: ${{ needs.release-context.outputs.release_tag }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ "${{ runner.os }}" = "Windows" ]; then ext="zip"; else ext="tar.gz"; fi
-          for bin in crw crw-server crw-mcp; do
-            f="${bin}-${{ matrix.platform }}-${{ matrix.arch_label }}.${ext}"
-            cosign sign-blob --yes \
-              --output-signature "${f}.sig" \
-              --output-certificate "${f}.pem" "$f"
-            gh release upload "$RELEASE_TAG" "${f}.sig" "${f}.pem" --clobber
-          done
+  # Signing lives in asset-gate, not here: one signature over SHA256SUMS covers
+  # all 18 assets transitively, keeps cosign off the Windows and macOS runners,
+  # and moves the failure out of a 6-leg matrix into one re-dispatchable job.
 
   asset-gate:
     needs: [release-context, publish-binaries]
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
+      id-token: write
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ needs.release-context.outputs.source_ref }}
 
-      - name: Verify all 18 binary assets attached
+      # Pin the cosign version explicitly. The installer's own default moved from
+      # cosign v2 to v3 in a grouped Dependabot bump, which changed sign-blob's
+      # output contract and silently broke signing from v0.22.0 onward.
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.0.6
+
+      - name: Verify assets, publish SHA256SUMS and signature
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -337,7 +329,7 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
-      - name: Download platform release assets
+      - name: Download and verify platform release assets
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -345,7 +337,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/assets
-          gh release download "$RELEASE_TAG" -D /tmp/assets -p "crw-mcp-*"
+          gh release download "$RELEASE_TAG" -D /tmp/assets -p "crw-mcp-*.tar.gz"
+          gh release download "$RELEASE_TAG" -D /tmp/assets -p "SHA256SUMS"
+          # These bytes get repackaged into the platform packages that every
+          # macOS and Linux npm user installs, and that path never reaches the
+          # launcher's own verification. `gh release download` checks nothing,
+          # so check here.
+          ( cd /tmp/assets && sha256sum -c SHA256SUMS --ignore-missing )
 
       - name: Idempotent publish (platform packages)
         shell: bash

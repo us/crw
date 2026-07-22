@@ -132,6 +132,13 @@ jobs:
       - name: Test
         run: npm test
 
+      # The launcher's SHA256SUMS parser is hand-rolled because Windows ships no
+      # sha256sum, and Windows is the one platform with no prebuilt package, so
+      # every Windows user depends on it. No deps, node:test is stdlib.
+      - name: Test crw-mcp launcher
+        working-directory: mcp/crw-mcp
+        run: npm test
+
   # Firecrawl v2 conformance gate (conformance/, issue #62). Drives the
   # deterministic corpus against a live `crw serve` and diffs each response's
   # SHAPE against the committed golden Firecrawl fixtures. `compare.py` only

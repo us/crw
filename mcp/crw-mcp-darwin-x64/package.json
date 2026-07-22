@@ -3,10 +3,14 @@
   "version": "0.27.0",
   "description": "CRW MCP server binary for darwin x64",
   "license": "AGPL-3.0",
-  "homepage": "https://github.com/us/crw",
+  "author": "fastCRW <hello@fastcrw.com>",
+  "homepage": "https://fastcrw.com",
   "repository": {
     "type": "git",
     "url": "https://github.com/us/crw.git"
+  },
+  "bugs": {
+    "url": "https://github.com/us/crw/issues"
   },
   "os": [
     "darwin"

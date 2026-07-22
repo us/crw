@@ -3,17 +3,20 @@
   "version": "0.27.0",
   "description": "TypeScript/JavaScript SDK for CRW — scrape, crawl, map, search, parse, and extract any website",
   "license": "MIT",
-  "homepage": "https://github.com/us/crw",
+  "author": "fastCRW <hello@fastcrw.com>",
+  "homepage": "https://fastcrw.com",
   "repository": {
     "type": "git",
     "url": "https://github.com/us/crw.git"
+  },
+  "bugs": {
+    "url": "https://github.com/us/crw/issues"
   },
   "keywords": [
     "web-scraping",
     "crawler",
     "scraper",
     "ai-agent",
-    "firecrawl",
     "mcp"
   ],
   "type": "module",

@@ -64,7 +64,7 @@ result = client.scrape("https://example.com")
 print(result["markdown"])
 
 # ...or pass the key explicitly:
-client = CrwClient(api_key="fc-...")
+client = CrwClient(api_key="crw_live_...")
 
 # Self-hosted server:
 client = CrwClient(api_url="http://localhost:3000")
