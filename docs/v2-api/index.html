@@ -540,6 +540,12 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <td>Pin a renderer tier</td>
 </tr>
 <tr>
+<td><code>renderJs</code></td>
+<td><code>boolean</code></td>
+<td>—</td>
+<td><code>true</code> forces JS rendering, <code>false</code> keeps the request HTTP-only, omitted uses auto-detection. Same semantics as on <code>/v1/scrape</code>, see <a href="js-rendering.md">JS Rendering</a></td>
+</tr>
+<tr>
 <td><code>parsers</code></td>
 <td><code>ParserSpec[]</code></td>
 <td>—</td>
@@ -652,7 +658,7 @@ const data = await crw.scrape(&quot;https://example.com/product&quot;, {
 <td><code>scrapeOptions</code></td>
 <td><code>object</code></td>
 <td>—</td>
-<td>Per-page scrape settings (<code>formats</code>, <code>onlyMainContent</code>, <code>waitFor</code>)</td>
+<td>Per-page scrape settings (<code>formats</code>, <code>onlyMainContent</code>, <code>waitFor</code>, <code>renderJs</code>)</td>
 </tr>
 <tr>
 <td><code>renderer</code></td>
