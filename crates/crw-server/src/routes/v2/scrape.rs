@@ -152,6 +152,15 @@ pub(crate) fn to_internal(
         wait_for: v2.wait_for,
         headers: v2.headers,
         json_schema: decomposed.json_schema.clone(),
+        // A `{"type":"json","prompt":...}` format object carries the extraction
+        // instruction; it reaches the LLM only via `extract.prompt`.
+        extract: decomposed
+            .json_prompt
+            .clone()
+            .map(|prompt| crw_core::types::ExtractOptions {
+                schema: None,
+                prompt: Some(prompt),
+            }),
         change_tracking: decomposed.change_tracking.clone(),
         screenshot_full_page: decomposed.screenshot_full_page,
         country,

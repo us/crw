@@ -12,7 +12,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use crw_core::error::CrwError;
-use crw_core::types::{OutputFormat, ScrapeRequest};
+use crw_core::types::{ExtractOptions, OutputFormat, ScrapeRequest};
 
 use super::adapters::system_time_rfc3339;
 use crate::error::AppError;
@@ -41,6 +41,25 @@ pub struct V2ExtractStartResponse {
     pub replacement: String,
 }
 
+/// Build the per-URL scrape template for an extract job.
+///
+/// The prompt has to ride `extract.prompt` — that is the field the JSON
+/// extraction path reads (single.rs). It used to go into `summary_prompt`,
+/// which only drives the `summary` format, so a prompt-only extract hit the
+/// "requires a jsonSchema field or a prompt" error despite carrying one, and a
+/// schema+prompt extract silently ignored the prompt.
+pub(crate) fn extract_template(prompt: Option<String>, schema: Option<Value>) -> ScrapeRequest {
+    ScrapeRequest {
+        formats: vec![OutputFormat::Json],
+        json_schema: schema,
+        extract: Some(ExtractOptions {
+            schema: None,
+            prompt,
+        }),
+        ..Default::default()
+    }
+}
+
 pub async fn start_extract(
     State(state): State<AppState>,
     body: Result<Json<V2ExtractRequest>, JsonRejection>,
@@ -50,6 +69,21 @@ pub async fn start_extract(
         return Err(AppError::from(CrwError::InvalidRequest(
             "`urls` is required for extract on this engine (prompt-only extraction \
              without URLs is not supported)"
+                .into(),
+        )));
+    }
+    // `systemPrompt` is a distinct Firecrawl feature (its own LLM `system`
+    // role), not an alias for `prompt`, and the extractor has no slot for it
+    // yet. Reject it loudly rather than accept it and silently ignore it —
+    // the same contract the engine already gives `actions` (single.rs).
+    if req
+        .system_prompt
+        .as_deref()
+        .is_some_and(|s| !s.trim().is_empty())
+    {
+        return Err(AppError::from(CrwError::InvalidRequest(
+            "systemPrompt is not yet supported on this engine; fold your \
+             instruction into `prompt`."
                 .into(),
         )));
     }
@@ -64,14 +98,7 @@ pub async fn start_extract(
         valid.push(u.clone());
     }
 
-    let template = ScrapeRequest {
-        formats: vec![OutputFormat::Json],
-        json_schema: req.schema.clone(),
-        // A free-text extraction prompt (no schema) rides the summary_prompt slot,
-        // which the extractor folds into the structured-extraction instruction.
-        summary_prompt: req.prompt.clone(),
-        ..Default::default()
-    };
+    let template = extract_template(req.prompt.clone(), req.schema.clone());
 
     // v2 early-returns on the first bad URL (above), so every entry is valid.
     let entries = valid
@@ -124,4 +151,36 @@ pub async fn get_extract(
         credits_used: rec.credits_used,
         tokens_used: rec.tokens_used,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The regression: the prompt must land in `extract.prompt`, which the JSON
+    /// extraction path reads, NOT in `summary_prompt`, which only drives the
+    /// summary format. Putting it in the wrong slot made a prompt-only extract
+    /// fail with "requires a jsonSchema field or a prompt" despite the caller
+    /// having supplied one.
+    #[test]
+    fn prompt_lands_in_extract_not_summary() {
+        let t = extract_template(Some("Get the title".into()), None);
+        assert_eq!(
+            t.extract.as_ref().and_then(|e| e.prompt.as_deref()),
+            Some("Get the title")
+        );
+        assert!(t.summary_prompt.is_none());
+        assert!(t.formats.contains(&OutputFormat::Json));
+    }
+
+    #[test]
+    fn schema_and_prompt_both_survive() {
+        let schema = serde_json::json!({"type": "object"});
+        let t = extract_template(Some("steer".into()), Some(schema.clone()));
+        assert_eq!(t.json_schema.as_ref(), Some(&schema));
+        assert_eq!(
+            t.extract.as_ref().and_then(|e| e.prompt.as_deref()),
+            Some("steer")
+        );
+    }
 }

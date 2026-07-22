@@ -91,6 +91,46 @@ async fn v2_extract_requires_urls_400() {
 }
 
 #[tokio::test]
+async fn v2_extract_rejects_system_prompt() {
+    // systemPrompt is a distinct Firecrawl feature with no slot in the engine
+    // yet. It must be rejected loudly, not accepted and silently ignored.
+    let s = test_app();
+    let r = s
+        .post("/v2/extract")
+        .json(&json!({
+            "urls": ["http://example.com"],
+            "prompt": "get the title",
+            "systemPrompt": "you are a careful extractor",
+        }))
+        .await;
+    r.assert_status(StatusCode::BAD_REQUEST);
+    assert!(r.text().contains("systemPrompt"), "body: {}", r.text());
+}
+
+#[tokio::test]
+async fn v2_extract_blank_system_prompt_is_tolerated() {
+    // An empty systemPrompt is not a real instruction — do not 400 on it, or a
+    // client that always sends the key gets rejected for nothing.
+    let s = test_app();
+    let r = s
+        .post("/v2/extract")
+        .json(&json!({
+            "urls": ["http://example.com"],
+            "prompt": "get the title",
+            "systemPrompt": "   ",
+        }))
+        .await;
+    // Not a 400 for the systemPrompt reason (it will start a job or fail on SSRF,
+    // either way not our rejection).
+    assert_ne!(
+        r.status_code(),
+        StatusCode::BAD_REQUEST,
+        "blank systemPrompt must not be rejected: {}",
+        r.text()
+    );
+}
+
+#[tokio::test]
 async fn v2_batch_requires_urls_400() {
     let s = test_app();
     let r = s.post("/v2/batch/scrape").json(&json!({"urls": []})).await;
