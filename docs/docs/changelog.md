@@ -8,6 +8,14 @@ The source of truth is the repository root changelog. Do not edit this docs page
 
 All notable changes to CRW are documented here.
 
+## [0.27.1](https://github.com/us/crw/compare/v0.27.0...v0.27.1) (2026-07-22)
+
+
+### Bug Fixes
+
+* **packaging:** verify downloaded binaries against published checksums ([a181e69](https://github.com/us/crw/commit/a181e6906ce3427258ab34703c64c47be0957883))
+* **search:** distinguish a degraded backend from a zero-result query ([c8c031a](https://github.com/us/crw/commit/c8c031a13793d96bbd05d4ebabd1846c5f88117a))
+
 ## [0.27.0](https://github.com/us/crw/compare/v0.26.1...v0.27.0) (2026-07-21)
 
 
