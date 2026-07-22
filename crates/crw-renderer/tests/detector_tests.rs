@@ -170,6 +170,30 @@ fn thin_html_substantive_page_not_thin() {
 }
 
 #[test]
+fn thin_html_large_page_past_500kb_is_not_thin() {
+    // Regression: a >500 KB content-rich page (e.g. a long Wikipedia article) was
+    // truncated at the 500 KB scan cap, its `</body>` fell past the cut, and the
+    // whole body text was discarded → falsely "thin" → needless Chrome escalation.
+    // The real body text sits inside the slice; it must be measured, not dropped.
+    let article = "<p>Real article prose about a real topic. </p>".repeat(30_000);
+    let html = format!("<html><body><article>{article}</article></body></html>");
+    assert!(html.len() > 500_000, "fixture must exceed the scan cap");
+    assert!(!looks_like_thin_html(&html));
+    // The same shared helper backs needs_js_rendering; it must not misfire either.
+    assert!(!needs_js_rendering(&html));
+}
+
+#[test]
+fn thin_html_short_truncated_page_still_thin() {
+    // A genuinely short page with no `</body>` (mid-stream cut / malformed) is NOT
+    // large, so it stays "thin" and escalates to a fresh render for recovery —
+    // the was_truncated guard must not flip this case.
+    let html = "<html><body><article>Some opening text that never closes";
+    assert!(html.len() < 500_000);
+    assert!(looks_like_thin_html(html));
+}
+
+#[test]
 fn bot_wall_scanpy_style() {
     let html = r#"<html><body><h1>Performing security verification</h1><p>This page checks your browser.</p></body></html>"#;
     assert!(looks_like_generic_bot_wall(html));
