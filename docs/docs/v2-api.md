@@ -83,6 +83,7 @@ Scrape one URL synchronously. Returns immediately with a `V2Document`.
 | `proxyRotation` | `"round_robin" \| "random"` | — | Rotation strategy for `proxyList` |
 | `timeout` | `number` | server default | Request deadline in milliseconds |
 | `renderer` | `"auto" \| "lightpanda" \| "chrome" \| "chrome_proxy" \| "playwright"` | — | Pin a renderer tier |
+| `renderJs` | `boolean` | — | `true` forces JS rendering, `false` keeps the request HTTP-only, omitted uses auto-detection. Same semantics as on `/v1/scrape`, see [JS Rendering](js-rendering.md) |
 | `parsers` | `ParserSpec[]` | — | Document parser directives (e.g. `["pdf"]`) |
 | `llmApiKey` | `string` | — | Per-request LLM API key (required for `summary` / `json` if no server key) |
 | `llmProvider` | `"anthropic" \| "openai" \| "deepseek" \| "azure" \| "openai-compatible"` | — | Per-request LLM provider |
@@ -170,7 +171,7 @@ Start an asynchronous recursive crawl. Returns a job ID immediately; poll `GET /
 | `url` | `string` | **required** | Seed URL |
 | `limit` | `number` | — | Maximum pages to crawl |
 | `maxDiscoveryDepth` | `number` | — | Maximum link-follow depth from the seed |
-| `scrapeOptions` | `object` | — | Per-page scrape settings (`formats`, `onlyMainContent`, `waitFor`) |
+| `scrapeOptions` | `object` | — | Per-page scrape settings (`formats`, `onlyMainContent`, `waitFor`, `renderJs`) |
 | `renderer` | `RequestedRenderer` | — | Pin a renderer tier for all pages |
 | `country` | `string` | — | 2-letter ISO country for proxy egress |
 | `proxyList` | `string[]` | `[]` | BYOP proxy pool |
