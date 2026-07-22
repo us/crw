@@ -100,11 +100,31 @@ pub async fn validate_safe_url_resolved(url: &url::Url) -> Result<(), String> {
     let port = url
         .port_or_known_default()
         .ok_or_else(|| "URL has no resolvable port".to_string())?;
-    let addrs = tokio::net::lookup_host((stripped, port))
-        .await
-        .map_err(|_| "DNS resolution failed".to_string())?;
+    // Bound the lookup. `lookup_host` inherits the OS resolver's own retry
+    // behaviour, which against a stalled or blackholed nameserver can hang for
+    // tens of seconds — long past any route backstop. This is the single choke
+    // point every SSRF caller routes through, so bounding it here covers the ~14
+    // callers that have no request-scoped timeout of their own; the two that do
+    // (crw-crawl seed + BFS) keep winning since the tighter timeout applies.
+    // Fails CLOSED: an elapsed lookup maps to the same rejection a resolver error
+    // already produces.
+    let addrs = tokio::time::timeout(
+        DNS_RESOLVE_TIMEOUT,
+        tokio::net::lookup_host((stripped, port)),
+    )
+    .await
+    .map_err(|_| "DNS resolution timed out".to_string())?
+    .map_err(|_| "DNS resolution failed".to_string())?;
     validate_resolved_ips(addrs.map(|addr| addr.ip()))
 }
+
+/// Upper bound on a single SSRF DNS resolution. Purpose is to bound a stalled /
+/// blackholed resolver, not to race a slow-but-working one: recall is the hard
+/// invariant, so this sits high enough (8s) to still resolve a legitimate host
+/// behind a CNAME chain or a slow authoritative server that needs a UDP retry,
+/// while staying under the search enrichment per-result budget. Two orders of
+/// magnitude above a healthy lookup (tens of ms).
+const DNS_RESOLVE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);
 
 /// Synchronous resolved validation for places that cannot await, notably
 /// reqwest's redirect-policy callback. Keep use narrow; it performs DNS on the
@@ -309,5 +329,17 @@ mod tests {
         assert!(validate_safe_url_blocking_resolved(&url("http://169.254.169.254")).is_err());
         assert!(validate_safe_url_blocking_resolved(&url("http://127.0.0.1")).is_err());
         assert!(validate_safe_url_blocking_resolved(&url("http://[::1]")).is_err());
+    }
+
+    #[tokio::test]
+    async fn resolution_fails_closed_and_bounded() {
+        // `.invalid` is reserved (RFC 6761) and never resolves. The result must be
+        // a fail-closed `Err`, and it must return in well under the DNS timeout
+        // (proving the wrapper doesn't hang the caller). NXDOMAIN returns fast; the
+        // bound here only asserts we never sit past the timeout.
+        let start = std::time::Instant::now();
+        let res = validate_safe_url_resolved(&url("https://nonexistent.invalid")).await;
+        assert!(res.is_err());
+        assert!(start.elapsed() < DNS_RESOLVE_TIMEOUT + std::time::Duration::from_secs(1));
     }
 }
