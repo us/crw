@@ -43,6 +43,58 @@ const SCOUT_FETCH_LIMIT: u32 = 6;
 /// `multi_round` adds.
 const MULTI_ROUND_MIN_BUDGET_MS: u64 = 20_000;
 
+/// Per-result scrape budget for search enrichment when the caller passes no
+/// `scrapeOptions.timeout`.
+///
+/// NOT `effective_deadline_ms(None, None)`: an implicit deadline auto-extends to
+/// the full renderer ladder (`http + lightpanda + chrome + 28s per CDP tier` —
+/// 92.5s on the docker config), which is the right budget for ONE `/v1/scrape`
+/// but not here: search waits for every result, so a single straggler walking
+/// the whole ladder stalls the entire response. 15s is the deadline this
+/// codebase already validated against the zero-byte-miss class
+/// (`config.docker.toml` `[request]`), and it leaves chrome its full
+/// `chrome_nav_budget_ms` whenever the HTTP prefetch is quick.
+const SEARCH_ENRICH_DEADLINE_MS: u64 = 15_000;
+
+/// Upper bound for a caller-supplied `scrapeOptions.timeout`. Matches the range
+/// documented on `ScrapeRequest.deadline_ms`; enforced here because search
+/// multiplies the budget across every result.
+const SEARCH_ENRICH_DEADLINE_MAX_MS: u64 = 60_000;
+
+/// Fold the C1-overlap prefetch outcomes into the final (reranked-over-union)
+/// pool. A successful prefetch hands over its content; a FAILED one hands over
+/// its error, which is what stops `enrich_with_scrape` from scraping that URL a
+/// second time and spending the per-result budget twice in one request.
+fn fold_prescraped(pool: &mut [SearchResult], prescraped: &[SearchResult]) {
+    let by_url: std::collections::HashMap<&str, &SearchResult> =
+        prescraped.iter().map(|r| (r.url.as_str(), r)).collect();
+    for r in pool.iter_mut() {
+        if r.metadata.is_some() {
+            continue;
+        }
+        let Some(src) = by_url.get(r.url.as_str()) else {
+            continue;
+        };
+        if src.metadata.is_some() {
+            r.markdown = src.markdown.clone();
+            r.html = src.html.clone();
+            r.raw_html = src.raw_html.clone();
+            r.links = src.links.clone();
+            r.metadata = src.metadata.clone();
+            r.truncated = src.truncated;
+        } else if src.error.is_some() {
+            r.error = src.error.clone();
+        }
+    }
+}
+
+/// Per-result scrape budget for one enrichment fan-out. Validated in
+/// [`validate_request`], so the caller value is already within
+/// `(0, SEARCH_ENRICH_DEADLINE_MAX_MS]` by the time it reaches here.
+fn enrich_deadline_ms(opts: &SearchScrapeOptions) -> u64 {
+    opts.timeout.unwrap_or(SEARCH_ENRICH_DEADLINE_MS)
+}
+
 /// Customer-facing text for "the backend could not answer", used both as the
 /// non-LLM error and as the LLM-path warning. A single constant because the
 /// multi-round leg has to be able to REMOVE it again by value when a later
@@ -381,23 +433,17 @@ pub async fn search_inner(
 
     // Phase C1: fold the original-results scrapes done during the overlap back
     // into the final (reranked-over-union) source set. Entries that match by URL
-    // get their scraped fields reused; enrich_with_scrape then skips them
-    // (metadata.is_some()) and only scrapes the URLs the expansion newly added.
-    if !prescraped.is_empty()
-        && let SearchData::Flat(v) = &mut data
-    {
-        let by_url: std::collections::HashMap<&str, &SearchResult> =
-            prescraped.iter().map(|r| (r.url.as_str(), r)).collect();
-        for r in v.iter_mut() {
-            if r.metadata.is_none()
-                && let Some(src) = by_url.get(r.url.as_str())
-                && src.metadata.is_some()
-            {
-                r.markdown = src.markdown.clone();
-                r.html = src.html.clone();
-                r.raw_html = src.raw_html.clone();
-                r.links = src.links.clone();
-                r.metadata = src.metadata.clone();
+    // get their scraped outcome reused; enrich_with_scrape then skips them and
+    // only scrapes the URLs the expansion newly added. Grouped responses fold
+    // too — the prefetch pool is flat either way, and skipping the fold there
+    // would scrape those URLs a second time on the same request.
+    if !prescraped.is_empty() {
+        match &mut data {
+            SearchData::Flat(v) => fold_prescraped(v, &prescraped),
+            SearchData::Grouped(g) => {
+                if let Some(web) = g.web.as_mut() {
+                    fold_prescraped(web, &prescraped);
+                }
             }
         }
     }
@@ -1077,6 +1123,14 @@ fn validate_request(req: &SearchRequest, max_limit: u32) -> Result<(), CrwError>
                 )));
             }
         }
+        if let Some(t) = opts.timeout
+            && (t == 0 || t > SEARCH_ENRICH_DEADLINE_MAX_MS)
+        {
+            return Err(CrwError::InvalidRequest(format!(
+                "scrapeOptions.timeout must be between 1 and \
+                 {SEARCH_ENRICH_DEADLINE_MAX_MS} ms (got {t})"
+            )));
+        }
     }
     Ok(())
 }
@@ -1201,9 +1255,11 @@ async fn enrich_with_scrape(
     // Validate each URL and remember which slot it came from.
     let mut jobs: Vec<(usize, String)> = Vec::new();
     for (idx, r) in targets.iter().enumerate() {
-        // C1 overlap: a slot already enriched by the original-results prefetch
-        // (metadata set by apply_scrape_to_result) is reused, not re-scraped.
-        if r.metadata.is_some() {
+        // C1 overlap: a slot already handled by the original-results prefetch is
+        // reused, not re-scraped — whether it succeeded (metadata set by
+        // apply_scrape_to_result) or failed (error set). Re-scraping a failure
+        // here would spend the per-result budget twice in one request.
+        if r.metadata.is_some() || r.error.is_some() {
             continue;
         }
         let parsed = match url::Url::parse(&r.url) {
@@ -1240,7 +1296,7 @@ async fn enrich_with_scrape(
         let default_stealth =
             state.config.crawler.stealth.enabled && state.config.crawler.stealth.inject_headers;
         let render_js_default = state.config.renderer.render_js_default;
-        let deadline_ms = state.config.effective_deadline_ms(None, None);
+        let deadline_ms = enrich_deadline_ms(opts);
         let permit_src = semaphore.clone();
 
         // Deliberately NOT scoped to `ScrapeClass::Batch`: `/v1/search` is a
@@ -1347,6 +1403,9 @@ fn apply_scrape_to_result(slot: &mut SearchResult, data: ScrapeData, formats: &[
     if formats.contains(&OutputFormat::Links) {
         slot.links = data.links;
     }
+    if data.truncated {
+        slot.truncated = Some(true);
+    }
     slot.metadata = Some(data.metadata);
 }
 
@@ -1354,6 +1413,106 @@ fn apply_scrape_to_result(slot: &mut SearchResult, data: ScrapeData, formats: &[
 mod tests {
     use super::*;
     use crw_core::types::SearchSource;
+
+    fn scrape_opts(timeout: Option<u64>) -> SearchScrapeOptions {
+        SearchScrapeOptions {
+            formats: vec![OutputFormat::Markdown],
+            only_main_content: true,
+            country: None,
+            timeout,
+        }
+    }
+
+    #[test]
+    fn enrichment_deadline_is_bounded_not_the_renderer_ladder() {
+        // Regression pin: enrichment must NOT inherit the implicit full-ladder
+        // deadline (`effective_deadline_ms(None, None)` — 92.5s on the docker
+        // renderer config). Search waits for every result, so one straggler
+        // walking the ladder stalls the whole response.
+        // Prod raises the implicit budget to 60s and the ladder extension takes
+        // it to ~92.5s; the enrichment budget must be independent of both.
+        let cfg: crw_core::config::AppConfig =
+            toml::from_str("[request]\ndeadline_ms_default = 60000\n").expect("config parses");
+        assert_eq!(cfg.effective_deadline_ms(None, None), 60_000);
+        assert_eq!(enrich_deadline_ms(&scrape_opts(None)), 15_000);
+    }
+
+    #[test]
+    fn truncated_render_is_marked_on_the_result() {
+        // A budget-shortened render still returns content, so without this flag
+        // it is indistinguishable from a page that genuinely has little text —
+        // which is what would make a tightened budget a silent recall loss.
+        let mut slot = bare_result("https://example.com/a");
+        let mut data: ScrapeData = serde_json::from_value(serde_json::json!({
+            "markdown": "# partial",
+            "metadata": {"sourceURL": "https://example.com/a", "statusCode": 200, "elapsedMs": 1}
+        }))
+        .expect("valid scrape data");
+        data.truncated = true;
+        apply_scrape_to_result(&mut slot, data, &[OutputFormat::Markdown]);
+        assert_eq!(slot.truncated, Some(true));
+
+        let mut slot = bare_result("https://example.com/b");
+        let data: ScrapeData = serde_json::from_value(serde_json::json!({
+            "markdown": "# whole",
+            "metadata": {"sourceURL": "https://example.com/b", "statusCode": 200, "elapsedMs": 1}
+        }))
+        .expect("valid scrape data");
+        apply_scrape_to_result(&mut slot, data, &[OutputFormat::Markdown]);
+        assert_eq!(slot.truncated, None);
+    }
+
+    fn bare_result(url: &str) -> SearchResult {
+        serde_json::from_value(serde_json::json!({
+            "url": url, "title": "t", "description": "d", "position": 1
+        }))
+        .expect("valid result")
+    }
+
+    #[test]
+    fn prefetch_outcomes_fold_back_into_the_final_pool() {
+        let mut ok = bare_result("https://example.com/ok");
+        ok.markdown = Some("# ok".into());
+        ok.truncated = Some(true);
+        ok.metadata = Some(
+            serde_json::from_value(serde_json::json!({
+                "sourceURL": "https://example.com/ok", "statusCode": 200, "elapsedMs": 1
+            }))
+            .expect("valid metadata"),
+        );
+        let mut failed = bare_result("https://example.com/failed");
+        failed.error = Some("Timeout after 15000ms".into());
+
+        let mut pool = vec![
+            bare_result("https://example.com/ok"),
+            bare_result("https://example.com/failed"),
+            bare_result("https://example.com/fresh"),
+        ];
+        fold_prescraped(&mut pool, &[ok, failed]);
+
+        assert_eq!(pool[0].markdown.as_deref(), Some("# ok"));
+        // A truncated prefetch must not lose its marker on the way through.
+        assert_eq!(pool[0].truncated, Some(true));
+        // A failed prefetch carries its error, which is what makes
+        // `enrich_with_scrape` skip it instead of paying the budget twice.
+        assert!(pool[1].error.is_some() && pool[1].metadata.is_none());
+        // A URL the expansion newly added is untouched and still gets scraped.
+        assert!(pool[2].error.is_none() && pool[2].metadata.is_none());
+    }
+
+    #[test]
+    fn scrape_options_timeout_range_is_validated() {
+        let req = |timeout: Option<u64>| {
+            let json = serde_json::json!({"query": "q", "scrapeOptions": {}});
+            let mut r: SearchRequest = serde_json::from_value(json).expect("valid request");
+            r.scrape_options = Some(scrape_opts(timeout));
+            r
+        };
+        assert!(validate_request(&req(Some(15_000)), 20).is_ok());
+        assert!(validate_request(&req(None), 20).is_ok());
+        assert!(validate_request(&req(Some(0)), 20).is_err());
+        assert!(validate_request(&req(Some(60_001)), 20).is_err());
+    }
 
     #[test]
     fn block_shell_detected_but_not_real_articles() {

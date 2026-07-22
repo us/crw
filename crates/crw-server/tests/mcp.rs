@@ -721,6 +721,7 @@ fn real_search_result(idx: u32) -> SearchResult {
         metadata: None,
         summary: None,
         error: None,
+        truncated: None,
     }
 }
 

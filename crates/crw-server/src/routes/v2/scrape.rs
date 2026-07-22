@@ -345,6 +345,7 @@ mod tests {
             change_tracking: None,
             screenshot: None,
             block: None,
+            truncated: false,
         };
         to_v2_document(data, "basic", "id".into())
     }

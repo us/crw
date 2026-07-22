@@ -694,6 +694,12 @@ async fn scrape_url_inner(
     // crawl path) can hash binary/non-text content rather than diff it.
     data.content_type = fetch_result.content_type.clone();
 
+    // A partial-DOM snapshot (navigation budget elapsed) extracts to usable but
+    // incomplete content. Carry the flag out so callers that bound the scrape
+    // budget — `/v1/search` enrichment above all — can observe truncation
+    // instead of mistaking it for a thin page.
+    data.truncated = fetch_result.truncated;
+
     // Wrap the raw base64 screenshot in a `data:image/png;base64,` URL exactly
     // once, here, so both v1 and v2 responses are identical (D8). FetchResult
     // keeps the raw b64.
