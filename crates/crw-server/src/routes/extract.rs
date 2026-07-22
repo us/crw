@@ -165,31 +165,36 @@ pub(crate) async fn prepare_extract(
         ));
     }
 
-    // Per-URL preflight in original order. Bad parse / SSRF failures become
-    // `failed` results (surfaced, not dropped); valid URLs are enqueued.
-    let mut entries = Vec::with_capacity(req.urls.len());
-    let mut valid_count = 0usize;
-    for u in &req.urls {
-        match url::Url::parse(u) {
-            Ok(parsed) => match crw_core::url_safety::validate_safe_url_resolved(&parsed).await {
-                Ok(()) => {
-                    valid_count += 1;
-                    entries.push(PreparedUrl {
+    // Per-URL preflight. Each SSRF check does a DNS lookup, so a serial loop over
+    // up to `max_extract_urls` (50) URLs added tens of seconds of cold DNS before
+    // any extraction started. Validate concurrently; `join_all` preserves order,
+    // which the response relies on (`entries` align 1:1 with `req.urls`). Bad
+    // parse / SSRF failures become `failed` results (surfaced, not dropped).
+    let entries: Vec<PreparedUrl> =
+        futures::future::join_all(req.urls.iter().map(|u| async move {
+            match url::Url::parse(u) {
+                Ok(parsed) => match crw_core::url_safety::validate_safe_url_resolved(&parsed).await
+                {
+                    Ok(()) => PreparedUrl {
                         url: u.clone(),
                         preflight_error: None,
-                    });
-                }
-                Err(e) => entries.push(PreparedUrl {
+                    },
+                    Err(e) => PreparedUrl {
+                        url: u.clone(),
+                        preflight_error: Some(e),
+                    },
+                },
+                Err(e) => PreparedUrl {
                     url: u.clone(),
-                    preflight_error: Some(e),
-                }),
-            },
-            Err(e) => entries.push(PreparedUrl {
-                url: u.clone(),
-                preflight_error: Some(format!("invalid URL: {e}")),
-            }),
-        }
-    }
+                    preflight_error: Some(format!("invalid URL: {e}")),
+                },
+            }
+        }))
+        .await;
+    let valid_count = entries
+        .iter()
+        .filter(|e| e.preflight_error.is_none())
+        .count();
     if valid_count == 0 {
         return Err(CrwError::InvalidRequest(
             "no valid URLs to extract (all failed URL parsing or the SSRF safety check)".into(),

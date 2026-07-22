@@ -175,6 +175,20 @@ fn is_block_shell(md: &str) -> bool {
     .any(|p| l.contains(p))
 }
 
+/// Drop rows whose URL is already in the flat pool. Used to skip re-scraping a
+/// scout result the answer pool already holds. Recall-safe: `merge_scraped` would
+/// discard these same rows anyway (it dedups by URL), and nothing on this path
+/// re-scrapes for fresher content — this just avoids paying for the scrape first.
+fn drop_known_urls(data: &SearchData, rows: Vec<SearchResult>) -> Vec<SearchResult> {
+    let SearchData::Flat(pool) = data else {
+        return rows;
+    };
+    let seen: std::collections::HashSet<&str> = pool.iter().map(|r| r.url.as_str()).collect();
+    rows.into_iter()
+        .filter(|r| !seen.contains(r.url.as_str()))
+        .collect()
+}
+
 /// Merge freshly-scraped scout rows into the flat answer pool (dedup by URL,
 /// only rows that actually carry markdown). Returns true if any were added.
 /// Grouped data (the explicit-`sources` path) is left untouched — multi-round
@@ -653,7 +667,18 @@ pub async fn search_inner(
                                             SCOUT_FETCH_LIMIT,
                                             state.config.search.rerank_relevance,
                                         );
-                                        let mut sd = SearchData::Flat(extra);
+                                        // Drop scout results already in the pool
+                                        // BEFORE scraping. merge_scraped only dedups
+                                        // AFTER the scrape, so a URL from round 1 (or
+                                        // returned by both scout queries — the pool
+                                        // has grown by iteration 2) would otherwise be
+                                        // scraped again and its result discarded,
+                                        // paying the per-result budget for nothing.
+                                        let fresh = drop_known_urls(&data, extra);
+                                        if fresh.is_empty() {
+                                            continue;
+                                        }
+                                        let mut sd = SearchData::Flat(fresh);
                                         let _ = enrich_with_scrape(&mut sd, opts, state).await;
                                         if let SearchData::Flat(rows) = sd {
                                             grew |= merge_scraped(&mut data, rows);
@@ -1253,27 +1278,40 @@ async fn enrich_with_scrape(
     }
 
     // Validate each URL and remember which slot it came from.
-    let mut jobs: Vec<(usize, String)> = Vec::new();
-    for (idx, r) in targets.iter().enumerate() {
+    // Each `validate_safe_url_resolved` does a DNS lookup; running them serially
+    // added up to ~max_limit cold lookups (~9s at limit 20) on the critical path
+    // before any scrape could start. SERP results are diverse domains, so this is
+    // the common case, not the worst case. Validate concurrently instead — N is
+    // bounded by `max_limit` (≤20), so `join_all` needs no width cap, and it
+    // preserves order (irrelevant here since each job carries its own `idx`).
+    let candidates: Vec<(usize, url::Url, String)> = targets
+        .iter()
+        .enumerate()
         // C1 overlap: a slot already handled by the original-results prefetch is
         // reused, not re-scraped — whether it succeeded (metadata set by
         // apply_scrape_to_result) or failed (error set). Re-scraping a failure
         // here would spend the per-result budget twice in one request.
-        if r.metadata.is_some() || r.error.is_some() {
-            continue;
-        }
-        let parsed = match url::Url::parse(&r.url) {
-            Ok(u) => u,
-            Err(_) => continue,
-        };
-        if crw_core::url_safety::validate_safe_url_resolved(&parsed)
-            .await
-            .is_err()
-        {
-            continue;
-        }
-        jobs.push((idx, r.url.clone()));
-    }
+        .filter(|(_, r)| r.metadata.is_none() && r.error.is_none())
+        .filter_map(|(idx, r)| {
+            url::Url::parse(&r.url)
+                .ok()
+                .map(|parsed| (idx, parsed, r.url.clone()))
+        })
+        .collect();
+    let jobs: Vec<(usize, String)> = futures::future::join_all(candidates.into_iter().map(
+        |(idx, parsed, original)| async move {
+            crw_core::url_safety::validate_safe_url_resolved(&parsed)
+                .await
+                .ok()
+                // Scrape the caller's original URL string, not the reparsed
+                // (possibly re-normalized) one — same as the serial version.
+                .map(|()| (idx, original))
+        },
+    ))
+    .await
+    .into_iter()
+    .flatten()
+    .collect();
     if jobs.is_empty() {
         return Ok(());
     }
@@ -1467,6 +1505,23 @@ mod tests {
             "url": url, "title": "t", "description": "d", "position": 1
         }))
         .expect("valid result")
+    }
+
+    #[test]
+    fn scout_dedup_drops_urls_already_in_the_pool() {
+        // The scout must not re-scrape a URL the answer pool already holds:
+        // enrich_with_scrape spends the per-result budget, then merge_scraped
+        // discards the duplicate. drop_known_urls removes them before the scrape.
+        let mut known = bare_result("https://example.com/known");
+        known.markdown = Some("# known".into());
+        let data = SearchData::Flat(vec![known]);
+        let scout_rows = vec![
+            bare_result("https://example.com/known"), // already in the pool
+            bare_result("https://example.com/fresh"), // new -> keep
+        ];
+        let fresh = drop_known_urls(&data, scout_rows);
+        assert_eq!(fresh.len(), 1);
+        assert_eq!(fresh[0].url, "https://example.com/fresh");
     }
 
     #[test]
