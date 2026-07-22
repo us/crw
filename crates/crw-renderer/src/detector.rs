@@ -13,8 +13,9 @@ pub fn needs_js_rendering(html: &str) -> bool {
     // and the <body> may start well beyond 50KB. Every fixed-cap prefix slice of the
     // page HTML here goes through `floor_char_boundary`: a page longer than the cap
     // can straddle it with a multibyte char, and slicing mid-char panics.
+    let was_truncated = html.len() > 500_000;
     let lower = html[..html.floor_char_boundary(500_000)].to_lowercase();
-    let body_len = extract_body_text_len(&lower);
+    let body_len = extract_body_text_len(&lower, was_truncated);
 
     // Very short body text + presence of JS framework indicators.
     // After stripping script/style, most SPA shells have very little actual text.
@@ -109,7 +110,9 @@ pub fn looks_like_generic_bot_wall(html: &str) -> bool {
     // small `{"error":"access_denied"}` payload would trip an existing phrase.
     // The 600-char cap below still guards against real articles.
     let body_stripped = if lower.contains("<body") {
-        body_html_without_scripts_lower(&lower)
+        // This fn already bailed above for `html.len() > 80_000`, so the input is
+        // never truncated at the 500 KB cap: `was_truncated = false`.
+        body_html_without_scripts_lower(&lower, false)
     } else if lower.contains("<html") || lower.contains("<!doctype html") {
         strip_tag_blocks(&strip_tag_blocks(&lower, "script"), "style")
     } else {
@@ -224,8 +227,9 @@ pub fn looks_like_vendor_block(html: &str) -> Option<&'static str> {
 /// on raw markup, looking for framework shells. This one is purely about
 /// outcome — does the page have *any* content for an extractor to chew on.
 pub fn looks_like_thin_html(html: &str) -> bool {
+    let was_truncated = html.len() > 500_000;
     let lower = html[..html.floor_char_boundary(500_000)].to_lowercase();
-    extract_body_text_len(&lower) < 200
+    extract_body_text_len(&lower, was_truncated) < 200
 }
 
 /// Would a headless browser plausibly reveal MORE content than the raw HTTP
@@ -382,7 +386,8 @@ pub fn looks_like_loading_placeholder(html: &str) -> bool {
         return false;
     }
     let lower = html.to_lowercase();
-    let body_stripped = body_html_without_scripts_lower(&lower);
+    // Bailed above for `html.len() > 80_000`, so never truncated at the 500 KB cap.
+    let body_stripped = body_html_without_scripts_lower(&lower, false);
     let body_text = visible_text_from_stripped_html(&body_stripped);
     let body_text_len = body_text.chars().filter(|c| !c.is_whitespace()).count();
 
@@ -430,11 +435,22 @@ pub fn looks_like_loading_placeholder(html: &str) -> bool {
 /// Return the `<body>` of a lowercased HTML document with `<script>` and
 /// `<style>` blocks removed. Remaining tags (and their attributes) are
 /// preserved. Returns an empty string if no `<body>` is found.
-fn body_html_without_scripts_lower(lower: &str) -> String {
+fn body_html_without_scripts_lower(lower: &str, was_truncated: bool) -> String {
     let body_start = lower
         .find("<body")
         .and_then(|i| lower[i..].find('>').map(|j| i + j + 1));
-    let body_end = lower.rfind("</body>");
+    // A missing `</body>` means two different things. On a page that was cut at
+    // the 500 KB scan cap, the tag simply sits past the cut and the real body
+    // text is right here in the slice — measuring to the end of the slice is
+    // correct (a 1.8 MB article was being called "thin" and needlessly escalated
+    // to Chrome). On a NON-truncated page, a missing `</body>` is a genuinely
+    // malformed / mid-stream-truncated response, and treating it as thin so it
+    // escalates to a fresh render is the right recovery — keep that.
+    let body_end = match lower.rfind("</body>") {
+        Some(end) => Some(end),
+        None if was_truncated => Some(lower.len()),
+        None => None,
+    };
 
     let body = match (body_start, body_end) {
         (Some(start), Some(end)) if start < end => &lower[start..end],
@@ -474,11 +490,11 @@ fn visible_text_from_stripped_html(stripped: &str) -> String {
 /// Rough estimate of non-whitespace text length inside `<body>` of a
 /// lowercased HTML document. Returns `1000` as a "probably has content"
 /// fallback if no `<body>` is found.
-fn extract_body_text_len(lower: &str) -> usize {
+fn extract_body_text_len(lower: &str, was_truncated: bool) -> usize {
     if !lower.contains("<body") {
         return 1000;
     }
-    let stripped = body_html_without_scripts_lower(lower);
+    let stripped = body_html_without_scripts_lower(lower, was_truncated);
     visible_text_from_stripped_html(&stripped)
         .chars()
         .filter(|c| !c.is_whitespace())
