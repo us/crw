@@ -39,6 +39,9 @@ pub enum CrwError {
     SearchDisabled(String),
 
     #[error("{0}")]
+    SearchDegraded(String),
+
+    #[error("{0}")]
     Internal(String),
 
     #[error("Renderer pool shutting down")]
@@ -61,6 +64,7 @@ impl CrwError {
             CrwError::NotFound(_) => "not_found",
             CrwError::RateLimited => "rate_limited",
             CrwError::SearchDisabled(_) => "search_disabled",
+            CrwError::SearchDegraded(_) => "search_degraded",
             CrwError::Internal(_) => "internal_error",
             CrwError::Shutdown => "shutdown",
         }

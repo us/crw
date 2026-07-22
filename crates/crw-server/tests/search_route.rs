@@ -51,6 +51,30 @@ model = "claude-sonnet-4-20250514"
     TestServer::new(app)
 }
 
+fn test_app_with_structured_sources(url: &str) -> TestServer {
+    // As above, plus `use_structured_sources` so `infoboxes[]`/`answers[]` are
+    // parsed into pinned answer sources. Needed to tell a real structured-answer
+    // rescue apart from a merely-collected structured fact.
+    let toml = format!(
+        r#"
+[search]
+enabled = true
+searxng_url = "{url}"
+timeout_ms = 5000
+use_structured_sources = true
+
+[extraction.llm]
+provider = "anthropic"
+api_key = "sk-test"
+model = "claude-sonnet-4-20250514"
+"#
+    );
+    let config: AppConfig = toml::from_str(&toml).unwrap();
+    let state = AppState::new(config).expect("AppState::new failed");
+    let app = create_app(state);
+    TestServer::new(app)
+}
+
 fn test_app_search_disabled() -> TestServer {
     // Default config has no searxng_url → state.searxng = None.
     let config: AppConfig = toml::from_str("").unwrap();
@@ -243,6 +267,141 @@ async fn search_disabled_returns_503_with_search_disabled_code() {
     assert!(
         err.contains("Search is disabled"),
         "expected disabled error, got: {err}"
+    );
+}
+
+#[tokio::test]
+async fn search_genuine_zero_result_stays_200_with_empty_array() {
+    // The counterpart to the degraded test below, and the guard against
+    // over-firing it: an empty pool with NO failed engines is a query that
+    // genuinely has no results. It must keep returning a normal 200 with an
+    // empty array, not a 503.
+    let mock = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/search"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "results": [],
+            "number_of_results": 0,
+            "unresponsive_engines": []
+        })))
+        .mount(&mock)
+        .await;
+
+    let server = test_app_with_searxng(&mock.uri());
+    let resp = server
+        .post("/v1/search")
+        .json(&json!({"query": "zzzqqq no such thing"}))
+        .await;
+    resp.assert_status_ok();
+    let body: Value = resp.json();
+    assert_eq!(body["success"], true);
+    assert_eq!(body["data"]["results"].as_array().map(|a| a.len()), Some(0));
+}
+
+#[tokio::test]
+async fn search_degraded_non_llm_returns_503_with_search_degraded_code() {
+    // Backend answers 200 with an empty pool AND reports failed engines: on
+    // the plain (non-LLM) path `response` is final, so this must surface as
+    // 503 `search_degraded` rather than a silent 200-with-empty-results.
+    let mock = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/search"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "results": [],
+            "number_of_results": 0,
+            "unresponsive_engines": [["google", "timeout"]]
+        })))
+        .mount(&mock)
+        .await;
+
+    let server = test_app_with_searxng(&mock.uri());
+    let resp = server
+        .post("/v1/search")
+        .json(&json!({"query": "rust async"}))
+        .await;
+    resp.assert_status(axum::http::StatusCode::SERVICE_UNAVAILABLE);
+    let body: Value = resp.json();
+    assert_eq!(body["success"], false);
+    assert_eq!(body["errorCode"], "search_degraded");
+}
+
+#[tokio::test]
+async fn search_degraded_llm_path_does_not_503() {
+    // Same degraded backend shape, but `answer: true` puts the request on the
+    // LLM path, where page-2/Wikidata rescues still run after this point —
+    // erroring out here would kill those rescues. Must stay 200.
+    let mock = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/search"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "results": [],
+            "number_of_results": 0,
+            "unresponsive_engines": [["google", "timeout"]]
+        })))
+        .mount(&mock)
+        .await;
+
+    let server = test_app_with_searxng_and_llm(&mock.uri());
+    let resp = server
+        .post("/v1/search")
+        .json(&json!({"query": "rust async", "answer": true}))
+        .await;
+    resp.assert_status_ok();
+    let body: Value = resp.json();
+    assert_eq!(body["success"], true);
+    // Nothing rescued it here, so the caller must still be told the backend
+    // could not answer — a silent empty answer is the bug this change removes.
+    let warnings = body["data"]["warnings"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.as_str().unwrap_or("").contains("could not answer")),
+        "degraded LLM-path request must carry the warning, got {warnings:?}"
+    );
+}
+
+#[tokio::test]
+async fn search_degraded_summarize_only_still_warns() {
+    // `summarizeResults` without `answer` never consumes `structured_sources`,
+    // so a structured fact can NOT rescue it — the warning must still fire even
+    // though structured sources WERE collected. The mock deliberately carries a
+    // parseable `answers[]` entry and the app enables `use_structured_sources`:
+    // without both, this test would also pass against the earlier, buggy plain
+    // `structured_sources.is_empty()` condition, i.e. it would pin nothing.
+    let mock = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/search"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "results": [],
+            "number_of_results": 0,
+            "unresponsive_engines": [["google", "timeout"]],
+            "answers": [{"answer": "Rust's async runtime is Tokio.", "url": "https://tokio.rs/"}],
+            "infoboxes": [],
+            "suggestions": [],
+            "corrections": []
+        })))
+        .mount(&mock)
+        .await;
+
+    let server = test_app_with_structured_sources(&mock.uri());
+    let resp = server
+        .post("/v1/search")
+        .json(&json!({"query": "rust async", "summarizeResults": true}))
+        .await;
+    resp.assert_status_ok();
+    let body: Value = resp.json();
+    let warnings = body["data"]["warnings"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.as_str().unwrap_or("").contains("could not answer")),
+        "summarize-only degraded request must still warn, got {warnings:?}"
     );
 }
 

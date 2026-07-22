@@ -47,6 +47,7 @@ impl IntoResponse for AppError {
             CrwError::ExtractionError(_) => StatusCode::UNPROCESSABLE_ENTITY,
             CrwError::RateLimited => StatusCode::TOO_MANY_REQUESTS,
             CrwError::SearchDisabled(_) => StatusCode::SERVICE_UNAVAILABLE,
+            CrwError::SearchDegraded(_) => StatusCode::SERVICE_UNAVAILABLE,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
