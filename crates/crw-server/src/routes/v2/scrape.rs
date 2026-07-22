@@ -70,6 +70,12 @@ pub struct V2ScrapeRequest {
     /// Optional explicit renderer pin (crw extension, tolerated alongside v2).
     #[serde(default)]
     pub renderer: Option<RequestedRenderer>,
+    /// JS-rendering preference (crw extension, tolerated alongside v2 — upstream
+    /// Firecrawl has no equivalent). Same semantics as `/v1/scrape`: null =
+    /// auto/server default, true = force JS, false = never reach a browser tier.
+    /// Accepts the snake_case alias for parity with the v1 wire.
+    #[serde(default, alias = "render_js")]
+    pub render_js: Option<bool>,
     /// Firecrawl `parsers` — document parsing directives. Accepts `["pdf"]` or
     /// `[{"type":"pdf","maxPages":N}]`. Omitted = auto-parse PDFs; `[]` = leave
     /// raw. See [`crw_core::types::ParserSpec`].
@@ -156,6 +162,7 @@ pub(crate) fn to_internal(
         base_url: v2.base_url,
         summary_prompt: v2.summary_prompt,
         renderer,
+        render_js: v2.render_js,
         parsers: v2.parsers,
         proxy_list: v2.proxy_list,
         proxy_rotation: v2.proxy_rotation,
@@ -301,6 +308,43 @@ mod tests {
             req.proxy_rotation,
             Some(crw_core::proxy::ProxyRotation::RoundRobin)
         );
+    }
+
+    /// Regression for #346: `renderJs` used to have no field on the v2 wire, so
+    /// the lenient-unknown-fields policy swallowed it and `to_internal` left
+    /// `render_js: None` (auto). With a browser tier configured, auto escalates,
+    /// which made `renderJs:false` indistinguishable from `renderJs:true`.
+    /// Asserted through `to_internal` — deserialization alone would still pass
+    /// if the forwarding line were dropped.
+    #[test]
+    fn v2_scrape_threads_render_js_to_internal() {
+        for (wire, expected) in [
+            (serde_json::json!(false), Some(false)),
+            (serde_json::json!(true), Some(true)),
+        ] {
+            let body = serde_json::json!({ "url": "http://example.com", "renderJs": wire });
+            let v2: V2ScrapeRequest = serde_json::from_value(body).unwrap();
+            let (req, _, _) = to_internal(v2).unwrap();
+            assert_eq!(req.render_js, expected, "renderJs {wire} must survive");
+        }
+    }
+
+    #[test]
+    fn v2_scrape_render_js_snake_case_alias() {
+        let body = serde_json::json!({ "url": "http://example.com", "render_js": false });
+        let v2: V2ScrapeRequest = serde_json::from_value(body).unwrap();
+        let (req, _, _) = to_internal(v2).unwrap();
+        assert_eq!(req.render_js, Some(false));
+    }
+
+    #[test]
+    fn v2_scrape_omitted_render_js_stays_none() {
+        // Absent must remain None so the server's render_js_default still
+        // applies — omitting the field is not the same as sending false.
+        let body = serde_json::json!({ "url": "http://example.com" });
+        let v2: V2ScrapeRequest = serde_json::from_value(body).unwrap();
+        let (req, _, _) = to_internal(v2).unwrap();
+        assert_eq!(req.render_js, None);
     }
 
     fn minimal_doc() -> V2Document {

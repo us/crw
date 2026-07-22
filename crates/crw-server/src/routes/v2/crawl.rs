@@ -78,6 +78,7 @@ pub(crate) struct ScrapeOpts {
     pub json_schema: Option<Value>,
     pub only_main_content: bool,
     pub wait_for: Option<u64>,
+    pub render_js: Option<bool>,
 }
 
 /// Pull the internal scrape projection out of a v2 `scrapeOptions` object.
@@ -87,6 +88,7 @@ pub(crate) fn scrape_opts_to_internal(opts: &Option<Value>) -> Result<ScrapeOpts
         json_schema: None,
         only_main_content: true,
         wait_for: None,
+        render_js: None,
     };
     if let Some(Value::Object(m)) = opts {
         if let Some(f) = m.get("formats") {
@@ -102,6 +104,22 @@ pub(crate) fn scrape_opts_to_internal(opts: &Option<Value>) -> Result<ScrapeOpts
         }
         if let Some(w) = m.get("waitFor").and_then(Value::as_u64) {
             out.wait_for = Some(w);
+        }
+        // crw extension, same semantics as `/v1/crawl`'s `renderJs`. Absent (or
+        // null) leaves `None` so the server default still applies; an explicit
+        // `false` must survive all the way to `CrawlRequest` or a v2 caller has
+        // no way to keep a crawl off the browser tiers. A non-boolean is an
+        // error rather than a silent fallback to auto — quietly ignoring this
+        // key is the exact failure #346 reported. The snake_case alias mirrors
+        // the one on the v2 scrape wire; the sibling keys here are camelCase
+        // only, but dropping it would mean `render_js` gets silently ignored —
+        // again the same failure mode.
+        if let Some(v) = m.get("renderJs").or_else(|| m.get("render_js"))
+            && !v.is_null()
+        {
+            out.render_js = Some(v.as_bool().ok_or_else(|| {
+                CrwError::InvalidRequest("scrapeOptions.renderJs must be a boolean".into())
+            })?);
         }
     }
     Ok(out)
@@ -127,7 +145,7 @@ pub async fn start_crawl(
         formats: opts.formats,
         only_main_content: opts.only_main_content,
         json_schema: opts.json_schema,
-        render_js: None,
+        render_js: opts.render_js,
         wait_for: opts.wait_for,
         renderer: v2.renderer,
         country: v2.country,
@@ -233,4 +251,60 @@ pub async fn get_errors(
     Ok(Json(
         serde_json::json!({ "success": true, "errors": errors, "robotsBlocked": [] }),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression for #346. `scrapeOptions` is parsed key-by-key out of a raw
+    /// `Value`, so a key nobody reads is silently dropped; `renderJs` was such a
+    /// key and `CrawlRequest.render_js` was hardcoded `None`. A v2 caller then
+    /// had no way to keep a crawl off the browser tiers.
+    #[test]
+    fn scrape_opts_reads_render_js() {
+        for (key, wire, expected) in [
+            ("renderJs", serde_json::json!(false), Some(false)),
+            ("renderJs", serde_json::json!(true), Some(true)),
+            ("render_js", serde_json::json!(false), Some(false)),
+        ] {
+            let opts = Some(serde_json::json!({ key: wire }));
+            let parsed = scrape_opts_to_internal(&opts).unwrap();
+            assert_eq!(parsed.render_js, expected, "{key} = {wire}");
+        }
+    }
+
+    #[test]
+    fn scrape_opts_render_js_defaults_to_none() {
+        // "No scrapeOptions at all", "scrapeOptions without renderJs" and an
+        // explicit null must all stay None so the server's render_js_default
+        // still applies.
+        assert_eq!(scrape_opts_to_internal(&None).unwrap().render_js, None);
+        for opts in [
+            serde_json::json!({ "onlyMainContent": false }),
+            serde_json::json!({ "renderJs": null }),
+        ] {
+            let parsed = scrape_opts_to_internal(&Some(opts.clone())).unwrap();
+            assert_eq!(parsed.render_js, None, "{opts}");
+        }
+    }
+
+    /// A non-boolean must not degrade to auto. `scrapeOptions` is hand-parsed
+    /// out of a `Value`, so `"false"` would otherwise read as "key absent" and
+    /// leave JS on — the same silent-drop shape as #346 itself.
+    #[test]
+    fn scrape_opts_render_js_rejects_non_boolean() {
+        for bad in [
+            serde_json::json!("false"),
+            serde_json::json!(0),
+            serde_json::json!([false]),
+        ] {
+            let opts = Some(serde_json::json!({ "renderJs": bad }));
+            match scrape_opts_to_internal(&opts) {
+                Err(CrwError::InvalidRequest(m)) => assert!(m.contains("renderJs"), "{m}"),
+                Err(e) => panic!("{bad} rejected with the wrong error: {e}"),
+                Ok(_) => panic!("{bad} must be rejected, not silently ignored"),
+            }
+        }
+    }
 }
