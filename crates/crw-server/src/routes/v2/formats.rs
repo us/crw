@@ -57,6 +57,10 @@ pub struct DecomposedFormats {
     pub formats: Vec<OutputFormat>,
     /// `ScrapeRequest.json_schema` (from a `{"type":"json","schema":...}` entry).
     pub json_schema: Option<Value>,
+    /// `ScrapeRequest.extract.prompt` (from a `{"type":"json","prompt":...}`
+    /// entry). The documented `/v2/extract` replacement carries the extraction
+    /// instruction here; without threading it the prompt is silently dropped.
+    pub json_prompt: Option<String>,
     /// `ScrapeRequest.change_tracking` (from a `{"type":"changeTracking",...}` entry).
     pub change_tracking: Option<ChangeTrackingOptions>,
     /// A `screenshot` format was requested. The format is now produced via CDP
@@ -148,9 +152,18 @@ fn handle_token(
             }
             if fmt == OutputFormat::Json
                 && let Some(m) = obj
-                && let Some(schema) = m.get("schema")
             {
-                out.json_schema = Some(schema.clone());
+                if let Some(schema) = m.get("schema") {
+                    out.json_schema = Some(schema.clone());
+                }
+                // Firecrawl's json format object carries a free-text `prompt`
+                // alongside (or instead of) the schema. It reaches the LLM via
+                // `extract.prompt`; reading only `schema` here dropped it.
+                if let Some(p) = m.get("prompt").and_then(Value::as_str)
+                    && !p.trim().is_empty()
+                {
+                    out.json_prompt = Some(p.to_string());
+                }
             }
             if fmt == OutputFormat::ChangeTracking {
                 out.change_tracking = Some(match obj {
@@ -230,6 +243,37 @@ mod tests {
         assert!(d.formats.contains(&OutputFormat::Json));
         assert!(d.formats.contains(&OutputFormat::Summary));
         assert_eq!(d.json_schema.as_ref(), Some(&schema));
+    }
+
+    #[test]
+    fn object_json_lifts_prompt() {
+        // The documented `/v2/extract` replacement. The prompt reaches the LLM
+        // only via `extract.prompt`, so dropping it here (as the code did) made
+        // the format object silently ignore the caller's instruction.
+        let d = decompose(&specs(json!([
+            {"type": "json", "prompt": "Extract the author name"}
+        ])))
+        .unwrap();
+        assert!(d.formats.contains(&OutputFormat::Json));
+        assert_eq!(d.json_prompt.as_deref(), Some("Extract the author name"));
+        assert!(d.json_schema.is_none());
+    }
+
+    #[test]
+    fn object_json_lifts_schema_and_prompt_together() {
+        let schema = json!({"type": "object"});
+        let d = decompose(&specs(json!([
+            {"type": "json", "schema": schema.clone(), "prompt": "steer it"}
+        ])))
+        .unwrap();
+        assert_eq!(d.json_schema.as_ref(), Some(&schema));
+        assert_eq!(d.json_prompt.as_deref(), Some("steer it"));
+    }
+
+    #[test]
+    fn object_json_blank_prompt_is_ignored() {
+        let d = decompose(&specs(json!([{"type": "json", "prompt": "   "}]))).unwrap();
+        assert!(d.json_prompt.is_none());
     }
 
     #[test]

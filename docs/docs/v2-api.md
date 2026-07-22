@@ -556,7 +556,9 @@ Async multi-URL LLM extraction. Starts a job that scrapes each URL with `formats
 | `urls` | `string[]` | **required** | URLs to extract from |
 | `prompt` | `string` | — | Free-text extraction instruction (no schema required) |
 | `schema` | `object` | — | JSON Schema for structured output |
-| `systemPrompt` | `string` | — | System-level instruction prepended to the extraction prompt |
+
+`systemPrompt` is a Firecrawl field this engine does not implement yet; sending a
+non-empty value returns a 400. Fold your instruction into `prompt` instead.
 
 ### Start response
 
