@@ -338,6 +338,7 @@ mod tests {
             change_tracking: None,
             screenshot: None,
             block: None,
+            truncated: false,
         }
     }
 

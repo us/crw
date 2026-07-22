@@ -80,6 +80,7 @@ fn to_search_result(r: &SearxngResult, position: u32) -> SearchResult {
         metadata: None,
         summary: None,
         error: None,
+        truncated: None,
     }
 }
 

@@ -747,6 +747,13 @@ pub struct ScrapeData {
     /// `success:false`. `None` (skipped when serializing) = not blocked.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub block: Option<BlockOutcome>,
+    /// The renderer snapshotted a partial DOM because the navigation budget
+    /// elapsed (`FetchResult.truncated`). The content is usable but incomplete,
+    /// and a caller cannot otherwise tell it apart from a page that genuinely
+    /// has little content — which is what makes a shrinking scrape budget a
+    /// silent recall regression.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub truncated: bool,
 }
 
 impl ScrapeData {
@@ -992,6 +999,7 @@ mod tests {
                 vendor: "cloudflare".into(),
                 reason: "cloudflare challenge interstitial".into(),
             }),
+            truncated: false,
         };
         data.clear_body();
         // content-shell + LLM outputs cleared
@@ -1473,6 +1481,12 @@ pub struct SearchScrapeOptions {
     /// Populated by the SaaS layer from the caller's IP (geo-aware proxy). `None` = engine default.
     #[serde(default)]
     pub country: Option<String>,
+    /// Per-result scrape budget (ms). `None` = the search-enrichment default,
+    /// NOT the implicit full-ladder deadline a single `/v1/scrape` gets: search
+    /// waits for every result, so one straggler walking the whole renderer
+    /// ladder would stall the entire response. Must be in `(0, 60000]`.
+    #[serde(default)]
+    pub timeout: Option<u64>,
 }
 
 /// POST /v1/search request body. Mirrors the zod schema in
@@ -1614,6 +1628,13 @@ pub struct SearchResult {
     /// had no markdown". Absent on success — backward-compatible.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Set when the enrichment scrape returned a partial-DOM snapshot because
+    /// its budget elapsed (`ScrapeData.truncated`). Sibling of `error`: `error`
+    /// marks a total failure, this marks an incomplete success — without it a
+    /// budget-shortened render is indistinguishable from a thin page. Absent
+    /// (not `false`) when the scrape completed — backward-compatible.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub truncated: Option<bool>,
 }
 
 /// A single image result. Mirrors `ImageResult` in
