@@ -39,7 +39,7 @@ from crw import CrwClient
 client = CrwClient()
 
 # …or pass the key explicitly
-client = CrwClient(api_key="fc-...")
+client = CrwClient(api_key="crw_live_...")
 ```
 
 ```ts
@@ -49,7 +49,7 @@ import { CrwClient } from "crw-sdk";
 const crw = new CrwClient();
 
 // …or pass it explicitly
-const crw = new CrwClient({ apiKey: "fc-..." });
+const crw = new CrwClient({ apiKey: "crw_live_..." });
 ```
 
 Sign up for **500 free credits** (no payment card, no monthly reset) at
