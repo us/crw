@@ -2,6 +2,33 @@
 
 All notable changes to CRW are documented here.
 
+## [0.28.0](https://github.com/us/crw/compare/v0.27.1...v0.28.0) (2026-07-23)
+
+
+### Features
+
+* **sdk:** add typed response object interfaces ([a2acacb](https://github.com/us/crw/commit/a2acacb1e6cbf3077fdd089f710cac75eb7eabda)), closes [#361](https://github.com/us/crw/issues/361)
+
+
+### Bug Fixes
+
+* **core:** bound SSRF DNS resolution with an 8s timeout ([4b542dc](https://github.com/us/crw/commit/4b542dc65dd01465cc0e917f4607dc9095d00e18))
+* **crawl:** accept the nested scrapeOptions shape the spec publishes ([c568333](https://github.com/us/crw/commit/c5683334414df28525c7efb42332fb2e2165858f))
+* **openapi:** re-sync the docs copy of the 3.0 spec ([ffe8618](https://github.com/us/crw/commit/ffe8618b24cece724ecc62d2f8d044d37d3816a4))
+* **openapi:** sync the spec with the real types, and guard it in CI ([dcc0fcc](https://github.com/us/crw/commit/dcc0fcc77d8b926fe4744564072d59b81f4dcef6))
+* **renderer:** forward custom request headers on the CDP path ([a0677f7](https://github.com/us/crw/commit/a0677f7a75d58b5330def3ec88527f60d50a9351)), closes [#351](https://github.com/us/crw/issues/351)
+* **renderer:** stop misclassifying &gt;500KB pages as thin ([21c15dd](https://github.com/us/crw/commit/21c15dd7910afcd3b228d6f3c11e3dda9005b7b0))
+* **renderer:** treat a blank caller UA as absent, document header scope ([69a2f8e](https://github.com/us/crw/commit/69a2f8e0f44f249a80f4fde3cec11232b6cae976))
+* **search:** bound the per-result scrape budget for scrapeOptions ([97aa154](https://github.com/us/crw/commit/97aa15431c06b80bf2dbfaec37c381ec09b4e281))
+* **v2:** honor location.languages as an Accept-Language header ([bac52cd](https://github.com/us/crw/commit/bac52cdf2a2fd505cc60322ef8140a2ec40d6d16))
+* **v2:** honor renderJs on the Firecrawl-compat surface ([8491d5f](https://github.com/us/crw/commit/8491d5f4d2903b2d01999d457db4b32732aacc37)), closes [#346](https://github.com/us/crw/issues/346)
+* **v2:** thread the extraction prompt through extract and the json format ([0f2650e](https://github.com/us/crw/commit/0f2650e45f96b715986b7fbc861ba817bcad2c54)), closes [#352](https://github.com/us/crw/issues/352)
+
+
+### Performance
+
+* **search:** parallelize enrichment DNS validation and dedup scout scrapes ([6e1ca78](https://github.com/us/crw/commit/6e1ca78ef3e8b79994e98e88b9d7f287d7ed204e))
+
 ## [0.27.1](https://github.com/us/crw/compare/v0.27.0...v0.27.1) (2026-07-22)
 
 
