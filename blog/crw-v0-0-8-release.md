@@ -50,7 +50,7 @@ v0.0.8 adds per-request LLM configuration:
 
 ```
 curl -X POST https://api.fastcrw.com/v1/scrape \
-  -H "Authorization: Bearer fc-YOUR_API_KEY" \
+  -H "Authorization: Bearer crw_live_YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://store.example.com/product/widget",

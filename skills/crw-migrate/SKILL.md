@@ -68,7 +68,7 @@ self-hosted `http://localhost:3000`). Auth header stays the same:
 ```bash
 # Before
 curl -X POST https://api.firecrawl.dev/v1/scrape \
-  -H "Authorization: Bearer fc-..." \
+  -H "Authorization: Bearer crw_live_..." \
   -H "Content-Type: application/json" \
   -d '{"url":"https://example.com","formats":["markdown"]}'
 

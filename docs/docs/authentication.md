@@ -43,7 +43,7 @@ Set one or more keys in config:
 
 ```toml
 [auth]
-api_keys = ["fc-key-1234", "fc-key-5678"]
+api_keys = ["crw_live_key-1234", "crw_live_key-5678"]
 ```
 
 Once keys are configured, every route under `/v1/*`, `/firecrawl/v2/*`, and `/mcp` requires the same Bearer header.

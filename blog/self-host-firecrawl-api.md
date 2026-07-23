@@ -105,7 +105,7 @@ If you're already using Firecrawl, changing your base URL is the entire migratio
 ```
 // Before: Firecrawl cloud
 const client = new FirecrawlApp({
-  apiKey: "fc-...",
+  apiKey: "crw_live_...",
   apiUrl: "https://api.firecrawl.dev",
 });
 

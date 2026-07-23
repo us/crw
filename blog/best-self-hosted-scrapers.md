@@ -68,7 +68,7 @@ The following commands are enough to get each tool running locally or on a fresh
 docker run -p 3000:3000 -e CRW_API_KEY=your-key ghcr.io/us/crw:latest
 
 # Test it
-curl https://api.fastcrw.com/v1/scrape   -H "Authorization: Bearer fc-YOUR_API_KEY"   -H "Content-Type: application/json"   -d '{"url": "https://example.com", "formats": ["markdown"]}'
+curl https://api.fastcrw.com/v1/scrape   -H "Authorization: Bearer crw_live_YOUR_API_KEY"   -H "Content-Type: application/json"   -d '{"url": "https://example.com", "formats": ["markdown"]}'
 ```
 
 That is the entire setup. No cloning a repo, no Redis, no Playwright install. The 8 MB image pulls in a few seconds even on a slow connection. The API key is optional for local development but strongly recommended for any networked deployment.

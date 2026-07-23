@@ -43,10 +43,10 @@ from openai import OpenAI
 from datetime import datetime
 
 # Connect to CRW
-app = FirecrawlApp(api_key="fc-YOUR-KEY", api_url="http://localhost:3000")
+app = FirecrawlApp(api_key="crw_live_YOUR-KEY", api_url="http://localhost:3000")
 
 # Or use fastCRW cloud
-# app = FirecrawlApp(api_key="fc-YOUR-KEY", api_url="https://api.fastcrw.com")
+# app = FirecrawlApp(api_key="crw_live_YOUR-KEY", api_url="https://api.fastcrw.com")
 
 # OpenAI for resume matching
 client = OpenAI()

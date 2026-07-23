@@ -127,7 +127,7 @@ The `/v1/scrape` endpoint fetches a single URL and returns clean markdown:
 import requests
 
 CRW_URL = "https://api.fastcrw.com"  # or http://localhost:3000 for self-hosted
-API_KEY = "fc-YOUR_API_KEY"
+API_KEY = "crw_live_YOUR_API_KEY"
 
 def scrape_page(url: str) -> dict:
     response = requests.post(
@@ -162,7 +162,7 @@ from firecrawl import FirecrawlApp
 
 # Point SDK at CRW (self-hosted or fastCRW cloud)
 app = FirecrawlApp(
-    api_key="fc-YOUR_API_KEY",
+    api_key="crw_live_YOUR_API_KEY",
     api_url="https://api.fastcrw.com",  # or http://localhost:3000
 )
 
@@ -226,7 +226,7 @@ for page in pages:
 ```
 from firecrawl import FirecrawlApp
 
-app = FirecrawlApp(api_key="fc-YOUR_API_KEY", api_url="https://api.fastcrw.com")
+app = FirecrawlApp(api_key="crw_live_YOUR_API_KEY", api_url="https://api.fastcrw.com")
 
 # Crawl with the SDK (handles polling automatically)
 result = app.crawl_url(
@@ -318,7 +318,7 @@ Here's a complete script that crawls a documentation site and builds a searchabl
 import json
 
 CRW_URL = "https://api.fastcrw.com"
-API_KEY = "fc-YOUR_API_KEY"
+API_KEY = "crw_live_YOUR_API_KEY"
 
 def crawl_docs(site_url: str, limit: int = 100) -> list[dict]:
     """Crawl a documentation site and return all pages."""

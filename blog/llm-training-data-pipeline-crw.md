@@ -34,7 +34,7 @@ pip install firecrawl-py datasketch
 ```
 from firecrawl import FirecrawlApp
 
-app = FirecrawlApp(api_key="fc-YOUR-KEY", api_url="http://localhost:3000")
+app = FirecrawlApp(api_key="crw_live_YOUR-KEY", api_url="http://localhost:3000")
 # fastCRW cloud: api_url="https://api.fastcrw.com"
 
 def crawl(base_url: str, limit: int = 500) -> list[dict]:

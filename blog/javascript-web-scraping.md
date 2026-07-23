@@ -113,7 +113,7 @@ CRW handles scraping, JavaScript rendering, and content extraction server-side. 
 
 ```
 const CRW_URL = "https://api.fastcrw.com"; // or http://localhost:3000
-const API_KEY = "fc-YOUR_API_KEY";
+const API_KEY = "crw_live_YOUR_API_KEY";
 
 async function scrapePage(url: string) {
   const response = await fetch(`${CRW_URL}/v1/scrape`, {
@@ -149,7 +149,7 @@ CRW is Firecrawl-compatible, so the official Firecrawl JavaScript SDK works out 
 import FirecrawlApp from "@mendable/firecrawl-js";
 
 const app = new FirecrawlApp({
-  apiKey: "fc-YOUR_API_KEY",
+  apiKey: "crw_live_YOUR_API_KEY",
   apiUrl: "https://api.fastcrw.com", // or http://localhost:3000
 });
 
@@ -282,7 +282,7 @@ Here's a complete TypeScript script that monitors web pages for changes:
 import { readFile, writeFile } from "node:fs/promises";
 
 const CRW_URL = "https://api.fastcrw.com";
-const API_KEY = "fc-YOUR_API_KEY";
+const API_KEY = "crw_live_YOUR_API_KEY";
 
 interface PageSnapshot {
   url: string;

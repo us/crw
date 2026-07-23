@@ -37,7 +37,7 @@ Build a "Research Assistant" web app with these features:
 6. Use a modern, minimal design with Tailwind CSS
 
 The API endpoint is: POST https://api.fastcrw.com/v1/scrape
-Headers: Content-Type: application/json, Authorization: Bearer fc-API_KEY
+Headers: Content-Type: application/json, Authorization: Bearer crw_live_API_KEY
 Body: { "url": "USER_INPUT_URL", "formats": ["markdown"] }
 Response: { "success": true, "data": { "markdown": "...", "metadata": { "title": "...", "sourceURL": "..." } } }
 ```

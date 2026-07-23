@@ -48,7 +48,7 @@ This guide evaluates eight scraping APIs against these AI-specific criteria. We 
 
 ```
 curl https://api.fastcrw.com/v1/scrape \
-  -H "Authorization: Bearer fc-YOUR_API_KEY" \
+  -H "Authorization: Bearer crw_live_YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com", "formats": ["markdown"]}'
 ```

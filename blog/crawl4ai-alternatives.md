@@ -169,7 +169,7 @@ The key difference: Crawl4AI is a Python library that also has a REST API. CRW i
 
 ```
 # CRW gives you the same markdown output via REST
-curl https://api.fastcrw.com/v1/scrape   -H "Authorization: Bearer fc-YOUR_API_KEY"   -H "Content-Type: application/json"   -d '{"url": "https://example.com", "formats": ["markdown"]}'
+curl https://api.fastcrw.com/v1/scrape   -H "Authorization: Bearer crw_live_YOUR_API_KEY"   -H "Content-Type: application/json"   -d '{"url": "https://example.com", "formats": ["markdown"]}'
 ```
 
 ## Frequently Asked Questions

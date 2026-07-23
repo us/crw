@@ -63,7 +63,7 @@ This is the core of the workflow. Add an **"HTTP → Make a request"** module an
 - **URL:** `https://api.fastcrw.com/v1/scrape` (or `http://localhost:3000/v1/scrape` for self-hosted)
 - **Method:** POST
 - **Headers:** `Content-Type`: `application/json`
-- `Authorization`: `Bearer fc-YOUR_API_KEY`
+- `Authorization`: `Bearer crw_live_YOUR_API_KEY`
 
   **Body type:** Raw
   **Content type:** JSON (application/json)

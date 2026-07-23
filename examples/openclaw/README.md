@@ -11,7 +11,7 @@ Add to your OpenClaw MCP config:
     "crw": {
       "command": "npx",
       "args": ["-y", "crw-mcp"],
-      "env": { "CRW_API_KEY": "fc-..." }
+      "env": { "CRW_API_KEY": "crw_live_..." }
     }
   }
 }

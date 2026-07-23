@@ -18,7 +18,7 @@ Not every scraping task needs the full page. Product prices live in `.product-pr
 
 ```
 curl -X POST https://api.fastcrw.com/v1/scrape \
-  -H "Authorization: Bearer fc-YOUR_API_KEY" \
+  -H "Authorization: Bearer crw_live_YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://docs.example.com/api-reference",
@@ -33,7 +33,7 @@ CRW applies the selector before markdown conversion, so the output is clean and 
 
 ```
 curl -X POST https://api.fastcrw.com/v1/scrape \
-  -H "Authorization: Bearer fc-YOUR_API_KEY" \
+  -H "Authorization: Bearer crw_live_YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://store.example.com/product/widget",

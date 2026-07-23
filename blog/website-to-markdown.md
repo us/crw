@@ -51,7 +51,7 @@ What CRW preserves:
 `, ``)** → fenced code blocks with language hints **Tables** → markdown table syntax Links (``) → `[text](url)` if `links` format is requested Images (``) → alt text preserved as `![alt](src)` Basic Scrape to Markdown
 ```
 curl -X POST https://api.fastcrw.com/v1/scrape \
-  -H "Authorization: Bearer fc-YOUR_API_KEY" \
+  -H "Authorization: Bearer crw_live_YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://en.wikipedia.org/wiki/Rust_(programming_language)",
@@ -77,7 +77,7 @@ async function toMarkdown(url: string): Promise<string> {
   const res = await fetch("https://api.fastcrw.com/v1/scrape", { // or http://localhost:3000 for self-hosted
     method: "POST",
     headers: {
-      "Authorization": "Bearer fc-YOUR_API_KEY",
+      "Authorization": "Bearer crw_live_YOUR_API_KEY",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ url, formats: ["markdown"] }),
@@ -97,7 +97,7 @@ import requests
 def to_markdown(url: str) -> str:
     res = requests.post(
         "https://api.fastcrw.com/v1/scrape",  # or http://localhost:3000 for self-hosted
-        headers={"Authorization": "Bearer fc-YOUR_API_KEY"},
+        headers={"Authorization": "Bearer crw_live_YOUR_API_KEY"},
         json={"url": url, "formats": ["markdown"]},
         timeout=30,
     )
@@ -112,7 +112,7 @@ print(md[:500])
  Handling Different Page Types News Articles News sites have heavy navigation and related-article widgets. CRW's `onlyMainContent` option focuses extraction on the article body specifically, using heuristics to identify the primary content area:
 ```
 curl -X POST https://api.fastcrw.com/v1/scrape \
-  -H "Authorization: Bearer fc-YOUR_API_KEY" \
+  -H "Authorization: Bearer crw_live_YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://techcrunch.com/some-article",
@@ -123,7 +123,7 @@ curl -X POST https://api.fastcrw.com/v1/scrape \
  Documentation Pages Documentation often has left-rail navigation and right-rail "on this page" TOCs. Use `excludeTags` to remove them:
 ```
 curl -X POST https://api.fastcrw.com/v1/scrape \
-  -H "Authorization: Bearer fc-YOUR_API_KEY" \
+  -H "Authorization: Bearer crw_live_YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://docs.example.com/api-reference",
@@ -134,7 +134,7 @@ curl -X POST https://api.fastcrw.com/v1/scrape \
  E-Commerce Product Pages Product pages have structured data spread across multiple sections. Use `includeTags` to target only the product information you need:
 ```
 curl -X POST https://api.fastcrw.com/v1/scrape \
-  -H "Authorization: Bearer fc-YOUR_API_KEY" \
+  -H "Authorization: Bearer crw_live_YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://store.example.com/product/widget",
