@@ -111,7 +111,7 @@ requests_per_second = 10.0
 respect_robots_txt = true
 
 [auth]
-# api_keys = ["fc-key-1234"]
+# api_keys = ["crw_live_key-1234"]
 
 [extraction.llm]
 provider = "anthropic"  # "anthropic" or "openai"

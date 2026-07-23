@@ -41,7 +41,7 @@ v0.0.10 adds `DELETE /v1/crawl/{id}`:
 
 ```
 curl -X DELETE https://api.fastcrw.com/v1/crawl/abc123 \
-  -H "Authorization: Bearer fc-YOUR_API_KEY"
+  -H "Authorization: Bearer crw_live_YOUR_API_KEY"
 ```
 
 ```

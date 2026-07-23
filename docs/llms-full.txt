@@ -72,8 +72,8 @@ Self-hosted (no auth by default):
 
 Self-hosted with auth enabled (config.toml):
   [auth]
-  api_keys = ["fc-key-1234", "fc-key-5678"]
-  # Then: Authorization: Bearer fc-key-1234 is required on /v1/*, /firecrawl/v2/*, /mcp
+  api_keys = ["crw_live_key-1234", "crw_live_key-5678"]
+  # Then: Authorization: Bearer crw_live_key-1234 is required on /v1/*, /firecrawl/v2/*, /mcp
 
 Free tier: 500 one-time lifetime credits (never resets, not monthly).
 

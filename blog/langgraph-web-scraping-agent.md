@@ -61,7 +61,7 @@ from langchain_core.tools import tool
 
 # Point at your CRW instance
 crw = FirecrawlApp(
-    api_key="fc-YOUR-KEY",
+    api_key="crw_live_YOUR-KEY",
     api_url="http://localhost:3000"  # or "https://api.fastcrw.com"
 )
 
@@ -286,7 +286,7 @@ To use the managed [fastCRW](https://fastcrw.com) cloud service instead of self-
 
 ```
 crw = FirecrawlApp(
-    api_key="fc-YOUR-FASTCRW-KEY",
+    api_key="crw_live_YOUR-FASTCRW-KEY",
     api_url="https://api.fastcrw.com"
 )
 ```

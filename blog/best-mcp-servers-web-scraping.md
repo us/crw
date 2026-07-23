@@ -94,7 +94,7 @@ Or if using fastCRW cloud:
       "command": "npx",
       "args": ["-y", "crw-mcp"],
       "env": {
-        "CRW_API_KEY": "fc-YOUR_API_KEY",
+        "CRW_API_KEY": "crw_live_YOUR_API_KEY",
         "CRW_API_URL": "https://api.fastcrw.com"
       }
     }
@@ -355,7 +355,7 @@ Don't want to run Docker locally? Use [fastCRW](https://fastcrw.com) as the back
       "command": "npx",
       "args": ["-y", "crw-mcp"],
       "env": {
-        "CRW_API_KEY": "fc-YOUR_KEY",
+        "CRW_API_KEY": "crw_live_YOUR_KEY",
         "CRW_API_URL": "https://api.fastcrw.com"
       }
     }

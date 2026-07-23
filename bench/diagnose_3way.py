@@ -75,7 +75,7 @@ async def call_crawl4ai(session, url: str, timeout: int) -> dict:
 
 async def call_firecrawl(session, url: str, timeout: int) -> dict:
     body = {"url": url, "formats": ["markdown"]}
-    headers = {"Authorization": "Bearer fc-local-bench"}
+    headers = {"Authorization": "Bearer crw_live_local-bench"}
     t0 = time.monotonic()
     async with session.post(
         "http://localhost:3022/v1/scrape",

@@ -391,7 +391,7 @@ requests_per_second = 10.0
 respect_robots_txt = true
 
 [auth]
-# api_keys = ["fc-key-1234"]
+# api_keys = ["crw_live_key-1234"]
 ```
 
 查看[完整配置参考](docs/zh-CN/configuration.md)了解所有选项。

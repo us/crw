@@ -124,7 +124,7 @@ max_concurrency = 4          # bounded fan-out for per-result summaries in /v1/s
 # sandbox_memory_bytes = 536870912   # RLIMIT_AS for sandbox child (Unix); 512 MiB
 
 [auth]
-# api_keys = ["fc-key-1234"]
+# api_keys = ["crw_live_key-1234"]
 ```
 
 ## Stealth mode

@@ -53,7 +53,7 @@ async function crawlSite(url: string) {
   const startRes = await fetch(`${BASE_URL}/v1/crawl`, {
     method: "POST",
     headers: {
-      "Authorization": "Bearer fc-YOUR_API_KEY",
+      "Authorization": "Bearer crw_live_YOUR_API_KEY",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -87,7 +87,7 @@ async function scrapePage(url: string): Promise<{ markdown: string; title: strin
   const res = await fetch(`${BASE_URL}/v1/scrape`, {
     method: "POST",
     headers: {
-      "Authorization": "Bearer fc-YOUR_API_KEY",
+      "Authorization": "Bearer crw_live_YOUR_API_KEY",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ url, formats: ["markdown"] }),
@@ -376,7 +376,7 @@ async function loadWithCRW(urls: string[]): Promise<Document[]> {
     const res = await fetch("https://api.fastcrw.com/v1/scrape", { // or http://localhost:3000 for self-hosted
       method: "POST",
       headers: {
-        "Authorization": "Bearer fc-YOUR_API_KEY",
+        "Authorization": "Bearer crw_live_YOUR_API_KEY",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ url, formats: ["markdown"] }),
@@ -426,7 +426,7 @@ class CRWReader {
       const res = await fetch("https://api.fastcrw.com/v1/scrape", { // or http://localhost:3000 for self-hosted
         method: "POST",
         headers: {
-          "Authorization": "Bearer fc-YOUR_API_KEY",
+          "Authorization": "Bearer crw_live_YOUR_API_KEY",
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ url, formats: ["markdown"] }),
@@ -473,7 +473,7 @@ async function scrapeWithRetry(
       const res = await fetch(`${BASE_URL}/v1/scrape`, {
         method: "POST",
         headers: {
-          "Authorization": "Bearer fc-YOUR_API_KEY",
+          "Authorization": "Bearer crw_live_YOUR_API_KEY",
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ url, formats: ["markdown"] }),
@@ -539,7 +539,7 @@ async function incrementalReindex(siteUrl: string) {
   const mapRes = await fetch(`${BASE_URL}/v1/map`, {
     method: "POST",
     headers: {
-      "Authorization": "Bearer fc-YOUR_API_KEY",
+      "Authorization": "Bearer crw_live_YOUR_API_KEY",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ url: siteUrl }),

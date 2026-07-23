@@ -143,7 +143,7 @@ curl -X POST http://localhost:3000/v1/scrape \
 # fastCRW Cloud
 curl -X POST https://api.fastcrw.com/v1/scrape \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer fc-YOUR_API_KEY" \
+  -H "Authorization: Bearer crw_live_YOUR_API_KEY" \
   -d '{"url": "https://example.com", "formats": ["markdown"]}'
 ```
 
@@ -175,7 +175,7 @@ response = requests.post(
     f"{CRW_URL}/v1/scrape",
     headers={
         "Content-Type": "application/json",
-        "Authorization": "Bearer fc-YOUR_API_KEY",
+        "Authorization": "Bearer crw_live_YOUR_API_KEY",
     },
     json={
         "url": "https://example.com",
@@ -198,7 +198,7 @@ const response = await fetch("https://api.fastcrw.com/v1/scrape", {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
-    "Authorization": "Bearer fc-YOUR_API_KEY",
+    "Authorization": "Bearer crw_live_YOUR_API_KEY",
   },
   body: JSON.stringify({
     url: "https://example.com",
@@ -221,7 +221,7 @@ Scraping one page at a time is useful, but often you need content from an entire
 # Start a crawl (async — returns immediately with a job ID)
 curl -X POST https://api.fastcrw.com/v1/crawl \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer fc-YOUR_API_KEY" \
+  -H "Authorization: Bearer crw_live_YOUR_API_KEY" \
   -d '{
     "url": "https://docs.example.com",
     "limit": 20,
@@ -232,7 +232,7 @@ curl -X POST https://api.fastcrw.com/v1/crawl \
 
 # Check the status (repeat until status is "completed")
 curl https://api.fastcrw.com/v1/crawl/crawl-abc123 \
-  -H "Authorization: Bearer fc-YOUR_API_KEY"
+  -H "Authorization: Bearer crw_live_YOUR_API_KEY"
 ```
 
 When the crawl completes, you get an array of all pages with their markdown content. CRW automatically discovers linked pages and scrapes them — you don't need to find URLs manually.
@@ -244,7 +244,7 @@ Sometimes you want to see what pages exist before deciding what to scrape. The `
 ```
 curl -X POST https://api.fastcrw.com/v1/map \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer fc-YOUR_API_KEY" \
+  -H "Authorization: Bearer crw_live_YOUR_API_KEY" \
   -d '{"url": "https://docs.example.com"}'
 
 # Response: {"success": true, "links": ["https://docs.example.com/intro", "https://docs.example.com/api", ...]}
@@ -259,7 +259,7 @@ Getting raw text is a great start, but sometimes you need structured data — pr
 ```
 curl -X POST https://api.fastcrw.com/v1/extract \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer fc-YOUR_API_KEY" \
+  -H "Authorization: Bearer crw_live_YOUR_API_KEY" \
   -d '{
     "urls": ["https://example.com/product"],
     "prompt": "Extract the product name, price, and whether it is in stock",

@@ -39,7 +39,7 @@ Drag an **"API Request"** node onto the canvas. Configure it:
 
 - **Method:** POST
 - **URL:** `http://localhost:3000/v1/scrape` (or `https://api.fastcrw.com/v1/scrape` for cloud)
-- **Headers:** `{"Content-Type": "application/json", "Authorization": "Bearer fc-YOUR_API_KEY"}`
+- **Headers:** `{"Content-Type": "application/json", "Authorization": "Bearer crw_live_YOUR_API_KEY"}`
 - **Body:**
 
 ```
@@ -78,7 +78,7 @@ def crawl_site(url: str, base_url: str = "http://localhost:3000") -> str:
     start = requests.post(
         f"{base_url}/v1/crawl",
         json={"url": url, "limit": 50, "scrapeOptions": {"formats": ["markdown"]}},
-        headers={"Authorization": "Bearer fc-YOUR_API_KEY"},
+        headers={"Authorization": "Bearer crw_live_YOUR_API_KEY"},
     )
     job_id = start.json()["id"]
 
@@ -226,7 +226,7 @@ def check_for_updates(site_url: str, known_urls: set) -> list:
     res = requests.post(
         "http://localhost:3000/v1/map",
         json={"url": site_url},
-        headers={"Authorization": "Bearer fc-YOUR_API_KEY"},
+        headers={"Authorization": "Bearer crw_live_YOUR_API_KEY"},
     )
     current_urls = set(res.json().get("links", []))
     new_urls = current_urls - known_urls

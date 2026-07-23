@@ -41,10 +41,10 @@ The Firecrawl Python SDK works with CRW out of the box — just point it to your
 from firecrawl import FirecrawlApp
 
 # Self-hosted CRW
-app = FirecrawlApp(api_key="fc-YOUR-KEY", api_url="http://localhost:3000")
+app = FirecrawlApp(api_key="crw_live_YOUR-KEY", api_url="http://localhost:3000")
 
 # Or use fastCRW cloud
-# app = FirecrawlApp(api_key="fc-YOUR-KEY", api_url="https://api.fastcrw.com")
+# app = FirecrawlApp(api_key="crw_live_YOUR-KEY", api_url="https://api.fastcrw.com")
 ```
 
 This single change lets you use the full Firecrawl SDK ecosystem with a local-first, low-latency engine instead of a remote multi-second round trip.

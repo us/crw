@@ -41,7 +41,7 @@ from firecrawl import FirecrawlApp
 
 # Initialize CRW
 crw = FirecrawlApp(
-    api_key="fc-YOUR-KEY",
+    api_key="crw_live_YOUR-KEY",
     api_url="http://localhost:3000"  # or "https://api.fastcrw.com"
 )
 
@@ -278,7 +278,7 @@ Switch to [fastCRW](https://fastcrw.com) cloud by changing one line:
 
 ```
 crw = FirecrawlApp(
-    api_key="fc-YOUR-FASTCRW-KEY",
+    api_key="crw_live_YOUR-FASTCRW-KEY",
     api_url="https://api.fastcrw.com"
 )
 ```

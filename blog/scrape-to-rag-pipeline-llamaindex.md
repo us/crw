@@ -38,10 +38,10 @@ CRW is Firecrawl-API compatible, so the official SDK works after a one-line chan
 from firecrawl import FirecrawlApp
 
 # Self-hosted CRW
-app = FirecrawlApp(api_key="fc-YOUR-KEY", api_url="http://localhost:3000")
+app = FirecrawlApp(api_key="crw_live_YOUR-KEY", api_url="http://localhost:3000")
 
 # Or fastCRW managed cloud
-# app = FirecrawlApp(api_key="fc-YOUR-KEY", api_url="https://api.fastcrw.com")
+# app = FirecrawlApp(api_key="crw_live_YOUR-KEY", api_url="https://api.fastcrw.com")
 ```
 
 ## Step 2: Crawl the Site

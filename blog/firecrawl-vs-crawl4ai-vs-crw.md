@@ -108,7 +108,7 @@ import requests
 
 response = requests.post(
     "https://api.fastcrw.com/v1/scrape",  # or http://localhost:3000 for self-hosted
-    headers={"Authorization": "Bearer fc-YOUR_API_KEY"},
+    headers={"Authorization": "Bearer crw_live_YOUR_API_KEY"},
     json={
         "url": "https://docs.example.com/getting-started",
         "formats": ["markdown"],
@@ -126,7 +126,7 @@ Or use the Firecrawl Python SDK pointed at your CRW instance — they share the 
 from firecrawl import FirecrawlApp
 
 # Point the SDK at your self-hosted CRW instance
-app = FirecrawlApp(api_key="fc-YOUR_API_KEY", api_url="https://api.fastcrw.com")  # or http://localhost:3000 for self-hosted
+app = FirecrawlApp(api_key="crw_live_YOUR_API_KEY", api_url="https://api.fastcrw.com")  # or http://localhost:3000 for self-hosted
 
 result = app.scrape_url(
     "https://docs.example.com/getting-started",
@@ -141,7 +141,7 @@ print(result.markdown)
 # pip install firecrawl-py
 from firecrawl import FirecrawlApp
 
-app = FirecrawlApp(api_key="fc-your_api_key")
+app = FirecrawlApp(api_key="crw_live_your_api_key")
 
 result = app.scrape_url(
     "https://docs.example.com/getting-started",
@@ -235,7 +235,7 @@ import requests
 # Start a crawl job
 job = requests.post(
     "https://api.fastcrw.com/v1/crawl",  # or http://localhost:3000 for self-hosted
-    headers={"Authorization": "Bearer fc-YOUR_API_KEY"},
+    headers={"Authorization": "Bearer crw_live_YOUR_API_KEY"},
     json={
         "url": "https://docs.example.com",
         "limit": 200,
@@ -248,7 +248,7 @@ job = requests.post(
 while True:
     status = requests.get(
         f"https://api.fastcrw.com/v1/crawl/{job['id']}",
-        headers={"Authorization": "Bearer fc-YOUR_API_KEY"},
+        headers={"Authorization": "Bearer crw_live_YOUR_API_KEY"},
     ).json()
     if status["status"] == "completed":
         pages = status["data"]
@@ -282,7 +282,7 @@ URLS = [
 def scrape(url):
     r = requests.post(
         "https://api.fastcrw.com/v1/scrape",  # or http://localhost:3000 for self-hosted
-        headers={"Authorization": "Bearer fc-YOUR_API_KEY"},
+        headers={"Authorization": "Bearer crw_live_YOUR_API_KEY"},
         json={"url": url, "formats": ["markdown"]},
     )
     return r.json()["data"]["markdown"]
@@ -325,7 +325,7 @@ schema = {
 
 result = requests.post(
     "https://api.fastcrw.com/v1/scrape",  # or http://localhost:3000 for self-hosted
-    headers={"Authorization": "Bearer fc-YOUR_API_KEY"},
+    headers={"Authorization": "Bearer crw_live_YOUR_API_KEY"},
     json={
         "url": "https://shop.example.com/product/widget-pro",
         "formats": ["json"],
@@ -390,7 +390,7 @@ What CRW does *not* currently do: CAPTCHA solving, fingerprint spoofing, or the 
 # Using a proxy with CRW
 result = requests.post(
     "https://api.fastcrw.com/v1/scrape",  # or http://localhost:3000 for self-hosted
-    headers={"Authorization": "Bearer fc-YOUR_API_KEY"},
+    headers={"Authorization": "Bearer crw_live_YOUR_API_KEY"},
     json={
         "url": "https://example.com",
         "formats": ["markdown"],
@@ -437,7 +437,7 @@ This is the easiest migration because CRW is API-compatible with Firecrawl. In m
 ```
 # Before (Firecrawl hosted)
 from firecrawl import FirecrawlApp
-app = FirecrawlApp(api_key="fc-your_key")
+app = FirecrawlApp(api_key="crw_live_your_key")
 
 # After (CRW self-hosted)
 from firecrawl import FirecrawlApp
@@ -471,7 +471,7 @@ async def scrape(url):
 def scrape(url):
     result = requests.post(
         "https://api.fastcrw.com/v1/scrape",  # or http://localhost:3000 for self-hosted
-        headers={"Authorization": "Bearer fc-YOUR_API_KEY"},
+        headers={"Authorization": "Bearer crw_live_YOUR_API_KEY"},
         json={"url": url, "formats": ["markdown"]},
     )
     return result.json()["data"]["markdown"]
@@ -495,7 +495,7 @@ result = requests.post(
 # After (Firecrawl hosted — switch to the official SDK)
 from firecrawl import FirecrawlApp
 
-app = FirecrawlApp(api_key="fc-your_key")
+app = FirecrawlApp(api_key="crw_live_your_key")
 result = app.scrape_url("https://example.com", formats=["markdown"])
 ```
 
@@ -565,7 +565,7 @@ AGPL-3.0 licensed. [GitHub](https://github.com/us/crw) · [Docs](https://us.gith
 Verify it's running:
 
 ```
-curl -X POST https://api.fastcrw.com/v1/scrape   -H "Authorization: Bearer fc-YOUR_API_KEY"   -H "Content-Type: application/json"   -d '{"url": "https://example.com", "formats": ["markdown"]}'
+curl -X POST https://api.fastcrw.com/v1/scrape   -H "Authorization: Bearer crw_live_YOUR_API_KEY"   -H "Content-Type: application/json"   -d '{"url": "https://example.com", "formats": ["markdown"]}'
 ```
 
 ### Hosted Path — fastCRW Cloud

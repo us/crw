@@ -33,7 +33,7 @@ pip install firecrawl-py requests
 ```
 from firecrawl import FirecrawlApp
 
-app = FirecrawlApp(api_key="fc-YOUR-KEY", api_url="http://localhost:3000")
+app = FirecrawlApp(api_key="crw_live_YOUR-KEY", api_url="http://localhost:3000")
 # fastCRW cloud: api_url="https://api.fastcrw.com"
 ```
 

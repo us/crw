@@ -179,7 +179,7 @@ import requests
 
 response = requests.post(
     "https://api.fastcrw.com/v1/scrape",  # or http://localhost:3000 for self-hosted
-    headers={"Authorization": "Bearer fc-YOUR_API_KEY"},
+    headers={"Authorization": "Bearer crw_live_YOUR_API_KEY"},
     json={"url": "https://example.com", "formats": ["markdown"]}
 )
 markdown = response.json()["data"]["markdown"]
@@ -195,7 +195,7 @@ async def scrape(url: str) -> str:
     async with httpx.AsyncClient() as client:
         response = await client.post(
             "https://api.fastcrw.com/v1/scrape",  # or http://localhost:3000 for self-hosted
-            headers={"Authorization": "Bearer fc-YOUR_API_KEY"},
+            headers={"Authorization": "Bearer crw_live_YOUR_API_KEY"},
             json={"url": url, "formats": ["markdown"]},
             timeout=30.0,
         )
@@ -207,7 +207,7 @@ async def scrape_many(urls: list[str]) -> list[str]:
         tasks = [
             client.post(
                 "https://api.fastcrw.com/v1/scrape",  # or http://localhost:3000 for self-hosted
-                headers={"Authorization": "Bearer fc-YOUR_API_KEY"},
+                headers={"Authorization": "Bearer crw_live_YOUR_API_KEY"},
                 json={"url": url, "formats": ["markdown"]},
                 timeout=30.0,
             )
@@ -232,7 +232,7 @@ async def scrape_with_aiohttp(url: str) -> str:
     async with aiohttp.ClientSession() as session:
         async with session.post(
             "https://api.fastcrw.com/v1/scrape",  # or http://localhost:3000 for self-hosted
-            headers={"Authorization": "Bearer fc-YOUR_API_KEY"},
+            headers={"Authorization": "Bearer crw_live_YOUR_API_KEY"},
             json={"url": url, "formats": ["markdown"]},
         ) as response:
             data = await response.json()

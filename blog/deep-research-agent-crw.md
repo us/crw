@@ -56,7 +56,7 @@ from firecrawl import FirecrawlApp
 
 # CRW client — self-hosted or fastCRW
 crw = FirecrawlApp(
-    api_key="fc-YOUR-KEY",
+    api_key="crw_live_YOUR-KEY",
     api_url="http://localhost:3000"  # or "https://api.fastcrw.com"
 )
 
@@ -350,7 +350,7 @@ For production research agents that scrape many different sites, [fastCRW](https
 
 ```
 crw = FirecrawlApp(
-    api_key="fc-YOUR-FASTCRW-KEY",
+    api_key="crw_live_YOUR-FASTCRW-KEY",
     api_url="https://api.fastcrw.com"
 )
 ```

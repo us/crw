@@ -41,7 +41,7 @@ First, set up a reusable credential for CRW's API:
 1. In n8n, go to **Credentials → Add Credential → Header Auth**
 2. Set Name: `CRW API`
 3. Set Header Name: `Authorization`
-4. Set Header Value: `Bearer fc-YOUR-API-KEY`
+4. Set Header Value: `Bearer crw_live_YOUR-API-KEY`
 
 This credential will be reused across all CRW nodes in your workflows.
 
