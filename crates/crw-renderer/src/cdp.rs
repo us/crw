@@ -741,8 +741,11 @@ fn lightpanda_safe_ua(ua: &str) -> &str {
 /// On CDP a User-Agent is set via `Network.setUserAgentOverride`, not through
 /// `Network.setExtraHTTPHeaders`, so a `User-Agent` header (matched
 /// case-insensitively) is pulled out and returned separately; every other
-/// header becomes the extra-headers payload. The last `User-Agent` entry wins,
-/// matching how the HTTP tier's `RequestBuilder::header` overrides duplicates.
+/// header becomes the extra-headers payload.
+///
+/// A blank `User-Agent` is treated as absent: it neither overrides the tier
+/// default nor lands in the extra headers, so the render keeps sending the
+/// tier's modern UA rather than falling back to the browser's own (stale) one.
 fn split_caller_headers(
     headers: &HashMap<String, String>,
 ) -> (Option<String>, serde_json::Map<String, serde_json::Value>) {
@@ -750,7 +753,9 @@ fn split_caller_headers(
     let mut extra = serde_json::Map::new();
     for (k, v) in headers {
         if k.eq_ignore_ascii_case("user-agent") {
-            ua = Some(v.clone());
+            if !v.trim().is_empty() {
+                ua = Some(v.clone());
+            }
         } else {
             extra.insert(k.clone(), serde_json::Value::String(v.clone()));
         }
@@ -2366,6 +2371,17 @@ impl CdpRenderer {
         // `headers` field silently did nothing on any browser render. Additive:
         // skipped when the caller passed none, so the default render sends
         // byte-identical CDP traffic. Best-effort like the UA override above.
+        //
+        // Scope note: `setExtraHTTPHeaders` applies to EVERY request the page
+        // makes, including cross-origin subresources — the standard browser
+        // behaviour (Playwright/Puppeteer `setExtraHTTPHeaders` are identical),
+        // but broader than the HTTP tier, which decorates only the single main
+        // fetch. A caller must therefore not put cross-origin-sensitive
+        // credentials (e.g. `Authorization`) here for a browser render; the docs
+        // carry this warning. Scoping to the main document would require enabling
+        // `Fetch` request interception on every render (it is otherwise only on
+        // for proxy-auth / blocklist), a latency cost the engine deliberately
+        // avoids on the hot path.
         if !extra_headers.is_empty() {
             conn.send_recv(
                 "Network.setExtraHTTPHeaders",
@@ -3200,6 +3216,17 @@ mod tests {
         assert_eq!(extra.get("X-Probe").and_then(|v| v.as_str()), Some("v"));
         assert!(!extra.contains_key("user-agent"));
         assert_eq!(extra.len(), 1);
+    }
+
+    #[test]
+    fn split_caller_headers_blank_ua_is_absent() {
+        // A blank caller UA must not suppress the tier default: it becomes None
+        // and does not land in the extra headers either.
+        let mut h = HashMap::new();
+        h.insert("User-Agent".to_string(), "   ".to_string());
+        let (ua, extra) = split_caller_headers(&h);
+        assert!(ua.is_none());
+        assert!(extra.is_empty());
     }
 
     #[test]
