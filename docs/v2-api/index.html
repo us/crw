@@ -1109,13 +1109,9 @@ GET  /firecrawl/v2/batch/scrape/{id}?skip=100  →  { status, data[], next }
 <td>—</td>
 <td>JSON Schema for structured output</td>
 </tr>
-<tr>
-<td><code>systemPrompt</code></td>
-<td><code>string</code></td>
-<td>—</td>
-<td>System-level instruction prepended to the extraction prompt</td>
-</tr>
 </tbody></table>
+<p><code>systemPrompt</code> is a Firecrawl field this engine does not implement yet; sending a
+non-empty value returns a 400. Fold your instruction into <code>prompt</code> instead.</p>
 <h3 id="start-response-2">Start response</h3>
 <pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
