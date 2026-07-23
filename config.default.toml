@@ -181,7 +181,7 @@ max_html_bytes = 100000
 always_run = false
 
 [auth]
-# api_keys = ["fc-key-1234"]
+# api_keys = ["crw_live_key-1234"]
 
 # LLM configuration — powers both:
 #   1. structured JSON extraction (formats: ["json"] with jsonSchema)
