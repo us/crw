@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "CRW REST API",
-    "version": "0.27.1",
+    "version": "0.28.0",
     "description": "Firecrawl-compatible web scraping, crawling, mapping, search, and extraction API. Hosted at https://api.fastcrw.com; self-host with `docker run -p 3000:3000 ghcr.io/us/crw:latest`.",
     "license": {
       "name": "AGPL-3.0",
@@ -346,7 +346,7 @@
           "change-tracking"
         ],
         "summary": "Diff current scrape content against a previous snapshot",
-        "description": "Stateless: opencore stores nothing \u2014 the caller supplies the `previous` snapshot. Accepts a single body or a `batch` array (presence of `batch` selects batch mode). The crawl-path workhorse for monitors.",
+        "description": "Stateless: opencore stores nothing — the caller supplies the `previous` snapshot. Accepts a single body or a `batch` array (presence of `batch` selects batch mode). The crawl-path workhorse for monitors.",
         "operationId": "changeTrackingDiff",
         "requestBody": {
           "required": true,
@@ -447,7 +447,7 @@
           "capabilities"
         ],
         "summary": "Server capability discovery",
-        "description": "Returns what this opencore instance actually supports: LLM providers, output formats, search features, screenshot/renderer availability, document parsers and enforced limits. Every boolean is derived from the real build features and effective config \u2014 a capability is true only when the instance can perform it for a request that supplies no extra credentials. SaaS frontends call this on boot to validate a minimum capability set before sending traffic.",
+        "description": "Returns what this opencore instance actually supports: LLM providers, output formats, search features, screenshot/renderer availability, document parsers and enforced limits. Every boolean is derived from the real build features and effective config — a capability is true only when the instance can perform it for a request that supplies no extra credentials. SaaS frontends call this on boot to validate a minimum capability set before sending traffic.",
         "operationId": "capabilities",
         "security": [
           {
@@ -502,7 +502,7 @@
                         },
                         "supportsBaseUrl": {
                           "type": "boolean",
-                          "description": "The LLM dispatcher accepts a custom baseUrl, but only as part of a BYOK request: the per-request LLM config that carries it is only built when the request also supplies llmApiKey. Sending baseUrl without a key leaves the server's own endpoint in force (the server never points its own key at a caller-chosen host). POST /v1/extract rejects baseUrl outright \u2014 configure [extraction.llm.base_url] server-side for that route. Build-invariant: no config turns this off."
+                          "description": "The LLM dispatcher accepts a custom baseUrl, but only as part of a BYOK request: the per-request LLM config that carries it is only built when the request also supplies llmApiKey. Sending baseUrl without a key leaves the server's own endpoint in force (the server never points its own key at a caller-chosen host). POST /v1/extract rejects baseUrl outright — configure [extraction.llm.base_url] server-side for that route. Build-invariant: no config turns this off."
                         },
                         "serverKeyConfigured": {
                           "type": "boolean",
@@ -629,7 +629,7 @@
                           "items": {
                             "type": "string"
                           },
-                          "description": "JS renderer tiers this instance constructed, in fallback order \u2014 reflects both the build features and the config. These are the values the per-request `renderer` pin accepts.",
+                          "description": "JS renderer tiers this instance constructed, in fallback order — reflects both the build features and the config. These are the values the per-request `renderer` pin accepts.",
                           "example": [
                             "lightpanda",
                             "chrome"
@@ -664,7 +664,7 @@
                       "properties": {
                         "supported": {
                           "type": "boolean",
-                          "description": "POST /v1/extract works for a request that carries no credentials of its own. The route is ALWAYS mounted, but it needs an LLM: false means a server LLM key is absent, or llm.requireByokHeader is set (which makes the server key insufficient). false does NOT mean 'not implemented' \u2014 a request carrying llmApiKey still extracts on a self-hosted instance."
+                          "description": "POST /v1/extract works for a request that carries no credentials of its own. The route is ALWAYS mounted, but it needs an LLM: false means a server LLM key is absent, or llm.requireByokHeader is set (which makes the server key insufficient). false does NOT mean 'not implemented' — a request carrying llmApiKey still extracts on a self-hosted instance."
                         },
                         "maxUrls": {
                           "type": "integer",
@@ -712,7 +712,7 @@
                             },
                             "maxBytes": {
                               "type": "integer",
-                              "description": "The ENFORCED body cap ([document].max_upload_bytes, clamped by the hard ceiling) \u2014 the same value the body-limit layer applies."
+                              "description": "The ENFORCED body cap ([document].max_upload_bytes, clamped by the hard ceiling) — the same value the body-limit layer applies."
                             },
                             "types": {
                               "type": "array",
@@ -1296,7 +1296,7 @@
           "actions": {
             "type": "object",
             "additionalProperties": true,
-            "description": "Unsupported Firecrawl parameter \u2014 returns a clear error if supplied"
+            "description": "Unsupported Firecrawl parameter — returns a clear error if supplied"
           },
           "extract": {
             "$ref": "#/components/schemas/ExtractOptions",
@@ -1943,7 +1943,7 @@
           },
           "firstObservation": {
             "type": "boolean",
-            "description": "True when no previous was supplied \u2014 caller maps to 'new'"
+            "description": "True when no previous was supplied — caller maps to 'new'"
           },
           "contentHash": {
             "type": "string"
