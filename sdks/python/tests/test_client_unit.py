@@ -37,9 +37,9 @@ class TestInit:
             CrwClient()
 
     def test_default_cloud_with_key(self) -> None:
-        client = CrwClient(api_key="fc-test")
+        client = CrwClient(api_key="crw_live_test")
         assert client._api_url == CLOUD_API_URL
-        assert client._api_key == "fc-test"
+        assert client._api_key == "crw_live_test"
 
     def test_local_opt_in_via_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("CRW_LOCAL", "1")
@@ -66,7 +66,7 @@ class TestInit:
 @pytest.mark.unit
 class TestScrape:
     def test_scrape_http_builds_correct_request(self) -> None:
-        client = CrwClient(api_url="https://fastcrw.com/api", api_key="fc-test")
+        client = CrwClient(api_url="https://fastcrw.com/api", api_key="crw_live_test")
         mock_response = {"markdown": "# Hello", "metadata": {"title": "Hello"}}
 
         with patch.object(client, "_http_post", return_value=mock_response) as mock_post:
@@ -102,7 +102,7 @@ class TestScrape:
 @pytest.mark.unit
 class TestCrawl:
     def test_crawl_http_polls_until_complete(self) -> None:
-        client = CrwClient(api_url="https://fastcrw.com/api", api_key="fc-test")
+        client = CrwClient(api_url="https://fastcrw.com/api", api_key="crw_live_test")
 
         crawl_start_response = {"id": "job-123"}
         poll_in_progress = {"success": True, "status": "scraping", "data": []}
@@ -126,7 +126,7 @@ class TestCrawl:
         assert result[0]["url"] == "https://example.com"
 
     def test_crawl_raises_timeout(self) -> None:
-        client = CrwClient(api_url="https://fastcrw.com/api", api_key="fc-test")
+        client = CrwClient(api_url="https://fastcrw.com/api", api_key="crw_live_test")
 
         crawl_start_response = {"id": "job-timeout"}
         poll_in_progress = {"success": True, "status": "scraping", "data": []}
@@ -141,7 +141,7 @@ class TestCrawl:
                 client.crawl("https://example.com", poll_interval=0.01, timeout=5)
 
     def test_crawl_raises_on_failure(self) -> None:
-        client = CrwClient(api_url="https://fastcrw.com/api", api_key="fc-test")
+        client = CrwClient(api_url="https://fastcrw.com/api", api_key="crw_live_test")
 
         crawl_start_response = {"id": "job-fail"}
         poll_failed = {"success": True, "status": "failed", "error": "Something went wrong"}
@@ -163,7 +163,7 @@ class TestCrawl:
 @pytest.mark.unit
 class TestMap:
     def test_map_http_returns_links(self) -> None:
-        client = CrwClient(api_url="https://fastcrw.com/api", api_key="fc-test")
+        client = CrwClient(api_url="https://fastcrw.com/api", api_key="crw_live_test")
         mock_response = {"links": ["https://example.com/a", "https://example.com/b"]}
 
         with patch.object(client, "_http_post", return_value=mock_response):
@@ -192,7 +192,7 @@ class TestSearch:
         assert result == mock_response
 
     def test_search_http_sends_query(self) -> None:
-        client = CrwClient(api_url="https://fastcrw.com/api", api_key="fc-test")
+        client = CrwClient(api_url="https://fastcrw.com/api", api_key="crw_live_test")
         mock_response = [{"url": "https://example.com", "title": "Example"}]
 
         with patch.object(
@@ -246,7 +246,7 @@ class TestLifecycle:
 @pytest.mark.unit
 class TestErrors:
     def test_api_error_raised_on_failure(self) -> None:
-        client = CrwClient(api_url="https://fastcrw.com/api", api_key="fc-test")
+        client = CrwClient(api_url="https://fastcrw.com/api", api_key="crw_live_test")
 
         with patch.object(
             client,
@@ -385,7 +385,7 @@ class TestHttpOnlyMethods:
     def test_start_extract_prefer_managed_and_self_hosted_fixtures(self) -> None:
         accepted = {"id": "job-1", "status": "processing", "urls": 1}
         for client in (
-            CrwClient(api_key="fc-test"),
+            CrwClient(api_key="crw_live_test"),
             CrwClient(api_url="http://localhost:3000"),
         ):
             with patch.object(client, "_http_request", return_value=accepted) as req:
@@ -398,7 +398,7 @@ class TestHttpOnlyMethods:
             assert req.call_args[0][2]["basis"] is True
 
     def test_extract_preserves_managed_sync_fixture_with_prefer(self) -> None:
-        client = CrwClient(api_key="fc-test")
+        client = CrwClient(api_key="crw_live_test")
         sync = {
             "success": True,
             "results": [

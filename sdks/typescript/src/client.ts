@@ -98,8 +98,8 @@ export class CrwClient {
       if (!f.includes("json")) args.formats = [...f, "json"];
     }
     Object.assign(args, rest);
-    if (this.apiUrl) return this.httpPost("/v1/scrape", args);
-    return this.localTransport().toolCall("crw_scrape", args);
+    if (this.apiUrl) return this.httpPost("/v1/scrape", args) as Promise<ScrapeResult>;
+    return this.localTransport().toolCall("crw_scrape", args) as Promise<ScrapeResult>;
   }
 
   async crawl(url: string, opts: CrawlOptions = {}): Promise<CrawlResult> {
@@ -211,7 +211,7 @@ export class CrwClient {
       const form = new FormData();
       form.append("file", new Blob([content as unknown as BlobPart]), filename);
       if (Object.keys(options).length) form.append("options", JSON.stringify(options));
-      return this.httpMultipart("/v2/parse", form);
+      return this.httpMultipart("/v2/parse", form) as Promise<ParseResult>;
     }
     const b64 = Buffer.from(content).toString("base64");
     const args: Json = { filename, contentBase64: b64 };
@@ -219,7 +219,7 @@ export class CrwClient {
     if (jsonSchema !== undefined) args.jsonSchema = jsonSchema;
     if (parsers) args.parsers = parsers;
     Object.assign(args, rest);
-    return this.localTransport().toolCall("crw_parse_file", args);
+    return this.localTransport().toolCall("crw_parse_file", args) as Promise<ParseResult>;
   }
 
   /**
@@ -321,7 +321,7 @@ export class CrwClient {
     for (;;) {
       if (Date.now() > deadline) throw new CrwTimeoutError(`Batch scrape ${jobId} timed out after ${timeout}s`);
       const status = await this.httpRequest("GET", `/v2/batch/scrape/${jobId}`, undefined, { raw: true, checkSuccess: false });
-      if (status.status === "completed") return (status.data as Json[]) ?? [];
+      if (status.status === "completed") return (status.data as BatchResult) ?? [];
       if (status.status === "failed") throw new CrwError(`Batch scrape failed: ${status.error ?? "unknown"}`);
       await sleep(pollInterval * 1000);
     }
@@ -330,7 +330,7 @@ export class CrwClient {
   /** Feature-detect the engine (HTTP mode only). */
   async capabilities(): Promise<Capabilities> {
     if (!this.apiUrl) throw new CrwError(httpOnlyHint("capabilities", "server capabilities endpoint"));
-    return this.httpRequest("GET", "/v1/capabilities", undefined, { checkSuccess: false });
+    return this.httpRequest("GET", "/v1/capabilities", undefined, { checkSuccess: false }) as Promise<Capabilities>;
   }
 
   /** Diff a page against a prior snapshot (HTTP mode only). */
@@ -342,7 +342,7 @@ export class CrwClient {
     if (schema !== undefined) body.schema = schema;
     if (prompt !== undefined) body.prompt = prompt;
     Object.assign(body, rest);
-    return this.httpPost("/v1/change-tracking/diff", body);
+    return this.httpPost("/v1/change-tracking/diff", body) as Promise<DiffResult>;
   }
 
   /** Shut down the local subprocess if running. */
@@ -363,7 +363,7 @@ export class CrwClient {
     for (;;) {
       if (Date.now() > deadline) throw new CrwTimeoutError(`Crawl ${jobId} timed out after ${timeout}s`);
       const result = await this.localTransport().toolCall("crw_check_crawl_status", { id: jobId });
-      if (result.status === "completed") return (result.data as Json[]) ?? [];
+      if (result.status === "completed") return (result.data as CrawlResult) ?? [];
       if (result.status === "failed") throw new CrwError(`Crawl failed: ${result.error ?? "unknown"}`);
       await sleep(pollInterval * 1000);
     }
@@ -437,7 +437,7 @@ export class CrwClient {
     for (;;) {
       if (Date.now() > deadline) throw new CrwTimeoutError(`Crawl ${jobId} timed out after ${timeout}s`);
       const status = await this.httpRequest("GET", `/v1/crawl/${jobId}`, undefined, { raw: true });
-      if (status.status === "completed") return (status.data as Json[]) ?? [];
+      if (status.status === "completed") return (status.data as CrawlResult) ?? [];
       if (status.status === "failed") throw new CrwError(`Crawl failed: ${status.error ?? "unknown"}`);
       await sleep(pollInterval * 1000);
     }
