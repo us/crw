@@ -436,7 +436,7 @@ console.log(body.data.markdown);</code></pre></div><div class="code-tab-panel" d
 <td><code>headers</code></td>
 <td>object</td>
 <td><code>{}</code></td>
-<td>Custom HTTP headers</td>
+<td>Custom HTTP headers, forwarded on both the HTTP and browser render paths. A <code>User-Agent</code> here overrides the default. On a browser render they apply to every request the page makes (subresources included), so avoid putting cross-origin-sensitive credentials like <code>Authorization</code> here.</td>
 </tr>
 <tr>
 <td><code>cssSelector</code></td>
