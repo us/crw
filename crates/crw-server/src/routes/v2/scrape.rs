@@ -114,6 +114,19 @@ pub struct V2ScrapeResponse {
     pub error: Option<String>,
 }
 
+/// Build an `Accept-Language` header value from Firecrawl's `location.languages`
+/// list. Blank entries are dropped; an all-blank or empty list yields `None` so
+/// no header is added. Values are joined as-is (`["en-US","de"]` → `en-US, de`).
+pub(crate) fn accept_language_from(languages: &[String]) -> Option<String> {
+    let joined = languages
+        .iter()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .collect::<Vec<_>>()
+        .join(", ");
+    (!joined.is_empty()).then_some(joined)
+}
+
 /// Resolved proxy tier reported in `metadata.proxyUsed`.
 pub(crate) fn proxy_tier(proxy: &str) -> &'static str {
     if proxy.eq_ignore_ascii_case("stealth") {
@@ -143,6 +156,23 @@ pub(crate) fn to_internal(
         .and_then(|l| l.country.as_ref())
         .map(|c| c.to_lowercase());
 
+    // Firecrawl's `location.languages` becomes an `Accept-Language` header — the
+    // engine has no separate locale knob, and this is what the docs promise. A
+    // caller's own explicit `Accept-Language` always wins, so this only fills a
+    // gap. Takes effect on the HTTP tier and, since #351, on the browser tiers.
+    let mut headers = v2.headers;
+    if let Some(accept_language) = v2
+        .location
+        .as_ref()
+        .and_then(|l| l.languages.as_deref())
+        .and_then(accept_language_from)
+        && !headers
+            .keys()
+            .any(|k| k.eq_ignore_ascii_case("accept-language"))
+    {
+        headers.insert("Accept-Language".to_string(), accept_language);
+    }
+
     let req = ScrapeRequest {
         url: v2.url,
         formats: decomposed.formats.clone(),
@@ -150,7 +180,7 @@ pub(crate) fn to_internal(
         include_tags: v2.include_tags,
         exclude_tags: v2.exclude_tags,
         wait_for: v2.wait_for,
-        headers: v2.headers,
+        headers,
         json_schema: decomposed.json_schema.clone(),
         // A `{"type":"json","prompt":...}` format object carries the extraction
         // instruction; it reaches the LLM only via `extract.prompt`.
@@ -294,6 +324,60 @@ pub async fn get_scrape_job(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn internal(body: serde_json::Value) -> ScrapeRequest {
+        let v2: V2ScrapeRequest = serde_json::from_value(body).unwrap();
+        to_internal(v2).unwrap().0
+    }
+
+    #[test]
+    fn accept_language_from_joins_and_trims() {
+        assert_eq!(
+            accept_language_from(&["en-US".into(), " de ".into()]),
+            Some("en-US, de".to_string())
+        );
+        assert_eq!(accept_language_from(&[]), None);
+        assert_eq!(accept_language_from(&["  ".into()]), None);
+    }
+
+    #[test]
+    fn location_languages_becomes_accept_language() {
+        let req = internal(serde_json::json!({
+            "url": "http://example.com",
+            "location": { "languages": ["de-DE", "en"] },
+        }));
+        assert_eq!(
+            req.headers.get("Accept-Language").map(String::as_str),
+            Some("de-DE, en")
+        );
+    }
+
+    #[test]
+    fn explicit_accept_language_header_wins() {
+        // A caller's own Accept-Language must not be overwritten by languages.
+        let req = internal(serde_json::json!({
+            "url": "http://example.com",
+            "location": { "languages": ["de-DE"] },
+            "headers": { "Accept-Language": "fr-FR" },
+        }));
+        assert_eq!(
+            req.headers.get("Accept-Language").map(String::as_str),
+            Some("fr-FR")
+        );
+    }
+
+    #[test]
+    fn no_languages_adds_no_header() {
+        let req = internal(serde_json::json!({
+            "url": "http://example.com",
+            "location": { "country": "de" },
+        }));
+        assert!(
+            !req.headers
+                .keys()
+                .any(|k| k.eq_ignore_ascii_case("accept-language"))
+        );
+    }
 
     #[test]
     fn v2_scrape_accepts_snake_case_proxy_alias_and_threads_to_internal() {
