@@ -135,7 +135,7 @@ That is the default CRW success shape: requested content plus a compact metadata
 | `renderer` | string | `auto` | Pin to a specific renderer: `auto`, `lightpanda`, `chrome`, `chrome_proxy`, `playwright`, or `camoufox`. Non-`auto` values hard-pin (no fallback) and imply `renderJs:true` unless `renderJs:false` is set explicitly. See [JS rendering](#js-rendering) |
 | `includeTags` | string[] | `[]` | CSS selectors to keep |
 | `excludeTags` | string[] | `[]` | CSS selectors to remove |
-| `headers` | object | `{}` | Custom HTTP headers |
+| `headers` | object | `{}` | Custom HTTP headers, forwarded on both the HTTP and browser render paths. A `User-Agent` here overrides the default. |
 | `cssSelector` | string | -- | Narrow extraction to one CSS selector |
 | `xpath` | string | -- | Narrow extraction to one XPath expression |
 | `chunkStrategy` | object | -- | Topic, sentence, or regex chunking |

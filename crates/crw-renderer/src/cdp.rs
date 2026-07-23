@@ -736,6 +736,28 @@ fn lightpanda_safe_ua(ua: &str) -> &str {
     ua.strip_prefix("Mozilla/5.0 ").unwrap_or(ua)
 }
 
+/// Split a caller-supplied header map into the UA override value and the rest.
+///
+/// On CDP a User-Agent is set via `Network.setUserAgentOverride`, not through
+/// `Network.setExtraHTTPHeaders`, so a `User-Agent` header (matched
+/// case-insensitively) is pulled out and returned separately; every other
+/// header becomes the extra-headers payload. The last `User-Agent` entry wins,
+/// matching how the HTTP tier's `RequestBuilder::header` overrides duplicates.
+fn split_caller_headers(
+    headers: &HashMap<String, String>,
+) -> (Option<String>, serde_json::Map<String, serde_json::Value>) {
+    let mut ua = None;
+    let mut extra = serde_json::Map::new();
+    for (k, v) in headers {
+        if k.eq_ignore_ascii_case("user-agent") {
+            ua = Some(v.clone());
+        } else {
+            extra.insert(k.clone(), serde_json::Value::String(v.clone()));
+        }
+    }
+    (ua, extra)
+}
+
 async fn connect_chrome_with_retry_inner(
     name: &str,
     configured_ws_url: &str,
@@ -1350,7 +1372,7 @@ impl PageFetcher for CdpRenderer {
     async fn fetch(
         &self,
         url: &str,
-        _headers: &HashMap<String, String>,
+        headers: &HashMap<String, String>,
         wait_for_ms: Option<u64>,
         deadline: crw_core::Deadline,
     ) -> CrwResult<FetchResult> {
@@ -1400,7 +1422,7 @@ impl PageFetcher for CdpRenderer {
         }
 
         let first = self
-            .fetch_once(url, wait_for_ms, deadline, overall_timeout)
+            .fetch_once(url, headers, wait_for_ms, deadline, overall_timeout)
             .await;
 
         // On-failure country fallback (residential chrome_proxy tier only).
@@ -1439,7 +1461,7 @@ impl PageFetcher for CdpRenderer {
                 return crate::REQUEST_COUNTRY
                     .scope(
                         self.default_country.clone(),
-                        self.fetch_once(url, wait_for_ms, deadline, retry_timeout),
+                        self.fetch_once(url, headers, wait_for_ms, deadline, retry_timeout),
                     )
                     .await;
             }
@@ -1533,6 +1555,7 @@ impl CdpRenderer {
     async fn fetch_once(
         &self,
         url: &str,
+        headers: &HashMap<String, String>,
         wait_for_ms: Option<u64>,
         deadline: crw_core::Deadline,
         overall_timeout: Duration,
@@ -1546,9 +1569,11 @@ impl CdpRenderer {
             .unwrap_or(false);
         let fut = async {
             if let Some(pool) = self.pool.as_ref().filter(|_| !proxy_active) {
-                self.fetch_with_pool(pool, url, wait_for_ms, deadline).await
+                self.fetch_with_pool(pool, url, headers, wait_for_ms, deadline)
+                    .await
             } else {
-                self.fetch_with_ws(url, wait_for_ms, deadline).await
+                self.fetch_with_ws(url, headers, wait_for_ms, deadline)
+                    .await
             }
         };
         tokio::time::timeout(overall_timeout, fut)
@@ -1605,6 +1630,7 @@ impl CdpRenderer {
         &self,
         pool: &Arc<crate::browser_pool::BrowserContextPool<CdpConnection>>,
         url: &str,
+        headers: &HashMap<String, String>,
         wait_for_ms: Option<u64>,
         deadline: crw_core::Deadline,
     ) -> CrwResult<FetchResult> {
@@ -1644,6 +1670,7 @@ impl CdpRenderer {
                 Some(&ctx_id),
                 &recorder,
                 url,
+                headers,
                 wait_for_ms,
                 deadline,
             )
@@ -1708,6 +1735,7 @@ impl CdpRenderer {
     async fn fetch_with_ws(
         &self,
         url: &str,
+        headers: &HashMap<String, String>,
         wait_for_ms: Option<u64>,
         deadline: crw_core::Deadline,
     ) -> CrwResult<FetchResult> {
@@ -1788,6 +1816,7 @@ impl CdpRenderer {
                 proxy_ctx.as_deref(),
                 &recorder,
                 url,
+                headers,
                 wait_for_ms,
                 deadline,
             )
@@ -2208,12 +2237,14 @@ impl CdpRenderer {
         Ok(last_html)
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn fetch_inner(
         &self,
         conn: &CdpConnection,
         browser_context_id: Option<&str>,
         target_recorder: &(dyn Fn(&str) + Send + Sync),
         url: &str,
+        headers: &HashMap<String, String>,
         wait_for_ms: Option<u64>,
         deadline: crw_core::Deadline,
     ) -> CrwResult<(
@@ -2299,6 +2330,13 @@ impl CdpRenderer {
         )
         .await?;
 
+        // Split the caller headers into the UA override (CDP sets a UA via
+        // `setUserAgentOverride`, not via extra headers) and everything else.
+        // A caller-supplied `User-Agent` wins over the tier default, the same
+        // precedence the HTTP fetcher gives it (http_only.rs applies caller
+        // headers last).
+        let (caller_ua, extra_headers) = split_caller_headers(headers);
+
         // Present a modern UA on the CDP path too (the HTTP fetcher already does,
         // but renderers otherwise send the browser's own — often stale — UA, which
         // trips "your browser is outdated" gates). Session-scoped (so pooled
@@ -2306,15 +2344,32 @@ impl CdpRenderer {
         // must NOT abort an otherwise-fine render — hence `.ok()`, not `?`.
         // lightpanda rejects "Mozilla" UAs (→ `lightpanda_safe_ua`); it routes
         // Network.* → Emulation.* internally, so the method name is fine. Skip if empty.
-        if !self.user_agent.is_empty() {
-            let ua = if self.name == "lightpanda" {
-                lightpanda_safe_ua(&self.user_agent)
+        let effective_ua = caller_ua.as_deref().unwrap_or(&self.user_agent);
+        if !effective_ua.is_empty() {
+            let ua: &str = if self.name == "lightpanda" {
+                lightpanda_safe_ua(effective_ua)
             } else {
-                &self.user_agent
+                effective_ua
             };
             conn.send_recv(
                 "Network.setUserAgentOverride",
                 serde_json::json!({ "userAgent": ua }),
+                Some(&session_id),
+                self.page_timeout,
+            )
+            .await
+            .ok();
+        }
+
+        // Forward the caller's custom request headers. These were dropped on the
+        // CDP path entirely (only the HTTP tier honored them), so a documented
+        // `headers` field silently did nothing on any browser render. Additive:
+        // skipped when the caller passed none, so the default render sends
+        // byte-identical CDP traffic. Best-effort like the UA override above.
+        if !extra_headers.is_empty() {
+            conn.send_recv(
+                "Network.setExtraHTTPHeaders",
+                serde_json::json!({ "headers": extra_headers }),
                 Some(&session_id),
                 self.page_timeout,
             )
@@ -2914,8 +2969,9 @@ fn is_spa_text_ready(text_len: i64) -> bool {
 mod tests {
     use super::{
         CdpRenderer, CrwError, build_auth_response, is_content_stable, is_proxy_tunnel_error,
-        lightpanda_safe_ua, screenshot_clip,
+        lightpanda_safe_ua, screenshot_clip, split_caller_headers,
     };
+    use std::collections::HashMap;
 
     #[test]
     fn proxy_tunnel_error_matches_connect_failures() {
@@ -3130,6 +3186,40 @@ mod tests {
         assert!(safe.contains("Chrome/150"));
         // A UA without the prefix is returned unchanged (no double-strip).
         assert_eq!(lightpanda_safe_ua("Chrome/150.0.0.0"), "Chrome/150.0.0.0");
+    }
+
+    #[test]
+    fn split_caller_headers_pulls_out_user_agent() {
+        // A caller User-Agent must go to setUserAgentOverride, not into the
+        // extra-headers payload, and the match is case-insensitive.
+        let mut h = HashMap::new();
+        h.insert("user-agent".to_string(), "MyAgent/1.0".to_string());
+        h.insert("X-Probe".to_string(), "v".to_string());
+        let (ua, extra) = split_caller_headers(&h);
+        assert_eq!(ua.as_deref(), Some("MyAgent/1.0"));
+        assert_eq!(extra.get("X-Probe").and_then(|v| v.as_str()), Some("v"));
+        assert!(!extra.contains_key("user-agent"));
+        assert_eq!(extra.len(), 1);
+    }
+
+    #[test]
+    fn split_caller_headers_empty_and_no_ua() {
+        // No headers → no UA, empty payload (the render skips both CDP calls).
+        let (ua, extra) = split_caller_headers(&HashMap::new());
+        assert!(ua.is_none());
+        assert!(extra.is_empty());
+
+        // Headers but no User-Agent → all of them are extra headers.
+        let mut h = HashMap::new();
+        h.insert("Accept-Language".to_string(), "de".to_string());
+        h.insert("Cookie".to_string(), "a=b".to_string());
+        let (ua, extra) = split_caller_headers(&h);
+        assert!(ua.is_none());
+        assert_eq!(extra.len(), 2);
+        assert_eq!(
+            extra.get("Accept-Language").and_then(|v| v.as_str()),
+            Some("de")
+        );
     }
 
     #[test]
