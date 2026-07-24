@@ -366,12 +366,19 @@ mod tests {
 
     #[test]
     fn dedup_keeps_nesting_levels_distinct() {
-        let top = "*   [Long privacy policy link text](https://example.com/privacy/)";
-        let nested = format!("    {top}");
-        let input = format!("{top}\n{nested}\n");
+        let a = "*   [Long privacy policy link text](https://example.com/privacy/)";
+        let b = "*   [Long terms of service link text](https://example.com/terms/)";
+        // The same two entries again, one level deeper: a repeated BLOCK, so the
+        // run rule alone would drop it. Keyed on the untrimmed line these are
+        // different lines, so the nested copy survives — which is what makes this
+        // a guard on the key and not just on the run length.
+        let input = format!("{a}\n{b}\n    {a}\n    {b}\n");
         let result = drop_repeated_nav_lines(&input);
-        assert!(result.contains(&nested), "nested entry lost: {result}");
-        assert_eq!(result.lines().count(), 2, "structure changed: {result}");
+        assert_eq!(result.lines().count(), 4, "nested block lost: {result}");
+        assert!(
+            result.contains(&format!("    {a}")),
+            "nested entry lost: {result}"
+        );
     }
 
     #[test]

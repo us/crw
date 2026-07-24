@@ -135,6 +135,26 @@ fn clean_html_impl(
             // a combined string that also contains the other classes).
             let combined = format!("{class} {id}");
 
+            // Names here are matched as a SUBSTRING of "{class} {id}", so a name
+            // that appears inside a content class deletes real content. Two were
+            // replaced with narrower ones after measuring on the frozen scrape
+            // corpus:
+            //
+            // - "widget" removed. Every WordPress page builder wraps page CONTENT
+            //   in classes containing it: Elementor `elementor-widget` +
+            //   `elementor-widget-{slug}`, SiteOrigin `so-widget-*` /
+            //   `panel-widget-style` / `textwidget` / `widget_sow-editor`. It
+            //   emptied those pages. `widget-area` / `widget_area` below still
+            //   remove the registered sidebar container, which is where widgets
+            //   that ARE boilerplate live; a bare `widget_*` block outside any
+            //   container leaks, which is the precision side of the trade. Note a
+            //   `widget_` PREFIX rule cannot work either: SiteOrigin's content
+            //   widget is `widget_sow-editor`.
+            // - "banner" removed. Hero banners carry the headline and the product
+            //   copy. `role="banner"` below is the reliable chrome signal, and
+            //   cookie / consent / promo cover the bars that matter. (Shopify and
+            //   Squarespace announcement bars are named `announcement-bar` and
+            //   were never caught by "banner" either way.)
             const NOISE_PATTERNS: &[&str] = &[
                 "sidebar",
                 "table-of-contents",
@@ -146,7 +166,8 @@ fn clean_html_impl(
                 "breadcrumb",
                 "cookie",
                 "consent",
-                "banner",
+                "widget-area",
+                "widget_area",
                 "disqus",
                 "advert",
                 "popup",
@@ -219,36 +240,7 @@ fn clean_html_impl(
                 "ads-",
             ];
 
-            // "widget" needs its own rule. Sidebar/footer widget areas are
-            // boilerplate (WordPress `widget_text`, Divi `et_pb_widget`,
-            // GeneratePress `footer-widgets`, Astra `ast-header-widget-area`),
-            // so any class token containing "widget" is noise by default.
-            //
-            // Elementor is the exception: it wraps EVERY piece of page content
-            // in a widget (the product title on a WooCommerce page is
-            // `elementor-widget-woocommerce-product-title`), so the default rule
-            // empties the whole page. Elementor tags each widget with BOTH
-            // `elementor-widget` and `elementor-widget-{slug}`, so both forms
-            // are treated as content — exempting only the literal wrapper class
-            // names leaves the bare token matching and the page still comes back
-            // empty. The one exception to the exception is `wp-widget-*`, the
-            // classic WordPress sidebar widgets dropped into the layout.
-            //
-            // The trade is precision: an Elementor boilerplate widget whose slug
-            // isn't independently caught (semantic `<nav>`/`<footer>`, or a
-            // NOISE_PATTERNS name like `sidebar`/`popup`/`social-icons`) now
-            // survives `onlyMainContent`. Recall wins over precision here.
-            let widget_noise =
-                combined
-                    .split_whitespace()
-                    .any(|t| match t.strip_prefix("elementor-widget") {
-                        Some(rest) => rest
-                            .strip_prefix('-')
-                            .is_some_and(|slug| slug.starts_with("wp-widget-")),
-                        None => t.contains("widget"),
-                    });
-
-            let is_noise = widget_noise || NOISE_PATTERNS.iter().any(|p| combined.contains(p)) || {
+            let is_noise = NOISE_PATTERNS.iter().any(|p| combined.contains(p)) || {
                 let tokens_iter = class.split_whitespace().chain(std::iter::once(id.as_str()));
                 tokens_iter.into_iter().any(|tok| {
                     NOISE_EXACT_TOKENS.contains(&tok)
@@ -452,53 +444,96 @@ mod tests {
     }
 
     #[test]
-    fn keeps_elementor_content_widgets_but_drops_wp_widget_areas() {
-        // Elementor tags every widget with BOTH `elementor-widget` and
-        // `elementor-widget-{slug}`; the product title on a WooCommerce page
-        // lives inside `elementor-widget-woocommerce-product-title`. Missing
-        // either token empties the page (issue #365).
+    fn page_builder_content_survives_only_main_content() {
+        // Every page builder wraps page CONTENT in classes containing "widget":
+        // Elementor tags each widget with both `elementor-widget` and
+        // `elementor-widget-{slug}`, SiteOrigin uses `so-widget-*`,
+        // `panel-widget-style` and `textwidget`. Matching "widget" by name
+        // emptied all of those pages (issue #365).
         let html = r#"<body>
             <div class="elementor-element elementor-widget elementor-widget-woocommerce-product-title">
               <h1>30 RK PANORA M 102 STP</h1>
             </div>
-            <div class="elementor-element elementor-widget elementor-widget-text-editor">
-              <p>Matt tiles offer a sophisticated finish.</p>
-            </div>
-            <div class="elementor-element elementor-widget elementor-widget-wp-widget-nav_menu">
-              <p>Classic sidebar menu</p>
+            <div class="so-panel widget widget_sow-editor panel-first-child">
+              <div class="so-widget-sow-editor so-widget-sow-editor-base">
+                <div class="siteorigin-widget-tinymce textwidget">
+                  <p>Our label and carton teams are ready to help.</p>
+                </div>
+              </div>
             </div>
         </body>"#;
         let result = clean_html(html, true, &[], &[]).unwrap();
         assert!(result.contains("30 RK PANORA M 102 STP"), "got: {result}");
         assert!(
-            result.contains("Matt tiles offer a sophisticated finish."),
+            result.contains("Our label and carton teams are ready to help."),
             "got: {result}"
         );
-        assert!(!result.contains("Classic sidebar menu"), "got: {result}");
     }
 
     #[test]
-    fn keeps_elementor_widget_wrappers_but_drops_widget_areas() {
-        // Elementor wraps every piece of page content in `elementor-widget-*`;
-        // a blanket "widget" substring match emptied those pages (issue #365).
+    fn widget_areas_in_page_chrome_are_still_removed() {
+        // Widget areas are boilerplate, but they are recognised by WHERE they
+        // sit — inside semantic chrome or a sidebar container — not by having
+        // "widget" in the class name.
         let html = r#"<body>
-            <div class="elementor-widget-wrap elementor-element-populated">
-              <div class="elementor-widget-container"><h1>Product title</h1>
-              <p>Product description text.</p></div>
-            </div>
-            <div class="widget_text">Sidebar promo</div>
-            <div class="footer-widgets">GeneratePress footer</div>
-            <div class="ast-header-widget-area">Astra header</div>
+            <aside class="widget_text"><p>Sidebar promo copy</p></aside>
+            <footer class="footer-widgets"><p>GeneratePress footer</p></footer>
+            <header class="ast-header-widget-area"><p>Astra header</p></header>
+            <div class="sidebar"><div class="widget_recent_posts">Recent posts</div></div>
+            <article><p>The actual article body.</p></article>
         </body>"#;
         let result = clean_html(html, true, &[], &[]).unwrap();
-        assert!(result.contains("Product title"), "got: {result}");
-        assert!(
-            result.contains("Product description text."),
-            "got: {result}"
-        );
-        assert!(!result.contains("Sidebar promo"), "got: {result}");
+        assert!(result.contains("The actual article body."), "got: {result}");
+        assert!(!result.contains("Sidebar promo copy"), "got: {result}");
         assert!(!result.contains("GeneratePress footer"), "got: {result}");
         assert!(!result.contains("Astra header"), "got: {result}");
+        assert!(!result.contains("Recent posts"), "got: {result}");
+    }
+
+    #[test]
+    fn registered_widget_area_is_removed_but_builder_widgets_are_not() {
+        // The narrow replacement for the deleted `widget` substring: the sidebar
+        // container a theme registers its widgets in, without relying on a
+        // semantic tag, and without touching page-builder content classes.
+        let html = r#"<body>
+            <div class="widget-area"><div class="widget_text">Sidebar promo copy</div></div>
+            <div class="footer-widget_area"><p>Footer widget copy</p></div>
+            <div class="elementor-widget elementor-widget-text-editor">
+              <p>Real page content from a builder widget.</p>
+            </div>
+        </body>"#;
+        let result = clean_html(html, true, &[], &[]).unwrap();
+        assert!(
+            result.contains("Real page content from a builder widget."),
+            "got: {result}"
+        );
+        assert!(!result.contains("Sidebar promo copy"), "got: {result}");
+        assert!(!result.contains("Footer widget copy"), "got: {result}");
+        assert!(
+            !result.contains("Free shipping this week only"),
+            "got: {result}"
+        );
+    }
+
+    #[test]
+    fn hero_banner_copy_survives_but_role_banner_does_not() {
+        // "banner" as a class name is where hero headlines live; `role="banner"`
+        // is the reliable signal for site chrome.
+        let html = r#"<body>
+            <div class="banner banner--product"><h1>KONI 2822 Race Damper</h1>
+              <p>The 2822 MKII Series is the latest offering from KONI.</p></div>
+            <div role="banner"><p>Site wide announcement bar</p></div>
+        </body>"#;
+        let result = clean_html(html, true, &[], &[]).unwrap();
+        assert!(result.contains("KONI 2822 Race Damper"), "got: {result}");
+        assert!(
+            result.contains("The 2822 MKII Series is the latest offering from KONI."),
+            "got: {result}"
+        );
+        assert!(
+            !result.contains("Site wide announcement bar"),
+            "got: {result}"
+        );
     }
 
     #[test]

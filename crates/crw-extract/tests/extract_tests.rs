@@ -678,7 +678,7 @@ fn elementor_page_with_duplicated_nav_extracts_cleanly() {
               </div>
             </div>
           </div>
-          <div class="widget_text">Subscribe to our newsletter today please</div>
+          <aside class="widget_text">Subscribe to our newsletter today please</aside>
         </div>
         </body></html>"#
     );
@@ -735,7 +735,7 @@ fn elementor_page_with_duplicated_nav_extracts_cleanly() {
         "nested nav entry should appear exactly once: {md}"
     );
 
-    // A real widget area is still boilerplate and must go.
+    // A widget area in page chrome is still boilerplate and must go.
     assert!(
         !md.contains("Subscribe to our newsletter today"),
         "widget area survived: {md}"
