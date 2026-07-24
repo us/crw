@@ -183,8 +183,6 @@ fn clean_html_impl(
                 "skiplinks",
                 "promo",
                 "promotional",
-                "widget",
-                "widgets",
                 "site-footer",
                 "site-header",
                 "page-footer",
@@ -221,7 +219,36 @@ fn clean_html_impl(
                 "ads-",
             ];
 
-            let is_noise = NOISE_PATTERNS.iter().any(|p| combined.contains(p)) || {
+            // "widget" needs its own rule. Sidebar/footer widget areas are
+            // boilerplate (WordPress `widget_text`, Divi `et_pb_widget`,
+            // GeneratePress `footer-widgets`, Astra `ast-header-widget-area`),
+            // so any class token containing "widget" is noise by default.
+            //
+            // Elementor is the exception: it wraps EVERY piece of page content
+            // in a widget (the product title on a WooCommerce page is
+            // `elementor-widget-woocommerce-product-title`), so the default rule
+            // empties the whole page. Elementor tags each widget with BOTH
+            // `elementor-widget` and `elementor-widget-{slug}`, so both forms
+            // are treated as content — exempting only the literal wrapper class
+            // names leaves the bare token matching and the page still comes back
+            // empty. The one exception to the exception is `wp-widget-*`, the
+            // classic WordPress sidebar widgets dropped into the layout.
+            //
+            // The trade is precision: an Elementor boilerplate widget whose slug
+            // isn't independently caught (semantic `<nav>`/`<footer>`, or a
+            // NOISE_PATTERNS name like `sidebar`/`popup`/`social-icons`) now
+            // survives `onlyMainContent`. Recall wins over precision here.
+            let widget_noise =
+                combined
+                    .split_whitespace()
+                    .any(|t| match t.strip_prefix("elementor-widget") {
+                        Some(rest) => rest
+                            .strip_prefix('-')
+                            .is_some_and(|slug| slug.starts_with("wp-widget-")),
+                        None => t.contains("widget"),
+                    });
+
+            let is_noise = widget_noise || NOISE_PATTERNS.iter().any(|p| combined.contains(p)) || {
                 let tokens_iter = class.split_whitespace().chain(std::iter::once(id.as_str()));
                 tokens_iter.into_iter().any(|tok| {
                     NOISE_EXACT_TOKENS.contains(&tok)
@@ -422,6 +449,56 @@ mod tests {
         assert!(!result.contains("Menu"));
         assert!(!result.contains("Foot"));
         assert!(result.contains("Content"));
+    }
+
+    #[test]
+    fn keeps_elementor_content_widgets_but_drops_wp_widget_areas() {
+        // Elementor tags every widget with BOTH `elementor-widget` and
+        // `elementor-widget-{slug}`; the product title on a WooCommerce page
+        // lives inside `elementor-widget-woocommerce-product-title`. Missing
+        // either token empties the page (issue #365).
+        let html = r#"<body>
+            <div class="elementor-element elementor-widget elementor-widget-woocommerce-product-title">
+              <h1>30 RK PANORA M 102 STP</h1>
+            </div>
+            <div class="elementor-element elementor-widget elementor-widget-text-editor">
+              <p>Matt tiles offer a sophisticated finish.</p>
+            </div>
+            <div class="elementor-element elementor-widget elementor-widget-wp-widget-nav_menu">
+              <p>Classic sidebar menu</p>
+            </div>
+        </body>"#;
+        let result = clean_html(html, true, &[], &[]).unwrap();
+        assert!(result.contains("30 RK PANORA M 102 STP"), "got: {result}");
+        assert!(
+            result.contains("Matt tiles offer a sophisticated finish."),
+            "got: {result}"
+        );
+        assert!(!result.contains("Classic sidebar menu"), "got: {result}");
+    }
+
+    #[test]
+    fn keeps_elementor_widget_wrappers_but_drops_widget_areas() {
+        // Elementor wraps every piece of page content in `elementor-widget-*`;
+        // a blanket "widget" substring match emptied those pages (issue #365).
+        let html = r#"<body>
+            <div class="elementor-widget-wrap elementor-element-populated">
+              <div class="elementor-widget-container"><h1>Product title</h1>
+              <p>Product description text.</p></div>
+            </div>
+            <div class="widget_text">Sidebar promo</div>
+            <div class="footer-widgets">GeneratePress footer</div>
+            <div class="ast-header-widget-area">Astra header</div>
+        </body>"#;
+        let result = clean_html(html, true, &[], &[]).unwrap();
+        assert!(result.contains("Product title"), "got: {result}");
+        assert!(
+            result.contains("Product description text."),
+            "got: {result}"
+        );
+        assert!(!result.contains("Sidebar promo"), "got: {result}");
+        assert!(!result.contains("GeneratePress footer"), "got: {result}");
+        assert!(!result.contains("Astra header"), "got: {result}");
     }
 
     #[test]

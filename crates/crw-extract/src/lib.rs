@@ -669,6 +669,19 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
         None
     };
 
+    // Collapse the repeated navigation a responsive template ships — a mobile
+    // copy, a desktop copy, one per dropdown. Applied after the candidate is
+    // chosen, so scoring (and therefore which candidate wins) is unaffected.
+    // Skipped without `onlyMainContent`: there the caller asked for the
+    // document as it is.
+    let md = md.map(|m| {
+        if only_main_content {
+            markdown::drop_repeated_nav_lines(&m)
+        } else {
+            m
+        }
+    });
+
     // News/blog templates frequently render the article H1 inside a `<header>`
     // sibling of the scored container, so readability drops it. Prepend the
     // metadata title (preferring the cleaner og:title) when it isn't already

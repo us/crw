@@ -643,3 +643,108 @@ fn css_no_match_extract_returns_empty_single_warning() {
         data.warnings
     );
 }
+
+// Issue #365: an Elementor product page rendered with duplicated responsive
+// navigation used to come back as the whole unfiltered page — six copies of the
+// menu, the footer, a popup form and stray ``` fences where nested lists were.
+// Drives the full extract() path, not the individual helpers.
+//
+// The menus live INSIDE #main, so they reach markdown conversion whichever
+// candidate the ladder picks — that is what makes this guard the real
+// behaviour rather than readability's narrowing.
+#[test]
+fn elementor_page_with_duplicated_nav_extracts_cleanly() {
+    let menu = r#"<div class="elementor-widget-wrap"><ul>
+        <li><a href="/about/">Company overview and history</a>
+          <ul><li><a href="/about/awards/">Awards and certifications page</a></li></ul>
+        </li>
+      </ul></div>"#;
+    // The template ships the same menu three times (desktop, mobile, dropdown).
+    let html = format!(
+        r#"<html><head><title>30 RK PANORA</title></head><body>
+        <div id="main" role="main">
+          {menu}{menu}{menu}
+          <div class="elementor-widget-wrap elementor-element-populated">
+            <div class="elementor-element elementor-widget elementor-widget-woocommerce-product-title">
+              <div class="elementor-widget-container">
+                <h1>30 RK PANORA M 102 STP</h1>
+              </div>
+            </div>
+            <div class="elementor-element elementor-widget elementor-widget-text-editor">
+              <div class="elementor-widget-container">
+                <p>Matt tiles offer a sophisticated, non-shiny surface finish
+                   that suits a timeless and serene interior.</p>
+                <p>Size</p><p>30x120CM</p><p>Surface</p><p>Porcelain Matt</p>
+              </div>
+            </div>
+          </div>
+          <div class="widget_text">Subscribe to our newsletter today please</div>
+        </div>
+        </body></html>"#
+    );
+
+    let data = crw_extract::extract(ExtractOptions {
+        raw_html: &html,
+        source_url: "https://example.com/product/30-rk-panora/",
+        status_code: 200,
+        rendered_with: None,
+        elapsed_ms: 0,
+        render_decision: None,
+        credit_cost: 0,
+        warnings: Vec::new(),
+        formats: &[OutputFormat::Markdown],
+        only_main_content: true,
+        include_tags: &[],
+        exclude_tags: &[],
+        css_selector: None,
+        xpath: None,
+        chunk_strategy: None,
+        query: None,
+        filter_mode: None,
+        top_k: None,
+        domain_selectors: None,
+        captured_responses: &[],
+        llm_fallback: None,
+        debug: false,
+        debug_sink: None,
+    })
+    .unwrap();
+
+    let md = data.markdown.unwrap_or_default();
+
+    // The product content survives onlyMainContent — this is what the
+    // over-broad "widget" class filter used to delete.
+    assert!(md.contains("30 RK PANORA M 102 STP"), "title lost: {md}");
+    assert!(md.contains("Porcelain Matt"), "spec lost: {md}");
+    assert!(
+        md.contains("Matt tiles offer a sophisticated"),
+        "description lost: {md}"
+    );
+
+    // The nav is present exactly once, not three times. Exactly-one, so the
+    // test fails both if dedup is removed and if the nav is dropped wholesale
+    // for the wrong reason.
+    assert_eq!(
+        md.matches("Company overview and history").count(),
+        1,
+        "nav should appear exactly once: {md}"
+    );
+    assert_eq!(
+        md.matches("Awards and certifications page").count(),
+        1,
+        "nested nav entry should appear exactly once: {md}"
+    );
+
+    // A real widget area is still boilerplate and must go.
+    assert!(
+        !md.contains("Subscribe to our newsletter today"),
+        "widget area survived: {md}"
+    );
+
+    // A nested menu list must stay a list, not become a code block.
+    assert!(!md.contains("```"), "spurious code fence: {md}");
+    assert!(
+        md.contains("[Awards and certifications page]"),
+        "nested list link lost: {md}"
+    );
+}
