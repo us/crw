@@ -405,8 +405,10 @@ pub(crate) const MIN_TIER_BUDGET: Duration = Duration::from_millis(500);
 pub(crate) const CHROME_PROXY_ARM_BUDGET_MS: u64 = 12_000;
 
 // Concurrency permits for the chrome_proxy auto-egress recovery arm are sized to
-// `config.pool_size` at construction (see `chrome_proxy_arm_sem`). The residential
-// chrome_proxy pool blocking-acquires a small (~pool_size) slot set; without a
+// `config.chrome_proxy_pool_size()` at construction (see `chrome_proxy_arm_sem`) —
+// falls back to `pool_size` when unset, but can be raised independently so a burst
+// of hard-blocks doesn't compete with the main chrome/lightpanda tiers' pool. The
+// residential chrome_proxy pool blocking-acquires a small (~pool_size) slot set; without a
 // non-blocking load-shed a burst of datacenter-blocked URLs (batch/crawl) would
 // queue every page on it for up to the SaaS 120s timeout, collapsing throughput
 // for co-tenant traffic. The arm `try_acquire_owned`s a permit and skips recovery
@@ -598,7 +600,7 @@ impl FallbackRenderer {
                 chrome_hedge: config.chrome_hedge,
                 hedge_sem: Arc::new(tokio::sync::Semaphore::new((config.pool_size / 2).max(1))),
                 chrome_proxy_arm_sem: Arc::new(tokio::sync::Semaphore::new(
-                    config.pool_size.max(1),
+                    config.chrome_proxy_pool_size(),
                 )),
                 preferences: Arc::new(HostPreferences::with_defaults()),
                 breakers: Arc::new(BreakerRegistry::with_defaults()),
@@ -775,7 +777,7 @@ impl FallbackRenderer {
                         "chrome_proxy",
                         &cp.ws_url,
                         config.chrome_proxy_timeout(),
-                        config.pool_size,
+                        config.chrome_proxy_pool_size(),
                     )
                     .with_user_agent(&effective_ua)
                     .with_nav_budget(config.chrome_nav_budget_ms)
@@ -910,7 +912,9 @@ impl FallbackRenderer {
             auto_egress_escalation: config.auto_egress_escalation,
             chrome_hedge: config.chrome_hedge,
             hedge_sem: Arc::new(tokio::sync::Semaphore::new((config.pool_size / 2).max(1))),
-            chrome_proxy_arm_sem: Arc::new(tokio::sync::Semaphore::new(config.pool_size.max(1))),
+            chrome_proxy_arm_sem: Arc::new(tokio::sync::Semaphore::new(
+                config.chrome_proxy_pool_size(),
+            )),
             preferences: Arc::new(HostPreferences::with_defaults()),
             breakers: Arc::new(BreakerRegistry::with_defaults()),
             tier_timeouts: tier_timeouts_from(config),
@@ -2736,7 +2740,9 @@ impl FallbackRenderer {
             // shared deadline near-exhausted (~2s of a 15s scrape deadline), which
             // starved the arm below any floor and is exactly why it never fired.
             //
-            // The `arm_sem == chrome_proxy conn_semaphore == pool_size` sizing makes
+            // The `arm_sem == chrome_proxy conn_semaphore == chrome_proxy_pool_size()`
+            // sizing (decoupled from the general `pool_size`, see
+            // `Config::chrome_proxy_pool_size`) makes
             // "a permit implies a free pool slot" hold on the managed prod path,
             // where `chrome_proxy` is arm-EXCLUSIVE (`!proxy_active` retained it out
             // of the ladder). In a mixed self-host config that ALSO runs

@@ -626,6 +626,14 @@ pub struct RendererConfig {
     pub chrome_timeout_ms: Option<u64>,
     #[serde(default = "default_pool_size")]
     pub pool_size: usize,
+    /// Concurrency cap for the `chrome_proxy` hard-block recovery arm
+    /// (`auto_egress_escalation`), decoupled from the general `pool_size`.
+    /// `None` falls back to `pool_size` — self-hosters see identical behavior.
+    /// Raise this independently when the arm is shedding recoveries
+    /// (`crw_render_route_decision_total{decision="armShed"}` rising) without
+    /// touching the main chrome/lightpanda tiers' concurrency.
+    #[serde(default)]
+    pub chrome_proxy_pool_size: Option<usize>,
     /// latency-qn: override the chrome post-navigate challenge-clear retry count
     /// (default 3 → 3×3s=9s). Measured at 28% of render time, mostly on shells
     /// that never clear (fail anyway); Firecrawl/Spider run no such loop. Lower
@@ -952,6 +960,7 @@ impl Default for RendererConfig {
             lightpanda_timeout_ms: None,
             chrome_timeout_ms: None,
             pool_size: default_pool_size(),
+            chrome_proxy_pool_size: None,
             chrome_challenge_max_retries: None,
             chrome_spa_selector_max_ms: None,
             chrome_fast_ready: false,
@@ -1011,6 +1020,9 @@ impl RendererConfig {
     pub fn chrome_proxy_timeout(&self) -> u64 {
         self.chrome_proxy_timeout_ms
             .unwrap_or_else(|| self.chrome_timeout().saturating_add(15_000))
+    }
+    pub fn chrome_proxy_pool_size(&self) -> usize {
+        self.chrome_proxy_pool_size.unwrap_or(self.pool_size).max(1)
     }
     pub fn camoufox_timeout(&self) -> u64 {
         self.camoufox_timeout_ms
@@ -1942,6 +1954,36 @@ mod tests {
         let cfg = RendererConfig::default();
         assert_eq!(cfg.mode, RendererMode::Auto);
         assert_eq!(cfg.render_js_default, None);
+    }
+
+    #[test]
+    fn chrome_proxy_pool_size_falls_back_to_pool_size() {
+        let cfg = RendererConfig {
+            pool_size: 8,
+            chrome_proxy_pool_size: None,
+            ..Default::default()
+        };
+        assert_eq!(cfg.chrome_proxy_pool_size(), 8);
+    }
+
+    #[test]
+    fn chrome_proxy_pool_size_explicit_override_wins() {
+        let cfg = RendererConfig {
+            pool_size: 8,
+            chrome_proxy_pool_size: Some(16),
+            ..Default::default()
+        };
+        assert_eq!(cfg.chrome_proxy_pool_size(), 16);
+    }
+
+    #[test]
+    fn chrome_proxy_pool_size_clamps_zero_to_one() {
+        let cfg = RendererConfig {
+            pool_size: 8,
+            chrome_proxy_pool_size: Some(0),
+            ..Default::default()
+        };
+        assert_eq!(cfg.chrome_proxy_pool_size(), 1);
     }
 
     #[cfg(feature = "camoufox")]
