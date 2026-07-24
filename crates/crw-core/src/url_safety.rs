@@ -184,7 +184,7 @@ fn is_blocked_host_name(host: &str) -> bool {
 }
 
 fn is_blocked_ipv4(v4: &std::net::Ipv4Addr) -> bool {
-    let [a, b, _, _] = v4.octets();
+    let [a, b, c, _] = v4.octets();
     v4.is_loopback()                       // 127.0.0.0/8
         || v4.is_private()                 // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
         || v4.is_link_local()              // 169.254.0.0/16 (metadata)
@@ -193,9 +193,14 @@ fn is_blocked_ipv4(v4: &std::net::Ipv4Addr) -> bool {
         || (a == 100 && (64..=127).contains(&b)) // carrier-grade NAT
         || a == 0
         || a >= 224                        // multicast/reserved
-        || (a == 192 && b == 0)
-        || (a == 198 && (b == 18 || b == 19 || b == 51))
-        || (a == 203 && b == 0)
+        // Reserved blocks inside otherwise-public /16s. Match the exact /24s,
+        // not the whole /16: e.g. 192.0.78.0/24 is WordPress.com/Automattic and
+        // must stay reachable — over-blocking 192.0.0.0/16 silently dropped
+        // legitimate sources.
+        || (a == 192 && b == 0 && (c == 0 || c == 2)) // 192.0.0.0/24 + TEST-NET-1 192.0.2.0/24
+        || (a == 198 && (b == 18 || b == 19))         // 198.18.0.0/15 benchmarking
+        || (a == 198 && b == 51 && c == 100)          // TEST-NET-2 198.51.100.0/24
+        || (a == 203 && b == 0 && c == 113) // TEST-NET-3 203.0.113.0/24
 }
 
 fn is_blocked_ip(ip: &IpAddr) -> bool {
@@ -264,6 +269,22 @@ mod tests {
         assert!(validate_safe_url(&url("http://0.0.0.0")).is_err());
         assert!(validate_safe_url(&url("http://100.64.0.1")).is_err());
         assert!(validate_safe_url(&url("http://224.0.0.1")).is_err());
+    }
+
+    #[test]
+    fn blocks_only_reserved_24s_not_whole_16() {
+        // Reserved /24s stay blocked.
+        assert!(validate_safe_url(&url("http://192.0.0.1")).is_err()); // 192.0.0.0/24
+        assert!(validate_safe_url(&url("http://192.0.2.1")).is_err()); // TEST-NET-1
+        assert!(validate_safe_url(&url("http://198.18.0.1")).is_err()); // benchmarking /15
+        assert!(validate_safe_url(&url("http://198.19.0.1")).is_err()); // benchmarking /15
+        assert!(validate_safe_url(&url("http://198.51.100.1")).is_err()); // TEST-NET-2
+        assert!(validate_safe_url(&url("http://203.0.113.1")).is_err()); // TEST-NET-3
+
+        // Public addresses in the SAME /16s must be reachable (were false-positives).
+        assert!(validate_safe_url(&url("http://192.0.78.24")).is_ok()); // WordPress.com/Automattic
+        assert!(validate_safe_url(&url("http://198.51.99.1")).is_ok()); // outside TEST-NET-2 /24
+        assert!(validate_safe_url(&url("http://203.0.112.1")).is_ok()); // outside TEST-NET-3 /24
     }
 
     #[test]
