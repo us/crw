@@ -412,11 +412,35 @@ async fn scrape_url_inner(
             .warning
             .as_deref()
             .is_some_and(|w| w.contains(crw_renderer::JS_ESCALATION_FAILED));
+        // The renderer ladder enforces this same floor per tier; apply it one
+        // layer up so we never DISPATCH an escalation that cannot run. `deadline`
+        // is Copy and is the same one the first fetch already spent, so by this
+        // point it is routinely near-exhausted — prod measured 432 of 536
+        // escalations starting with <50ms of budget, which is where the
+        // "JS escalation after empty markdown failed: Timeout after 1ms" lines
+        // come from. Those attempts cannot succeed; they only burn a pool slot
+        // and hide the real outcome behind a fabricated timeout.
+        let escalation_budget = deadline.remaining();
+        let has_escalation_budget = escalation_budget >= crw_renderer::MIN_TIER_BUDGET;
         let should_escalate = (md_is_byte_thin || escalate_for_quality)
             && used_low_tier
             && !js_ladder_exhausted
             && should_escalate_status
-            && escalation_eligible;
+            && escalation_eligible
+            && has_escalation_budget;
+        if (md_is_byte_thin || escalate_for_quality)
+            && used_low_tier
+            && should_escalate_status
+            && escalation_eligible
+            && !has_escalation_budget
+        {
+            tracing::debug!(
+                url = %req.url,
+                remaining_ms = escalation_budget.as_millis() as u64,
+                min_ms = crw_renderer::MIN_TIER_BUDGET.as_millis() as u64,
+                "skipping JS escalation: not enough deadline left to attempt it"
+            );
+        }
         if should_escalate {
             // If the prior tier was lightpanda (returned 200 with thin/no content
             // that fooled the renderer-level thinness check), force chrome on the

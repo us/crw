@@ -39,6 +39,26 @@ const HTTP_MAX_RETRIES: u32 = 1;
 /// Backoff before the retry attempt. Short — we are inside the request path
 /// and the upstream timeout is 30s, so we cannot afford long sleeps.
 const HTTP_RETRY_BACKOFF: std::time::Duration = std::time::Duration::from_millis(250);
+/// Budget held back from a proxy attempt that was armed mid-loop by a 429 or a
+/// header-announced challenge, so a hanging proxy can always fall back to direct.
+///
+/// Much smaller than [`crate::egress::DIRECT_FALLBACK_RESERVE`] (4s) on purpose:
+/// that one reserves for a FIRST-CONTACT direct attempt on a latched host, while
+/// this one only has to repeat a response we already received milliseconds ago.
+const CHALLENGE_DIRECT_RESERVE: std::time::Duration = std::time::Duration::from_millis(1500);
+/// Ceiling on a single challenge-armed proxy attempt, independent of how much
+/// deadline is left.
+///
+/// Without a ceiling the attempt gets `remaining - CHALLENGE_DIRECT_RESERVE`,
+/// which on the 15s search budget is 13.5s — so a hanging exit burns almost the
+/// whole request and THEN returns the same empty body the origin gave us in 70ms.
+/// That is a p90 regression on exactly the class this change exists to improve.
+///
+/// 6s comes from the measured distribution of the residential exit on the
+/// affected hosts: p50 2.3s, with one 38.2s outlier. It covers the realistic
+/// success cases with >2x headroom while capping the wasted wall-clock when the
+/// exit is in its bad tail. Everything above it stays with the direct rescue.
+const CHALLENGE_PROXY_MAX: std::time::Duration = std::time::Duration::from_secs(6);
 
 /// Returns true if a `reqwest::Error` is worth retrying on the SAME egress.
 /// Read-phase timeouts only (`is_timeout` without `is_connect`): the origin
@@ -109,12 +129,64 @@ fn is_ratelimit_status(status: u16) -> bool {
     matches!(status, 429)
 }
 
+/// A vendor challenge announced in a response header, independent of status and
+/// body. Both variants mean "this origin refused *this egress IP*", which is
+/// exactly the class a different egress can clear.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ChallengeHeader {
+    CloudflareMitigated,
+    AwsWaf,
+}
+
+impl ChallengeHeader {
+    /// Stable marker written to `FetchResult::warning`; `crate::fetch_inner`
+    /// matches on it to decide whether to escalate.
+    pub(crate) fn marker(self) -> &'static str {
+        match self {
+            Self::CloudflareMitigated => "cloudflare_mitigated",
+            Self::AwsWaf => "waf_challenge",
+        }
+    }
+
+    /// Customer-visible text. Kept next to the marker so an AWS-WAF block can
+    /// never be reported to the caller as a Cloudflare one (the previous text
+    /// was hardcoded and reaches the API via `crw_crawl::single`).
+    pub(crate) fn warning_text(self) -> &'static str {
+        match self {
+            Self::CloudflareMitigated => {
+                "cf-mitigated header indicates Cloudflare challenge or block"
+            }
+            Self::AwsWaf => "x-amzn-waf-action header indicates an AWS WAF challenge",
+        }
+    }
+}
+
+/// Detect a header-announced challenge on a response.
+///
+/// Dispatches on header NAME to its own predicate — the two value lists differ
+/// (`cf-mitigated`: challenge|block, `x-amzn-waf-action`: challenge|captcha) and
+/// merging them would silently change the pre-existing Cloudflare behaviour.
+///
+/// Factored because the same read appeared verbatim at three points in the retry
+/// state machine (direct retry arm, latched-proxy rescue guard, and the final
+/// `FetchResult` stamp), each against a different response value.
+pub(crate) fn challenge_header(headers: &reqwest::header::HeaderMap) -> Option<ChallengeHeader> {
+    let value = |name: &str| headers.get(name).and_then(|v| v.to_str().ok());
+    if value("cf-mitigated").is_some_and(crate::detector::is_cloudflare_mitigated_header) {
+        return Some(ChallengeHeader::CloudflareMitigated);
+    }
+    if value("x-amzn-waf-action").is_some_and(crate::detector::is_aws_waf_action_header) {
+        return Some(ChallengeHeader::AwsWaf);
+    }
+    None
+}
+
 /// Should the fetch retry once through the fallback proxy? True on an explicit
-/// rate-limit status (429) OR when the `cf-mitigated` response header flags a
-/// Cloudflare challenge/block — the header is a positive signal, so a different
-/// egress IP may clear it even when served as 200/403/503. Pure for unit test.
-fn should_arm_proxy(status: u16, cf_mitigated: bool) -> bool {
-    is_ratelimit_status(status) || cf_mitigated
+/// rate-limit status (429) OR when a response header flags a vendor
+/// challenge — the header is a positive signal, so a different egress IP may
+/// clear it even when served as 200/202/403/503. Pure for unit test.
+fn should_arm_proxy(status: u16, challenge: Option<ChallengeHeader>) -> bool {
+    is_ratelimit_status(status) || challenge.is_some()
 }
 
 /// Is `CRW_HTTP_TLS_RELAXED_FALLBACK` enabled? When on, a fetch that fails TLS
@@ -138,6 +210,28 @@ fn tls_relaxed_fallback_enabled() -> bool {
 /// behind a single shared IP when a huge proxy pool is available. Unset (or
 /// empty) = behavior identical to before (no proxy retry). SSRF protection is
 /// unaffected (it runs on the resolved target URL, not the proxy hop).
+/// Does the environment configure a proxy that `reqwest` will pick up on its own?
+///
+/// `build_client` does not call `.no_proxy()`, so reqwest honours `HTTP_PROXY` /
+/// `HTTPS_PROXY` / `ALL_PROXY` automatically. A fetcher built with `proxy: None`
+/// therefore still egresses through a proxy when those are set — which would make
+/// the egress-latch hooks below attribute a proxy-observed block to DIRECT
+/// traffic, latch it, and demote every other caller's healthy direct egress.
+/// Unset on the managed deployment; load-bearing for self-hosters behind a
+/// corporate proxy.
+fn env_proxy_configured() -> bool {
+    [
+        "HTTP_PROXY",
+        "http_proxy",
+        "HTTPS_PROXY",
+        "https_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+    ]
+    .iter()
+    .any(|k| std::env::var(k).is_ok_and(|v| !v.trim().is_empty()))
+}
+
 fn ratelimit_proxy_url() -> Option<String> {
     std::env::var("CRW_HTTP_RATELIMIT_PROXY_URL")
         .ok()
@@ -230,6 +324,13 @@ pub struct HttpFetcher {
     /// different egress IP (`is_ratelimit_status`); `None` keeps behavior
     /// identical to before.
     ratelimit_proxy_client: Option<reqwest::Client>,
+    /// True when the PRIMARY `client` already egresses through a proxy (config
+    /// rotation / BYOP via [`Self::with_proxy`]). Egress provenance is not
+    /// otherwise recoverable: `use_proxy` stays `false` for such a fetcher even
+    /// though every request leaves through a proxy, so without this flag the
+    /// egress-latch write hooks below would record a proxy-observed block as a
+    /// DIRECT one and demote every other caller's healthy direct traffic.
+    has_static_proxy: bool,
     inject_stealth_headers: bool,
 }
 
@@ -241,6 +342,14 @@ impl HttpFetcher {
             inject_stealth_headers,
             HTTP_REQUEST_TIMEOUT,
         )
+    }
+
+    /// Did a usable fallback-proxy client actually build? Distinct from "the env
+    /// var is set": a malformed `CRW_HTTP_RATELIMIT_PROXY_URL` leaves this `None`,
+    /// and callers reasoning about whether a recovery egress EXISTS must not be
+    /// fooled by a typo.
+    pub fn has_ratelimit_proxy(&self) -> bool {
+        self.ratelimit_proxy_client.is_some()
     }
 
     /// Same as [`Self::new`] but with a caller-supplied request timeout.
@@ -271,6 +380,7 @@ impl HttpFetcher {
             client,
             relaxed_client,
             ratelimit_proxy_client,
+            has_static_proxy: proxy.is_some() || env_proxy_configured(),
             inject_stealth_headers,
         }
     }
@@ -298,6 +408,7 @@ impl HttpFetcher {
             client,
             relaxed_client,
             ratelimit_proxy_client,
+            has_static_proxy: true,
             inject_stealth_headers,
         })
     }
@@ -377,6 +488,19 @@ impl PageFetcher for HttpFetcher {
         };
         let mut use_proxy = proxy_first;
         let mut direct_rescue_used = false;
+        // Set when the proxy is armed MID-LOOP (by a 429 or a header-announced
+        // challenge) rather than by the latch. Such an attempt needs the same
+        // direct-rescue guarantee the latched path gets, or a hung proxy turns a
+        // soft response into a hard Timeout.
+        let mut armed_mid_loop = false;
+        // Narrower: armed specifically by a challenge HEADER. Only this case takes
+        // the challenge budget shaping below. The 429 arm predates this change and
+        // its budget behaviour is deliberately left byte-identical — the 6s ceiling
+        // is derived from the residential exit's distribution on the AWS-WAF hosts
+        // in this ticket, which says nothing about the rate-limited population, and
+        // capping it would newly time out a slow-but-working exit on the 15s search
+        // and 92.5s crawl budgets.
+        let mut armed_from_challenge = false;
         if proxy_first {
             let m = crw_core::metrics::metrics();
             m.egress_latch_hit_total.inc();
@@ -406,8 +530,36 @@ impl PageFetcher for HttpFetcher {
             // origin no longer fits in it. `proxy_first` already guarantees the
             // budget is at least MIN_BUDGET_FOR_LATCH, so this subtraction always
             // leaves a real proxy attempt behind.
-            let attempt_budget = if use_proxy && proxy_first && !direct_rescue_used {
-                remaining.saturating_sub(crate::egress::DIRECT_FALLBACK_RESERVE)
+            //
+            // The challenge-armed case (`armed_from_challenge`) needs a reserve
+            // too — without one, a hung proxy consumes the whole deadline, the
+            // rescue arm switches to direct, and the next loop iteration finds
+            // zero budget and returns Timeout anyway. But it must NOT use
+            // DIRECT_FALLBACK_RESERVE: on a 5s scrape that leaves ~0.9s, which
+            // `attempt_budget.is_zero()` immediately hands back to direct, making
+            // the whole retry inert.
+            //
+            // `CHALLENGE_DIRECT_RESERVE`, capped at half of what is left: the
+            // direct response this arm rescues to is one we ALREADY received
+            // (that is what armed the proxy), so the rescue only has to repeat a
+            // request measured at ~70ms — it does not need the full 4s a latched
+            // first-contact rescue does. On a 5s scrape that leaves the proxy
+            // ~3.4s against a measured p50 of 2.3s; a flat `remaining / 2` left
+            // only 2.4s, i.e. 165ms of headroom over p50, which would have made
+            // F3a a coin flip on the tightest real budget. The `/ 2` cap keeps a
+            // rescue reachable when very little time is left.
+            let attempt_budget = if use_proxy && !direct_rescue_used {
+                if proxy_first {
+                    remaining.saturating_sub(crate::egress::DIRECT_FALLBACK_RESERVE)
+                } else if armed_from_challenge {
+                    let after_reserve = remaining
+                        .saturating_sub(std::cmp::min(remaining / 2, CHALLENGE_DIRECT_RESERVE));
+                    // Capped so a large budget does not turn a hanging exit into a
+                    // 13.5s wait for the same empty body direct returned in 70ms.
+                    std::cmp::min(after_reserve, CHALLENGE_PROXY_MAX)
+                } else {
+                    remaining
+                }
             } else {
                 remaining
             };
@@ -441,7 +593,7 @@ impl PageFetcher for HttpFetcher {
                 // This is the case the reserve exists for: fall back to direct with
                 // the budget we held back, instead of failing the whole fetch on a
                 // proxy that a latch — possibly a false one — put in front of it.
-                Err(_) if use_proxy && proxy_first && !direct_rescue_used => {
+                Err(_) if use_proxy && (proxy_first || armed_mid_loop) && !direct_rescue_used => {
                     tracing::warn!(
                         "proxy attempt for {url} exhausted its budget while latched; falling back to direct"
                     );
@@ -479,30 +631,33 @@ impl PageFetcher for HttpFetcher {
                         // burn the rescue budget on an attempt we know fails.
                         && !direct_rescue_used
                         && self.ratelimit_proxy_client.is_some()
-                        && should_arm_proxy(
-                            r.status().as_u16(),
-                            r.headers()
-                                .get("cf-mitigated")
-                                .and_then(|v| v.to_str().ok())
-                                .map(crate::detector::is_cloudflare_mitigated_header)
-                                .unwrap_or(false),
-                        ) =>
+                        && should_arm_proxy(r.status().as_u16(), challenge_header(r.headers())) =>
                 {
+                    let armed_by_header = challenge_header(r.headers()).is_some();
                     tracing::warn!(
-                        "HTTP {} from {url} (origin rate-limited or cf-mitigated); retrying once via proxy (ratelimit_bypassed)",
+                        "HTTP {} from {url} (origin rate-limited or header-announced challenge); retrying once via proxy (ratelimit_bypassed)",
                         r.status()
                     );
                     drop(r);
-                    // WRITE HOOK — direct-only by construction: this arm is gated on
-                    // `!use_proxy`, so the block we just saw was observed on a
-                    // genuine direct attempt. Remember it, so the next URL on this
-                    // host starts on the proxy instead of paying the climb again.
+                    // The proxy was armed mid-loop, so `proxy_first` is false and
+                    // the three rescue arms below would not fire for it. Arm them
+                    // explicitly, or a hung proxy eats the whole deadline and turns
+                    // a soft empty response into a hard Timeout.
+                    armed_mid_loop = true;
+                    armed_from_challenge = armed_by_header;
+                    // WRITE HOOK — direct-only: this arm is gated on `!use_proxy`,
+                    // AND on `!has_static_proxy` because a BYOP/config-rotation
+                    // fetcher egresses through a proxy while `use_proxy` stays
+                    // false. Remember it, so the next URL on this host starts on
+                    // the proxy instead of paying the climb again.
                     //
                     // A block seen *through* a proxy must never land here: it would
                     // say the proxy is blocked, not direct, and would let one
                     // caller's broken proxy demote every other caller's healthy
                     // direct traffic onto paid bandwidth.
-                    if let Some(h) = &host {
+                    if let Some(h) = &host
+                        && !self.has_static_proxy
+                    {
                         let eg = crate::egress::global();
                         eg.note_block(h).await;
                         crw_core::metrics::metrics()
@@ -535,14 +690,10 @@ impl PageFetcher for HttpFetcher {
                 // never wastes the rescue.
                 Ok(Ok(r))
                     if use_proxy
-                        && proxy_first
+                        && (proxy_first || armed_mid_loop)
                         && !direct_rescue_used
                         && (!r.status().is_success()
-                            || r.headers()
-                                .get("cf-mitigated")
-                                .and_then(|v| v.to_str().ok())
-                                .map(crate::detector::is_cloudflare_mitigated_header)
-                                .unwrap_or(false)) =>
+                            || challenge_header(r.headers()).is_some()) =>
                 {
                     tracing::warn!(
                         "HTTP {} from {url} via proxy while latched; falling back to direct",
@@ -566,7 +717,9 @@ impl PageFetcher for HttpFetcher {
                 // every scrape of a latched host into a hard failure for the whole
                 // cooldown — a scrape-success regression, and precisely the case the
                 // "reorder, never suppress" rule exists to prevent.
-                Ok(Err(_)) if use_proxy && proxy_first && !direct_rescue_used => {
+                Ok(Err(_))
+                    if use_proxy && (proxy_first || armed_mid_loop) && !direct_rescue_used =>
+                {
                     tracing::warn!(
                         "proxy egress failed for {url} while latched; falling back to direct"
                     );
@@ -675,21 +828,45 @@ impl PageFetcher for HttpFetcher {
             .as_deref()
             .and_then(charset_from_content_type);
 
-        let cf_mitigated = resp
-            .headers()
-            .get("cf-mitigated")
-            .and_then(|v| v.to_str().ok())
-            .map(crate::detector::is_cloudflare_mitigated_header)
-            .unwrap_or(false);
+        let challenge = challenge_header(resp.headers());
 
         let is_pdf = content_type.as_deref() == Some("application/pdf");
 
         let final_url_str = resp.url().as_str().to_string();
 
-        let bytes = resp
-            .bytes()
-            .await
-            .map_err(|e| CrwError::HttpError(e.to_string()))?;
+        // Bound the body read by the caller's remaining budget. Without this the
+        // read is governed only by the client-level `HTTP_REQUEST_TIMEOUT` (30s),
+        // so an origin (or proxy exit) that sends headers promptly and then stalls
+        // the body blows straight through a 5-15s request deadline.
+        //
+        // Floored at MIN_TIER_BUDGET, NOT at ~0: `send()` resolves on HEADERS, and
+        // the attempt above may legitimately have consumed almost the whole
+        // deadline reaching them. A bare `remaining` would hand a slow-TTFB origin
+        // a sliver of a millisecond to stream a body it would have delivered in
+        // 200ms — turning "late but complete" into a hard error, which is strictly
+        // worse than the 30s blow-through this bound exists to stop (`Ok` counts
+        // toward scrape success; `Err` does not).
+        //
+        // ponytail: known residual, deliberately not fixed here. The loop exits on
+        // a clean 2xx BEFORE the body is known, so a challenge-armed proxy that
+        // sends 200 headers and then stalls yields an error rather than falling
+        // back to direct — the same shape the pre-existing 429 arm has always had.
+        // Fixing it properly means restructuring `fetch` so the body read sits
+        // inside the retry loop; that is a bigger change than this ticket, and the
+        // failure needs a proxy that answers headers and then dies.
+        let bytes = match tokio::time::timeout(
+            deadline.remaining().max(crate::MIN_TIER_BUDGET),
+            resp.bytes(),
+        )
+        .await
+        {
+            Ok(r) => r.map_err(|e| CrwError::HttpError(e.to_string()))?,
+            Err(_) => {
+                return Err(CrwError::Timeout(
+                    (start.elapsed().as_millis().max(1)) as u64,
+                ));
+            }
+        };
 
         if bytes.len() > MAX_RESPONSE_BYTES {
             return Err(CrwError::HttpError(format!(
@@ -703,6 +880,51 @@ impl PageFetcher for HttpFetcher {
         } else {
             (decode_html_bytes(&bytes, header_charset.as_deref()), None)
         };
+
+        // SECOND WRITE HOOK — body-verdict blocks that carry no header and no
+        // block status, which is how Wikimedia serves its datacenter-IP ban
+        // (the canonical footer phrase in a `<body>`-less shell; see
+        // `detector::looks_like_generic_bot_wall`). The header hook above cannot
+        // see those, and the arm it sits in never fires for them, so without this
+        // every URL on such a host re-climbs the whole doomed ladder.
+        //
+        // Placed HERE rather than in `crate::fetch_inner` on purpose: this is the
+        // only point where the decoded body and the egress provenance
+        // (`use_proxy` / `has_static_proxy`) are both in scope. Latching from the
+        // renderer would be unable to tell a direct block from a proxied one, and
+        // a proxy-observed block would re-latch on every request — the TTL would
+        // never expire, so direct would never be re-probed and the host would be
+        // pinned to paid egress permanently.
+        //
+        // Fingerprint walls are excluded: a residential IP does not clear a
+        // Cloudflare managed challenge or a vendor SDK wall, so latching one only
+        // burns paid bandwidth.
+        //
+        // ponytail: `antibot::classify` deliberately does not run on this tier, so
+        // a vendor wall recognisable only from visible text (a PerimeterX/Imperva
+        // page with no SDK marker) is not excluded here and can latch for the
+        // 10-minute TTL. Bounded — the latch only reorders egress, never suppresses
+        // direct. Upgrade path if it ever matters: thread the classifier verdict
+        // down instead of adding a second classify() call to this hot path.
+        if !use_proxy
+            && !self.has_static_proxy
+            && !is_pdf
+            && let Some(h) = &host
+            && crate::detector::looks_like_generic_bot_wall(&html)
+            && !crate::detector::looks_like_cloudflare_challenge(&html)
+            && crate::detector::looks_like_vendor_block(&html).is_none()
+        {
+            let eg = crate::egress::global();
+            eg.note_block(h).await;
+            crw_core::metrics::metrics()
+                .egress_latched_hosts
+                .set(eg.latched_hosts() as i64);
+            tracing::info!(
+                url,
+                status,
+                "direct egress hit an IP-reputation block; latching host to proxy-first"
+            );
+        }
 
         let final_url = if final_url_str != url {
             Some(final_url_str)
@@ -723,18 +945,12 @@ impl PageFetcher for HttpFetcher {
                 Some("http".to_string())
             },
             elapsed_ms: start.elapsed().as_millis() as u64,
-            warning: if cf_mitigated {
-                Some("cloudflare_mitigated".to_string())
-            } else {
-                None
-            },
+            warning: challenge.map(|c| c.marker().to_string()),
             render_decision: None,
             credit_cost: 0,
-            warnings: if cf_mitigated {
-                vec!["cf-mitigated header indicates Cloudflare challenge or block".to_string()]
-            } else {
-                Vec::new()
-            },
+            warnings: challenge
+                .map(|c| vec![c.warning_text().to_string()])
+                .unwrap_or_default(),
             truncated: false,
             deadline_exceeded: false,
             captured_responses: Vec::new(),
@@ -811,14 +1027,71 @@ mod tests {
 
     #[test]
     fn should_arm_proxy_truth_table() {
-        assert!(should_arm_proxy(429, false), "429 arms on its own");
+        use ChallengeHeader::{AwsWaf, CloudflareMitigated};
+        assert!(should_arm_proxy(429, None), "429 arms on its own");
         assert!(
-            !should_arm_proxy(403, false),
+            !should_arm_proxy(403, None),
             "403 without header does not arm"
         );
-        assert!(should_arm_proxy(403, true), "403 + cf-mitigated arms");
-        assert!(should_arm_proxy(200, true), "challenge served as 200 arms");
-        assert!(!should_arm_proxy(200, false), "clean 200 does not arm");
+        assert!(
+            should_arm_proxy(403, Some(CloudflareMitigated)),
+            "403 + cf-mitigated arms"
+        );
+        assert!(
+            should_arm_proxy(200, Some(CloudflareMitigated)),
+            "challenge served as 200 arms"
+        );
+        assert!(!should_arm_proxy(200, None), "clean 200 does not arm");
+        // The AWS-WAF shape: 202 with an empty body. Nothing in the status or
+        // the body says "blocked", so without the header this response is
+        // indistinguishable from a legitimate empty 202.
+        assert!(
+            should_arm_proxy(202, Some(AwsWaf)),
+            "202 + x-amzn-waf-action arms"
+        );
+        assert!(!should_arm_proxy(202, None), "bare 202 does not arm");
+    }
+
+    fn header_map(pairs: &[(&str, &str)]) -> reqwest::header::HeaderMap {
+        let mut h = reqwest::header::HeaderMap::new();
+        for (k, v) in pairs {
+            h.insert(
+                reqwest::header::HeaderName::from_bytes(k.as_bytes()).unwrap(),
+                v.parse().unwrap(),
+            );
+        }
+        h
+    }
+
+    /// The two header predicates must NOT share a value list: `cf-mitigated`
+    /// uses challenge|block, `x-amzn-waf-action` uses challenge|captcha. Merging
+    /// them would silently drop `block` from the pre-existing Cloudflare path.
+    #[test]
+    fn challenge_header_keeps_the_two_value_lists_separate() {
+        use ChallengeHeader::{AwsWaf, CloudflareMitigated};
+        assert_eq!(
+            challenge_header(&header_map(&[("cf-mitigated", "block")])),
+            Some(CloudflareMitigated),
+            "cf-mitigated: block must still arm"
+        );
+        assert_eq!(
+            challenge_header(&header_map(&[("x-amzn-waf-action", "captcha")])),
+            Some(AwsWaf)
+        );
+        assert_eq!(
+            challenge_header(&header_map(&[("x-amzn-waf-action", "CHALLENGE")])),
+            Some(AwsWaf),
+            "header values are matched case-insensitively"
+        );
+        assert_eq!(
+            challenge_header(&header_map(&[("x-amzn-waf-action", "block")])),
+            None,
+            "`block` is not a documented value of this header"
+        );
+        assert_eq!(challenge_header(&header_map(&[])), None);
+        // The customer-visible text must name the right vendor.
+        assert!(AwsWaf.warning_text().contains("AWS WAF"));
+        assert!(CloudflareMitigated.warning_text().contains("Cloudflare"));
     }
 
     /// Complete the handshake, read the request, THEN abort with RST
@@ -982,6 +1255,7 @@ mod tests {
         let fetcher = HttpFetcher {
             client: reqwest::Client::new(),
             relaxed_client: None,
+            has_static_proxy: false,
             ratelimit_proxy_client: Some(
                 build_client(
                     "test-ua",
@@ -1020,6 +1294,7 @@ mod tests {
             client: reqwest::Client::new(),
             relaxed_client: None,
             ratelimit_proxy_client: None,
+            has_static_proxy: false,
             inject_stealth_headers: false,
         };
         let err = fetcher
@@ -1081,6 +1356,7 @@ mod tests {
             client: reqwest::Client::new(),
             relaxed_client: None,
             ratelimit_proxy_client: None,
+            has_static_proxy: false,
             inject_stealth_headers: false,
         };
         let _ = fetcher
@@ -1115,6 +1391,7 @@ mod tests {
         let fetcher = HttpFetcher {
             client: reqwest::Client::new(),
             relaxed_client: None,
+            has_static_proxy: false,
             ratelimit_proxy_client: Some(
                 build_client(
                     "ua",

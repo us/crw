@@ -313,6 +313,65 @@ struct JsAttemptClass {
 /// residential egress DOES recover — those still fire the arm. The `vendor_block`
 /// "cloudflare" arm is deliberately excluded (CF is matched via `cf_challenge`)
 /// so a CF error-1020 IP block is NOT wrongly suppressed.
+/// See [`FallbackRenderer::has_recovery_tier`]. True when SOME tier can plausibly
+/// clear an IP-reputation block: residential CDP egress, a stealth tier that the
+/// auto path can actually reach, or a usable fallback HTTP proxy.
+///
+/// Every input is the REAL constructed thing, never a config flag or an env var:
+///   * a `chrome_proxy` / `camoufox` entry present in `js_renderers` — camoufox
+///     with `include_in_auto = false` is filtered out of the auto chain per
+///     request, so it is excluded here too or a self-hoster who configured it
+///     for pinned use only would silently lose the breaker's brake;
+///   * `cloak_arm`, which is stored OUTSIDE `js_renderers` and would otherwise
+///     read as "no recovery" while a perfectly good recovery tier exists;
+///   * the concrete fetcher's `has_ratelimit_proxy()`, not the env var — a malformed
+///     `CRW_HTTP_RATELIMIT_PROXY_URL` leaves the client `None`, and a typo must
+///     not be mistaken for a recovery egress.
+fn has_recovery_tier(
+    config: &crw_core::config::RendererConfig,
+    js_renderers: &[Arc<dyn PageFetcher>],
+    cloak_arm_present: bool,
+    http_fallback_proxy_ready: bool,
+) -> bool {
+    let auto_reachable = |name: &str| {
+        js_renderers.iter().any(|r| r.name() == name)
+            && match name {
+                "camoufox" => config
+                    .camoufox
+                    .as_ref()
+                    .is_some_and(|cf| cf.include_in_auto),
+                _ => true,
+            }
+    };
+    auto_reachable("chrome_proxy")
+        || auto_reachable("camoufox")
+        || cloak_arm_present
+        || http_fallback_proxy_ready
+}
+
+/// May a browser render plausibly reveal more than this response body did?
+///
+/// The HTTP tier decodes every non-PDF response as HTML regardless of its
+/// declared type, so an empty `application/json` / `text/plain` / `image/*` /
+/// archive response is indistinguishable from an empty HTML shell by body shape
+/// alone. A browser cannot add content to any of those, so escalating them buys
+/// nothing but latency. Absent or unrecognised types stay eligible: a server
+/// that omits `Content-Type` on a bot-wall shell is exactly the case worth
+/// escalating.
+fn content_type_allows_js_escalation(content_type: Option<&str>) -> bool {
+    match content_type {
+        None => true,
+        Some(ct) => {
+            let ct = ct.trim().to_ascii_lowercase();
+            ct.is_empty()
+                || ct == "text/html"
+                || ct == "application/xhtml+xml"
+                || ct == "application/xml"
+                || ct == "text/xml"
+        }
+    }
+}
+
 fn is_fingerprint_vendor_wall(
     cf_challenge: bool,
     vendor_block: Option<&str>,
@@ -416,7 +475,7 @@ fn is_soft_block_status(status_code: u16) -> bool {
 /// `Timeout after Nms` (single-digit N) while still consuming a pool slot.
 /// Guards the main ladder loop, the hedge dispatch, the breaker leak-through arm,
 /// and the HTTP tier's proxy retry (`http_only`).
-pub(crate) const MIN_TIER_BUDGET: Duration = Duration::from_millis(500);
+pub const MIN_TIER_BUDGET: Duration = Duration::from_millis(500);
 
 /// Fresh render budget the `chrome_proxy` auto-egress recovery arm gets when it
 /// fires, instead of the shared request deadline. The HTTP/LightPanda/Chrome
@@ -475,6 +534,19 @@ pub struct FallbackRenderer {
     /// the residential pool (see [`CHROME_PROXY_ARM_BUDGET_MS`]). Sized to
     /// `pool_size` so at most a poolful of arms run and none blocks.
     chrome_proxy_arm_sem: Arc<tokio::sync::Semaphore>,
+    /// Is there any tier that could actually clear an IP-reputation block —
+    /// residential CDP egress, the stealth tier, or a fallback HTTP proxy?
+    ///
+    /// Gates the `SiteBlocked` breaker classification. Ignoring a site block in
+    /// the failure window only pays off when something downstream can recover
+    /// the page. Where nothing can (the common self-host build: no
+    /// `chrome_proxy`, no cloak, no `CRW_HTTP_RATELIMIT_PROXY_URL`), every tier
+    /// egresses from the same banned IP, so suppressing the breaker would make a
+    /// permanently blocked host re-walk the whole serial ladder on every request
+    /// — measured ~3-6s/page against ~0.5s once the breaker opens, i.e. a 6-12x
+    /// slowdown on a crawl, buying exactly zero recall. There, the breaker keeps
+    /// its brake and behaviour is unchanged.
+    has_recovery_tier: bool,
     /// Per-host renderer preference learning (auto-mode only).
     preferences: Arc<HostPreferences>,
     /// Per-host + global circuit breakers per renderer.
@@ -566,12 +638,17 @@ impl FallbackRenderer {
         if let Some(p) = proxy {
             crw_core::ProxyEntry::parse(p).map_err(CrwError::ConfigError)?;
         }
-        let http = Arc::new(http_only::HttpFetcher::with_timeout(
+        let http_concrete = http_only::HttpFetcher::with_timeout(
             &effective_ua,
             proxy,
             inject_headers,
             std::time::Duration::from_millis(http_timeout_ms),
-        )) as Arc<dyn PageFetcher>;
+        );
+        // Read off the CONCRETE fetcher: once coerced to `Arc<dyn PageFetcher>` the
+        // proxy-availability question is no longer askable, and asking the env var
+        // instead would call a malformed URL a working recovery egress.
+        let http_fallback_proxy_ready = http_concrete.has_ratelimit_proxy();
+        let http = Arc::new(http_concrete) as Arc<dyn PageFetcher>;
 
         // A pinned backend (Lightpanda/Chrome/Playwright) must have CDP compiled in
         // AND its matching endpoint configured. `Auto` and `None` remain functional
@@ -632,6 +709,9 @@ impl FallbackRenderer {
                 chrome_proxy_arm_sem: Arc::new(tokio::sync::Semaphore::new(
                     config.chrome_proxy_pool_size(),
                 )),
+                // `mode = none` builds no JS tier at all, so the only possible
+                // recovery is the HTTP fallback proxy.
+                has_recovery_tier: http_fallback_proxy_ready,
                 preferences: Arc::new(HostPreferences::with_defaults()),
                 breakers: Arc::new(BreakerRegistry::with_defaults()),
                 tier_timeouts: tier_timeouts_from(config),
@@ -934,6 +1014,19 @@ impl FallbackRenderer {
             );
         }
 
+        // The cloak arm is feature-gated and lives outside `js_renderers`, so its
+        // presence has to be reduced to a bool here — a lean build has no such
+        // binding at all.
+        #[cfg(feature = "cloak")]
+        let cloak_arm_present = cloak_arm.is_some();
+        #[cfg(not(feature = "cloak"))]
+        let cloak_arm_present = false;
+        let recovery_tier_available = has_recovery_tier(
+            config,
+            &js_renderers,
+            cloak_arm_present,
+            http_fallback_proxy_ready,
+        );
         Ok(Self {
             http,
             js_renderers,
@@ -945,6 +1038,7 @@ impl FallbackRenderer {
             chrome_proxy_arm_sem: Arc::new(tokio::sync::Semaphore::new(
                 config.chrome_proxy_pool_size(),
             )),
+            has_recovery_tier: recovery_tier_available,
             preferences: Arc::new(HostPreferences::with_defaults()),
             breakers: Arc::new(BreakerRegistry::with_defaults()),
             tier_timeouts: tier_timeouts_from(config),
@@ -1096,6 +1190,13 @@ impl FallbackRenderer {
 
     /// Names of the configured JS renderers in fallback order.
     /// Used for startup logs and tests — does not leak internal types.
+    /// Is some tier configured that could actually clear an IP-reputation block?
+    /// Exposed for the integration test that pins the self-host trade-off; see
+    /// the field docs.
+    pub fn has_recovery_tier(&self) -> bool {
+        self.has_recovery_tier
+    }
+
     pub fn js_renderer_names(&self) -> Vec<&str> {
         self.js_renderers.iter().map(|r| r.name()).collect()
     }
@@ -1349,7 +1450,11 @@ impl FallbackRenderer {
                                     >= Self::MIN_RENDERED_TEXT_LEN
                                     && detector::looks_like_failed_render(&r.html).is_none()
                                     && !detector::looks_like_loading_placeholder(&r.html)
-                                    && !detector::looks_like_cloudflare_challenge(&r.html);
+                                    && !detector::looks_like_cloudflare_challenge(&r.html)
+                                    // See the recovery arms: CF alone is not the
+                                    // only wall this tier can fail to clear.
+                                    && !detector::looks_like_generic_bot_wall(&r.html)
+                                    && detector::looks_like_vendor_block(&r.html).is_none();
                                 // Ship only a fully-rendered body: a curl_cffi shell
                                 // that passes `arm_ok` but is thin still falls
                                 // through to chrome (RED-2).
@@ -1639,9 +1744,26 @@ impl FallbackRenderer {
                 }
 
                 let needs_js = detector::needs_js_rendering(&result.html);
-                let cf_header_signal = result.warning.as_deref() == Some("cloudflare_mitigated");
+                // Either header-announced vendor challenge (`cf-mitigated` or
+                // `x-amzn-waf-action`). Independent of status and body, so it
+                // catches the AWS-WAF shape that carries NO body to inspect:
+                // HTTP 202 + content-length 0, which every body detector misses.
+                //
+                // The AWS half is additionally gated on `!is_hard_pinned`. The
+                // pinned path surfaces a JS failure as an error instead of falling
+                // back to the HTTP body (`Err(e) if is_hard_pinned`), so letting
+                // the new signal escalate a pinned request would convert today's
+                // `Ok`-with-an-empty-202 into a 5xx — the same debit the
+                // `!is_hard_pinned` term on `is_empty_2xx` exists to prevent, one
+                // line over. `cloudflare_mitigated` keeps its pre-existing
+                // behaviour untouched; this change adds no new pinned failure.
+                let challenge_header_signal = match result.warning.as_deref() {
+                    Some("cloudflare_mitigated") => true,
+                    Some("waf_challenge") => !is_hard_pinned,
+                    _ => false,
+                };
                 let is_generic_bot_wall = detector::looks_like_generic_bot_wall(&result.html);
-                let is_blocked = cf_header_signal
+                let is_blocked = challenge_header_signal
                     || detector::looks_like_cloudflare_challenge(&result.html)
                     || is_generic_bot_wall;
                 let is_auth_blocked = is_soft_block_status(result.status_code);
@@ -1661,9 +1783,35 @@ impl FallbackRenderer {
                 let is_thin_content = is_2xx
                     && detector::looks_like_thin_html(&result.html)
                     && detector::warrants_browser_retry(&result.html);
+                // A 2xx with a literally empty body carries no content by
+                // definition, and `warrants_browser_retry` structurally cannot
+                // fire on it (there is no markup to find a script tag in), so the
+                // thin-content path above misses it entirely and the empty
+                // response is returned to the caller as a success. Observed on
+                // AWS-WAF hosts that answer 202 + content-length 0.
+                //
+                // Narrow on purpose:
+                //   * 204/205/206 legitimately carry no (full) body;
+                //   * non-HTML content types (empty JSON, plain text, images,
+                //     archives) gain nothing from a browser — and this matters
+                //     because the HTTP tier decodes EVERY non-PDF response as
+                //     HTML, so without the check they would all escalate;
+                //   * a hard-pinned renderer surfaces JS failures as an error
+                //     rather than falling back to the HTTP body, so escalating
+                //     here would turn today's empty-but-Ok into a hard 5xx.
+                //   * PDFs already returned earlier.
+                let is_empty_2xx = is_2xx
+                    && !is_hard_pinned
+                    && !matches!(result.status_code, 204..=206)
+                    && content_type_allows_js_escalation(result.content_type.as_deref())
+                    && result.html.trim().is_empty();
 
                 if !self.js_renderers.is_empty()
-                    && (needs_js || is_blocked || is_auth_blocked || is_thin_content)
+                    && (needs_js
+                        || is_blocked
+                        || is_auth_blocked
+                        || is_thin_content
+                        || is_empty_2xx)
                 {
                     if is_auth_blocked {
                         tracing::info!(
@@ -1998,9 +2146,15 @@ impl FallbackRenderer {
         guard: &mut Option<ProbeGuard>,
     ) {
         if !host.is_empty() {
-            self.breakers
-                .record_outcome(host, k, BreakerOutcome::RenderError)
-                .await;
+            // Identical rule to the serial loop (`classify_outcome`'s
+            // `site_blocked`): the hedge must be provably equivalent to serial,
+            // and `cls.hard_block` is the same expression the serial arm derives.
+            let outcome = if cls.hard_block && self.has_recovery_tier {
+                BreakerOutcome::SiteBlocked
+            } else {
+                BreakerOutcome::RenderError
+            };
+            self.breakers.record_outcome(host, k, outcome).await;
             if k == RendererKind::Lightpanda {
                 let err_kind = if cls.is_status_blocked || cls.is_bot_wall || cls.antibot_blocked {
                     FailoverErrorKind::AntibotBlock
@@ -2503,7 +2657,37 @@ impl FallbackRenderer {
                         // Thin/placeholder/failed render → classify against
                         // attempt context so deadline-clamped attempts don't
                         // poison the breaker.
-                        let outcome = classify_outcome(false, false, false, &attempt_ctx);
+                        //
+                        // A site-side block is not a tier failure: every tier
+                        // egressing from this IP sees the same wall, so counting
+                        // it tripped the per-host breaker for lightpanda AND
+                        // chrome and left the ladder with nothing to run.
+                        //
+                        // Computed FRESH here, never from `saw_hard_block` — that
+                        // flag is cumulative across ladder iterations, so reading
+                        // it would let lightpanda's block mask a genuine chrome
+                        // render failure on the same host.
+                        //
+                        // Derived from the raw signals rather than `err_kind`:
+                        // that mapping is lossy (`is_bot_wall` lands on
+                        // `PlaceholderContent` and `cf_challenge` is absent), and
+                        // the bot-wall case is exactly how Wikimedia serves its
+                        // HTTP-200 datacenter ban. Mirrors `JsAttemptClass::
+                        // hard_block`, which deliberately omits 404/405/406/410/
+                        // 412/451/500 — those are not site-side blocks.
+                        let site_blocked = matches!(result.status_code, 401 | 403 | 429 | 503)
+                            || (520..=530).contains(&result.status_code)
+                            || is_bot_wall
+                            || vendor_block.is_some()
+                            || cf_challenge
+                            || antibot.signal.is_blocked();
+                        let outcome = classify_outcome(
+                            false,
+                            false,
+                            false,
+                            site_blocked && self.has_recovery_tier,
+                            &attempt_ctx,
+                        );
                         self.breakers.record_outcome(&host, k, outcome).await;
                         if k == RendererKind::Lightpanda
                             && let Some(target) =
@@ -2686,7 +2870,11 @@ impl FallbackRenderer {
                     last_failover_reason = Some(err_kind.clone());
                     if let Some(k) = trackable {
                         let was_timeout = matches!(e, CrwError::Timeout(_));
-                        let outcome = classify_outcome(false, false, was_timeout, &attempt_ctx);
+                        // No `site_blocked`: reaching this arm means the renderer
+                        // itself errored (no response to inspect), which is a
+                        // genuine tier signal the breaker should keep learning from.
+                        let outcome =
+                            classify_outcome(false, false, was_timeout, false, &attempt_ctx);
                         self.breakers.record_outcome(&host, k, outcome).await;
                         if k == RendererKind::Lightpanda {
                             let _ = self.preferences.record_failure(&host, &err_kind).await;
@@ -2756,18 +2944,59 @@ impl FallbackRenderer {
                 let res = renderer.fetch(url, headers, wait_for_ms, deadline).await;
                 match res {
                     Ok(mut result) => {
-                        let text_len = html_body_text_len(&result.html);
-                        let is_placeholder = detector::looks_like_loading_placeholder(&result.html);
-                        let failed_render = detector::looks_like_failed_render(&result.html);
+                        // One shared classification instead of four hand-rolled
+                        // detector calls: it feeds the accept gate, the breaker
+                        // outcome, and the recovery-arm flags below.
+                        let cls = self.classify_js_attempt(&result);
+                        let text_len = cls.text_len;
                         let truncated = result.truncated;
+                        // The ladder ran nothing, so the recovery arm's flags are
+                        // still false and it could not fire even though this
+                        // attempt just proved the page is walled. Seed BOTH — a
+                        // lone `hard_block` would fire the slow residential tier
+                        // on a fingerprint wall it cannot clear (the regression
+                        // ff09f30 was tuned against: success -2pp, p90 +69%).
+                        saw_hard_block |= cls.hard_block;
+                        saw_unrecoverable_wall |= cls.unrecoverable_wall;
                         // A large CF challenge shell has body text > 50 and no
                         // placeholder/failed marker, so guard it explicitly or it
-                        // would leak through this path as success.
+                        // would leak through this path as success. Same for a
+                        // generic bot wall (a Wikimedia ban shell clears the text
+                        // threshold) and a vendor block.
+                        //
+                        // Body detectors only — deliberately NOT `cls.acceptable`,
+                        // which also rejects `is_status_blocked` and would discard
+                        // a 403 that carries the real page. That behaviour is
+                        // intentional (see `crw_crawl::single`).
                         let content_ok = text_len >= Self::MIN_RENDERED_TEXT_LEN
-                            && !is_placeholder
-                            && failed_render.is_none()
-                            && !detector::looks_like_cloudflare_challenge(&result.html);
-                        let outcome = classify_outcome(content_ok, truncated, false, &attempt_ctx);
+                            && !cls.is_placeholder
+                            && cls.failed_render.is_none()
+                            && !cls.is_bot_wall
+                            && cls.vendor_block.is_none()
+                            // Covers the CF interstitial AND the vendor walls that
+                            // `classify` recognises from visible text alone (a
+                            // PerimeterX/Imperva page with no SDK marker), which
+                            // clear the 50-char threshold and evade the two lighter
+                            // detectors above.
+                            //
+                            // Deliberately NOT the broader `cls.antibot_blocked`:
+                            // `classify` returns GenericBlock for ANY 403 with a
+                            // non-data body regardless of how substantial it is
+                            // (`antibot.rs`), so gating on it would discard a 403
+                            // that carries the real page — which is accepted on
+                            // purpose (see `crw_crawl::single`).
+                            && !cls.unrecoverable_wall;
+                        // Same rule as the serial loop: a wall is not this tier's
+                        // fault. Without it the leak arm — which runs precisely
+                        // when breakers are already stressed — keeps advancing the
+                        // host window that F1 exists to protect.
+                        let outcome = classify_outcome(
+                            content_ok,
+                            truncated,
+                            false,
+                            cls.hard_block && self.has_recovery_tier,
+                            &attempt_ctx,
+                        );
                         // Record host only — global stays untouched so the
                         // existing trip can finish its cooldown naturally.
                         self.breakers
@@ -2779,17 +3008,32 @@ impl FallbackRenderer {
                                 Some(RenderDecision::AutoDefault { chosen: k });
                             return Ok(result);
                         }
-                        // Thin/placeholder on leak path → fall through to
-                        // the normal "no JS renderer" return below.
+                        // Thin/placeholder/blocked on the leak path → fall through
+                        // to the normal "no JS renderer" return below.
+                        //
+                        // Keep the body as the thin candidate rather than dropping
+                        // it. The tail returns `Err(last_error)` when `thin_result`
+                        // is None, and the `render_js = true` branch propagates that
+                        // straight to the caller — it has no "JS failed, fall back to
+                        // the HTTP body" net, unlike the auto branch. Dropping a
+                        // rejected body would therefore turn a response this path
+                        // used to return as `Ok` into a 5xx; `classify_block`
+                        // downstream still surfaces it as blocked and suppresses
+                        // billing, which is the pre-existing contract.
+                        // `best-result-wins` is unaffected: the leak arm only runs
+                        // when `thin_result` is None.
                         last_error = Some(CrwError::RendererError(format!(
                             "leak attempt on {} returned thin content (text_len={text_len})",
                             renderer.name()
                         )));
+                        thin_result = Some(result);
                         break;
                     }
                     Err(e) => {
                         let was_timeout = matches!(e, CrwError::Timeout(_));
-                        let outcome = classify_outcome(false, false, was_timeout, &attempt_ctx);
+                        // No response body to inspect → a genuine tier signal.
+                        let outcome =
+                            classify_outcome(false, false, was_timeout, false, &attempt_ctx);
                         self.breakers
                             .record_scoped_outcome(&host, k, None, Some(outcome))
                             .await;
@@ -2904,9 +3148,21 @@ impl FallbackRenderer {
                 match attempt {
                     Ok(r) => {
                         let r_text = html_body_text_len(&r.html);
+                        // Block detection is load-bearing here, not defensive: a
+                        // residential exit can land in the SAME ban range as the
+                        // box (or be challenged on its own), and this gate drives
+                        // both the ChromeProxy breaker outcome and `better` below.
+                        // Without it a ban shell is recorded Success — so the arm
+                        // keeps firing on a host it provably cannot serve — and,
+                        // being larger than the ladder's thin result, replaces it.
+                        // CF is checked too: a managed challenge is 100-300KB and
+                        // evades the size-capped vendor detector.
                         let r_ok = r_text >= Self::MIN_RENDERED_TEXT_LEN
                             && detector::looks_like_failed_render(&r.html).is_none()
-                            && !detector::looks_like_loading_placeholder(&r.html);
+                            && !detector::looks_like_loading_placeholder(&r.html)
+                            && !detector::looks_like_generic_bot_wall(&r.html)
+                            && detector::looks_like_vendor_block(&r.html).is_none()
+                            && !detector::looks_like_cloudflare_challenge(&r.html);
                         if !host.is_empty() {
                             let outcome = if r_ok {
                                 BreakerOutcome::Success
@@ -2984,7 +3240,12 @@ impl FallbackRenderer {
                         let r_ok = html_body_text_len(&r.html) >= Self::MIN_RENDERED_TEXT_LEN
                             && detector::looks_like_failed_render(&r.html).is_none()
                             && !detector::looks_like_loading_placeholder(&r.html)
-                            && !detector::looks_like_cloudflare_challenge(&r.html);
+                            && !detector::looks_like_cloudflare_challenge(&r.html)
+                            // Same gap as the chrome_proxy arm: the stealth tier
+                            // clears CF, but a DataDome / generic ban shell it
+                            // cannot clear would otherwise ship as content.
+                            && !detector::looks_like_generic_bot_wall(&r.html)
+                            && detector::looks_like_vendor_block(&r.html).is_none();
                         if !host.is_empty() {
                             let outcome = if r_ok {
                                 BreakerOutcome::Success
@@ -3231,6 +3492,36 @@ mod tests {
             r.js_renderer_names(),
             vec!["lightpanda", "chrome", "chrome_proxy"]
         );
+    }
+
+    /// The HTTP tier decodes every non-PDF body as HTML regardless of its
+    /// declared type, so without this gate an empty `application/json` or
+    /// `image/*` 2xx would buy a full browser render for nothing.
+    #[test]
+    fn empty_2xx_escalation_is_limited_to_htmlish_bodies() {
+        for ct in [
+            None,
+            Some(""),
+            Some("text/html"),
+            Some("application/xhtml+xml"),
+        ] {
+            assert!(
+                content_type_allows_js_escalation(ct),
+                "{ct:?} should stay eligible"
+            );
+        }
+        for ct in [
+            "application/json",
+            "text/plain",
+            "image/png",
+            "application/zip",
+            "text/csv",
+        ] {
+            assert!(
+                !content_type_allows_js_escalation(Some(ct)),
+                "{ct} cannot be improved by a browser"
+            );
+        }
     }
 
     #[cfg(feature = "cdp")]
