@@ -22,6 +22,7 @@ pub enum AntibotSignal {
     Imperva,
     Sucuri,
     Kasada,
+    Vercel,
     NetworkSecurity,
     RateLimited,
     GenericBlock,
@@ -39,6 +40,7 @@ impl AntibotSignal {
             Self::Imperva => "imperva",
             Self::Sucuri => "sucuri",
             Self::Kasada => "kasada",
+            Self::Vercel => "vercel",
             Self::NetworkSecurity => "network_security",
             Self::RateLimited => "rate_limited",
             Self::GenericBlock => "generic_block",
@@ -148,6 +150,19 @@ static TIER1_PATTERNS: Lazy<Vec<SignalPattern>> = Lazy::new(|| {
             Regex::new(r"(?i)blocked\s+by\s+network\s+security").unwrap(),
             AntibotSignal::NetworkSecurity,
             "Network security block",
+        ),
+        // Vercel's bot-check interstitial ("Vercel Security Checkpoint —
+        // We're verifying your browser" / "Failed to verify your browser").
+        // Require both the heading AND the verifying/failed phrase within a
+        // bounded window so a page merely mentioning "Vercel" (a common
+        // hosting platform name) in prose cannot trip this alone.
+        (
+            Regex::new(
+                r"(?i)Vercel\s+Security\s+Checkpoint[\s\S]{0,300}(?:verifying|Failed\s+to\s+verify)\s+your\s+browser",
+            )
+            .unwrap(),
+            AntibotSignal::Vercel,
+            "Vercel security checkpoint",
         ),
         // Google's rate-limit page ("Error 429 (Too Many Requests)!!1"). Google
         // serves it with a real 429 over HTTP, but lightpanda/CDP renderers
@@ -513,6 +528,35 @@ mod tests {
         let html = "<html><body><script>KPSDK.scriptStart = KPSDK.now()</script></body></html>";
         let r = classify(Some(200), html);
         assert_eq!(r.signal, AntibotSignal::Kasada);
+    }
+
+    #[test]
+    fn vercel_security_checkpoint_detected() {
+        let html = "<html><body><h1>Vercel Security Checkpoint</h1>\
+            <p>We're verifying your browser</p></body></html>";
+        let r = classify(Some(200), html);
+        assert_eq!(r.signal, AntibotSignal::Vercel);
+        assert_eq!(r.signal.class_name(), "vercel");
+    }
+
+    #[test]
+    fn vercel_security_checkpoint_failed_variant_detected() {
+        let html = "<html><body><h1>Vercel Security Checkpoint</h1>\
+            <p>Failed to verify your browser</p><p>Code 21</p></body></html>";
+        let r = classify(Some(200), html);
+        assert_eq!(r.signal, AntibotSignal::Vercel);
+    }
+
+    #[test]
+    fn vercel_mention_alone_is_not_enough() {
+        // Negative: a page that merely mentions Vercel (a common hosting
+        // platform) in prose, with no checkpoint heading, must not be flagged.
+        let html = "<html><body><article><p>This site is deployed on Vercel, \
+            a popular platform for hosting frontend applications and static \
+            sites with automatic previews on every pull request.</p></article>\
+            </body></html>";
+        let r = classify(Some(200), html);
+        assert_eq!(r.signal, AntibotSignal::None);
     }
 
     #[test]

@@ -1059,6 +1059,34 @@ fn classify_block(
             reason: "wikimedia datacenter-ip block".to_string(),
         });
     }
+    // Reddit's own block page ("You've been blocked by network security...") is
+    // itself ~115 bytes of prose — over the markdown-substantial guard below —
+    // so antibot::classify (which already recognizes this exact phrase via its
+    // NetworkSecurity pattern) never runs. Same trap as the Wikimedia/CF cases
+    // above. Require both halves of the sentence (not just the first clause) so
+    // an article merely quoting "blocked by network security" in isolation
+    // cannot trip this ahead of the guard.
+    if html.contains("blocked by network security")
+        && html.contains("log in to your Reddit account")
+    {
+        return Some(BlockOutcome {
+            vendor: "network_security".to_string(),
+            reason: "blocked by network security".to_string(),
+        });
+    }
+    // Cloudflare's hard block page (an outright deny, distinct from the
+    // Turnstile/managed-challenge interstitial matched by CF_STRONG_MARKERS
+    // above) also beats the guard. `<span class="cf-error-code">` is the exact
+    // structural marker antibot::classify already trusts for this vendor
+    // (`crw-extract/src/antibot.rs`); require it together with the page's own
+    // block heading so a page that merely mentions the token in prose, a code
+    // sample, or documentation cannot trip this ahead of the guard.
+    if html.contains(r#"<span class="cf-error-code">"#) && html.contains("you have been blocked") {
+        return Some(BlockOutcome {
+            vendor: "cloudflare".to_string(),
+            reason: "cloudflare block page (cf-error-code)".to_string(),
+        });
+    }
     if markdown.map(|m| m.trim().len()).unwrap_or(0) >= threshold {
         return None;
     }
@@ -1202,6 +1230,85 @@ mod tests {
         let b = classify_block(200, Some("text/html"), html, Some(md), false, THRESH)
             .expect("wikimedia datacenter block must be flagged even with substantial markdown");
         assert_eq!(b.vendor, "generic_block");
+    }
+
+    #[test]
+    fn classify_block_reddit_network_security_over_markdown_guard() {
+        // Regression: Reddit's own block page extracts to ~115 bytes of prose
+        // (> THRESH), so without the strong-marker check the guard would
+        // suppress the verdict before antibot::classify ever ran.
+        let html = "<html><body><p>You've been blocked by network security.</p>\
+            <p>To continue, log in to your Reddit account or use your developer token</p></body></html>";
+        let md = "You've been blocked by network security.\n\nTo continue, \
+            log in to your Reddit account or use your developer token";
+        assert!(
+            md.len() >= THRESH,
+            "fixture must exceed the guard to be meaningful"
+        );
+        let b = classify_block(200, Some("text/html"), html, Some(md), false, THRESH)
+            .expect("reddit network security block must be flagged even with substantial markdown");
+        assert_eq!(b.vendor, "network_security");
+    }
+
+    #[test]
+    fn classify_block_reddit_phrase_alone_is_not_enough() {
+        // Negative: an article that quotes the first half of Reddit's block
+        // sentence in isolation (no "log in to your Reddit account" nearby)
+        // must NOT be flagged — only the full page's block page trips this.
+        let html = "<html><body><article><p>Many scrapers report seeing \
+            \"blocked by network security\" style errors when hitting Reddit at \
+            scale, which is a common anti-bot pattern across social platforms.</p>\
+            </article></body></html>";
+        let md = "Many scrapers report seeing \"blocked by network security\" style \
+            errors when hitting Reddit at scale, which is a common anti-bot pattern.";
+        assert!(md.len() >= THRESH);
+        assert!(
+            classify_block(200, Some("text/html"), html, Some(md), false, THRESH).is_none(),
+            "an article merely discussing the phrase must not be misflagged as a block"
+        );
+    }
+
+    #[test]
+    fn classify_block_cloudflare_hard_block_over_markdown_guard() {
+        // Regression: Cloudflare's hard-deny page (no interstitial, so
+        // CF_STRONG_MARKERS above doesn't match) extracts to well over THRESH
+        // bytes of prose, so it needs its own strong-marker check.
+        let html = r#"<html><body><h1>Attention Required! | Cloudflare</h1>
+            <p>Please enable cookies.</p>
+            <span class="cf-error-code">1020</span>
+            <h1>Sorry, you have been blocked</h1>
+            <h2>You are unable to access example.com</h2></body></html>"#;
+        let md = "# Attention Required! | Cloudflare\n\nPlease enable cookies.\n\n\
+            # Sorry, you have been blocked\n\n## You are unable to access example.com";
+        assert!(
+            md.len() >= THRESH,
+            "fixture must exceed the guard to be meaningful"
+        );
+        let b = classify_block(200, Some("text/html"), html, Some(md), false, THRESH)
+            .expect("cloudflare hard block must be flagged even with substantial markdown");
+        assert_eq!(b.vendor, "cloudflare");
+    }
+
+    #[test]
+    fn classify_block_cf_error_code_marker_alone_is_not_enough() {
+        // Negative: a page that legitimately renders a `cf-error-code` span
+        // (e.g. a status/monitoring dashboard embedding one as a live example,
+        // not a real hard-block response) but has no "you have been blocked"
+        // heading must not be misflagged — the marker alone isn't sufficient,
+        // only its co-occurrence with the block heading is.
+        let html = r#"<html><body><article><h1>Error code reference</h1>
+            <p>Example live element: <span class="cf-error-code">1020</span></p>
+            <p>This is a normal reference page with plenty of unrelated
+            documentation content describing how status codes are displayed.</p>
+            </article></body></html>"#;
+        let md = "# Error code reference\n\nExample live element: 1020\n\n\
+            This is a normal reference page with plenty of unrelated documentation \
+            content describing how status codes are displayed.";
+        assert!(md.len() >= THRESH);
+        assert!(
+            classify_block(200, Some("text/html"), html, Some(md), false, THRESH).is_none(),
+            "a page merely rendering the cf-error-code marker without the block heading must not be misflagged"
+        );
     }
 
     #[test]
