@@ -1,3 +1,5 @@
+[![MCP Toplist](https://mcptoplist.com/badge/io.github.us%2Fcrw.svg)](https://mcptoplist.com/server/io.github.us%2Fcrw)
+
 <p align="center">
   <img src="docs/logo-animation.gif" alt="fastCRW" width="220" />
 </p>
