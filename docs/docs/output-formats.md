@@ -148,18 +148,23 @@ The LLM response is validated against the provided schema using the `jsonschema`
 | Provider | Tool mechanism |
 |----------|---------------|
 | Anthropic | `tool_use` with `input_schema` |
-| OpenAI | Function calling with `parameters` |
+| OpenAI / OpenAI-compatible | Chat Completions function calling with `parameters` |
+| OpenAI Responses-compatible | Forced Responses function call; arguments are validated locally |
 
 Configure in `config.toml`:
 
 ```toml
 [extraction.llm]
-provider = "anthropic"          # or "openai"
+provider = "anthropic"          # or "openai", "openai-responses", …
 api_key = "sk-..."
 model = "claude-sonnet-4-20250514"
 max_tokens = 4096
-# base_url = "https://..."     # for OpenAI-compatible endpoints
+# base_url = "https://..."     # for compatible Chat or Responses endpoints
 ```
+
+For a Responses-compatible endpoint, set `provider = "openai-responses"` and
+use a versioned HTTPS API base such as `https://gateway.example.com/v1`. CRW
+appends `/responses`; a complete endpoint URL is also accepted unchanged.
 
 ## Response Shape
 
@@ -236,7 +241,7 @@ The exact shape of `data` depends on what you requested. Do not assume every fie
 | `totalTokens` | `number` | Sum of input + output |
 | `estimatedCostUsd` | `number / null` | Best-effort cost using a snapshot pricing table. `null` for unknown models. Not for accounting — provider pricing drifts. |
 | `model` | `string` | Model that produced the output |
-| `provider` | `string` | `anthropic` / `openai` / `azure` / `openai-compatible` |
+| `provider` | `string` | `anthropic` / `openai` / `openai-responses` / `deepseek` / `azure` / `openai-compatible` |
 
 ### `ChunkResult` object
 

@@ -148,9 +148,9 @@ That is the default CRW success shape: requested content plus a compact metadata
 | `jsonSchema` | object | -- | Schema for structured extraction |
 | `extract` | object | -- | Firecrawl-compatible alias wrapper for extraction schema |
 | `llmApiKey` | string | -- | Per-request LLM API key |
-| `llmProvider` | string | server default | `anthropic`, `openai`, `deepseek`, `azure`, or `openai-compatible` |
+| `llmProvider` | string | server default | `anthropic`, `openai`, `openai-responses`, `deepseek`, `azure`, or `openai-compatible` |
 | `llmModel` | string | server default | Model override (extraction and summary) |
-| `baseUrl` | string | -- | OpenAI-compatible endpoint base, e.g. `https://api.deepseek.com/v1` (also used by Azure). crw appends `/chat/completions` automatically if you omit it. |
+| `baseUrl` | string | -- | Provider endpoint base. CRW appends `/chat/completions` for Chat Completions providers or `/responses` for `openai-responses`; complete endpoint URLs are accepted. |
 | `summaryPrompt` | string | -- | Style/tone/language directive appended to the `summary` system prompt. Safety wrapper kept intact. Capped at 500 chars. |
 | `maxContentChars` | number | `[extraction.llm].max_html_bytes` (100 KB) | Per-request byte cap on content sent to the LLM for `summary`. Clamped to 200 KB server-side. |
 | `deadlineMs` | number | `8000` | End-to-end request deadline in milliseconds. Must be in `(0, 60000]`. Requests above 8 000 ms land in a separate slow-path histogram and are excluded from the standard SLO p95 metric. |

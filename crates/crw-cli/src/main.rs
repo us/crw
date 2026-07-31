@@ -110,7 +110,7 @@ struct Cli {
     #[arg(long, value_name = "SCHEMA")]
     extract: Option<String>,
 
-    /// Override LLM provider for this request (anthropic, openai, deepseek, azure, openrouter)
+    /// Override LLM provider (anthropic, openai, openai-responses, deepseek, azure, openrouter)
     #[arg(long, value_name = "NAME")]
     llm_provider: Option<String>,
 
@@ -122,7 +122,7 @@ struct Cli {
     #[arg(long, value_name = "MODEL")]
     llm_model: Option<String>,
 
-    /// Override LLM base URL (for OpenAI-compatible or Azure endpoints)
+    /// Override LLM base URL (for Chat Completions-compatible, Responses-compatible, or Azure endpoints)
     #[arg(long, value_name = "URL")]
     llm_base_url: Option<String>,
 

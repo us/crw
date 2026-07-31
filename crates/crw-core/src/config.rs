@@ -1612,7 +1612,8 @@ pub struct LlmConfig {
     #[serde(default)]
     pub temperature: Option<f32>,
     /// Optional reasoning-effort hint forwarded to OpenAI-compatible providers
-    /// that support it. `None` (default) and the empty string send no key,
+    /// (`reasoning_effort`) and Responses-compatible providers
+    /// (`reasoning.effort`). `None` (default) and the empty string send no key,
     /// preserving each provider's default behavior.
     #[serde(default)]
     pub reasoning_effort: Option<String>,

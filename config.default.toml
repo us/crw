@@ -193,7 +193,7 @@ always_run = false
 # return HTTP 400 with a clear error pointing back here.
 #
 # [extraction.llm]
-# provider = "anthropic"        # "anthropic" | "openai" | "deepseek" | "azure" | "openai-compatible"
+# provider = "anthropic"        # "anthropic" | "openai" | "openai-responses" | "deepseek" | "azure" | "openai-compatible"
 # api_key = "sk-..."            # or use CRW_EXTRACTION__LLM__API_KEY env var
 # model = "claude-sonnet-4-20250514"
 # max_tokens = 4096
@@ -208,6 +208,12 @@ always_run = false
 #   api_key = "..."
 #   model = "deepseek-chat"
 #   base_url = "https://api.deepseek.com/v1"
+#
+# OpenAI Responses-compatible example:
+#   provider = "openai-responses"
+#   api_key = "..."
+#   model = "provider-model-id"
+#   base_url = "https://gateway.example.com/v1"         # CRW appends /responses
 #
 # Azure OpenAI example:
 #   provider = "azure"

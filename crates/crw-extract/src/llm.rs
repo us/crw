@@ -1,4 +1,5 @@
-//! LLM provider dispatch (Anthropic, OpenAI, OpenAI-compatible, Azure).
+//! LLM provider dispatch (Anthropic, OpenAI Chat Completions, OpenAI
+//! Responses, OpenAI-compatible, Azure).
 //!
 //! Two surfaces:
 //!
@@ -26,6 +27,7 @@ pub const SUPPORTED_PROVIDERS: &[&str] = &[
     "openai",
     "deepseek",
     "openai-compatible",
+    "openai-responses",
     "azure",
 ];
 
@@ -306,6 +308,19 @@ async fn dispatch(
                 provider_tag,
             )
             .await
+        }
+        "openai-responses" => {
+            let cfg = LlmConfig {
+                provider: "openai-responses".to_string(),
+                api_key: api_key.to_string(),
+                model: model.to_string(),
+                base_url: base_url.map(str::to_string),
+                max_tokens,
+                temperature,
+                reasoning_effort: reasoning_effort.map(str::to_string),
+                ..LlmConfig::default()
+            };
+            crate::responses::call_text(&cfg, system_prompt, user_msg, REQUEST_TIMEOUT).await
         }
         "azure" => {
             let endpoint = base_url.ok_or_else(|| {

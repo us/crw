@@ -86,7 +86,7 @@ Scrape one URL synchronously. Returns immediately with a `V2Document`.
 | `renderJs` | `boolean` | — | `true` forces JS rendering, `false` keeps the request HTTP-only, omitted uses auto-detection. Same semantics as on `/v1/scrape`, see [JS Rendering](js-rendering.md) |
 | `parsers` | `ParserSpec[]` | — | Document parser directives (e.g. `["pdf"]`) |
 | `llmApiKey` | `string` | — | Per-request LLM API key (required for `summary` / `json` if no server key) |
-| `llmProvider` | `"anthropic" \| "openai" \| "deepseek" \| "azure" \| "openai-compatible"` | — | Per-request LLM provider |
+| `llmProvider` | `"anthropic" \| "openai" \| "openai-responses" \| "deepseek" \| "azure" \| "openai-compatible"` | — | Per-request LLM provider |
 | `llmModel` | `string` | — | Per-request LLM model name |
 | `summaryPrompt` | `string` | — | Custom prompt for the `summary` format |
 

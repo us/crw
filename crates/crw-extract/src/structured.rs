@@ -256,8 +256,19 @@ async fn extract_inner(
             )
             .await
         }
+        "openai-responses" => {
+            call_responses(
+                &prompt,
+                tool_schema,
+                llm,
+                "extract_data",
+                "Extract structured data from the content",
+                timeout,
+            )
+            .await
+        }
         other => Err(CrwError::ExtractionError(format!(
-            "Unsupported LLM provider: {other}. Use 'anthropic', 'openai', 'deepseek', or 'openai-compatible'."
+            "Unsupported LLM provider: {other}. Use 'anthropic', 'openai', 'deepseek', 'openai-compatible', or 'openai-responses'."
         ))),
     }?;
 
@@ -741,8 +752,23 @@ pub(crate) async fn call_openai(
     Ok((value, usage))
 }
 
+/// Call an OpenAI Responses-compatible provider with a forced function tool.
+/// The transport is shared with the text-generation path; this wrapper owns the
+/// structured/judge concurrency permit just like [`call_openai`].
+pub(crate) async fn call_responses(
+    prompt: &str,
+    schema: &serde_json::Value,
+    llm: &LlmConfig,
+    tool_name: &str,
+    tool_desc: &str,
+    timeout: Duration,
+) -> CrwResult<(serde_json::Value, Option<LlmUsage>)> {
+    let _llm_permit = crate::llm_gate::acquire_llm().await;
+    crate::responses::call_tool(llm, prompt, schema, tool_name, tool_desc, timeout).await
+}
+
 /// Parse JSON from LLM response, stripping markdown fences if present.
-fn parse_json_response(text: &str) -> CrwResult<serde_json::Value> {
+pub(crate) fn parse_json_response(text: &str) -> CrwResult<serde_json::Value> {
     let trimmed = text.trim();
 
     // Strip ```json ... ``` fences if LLM wrapped it

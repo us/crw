@@ -161,9 +161,9 @@ curl -X POST https://api.fastcrw.com/v1/scrape \
 | `jsonSchema` | object | required | JSON schema describing the fields you want back |
 | `extract` | object | -- | Firecrawl-compatible wrapper; `extract.schema` is accepted |
 | `llmApiKey` | string | -- | Per-request LLM API key |
-| `llmProvider` | string | server default | `anthropic`, `openai`, `deepseek`, `azure`, or `openai-compatible` |
+| `llmProvider` | string | server default | `anthropic`, `openai`, `openai-responses`, `deepseek`, `azure`, or `openai-compatible` |
 | `llmModel` | string | server default | Extraction model override |
-| `baseUrl` | string | -- | OpenAI-compatible endpoint base, e.g. `https://api.deepseek.com/v1` (also used by Azure). crw appends `/chat/completions` automatically if you omit it. |
+| `baseUrl` | string | -- | Provider endpoint base. CRW appends `/chat/completions` for Chat Completions providers or `/responses` for `openai-responses`; complete endpoint URLs are accepted. |
 | `onlyMainContent` | boolean | `true` | Keep extraction focused on the main content block |
 | `cssSelector` | string | -- | Narrow the page before extraction |
 | `xpath` | string | -- | Narrow the page before extraction |
@@ -199,7 +199,7 @@ If the underlying page scrape is weak, the JSON extraction will also be weak.
 
 ## Self-hosted LLM and provider control
 
-**Self-hosted:** set `[extraction.llm]` in `config.toml` for a server-wide default, or pass `llmApiKey` + `llmProvider` + `llmModel` per request to override it. Supported providers: `anthropic`, `openai`, `deepseek`, `azure`, and `openai-compatible`. Use `baseUrl` for any OpenAI-compatible endpoint (DeepSeek, Azure, local models).
+**Self-hosted:** set `[extraction.llm]` in `config.toml` for a server-wide default, or pass `llmApiKey` + `llmProvider` + `llmModel` per request to override it. Supported providers: `anthropic`, `openai`, `openai-responses`, `deepseek`, `azure`, and `openai-compatible`. Use `baseUrl` for compatible Chat Completions or Responses endpoints.
 
 ## Common production patterns
 

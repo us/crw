@@ -17,7 +17,7 @@ No request body. No query parameters.
 {
   "version": "0.23.0",
   "llm": {
-    "providers": ["anthropic", "openai", "deepseek", "openai-compatible", "azure"],
+    "providers": ["anthropic", "openai", "deepseek", "openai-compatible", "openai-responses", "azure"],
     "supportsBaseUrl": true,
     "serverKeyConfigured": false,
     "maxConcurrency": 0

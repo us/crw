@@ -11,7 +11,9 @@
 //! the system instruction tells the model to treat it strictly as data and
 //! ignore any instructions inside it.
 
-use crate::structured::{call_anthropic, call_openai, truncate_md, validate_against_schema};
+use crate::structured::{
+    call_anthropic, call_openai, call_responses, truncate_md, validate_against_schema,
+};
 use crate::untrusted;
 use crw_core::config::LlmConfig;
 use crw_core::error::{CrwError, CrwResult};
@@ -145,8 +147,19 @@ pub async fn judge_change(
             )
             .await
         }
+        "openai-responses" => {
+            call_responses(
+                &prompt,
+                schema,
+                llm,
+                JUDGE_TOOL_NAME,
+                JUDGE_TOOL_DESC,
+                timeout,
+            )
+            .await
+        }
         other => Err(CrwError::ExtractionError(format!(
-            "Unsupported LLM provider for judge: {other}. Use 'anthropic', 'openai', 'deepseek', or 'openai-compatible'."
+            "Unsupported LLM provider for judge: {other}. Use 'anthropic', 'openai', 'deepseek', 'openai-compatible', or 'openai-responses'."
         ))),
     }?;
 

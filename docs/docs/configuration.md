@@ -81,15 +81,20 @@ only_main_content = true
 # always_run = false         # true = LLM on every page (higher cost, higher recall)
 
 [extraction.llm]
-provider = "anthropic"       # "anthropic", "openai", "deepseek", "azure", or "openai-compatible"
+provider = "anthropic"       # also: "openai", "openai-responses", "deepseek", "azure", "openai-compatible"
 api_key = ""
 model = "claude-sonnet-4-20250514"
 max_tokens = 4096
 max_html_bytes = 100000      # content fed to LLM is truncated at this byte count
 max_concurrency = 4          # bounded fan-out for per-result summaries in /v1/search
-# base_url = ""              # for OpenAI-compatible endpoints (DeepSeek, Azure, …)
+# base_url = ""              # for custom Chat Completions or Responses endpoints
 # azure_api_version = ""     # required when provider = "azure"
 # require_byok_header = ""   # tenant guard: reject LLM requests missing this header AND without llmApiKey
+
+# Responses-compatible gateway:
+# provider = "openai-responses"
+# model = "provider-model-id"
+# base_url = "https://gateway.example.com/v1"  # /responses is appended
 
 # /v1/search endpoint — proxies to a SearXNG instance.
 # Absence of searxng_url disables /v1/search with HTTP 503 (error_code: "search_disabled").

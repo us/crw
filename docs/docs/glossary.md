@@ -42,7 +42,7 @@ A credit is the billing unit for the hosted cloud at `fastcrw.com`. Every scrape
 
 ## llmProvider
 
-`llmProvider` is a request field that selects which LLM provider fastCRW routes extraction or summarization calls to. Accepted values are `"anthropic"`, `"openai"`, `"deepseek"`, `"azure"`, and `"openai-compatible"`. Use it together with `llmApiKey` and `llmModel` to pin a specific provider per request, or set the server-wide default in `config.toml` under `[extraction.llm]`. When using Azure or a custom OpenAI-compatible endpoint, also supply `baseUrl`. See [Extract](/docs/extract) and [Output Formats](/docs/output-formats) for full field references.
+`llmProvider` is a request field that selects which LLM provider fastCRW routes extraction or summarization calls to. Accepted values are `"anthropic"`, `"openai"`, `"openai-responses"`, `"deepseek"`, `"azure"`, and `"openai-compatible"`. Use it together with `llmApiKey` and `llmModel` to pin a specific provider per request, or set the server-wide default in `config.toml` under `[extraction.llm]`. When using Azure or a custom Chat Completions/Responses endpoint, also supply `baseUrl`. See [Extract](/docs/extract) and [Output Formats](/docs/output-formats) for full field references.
 
 ---
 

@@ -10,6 +10,7 @@ use dialoguer::{Input, Select};
 pub enum LlmProvider {
     Anthropic,
     OpenAI,
+    Responses,
     DeepSeek,
     Azure,
     OpenRouter,
@@ -22,6 +23,7 @@ impl LlmProvider {
         match self {
             LlmProvider::Anthropic => "Anthropic (Claude)",
             LlmProvider::OpenAI => "OpenAI (GPT)",
+            LlmProvider::Responses => "OpenAI Responses-compatible",
             LlmProvider::DeepSeek => "DeepSeek",
             LlmProvider::Azure => "Azure OpenAI",
             LlmProvider::OpenRouter => "OpenRouter",
@@ -34,6 +36,7 @@ impl LlmProvider {
         match self {
             LlmProvider::Anthropic => "anthropic",
             LlmProvider::OpenAI => "openai",
+            LlmProvider::Responses => "openai-responses",
             LlmProvider::DeepSeek => "deepseek",
             LlmProvider::Azure => "azure",
             LlmProvider::OpenRouter => "openai", // OpenRouter uses OpenAI protocol
@@ -46,6 +49,7 @@ impl LlmProvider {
         match self {
             LlmProvider::Anthropic => None, // Uses default
             LlmProvider::OpenAI => None,    // Uses default
+            LlmProvider::Responses => None, // User must provide (OpenAI or gateway base)
             LlmProvider::DeepSeek => Some("https://api.deepseek.com/v1"),
             LlmProvider::Azure => None, // User must provide
             LlmProvider::OpenRouter => Some("https://openrouter.ai/api/v1"),
@@ -78,6 +82,7 @@ impl LlmProvider {
                 ("gpt-4o", "GPT-4o (More capable, $2.5/$10 per M tokens)"),
                 ("gpt-4-turbo", "GPT-4 Turbo"),
             ],
+            LlmProvider::Responses => vec![],
             LlmProvider::DeepSeek => vec![
                 (
                     "deepseek-chat",
@@ -108,6 +113,7 @@ impl LlmProvider {
         match self {
             LlmProvider::Anthropic => "sk-ant-... (from console.anthropic.com)",
             LlmProvider::OpenAI => "sk-... (from platform.openai.com)",
+            LlmProvider::Responses => "Provider API key",
             LlmProvider::DeepSeek => "sk-... (from platform.deepseek.com)",
             LlmProvider::Azure => "Azure API key (from Azure Portal)",
             LlmProvider::OpenRouter => "sk-or-... (from openrouter.ai)",
@@ -120,6 +126,7 @@ impl LlmProvider {
         match self {
             LlmProvider::Anthropic => Some("https://console.anthropic.com/settings/keys"),
             LlmProvider::OpenAI => Some("https://platform.openai.com/api-keys"),
+            LlmProvider::Responses => None,
             LlmProvider::DeepSeek => Some("https://platform.deepseek.com/api_keys"),
             LlmProvider::Azure => Some("https://portal.azure.com"),
             LlmProvider::OpenRouter => Some("https://openrouter.ai/keys"),
@@ -215,6 +222,10 @@ fn prompt_provider() -> Result<LlmProvider, SetupError> {
             "OpenAI (GPT)"
         ),
         format!(
+            "{}\n      • Native /v1/responses protocol\n      • OpenAI or any Responses-compatible gateway",
+            "OpenAI Responses-compatible"
+        ),
+        format!(
             "{}\n      • Best value, excellent performance\n      • Models: DeepSeek Chat, Reasoner",
             "DeepSeek"
         ),
@@ -239,6 +250,7 @@ fn prompt_provider() -> Result<LlmProvider, SetupError> {
     let providers = [
         LlmProvider::Anthropic,
         LlmProvider::OpenAI,
+        LlmProvider::Responses,
         LlmProvider::DeepSeek,
         LlmProvider::Azure,
         LlmProvider::OpenRouter,
@@ -311,13 +323,18 @@ fn prompt_base_url(provider: LlmProvider) -> Result<Option<String>, SetupError> 
         return Ok(Some(url.to_string()));
     }
 
-    // Only ask for custom and Azure
-    if provider != LlmProvider::Custom && provider != LlmProvider::Azure {
+    // Only ask for custom, Responses-compatible, and Azure providers.
+    if provider != LlmProvider::Custom
+        && provider != LlmProvider::Responses
+        && provider != LlmProvider::Azure
+    {
         return Ok(None);
     }
 
     let prompt = if provider == LlmProvider::Azure {
         "  Enter your Azure OpenAI endpoint (e.g., https://myresource.openai.azure.com)"
+    } else if provider == LlmProvider::Responses {
+        "  Enter the Responses API base URL (e.g., https://gateway.example.com/v1)"
     } else {
         "  Enter the API base URL (e.g., http://localhost:11434/v1)"
     };

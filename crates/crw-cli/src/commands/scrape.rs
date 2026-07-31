@@ -70,7 +70,7 @@ pub struct ScrapeArgs {
     #[arg(long, value_name = "SCHEMA")]
     pub extract: Option<String>,
 
-    /// Override LLM provider for this request (anthropic, openai, deepseek, azure, openrouter).
+    /// Override LLM provider (anthropic, openai, openai-responses, deepseek, azure, openrouter).
     #[arg(long, value_name = "NAME")]
     pub llm_provider: Option<String>,
 
@@ -82,7 +82,7 @@ pub struct ScrapeArgs {
     #[arg(long, value_name = "MODEL")]
     pub llm_model: Option<String>,
 
-    /// Override LLM base URL (for OpenAI-compatible or Azure endpoints).
+    /// Override LLM base URL (for Chat Completions-compatible, Responses-compatible, or Azure endpoints).
     #[arg(long, value_name = "URL")]
     pub llm_base_url: Option<String>,
 }

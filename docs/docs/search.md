@@ -154,9 +154,9 @@ That is the flat response shape used when `sources` is not set.
 | `multiRound` | boolean | server config | When `true`, fires an adaptive evidence-scout round if the first-round answer abstains. Overrides `[search].multi_round` for this request. |
 | `answerListFormat` | boolean | server config | When `true` (and the query has list intent such as "best/top X"), renders the answer as a ranked list instead of prose. `false` forces prose. Overrides `[search].answer_list_format`. |
 | `llmApiKey` | string | -- | Per-request LLM API key |
-| `llmProvider` | string | server default | `anthropic`, `openai`, `deepseek`, `azure`, or `openai-compatible` |
+| `llmProvider` | string | server default | `anthropic`, `openai`, `openai-responses`, `deepseek`, `azure`, or `openai-compatible` |
 | `llmModel` | string | server default | Model override |
-| `baseUrl` | string | -- | OpenAI-compatible endpoint base (e.g. DeepSeek, Azure) |
+| `baseUrl` | string | -- | Provider endpoint base for Azure, Chat Completions-compatible, or Responses-compatible APIs |
 
 `scrapeOptions`:
 

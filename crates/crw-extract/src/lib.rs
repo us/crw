@@ -24,6 +24,7 @@ pub mod pdf;
 pub mod plaintext;
 pub mod quality;
 pub mod readability;
+mod responses;
 pub mod selector;
 pub mod structured;
 pub mod tables;

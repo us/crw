@@ -254,14 +254,15 @@ pub struct ScrapeRequest {
     /// Per-request LLM API key for structured extraction (BYOK).
     #[serde(default, alias = "llm_api_key")]
     pub llm_api_key: Option<String>,
-    /// Per-request LLM provider override ("anthropic", "openai", "deepseek", "azure", or "openai-compatible").
+    /// Per-request LLM provider override ("anthropic", "openai",
+    /// "openai-responses", "deepseek", "azure", or "openai-compatible").
     #[serde(default, alias = "llm_provider")]
     pub llm_provider: Option<String>,
     /// Per-request LLM model override.
     #[serde(default, alias = "llm_model")]
     pub llm_model: Option<String>,
-    /// Per-request LLM base URL override (OpenAI-compatible providers
-    /// like DeepSeek). Example: `"https://api.deepseek.com/v1"`.
+    /// Per-request LLM base URL override for Chat Completions-compatible or
+    /// Responses-compatible providers. Example: `"https://gateway.example/v1"`.
     #[serde(default, alias = "base_url")]
     pub base_url: Option<String>,
     /// Optional user-supplied instructions appended to the summary system
