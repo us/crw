@@ -35,10 +35,13 @@ Pick one:
 ```
 # Install and start CRW
 curl -fsSL https://fastcrw.com/install | bash
-crw  # runs on http://localhost:3000
+crw serve  # runs on http://localhost:3000
 
 # Or Docker
 docker run -p 3000:3000 ghcr.io/us/crw:latest
+
+# Point the loader at it
+export CRW_API_URL=http://localhost:3000
 ```
 
 ### Option B: Cloud (fastCRW)
@@ -225,8 +228,12 @@ docs = loader.load()
 The code is identical — only the backend changes:
 
 ```
-# Self-hosted: no args needed (localhost:3000)
-loader = CrwLoader(url="https://example.com", mode="scrape")
+# Self-hosted: point at your own server
+loader = CrwLoader(
+    url="https://example.com",
+    api_url="http://localhost:3000",
+    mode="scrape",
+)
 
 # Cloud: pass api_url and api_key
 loader = CrwLoader(
@@ -247,7 +254,7 @@ loader = CrwLoader(url="https://example.com", mode="scrape")
 - **Clean markdown by default.** CRW strips nav, footers, and boilerplate. Your chunks contain actual content, not HTML noise — which means better embeddings and more relevant retrieval.
 - **Low-latency, local-first crawling.** Running the engine next to your pipeline avoids remote API round trips, so crawling a large docs site stays quick. See the full latency distribution on our [public benchmark](/benchmarks).
 - **Native LangChain integration.** `CrwLoader` implements `BaseLoader` with `lazy_load()` — works with every LangChain component out of the box.
-- **Self-hosted for free.** No API keys, no rate limits, no per-page costs during development. Switch to [fastCRW](https://fastcrw.com) cloud when you need production reliability.
+- **Self-hosted for free.** No API key, no rate limits, no per-page costs during development. Switch to [fastCRW](https://fastcrw.com) cloud when you need production reliability.
 
 ## Next Steps
 

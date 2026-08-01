@@ -5,7 +5,7 @@ Runnable snippets showing how to use CRW from popular frameworks. These are
 
 | Dir | Framework | How it talks to CRW | Replaces |
 |---|---|---|---|
-| `langchain/` | LangChain | `crw[langchain]` extra (`crw.integrations.langchain`) | the old `langchain-crw` package |
+| `langchain/` | LangChain | `crw[langchain]` extra (`crw.integrations.langchain`) | nothing; `langchain-crw` re-exports this same loader |
 | `crewai/` | CrewAI | `crw[crewai]` extra (`crw.integrations.crewai`) | the old `crewai-crw` package |
 | `openclaw/` | OpenClaw | the `crw-mcp` MCP server (MCP-native) | the old `openclaw-plugin-crw` package |
 | `pi/` | Pi | the `crw-mcp` MCP server (MCP-native) | the old `pi-crw` package |

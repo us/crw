@@ -296,7 +296,7 @@ from crw.integrations.crewai import (
     CrwSearchWebTool,
 )
 
-# Self-hosted (default: localhost:3000)
+# Managed cloud by default (api.fastcrw.com), reads CRW_API_KEY
 scrape_tool = CrwScrapeWebsiteTool()
 
 # Or use fastCRW cloud
@@ -324,11 +324,15 @@ task = Task(
 crew = Crew(agents=[researcher], tasks=[task])
 result = crew.kickoff()</code></pre>
 <h2 id="langchain">LangChain</h2>
-<p>LangChain support is bundled as an <strong>extra</strong> in the <code>crw</code> Python package — no separate package needed.</p>
-<pre data-lang="bash"><code class="language-bash">pip install &quot;crw[langchain]&quot;</code></pre>
+<p>LangChain support ships as an <strong>extra</strong> in the <code>crw</code> Python package. The same
+loader is also published under the conventional LangChain name, so either
+install works and you get the identical <code>CrwLoader</code>.</p>
+<pre data-lang="bash"><code class="language-bash">pip install &quot;crw[langchain]&quot;
+# or
+pip install langchain-crw</code></pre>
 <pre data-lang="python"><code class="language-python">from crw.integrations.langchain import CrwLoader
 
-# Self-hosted (default: localhost:3000)
+# Managed cloud by default (api.fastcrw.com), reads CRW_API_KEY
 loader = CrwLoader(url=&quot;https://example.com&quot;, mode=&quot;scrape&quot;)
 docs = loader.load()
 
@@ -510,12 +514,12 @@ console.log(data.markdown);</code></pre>
 <td>--</td>
 </tr>
 <tr>
-<td><a href="https://pypi.org/project/crw/">LangChain</a> (<code>crw[langchain]</code>)</td>
+<td><a href="https://pypi.org/project/crw/">LangChain</a> (<code>crw[langchain]</code> or <code>langchain-crw</code>)</td>
 <td>Yes</td>
 <td>Yes</td>
 <td>Yes</td>
 <td>Yes (cloud)</td>
-<td>--</td>
+<td>Yes (cloud)</td>
 </tr>
 <tr>
 <td><a href="https://www.npmjs.com/package/n8n-nodes-crw">n8n</a></td>

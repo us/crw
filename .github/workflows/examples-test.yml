@@ -117,3 +117,35 @@ jobs:
 
       - name: Validate JSON blocks in MCP example READMEs
         run: bash scripts/check-mcp-example-json.sh
+
+  # ---------------------------------------------------------------------------
+  # Downstream package: langchain-crw re-exports crw.integrations.langchain, so
+  # an SDK change or an ecosystem move can break it without any signal in its own
+  # repo. That repo is dormant for months at a time and GitHub disables cron in
+  # repos idle for 60 days, so this weekly check has to live here, where the
+  # schedule stays alive.
+  # ---------------------------------------------------------------------------
+  downstream-langchain-crw:
+    name: langchain-crw resolves against current LangChain
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+
+      - name: Install the published package next to current LangChain
+        run: |
+          set -euo pipefail
+          uv venv .venv --python 3.13
+          uv pip install --python .venv/bin/python langchain-crw "langchain>=1,<2"
+
+      - name: Assert the loader imports and is the SDK's
+        run: |
+          set -euo pipefail
+          .venv/bin/python -c "
+          from importlib.metadata import version
+          from langchain_crw import CrwLoader
+          from crw.integrations.langchain import CrwLoader as SdkLoader
+          print('langchain-core=' + version('langchain-core'), 'crw=' + version('crw'))
+          assert version('langchain-core').startswith('1.'), version('langchain-core')
+          assert CrwLoader is SdkLoader, 'langchain-crw re-forked the loader'
+          "

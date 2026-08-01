@@ -21,7 +21,7 @@ from crw.integrations.crewai import (
     CrwSearchWebTool,
 )
 
-# Self-hosted (default: localhost:3000)
+# Managed cloud by default (api.fastcrw.com), reads CRW_API_KEY
 scrape_tool = CrwScrapeWebsiteTool()
 
 # Or use fastCRW cloud
@@ -52,16 +52,20 @@ result = crew.kickoff()
 
 ## LangChain
 
-LangChain support is bundled as an **extra** in the `crw` Python package — no separate package needed.
+LangChain support ships as an **extra** in the `crw` Python package. The same
+loader is also published under the conventional LangChain name, so either
+install works and you get the identical `CrwLoader`.
 
 ```bash
 pip install "crw[langchain]"
+# or
+pip install langchain-crw
 ```
 
 ```python
 from crw.integrations.langchain import CrwLoader
 
-# Self-hosted (default: localhost:3000)
+# Managed cloud by default (api.fastcrw.com), reads CRW_API_KEY
 loader = CrwLoader(url="https://example.com", mode="scrape")
 docs = loader.load()
 
@@ -222,7 +226,7 @@ Not every integration supports every endpoint. Search requires a cloud API backe
 | Integration | Scrape | Crawl | Map | Search | Extract |
 |-------------|--------|-------|-----|--------|---------|
 | [CrewAI](https://pypi.org/project/crw/) (`crw[crewai]`) | Yes | Yes | Yes | Yes (cloud) | -- |
-| [LangChain](https://pypi.org/project/crw/) (`crw[langchain]`) | Yes | Yes | Yes | Yes (cloud) | -- |
+| [LangChain](https://pypi.org/project/crw/) (`crw[langchain]` or `langchain-crw`) | Yes | Yes | Yes | Yes (cloud) | Yes (cloud) |
 | [n8n](https://www.npmjs.com/package/n8n-nodes-crw) | Yes | Yes | Yes | Yes (cloud) | -- |
 | [Dify](https://github.com/us/dify-plugin-crw) | Yes | Yes | Yes | Yes (cloud) | -- |
 | MCP Server (proxy mode) | Yes | Yes | Yes | Yes | -- |

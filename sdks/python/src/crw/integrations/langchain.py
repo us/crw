@@ -86,10 +86,13 @@ class CrwLoader(BaseLoader):
                 Not required for search mode.
             api_key: Bearer token for authentication.
                 Read from CRW_API_KEY env var if not provided.
-                Not required for subprocess mode or self-hosted without auth.
+                Not required with CRW_LOCAL=1 or a self-hosted server
+                without auth.
             api_url: Base URL of CRW server for HTTP mode.
                 Read from CRW_API_URL env var if not provided.
-                Defaults to None (subprocess mode — spawns crw-mcp binary).
+                Defaults to None, which uses the managed cloud at
+                api.fastcrw.com. Ignored when CRW_LOCAL=1 is set, which
+                runs a local engine instead.
             mode: Operation mode - "scrape", "crawl", "map", "search", "parse"
                 (local PDF → markdown/JSON), or "extract" (structured LLM
                 extraction across URLs; HTTP/cloud mode only).

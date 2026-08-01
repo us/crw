@@ -43,7 +43,7 @@ The `crewai-crw` package gives you three tools out of the box:
 ```
 from crewai_crw import CrwScrapeWebsiteTool, CrwCrawlWebsiteTool, CrwMapWebsiteTool
 
-# Self-hosted (default: localhost:3000)
+# Managed cloud by default (api.fastcrw.com), reads CRW_API_KEY
 scrape_tool = CrwScrapeWebsiteTool()
 crawl_tool = CrwCrawlWebsiteTool()
 map_tool = CrwMapWebsiteTool()
