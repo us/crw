@@ -400,6 +400,46 @@ async fn llm_providers_match_the_dispatcher() {
     }
 }
 
+#[test]
+fn openapi_provider_lists_match_the_dispatcher() {
+    // The spec is hand-maintained, so a new dispatcher provider silently leaves
+    // the published contract behind: the `llmProvider` enum then forbids a
+    // value the server accepts, and generated clients reject valid requests.
+    // `check-openapi.sh` only proves the served spec matches the committed one,
+    // which stays true while both are stale — this is the check that doesn't.
+    let spec: Value =
+        serde_json::from_str(include_str!("../openapi/openapi.json")).expect("valid OpenAPI");
+
+    let example =
+        spec["paths"]["/v1/capabilities"]["get"]["responses"]["200"]["content"]["application/json"]
+            ["schema"]["properties"]["llm"]["properties"]["providers"]["example"]
+            .as_array()
+            .expect("capabilities llm.providers example is an array");
+    let enumerated =
+        spec["components"]["schemas"]["ScrapeRequest"]["properties"]["llmProvider"]["enum"]
+            .as_array()
+            .expect("ScrapeRequest.llmProvider enum is an array");
+
+    for (label, values) in [
+        ("llm.providers example", example),
+        ("llmProvider enum", enumerated),
+    ] {
+        let listed: Vec<&str> = values.iter().filter_map(Value::as_str).collect();
+        for provider in crw_extract::llm::SUPPORTED_PROVIDERS {
+            assert!(
+                listed.contains(provider),
+                "{label} in openapi.json is missing `{provider}`, which the dispatcher accepts"
+            );
+        }
+        for provider in &listed {
+            assert!(
+                crw_extract::llm::is_supported_provider(provider),
+                "{label} in openapi.json advertises `{provider}`, which the dispatcher rejects"
+            );
+        }
+    }
+}
+
 #[tokio::test]
 async fn llm_required_formats_are_declared() {
     let body = caps(&app_from("")).await;

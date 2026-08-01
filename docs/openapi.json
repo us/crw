@@ -497,6 +497,7 @@
                             "openai",
                             "deepseek",
                             "openai-compatible",
+                            "openai-responses",
                             "azure"
                           ]
                         },
@@ -1313,7 +1314,8 @@
               "openai",
               "deepseek",
               "azure",
-              "openai-compatible"
+              "openai-compatible",
+              "openai-responses"
             ],
             "description": "Per-request LLM provider override"
           },
@@ -1323,7 +1325,7 @@
           },
           "baseUrl": {
             "type": "string",
-            "description": "Per-request LLM base URL override for OpenAI-compatible providers (e.g. https://api.deepseek.com/v1)"
+            "description": "Per-request LLM base URL override for Chat Completions-compatible or Responses-compatible providers (e.g. https://api.deepseek.com/v1)"
           },
           "summaryPrompt": {
             "type": "string",

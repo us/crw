@@ -6,36 +6,33 @@
 //! usage uses `input_tokens` / `output_tokens`. Keep that translation isolated
 //! here so OpenAI-compatible Chat Completions providers remain unchanged.
 
-use crate::llm::LlmCallResult;
+use crate::llm::{LlmCallResult, shared_client};
 use crate::pricing;
 use crw_core::config::LlmConfig;
 use crw_core::error::{CrwError, CrwResult};
 use crw_core::types::LlmUsage;
-use std::sync::OnceLock;
 use std::time::Duration;
 
 const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
-
-fn shared_client() -> &'static reqwest::Client {
-    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
-    CLIENT.get_or_init(|| {
-        reqwest::Client::builder()
-            .timeout(DEFAULT_TIMEOUT)
-            .build()
-            .expect("reqwest client build (Responses shared)")
-    })
-}
 
 /// Resolve a Responses endpoint from either a versioned API base or a complete
 /// endpoint. A base such as `https://gateway.example/v1` therefore becomes
 /// `https://gateway.example/v1/responses`, while a complete endpoint is idempotent.
+///
+/// The `/responses` suffix check runs on the PATH only: a query string or
+/// fragment must be preserved and re-attached after the path, never treated as
+/// part of it. Azure-style Responses endpoints carry a required
+/// `?api-version=…`, and appending after it (`…?api-version=x/responses`)
+/// corrupts the parameter instead of building a path.
 pub(crate) fn responses_url(base_url: Option<&str>) -> String {
-    let base = base_url.unwrap_or(DEFAULT_BASE_URL).trim_end_matches('/');
-    if base.ends_with("/responses") {
-        base.to_string()
+    let raw = base_url.unwrap_or(DEFAULT_BASE_URL);
+    let split = raw.find(['?', '#']).unwrap_or(raw.len());
+    let (path, suffix) = raw.split_at(split);
+    let path = path.trim_end_matches('/');
+    if path.ends_with("/responses") {
+        format!("{path}{suffix}")
     } else {
-        format!("{base}/responses")
+        format!("{path}/responses{suffix}")
     }
 }
 
@@ -69,19 +66,72 @@ async fn post(
         CrwError::ExtractionError(format!("Failed to read Responses API response: {e}"))
     })?;
     if !status.is_success() {
+        // The HTTP status code is enough — do not leak the body. A gateway that
+        // echoes the request back in an error body would otherwise surface the
+        // bearer key or the prompt to the API caller.
         return Err(CrwError::ExtractionError(format!(
-            "Responses API error ({status}): {}",
-            truncate_for_error(&text)
+            "Responses API error ({status})"
         )));
     }
 
-    serde_json::from_str(&text).map_err(|e| {
+    let payload: serde_json::Value = serde_json::from_str(&text).map_err(|e| {
         CrwError::ExtractionError(format!("Failed to parse Responses API response: {e}"))
-    })
+    })?;
+    check_response_status(&payload)?;
+    Ok(payload)
 }
 
-fn output_text(payload: &serde_json::Value) -> String {
-    payload
+/// A Responses payload carries its own terminal state, so an HTTP 200 is not by
+/// itself a success. Only an absent status (compatibility gateways that omit
+/// the field), `completed`, and `incomplete` carry usable output; `failed`,
+/// `cancelled`, `queued`, `in_progress` and anything unrecognised must not be
+/// mistaken for a result.
+///
+/// `incomplete` (the provider stopped at `max_output_tokens` or a content
+/// filter) stays a success with whatever was produced, matching the Chat
+/// Completions path, which likewise does not reject `finish_reason == "length"`.
+/// The failure is named by its status only. `error.message` is gateway-supplied
+/// and reaches the API caller verbatim through the 422 body, so echoing it would
+/// reopen on this path exactly the leak [`post`] refuses to open on the non-2xx
+/// one — and with no size bound at all. The status word is echoed only when it
+/// is one the API actually defines, keeping even that string bounded.
+fn check_response_status(payload: &serde_json::Value) -> CrwResult<()> {
+    let Some(status) = payload.get("status").and_then(serde_json::Value::as_str) else {
+        return Ok(());
+    };
+    if matches!(status, "completed" | "incomplete") {
+        return Ok(());
+    }
+    Err(CrwError::ExtractionError(
+        if matches!(status, "failed" | "cancelled" | "queued" | "in_progress") {
+            format!("Responses API returned status '{status}'")
+        } else {
+            // Server-side only: an operator debugging a gateway that speaks a
+            // dialect of the status vocabulary needs the actual word, and the
+            // caller-facing string above deliberately withholds it.
+            tracing::warn!(
+                status = %status,
+                "Responses API returned an unrecognised status"
+            );
+            "Responses API returned an unrecognised status".to_string()
+        },
+    ))
+}
+
+/// Join every `output_text` part the assistant produced.
+///
+/// The Chat Completions paths key on one field: an absent `message.content`
+/// errors, a present-but-empty one succeeds. `output_text` is the Responses
+/// analogue of that field, so presence is keyed on the PART, not on the
+/// enclosing `message` item — a message carrying only a `refusal` part is
+/// "content absent" exactly as a Chat Completions refusal (which nulls
+/// `content`) is, and must not read as an empty answer.
+///
+/// `None`: no usable `output_text` part anywhere (reasoning-only, refusal-only,
+/// or a malformed part whose `text` is missing or not a string).
+/// `Some("")`: a real `output_text` part whose text is genuinely empty.
+fn output_text(payload: &serde_json::Value) -> Option<String> {
+    let mut parts = payload
         .get("output")
         .and_then(serde_json::Value::as_array)
         .into_iter()
@@ -91,8 +141,9 @@ fn output_text(payload: &serde_json::Value) -> String {
         .flatten()
         .filter(|part| part.get("type").and_then(serde_json::Value::as_str) == Some("output_text"))
         .filter_map(|part| part.get("text").and_then(serde_json::Value::as_str))
-        .collect::<Vec<_>>()
-        .join("")
+        .peekable();
+    parts.peek()?;
+    Some(parts.collect::<Vec<_>>().join(""))
 }
 
 fn parse_usage(payload: &serde_json::Value, llm: &LlmConfig) -> Option<LlmUsage> {
@@ -144,12 +195,9 @@ pub(crate) async fn call_text(
     apply_optional_generation_fields(&mut body, llm);
 
     let payload = post(llm, &body, timeout).await?;
-    let content = output_text(&payload);
-    if content.is_empty() {
-        return Err(CrwError::ExtractionError(
-            "Responses API response missing output_text".into(),
-        ));
-    }
+    let content = output_text(&payload).ok_or_else(|| {
+        CrwError::ExtractionError("Responses API response missing output_text".into())
+    })?;
     Ok(LlmCallResult {
         content,
         usage: parse_usage(&payload, llm),
@@ -211,17 +259,9 @@ pub(crate) async fn call_tool(
     // Some compatibility gateways ignore tool_choice and return JSON text.
     // Preserve CRW's existing fallback behavior, then apply normal schema
     // validation in the caller.
-    let raw_text = output_text(&payload);
+    let raw_text = output_text(&payload).unwrap_or_default();
     let value = crate::structured::parse_json_response(&raw_text)?;
     Ok((value, usage))
-}
-
-fn truncate_for_error(text: &str) -> &str {
-    if text.len() > 200 {
-        &text[..text.floor_char_boundary(200)]
-    } else {
-        text
-    }
 }
 
 #[cfg(test)]
@@ -241,6 +281,107 @@ mod tests {
         assert_eq!(
             responses_url(Some("https://example.test/v1/responses/")),
             "https://example.test/v1/responses"
+        );
+    }
+
+    #[test]
+    fn endpoint_keeps_query_and_fragment_after_the_path() {
+        // Azure-style Responses endpoints carry a required api-version. The
+        // suffix must survive on both the append and the idempotent branch.
+        assert_eq!(
+            responses_url(Some("https://gateway.example/v1?api-version=2026-01-01")),
+            "https://gateway.example/v1/responses?api-version=2026-01-01"
+        );
+        assert_eq!(
+            responses_url(Some(
+                "https://gateway.example/v1/responses?api-version=2026-01-01"
+            )),
+            "https://gateway.example/v1/responses?api-version=2026-01-01"
+        );
+        assert_eq!(
+            responses_url(Some("https://gateway.example/v1#frag")),
+            "https://gateway.example/v1/responses#frag"
+        );
+    }
+
+    #[test]
+    fn status_gate_admits_only_usable_terminal_states() {
+        // Absent status: compatibility gateways that omit the field.
+        assert!(check_response_status(&serde_json::json!({})).is_ok());
+        assert!(check_response_status(&serde_json::json!({ "status": "completed" })).is_ok());
+        // Stopped at max_output_tokens: keep whatever was produced, like the
+        // Chat Completions path does for finish_reason == "length".
+        assert!(check_response_status(&serde_json::json!({ "status": "incomplete" })).is_ok());
+
+        for status in ["failed", "cancelled", "queued", "in_progress"] {
+            let err = check_response_status(&serde_json::json!({ "status": status }))
+                .expect_err("non-terminal or failed status must not pass as a result");
+            assert!(err.to_string().contains(status), "status named in error");
+        }
+    }
+
+    #[test]
+    fn status_gate_never_echoes_gateway_controlled_strings() {
+        // `error.message` is written by the gateway and would reach the API
+        // caller through the 422 body — the same leak the non-2xx branch of
+        // `post` refuses to open.
+        let err = check_response_status(&serde_json::json!({
+            "status": "failed",
+            "error": { "code": "server_error", "message": "Bearer SENTINEL-LEAK-TOKEN" }
+        }))
+        .expect_err("failed status must error");
+        let msg = err.to_string();
+        assert!(msg.contains("failed"), "status is named: {msg}");
+        assert!(!msg.contains("SENTINEL-LEAK-TOKEN"), "body echoed: {msg}");
+
+        // An unrecognised status is itself gateway-controlled, so it is not
+        // echoed either — no unbounded string reaches the caller.
+        let err = check_response_status(&serde_json::json!({ "status": "SENTINEL-LEAK-TOKEN" }))
+            .expect_err("unknown status must error");
+        assert!(!err.to_string().contains("SENTINEL-LEAK-TOKEN"));
+    }
+
+    #[test]
+    fn output_text_distinguishes_absent_from_empty() {
+        // A message item whose text is empty is "present but empty" -> Some("").
+        assert_eq!(
+            output_text(&serde_json::json!({
+                "output": [{
+                    "type": "message",
+                    "content": [{ "type": "output_text", "text": "" }]
+                }]
+            })),
+            Some(String::new())
+        );
+        // No message item at all -> nothing textual was produced.
+        assert_eq!(
+            output_text(&serde_json::json!({
+                "output": [{ "type": "reasoning", "summary": [] }]
+            })),
+            None
+        );
+        assert_eq!(output_text(&serde_json::json!({})), None);
+        // A refusal is carried as a message with no output_text part. Chat
+        // Completions nulls `content` for the same case and errors, so this
+        // must be "absent", never an empty answer.
+        assert_eq!(
+            output_text(&serde_json::json!({
+                "output": [{
+                    "type": "message",
+                    "content": [{ "type": "refusal", "refusal": "I cannot help with that." }]
+                }]
+            })),
+            None
+        );
+        // Malformed part: type says output_text but text is not a string.
+        assert_eq!(
+            output_text(&serde_json::json!({
+                "output": [{
+                    "type": "message",
+                    "content": [{ "type": "output_text", "text": null }]
+                }]
+            })),
+            None
         );
     }
 }

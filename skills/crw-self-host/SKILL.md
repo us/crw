@@ -219,11 +219,11 @@ and `/v1/search` with `answer: true`.
 
 ```toml
 [extraction.llm]
-provider = "anthropic"          # "anthropic" | "openai" | "deepseek" | "azure" | "openai-compatible"
+provider = "anthropic"          # "anthropic" | "openai" | "openai-responses" | "deepseek" | "azure" | "openai-compatible"
 api_key = "sk-..."              # or CRW_EXTRACTION__LLM__API_KEY env var
 model = "claude-sonnet-4-20250514"
 max_tokens = 4096
-# base_url = "https://custom-endpoint.example.com"   # for openai-compatible APIs
+# base_url = "https://custom-endpoint.example.com"   # Chat Completions or Responses endpoints
 max_concurrency = 4
 max_html_bytes = 100000
 

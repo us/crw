@@ -105,9 +105,9 @@ Key parameters:
   headers         object    opt       Custom HTTP headers forwarded to the target
   jsonSchema      object    opt       JSON Schema for structured extraction (formats:["json"])
   llmApiKey       string    opt       BYOK LLM key for json/summary formats
-  llmProvider     string    opt       "anthropic"|"openai"|"deepseek"|"azure"|"openai-compatible"
+  llmProvider     string    opt       "anthropic"|"openai"|"openai-responses"|"deepseek"|"azure"|"openai-compatible"
   llmModel        string    opt       Model override
-  baseUrl         string    opt       OpenAI-compatible endpoint base URL
+  baseUrl         string    opt       Chat Completions or Responses endpoint base URL
   summaryPrompt   string    opt       Style/tone directive for summary (≤500 chars)
   maxContentChars number    opt       Byte cap for content sent to LLM (default 100KB, max 200KB)
   proxy           string    opt       Per-request proxy URL

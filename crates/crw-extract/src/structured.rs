@@ -425,9 +425,12 @@ pub(crate) async fn call_anthropic(
     })?;
 
     if !status.is_success() {
+        // NOTE: body may contain the request echoed back by some gateways.
+        // The HTTP status code is enough — do not leak the body. This error
+        // text reaches the API caller verbatim in the response envelope, and
+        // on the managed path the echoed request carries the SERVER key.
         return Err(CrwError::ExtractionError(format!(
-            "Anthropic API error ({status}): {}",
-            truncate_for_error(&text)
+            "Anthropic API error ({status})"
         )));
     }
 
@@ -673,9 +676,10 @@ pub(crate) async fn call_openai(
         .map_err(|e| CrwError::ExtractionError(format!("Failed to read OpenAI response: {e}")))?;
 
     if !status.is_success() {
+        // Same rule as the Anthropic branch above: never echo the provider
+        // body back to the API caller.
         return Err(CrwError::ExtractionError(format!(
-            "OpenAI API error ({status}): {}",
-            truncate_for_error(&text)
+            "OpenAI API error ({status})"
         )));
     }
 

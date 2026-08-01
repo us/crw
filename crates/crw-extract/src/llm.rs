@@ -62,7 +62,11 @@ pub struct LlmCallResult {
     pub warning: Option<String>,
 }
 
-fn shared_client() -> &'static reqwest::Client {
+/// The crate's pooled LLM client. Shared with [`crate::responses`] so the
+/// Responses transport does not open a second connection pool; callers that
+/// need a different budget set a per-request `.timeout(..)`, which overrides
+/// the builder default below.
+pub(crate) fn shared_client() -> &'static reqwest::Client {
     static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
     CLIENT.get_or_init(|| {
         reqwest::Client::builder()
