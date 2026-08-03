@@ -4,7 +4,7 @@ This recipe walks from zero to a working Claude Code agent that can search the w
 
 **Time to complete:** ~5 minutes  
 **Prerequisites:** Node.js 18+, Claude Code installed  
-**Result:** Claude Code gains `crw_search`, `crw_scrape`, `crw_crawl`, `crw_map`, `crw_check_crawl_status`, `crw_extract`, `crw_check_extract_status`, and `crw_parse_file`
+**Result:** Claude Code gains `crw_search`, `crw_scrape`, `crw_crawl`, `crw_check_crawl_status`, `crw_map`, `crw_extract`, `crw_check_extract_status`, `crw_cancel_extract`, and `crw_parse_file`
 
 ---
 
@@ -20,9 +20,9 @@ claude mcp add crw -- npx -y crw-mcp
 
 Claude Code writes this into your project `.claude/mcp.json` automatically. You are done. Start a new Claude Code session and the tools are available.
 
-> **What you get:** `crw_scrape`, `crw_crawl`, `crw_check_crawl_status`, `crw_map`, `crw_extract`, `crw_check_extract_status`, `crw_parse_file`. `crw_search` requires a SearXNG backend — use cloud mode to get it instantly.
+> **What you get:** `crw_scrape`, `crw_crawl`, `crw_check_crawl_status`, `crw_map`, `crw_extract`, `crw_check_extract_status`, `crw_cancel_extract`, `crw_parse_file`. `crw_search` requires a SearXNG backend — use cloud mode to get it instantly.
 
-### Option B: Cloud mode (all 8 tools, including `crw_search`)
+### Option B: Cloud mode (all 9 tools, including `crw_search`)
 
 Get a free API key at [fastcrw.com](https://fastcrw.com) — 500 one-time lifetime credits, no monthly reset.
 
@@ -33,7 +33,7 @@ claude mcp add crw \
   -- npx -y crw-mcp
 ```
 
-This registers the same `crw-mcp` binary in proxy mode. Tool calls are forwarded to `api.fastcrw.com`. All 8 tools are advertised, including `crw_search`.
+This registers the same `crw-mcp` binary in proxy mode. Tool calls are forwarded to `api.fastcrw.com`. All 9 tools are advertised, including `crw_search`.
 
 **Verify it works:**
 
@@ -122,6 +122,8 @@ Claude recognizes it needs live data and calls the search tool first.
 
 Claude now has 5 live search results with titles, URLs, and descriptions. It picks the most informative result to read in full.
 
+> **Response shape note:** the envelope above is the self-hosted engine's — it nests the results as `data.results`. In cloud mode (`CRW_API_URL=https://api.fastcrw.com`) the hosted REST contract puts them **directly in `data`**, i.e. `{"success":true,"data":[{…}]}`. Read `data.results` when present and fall back to `data`. Because the two differ, `crw-mcp` advertises an `outputSchema` for its tools in embedded mode only; in proxy mode it still returns `structuredContent`, just without a schema to validate against. (The engine's own HTTP `/mcp` advertises them too — it produces the body itself.)
+
 ---
 
 ### Turn 2: Claude calls `crw_scrape`
@@ -187,17 +189,18 @@ Claude now has 5 live search results with titles, URLs, and descriptions. It pic
 
 ## Tool reference (MCP)
 
-All 8 tools registered by `crw-mcp`:
+All 9 tools registered by `crw-mcp`:
 
 | Tool | Required params | Returns |
 |------|-----------------|---------|
-| `crw_search` | `query` | `{ success, data: { results: [{title, url, description, position}] } }` |
+| `crw_search` | `query` | `{ success, data: [{title, url, description, position}] }` (cloud); `{ success, data: { results: [...] } }` (self-hosted engine) |
 | `crw_scrape` | `url` | `{ success, data: { markdown, metadata: { sourceURL, title, statusCode, renderedWith } } }` (cloud); `{ markdown, metadata: {...} }` (embedded) |
 | `crw_crawl` | `url` | `{ success, id }` — async job ID |
 | `crw_check_crawl_status` | `id` | `{ status, data: [...], total, completed }` |
 | `crw_map` | `url` | `{ links: ["url1", ...] }` |
 | `crw_extract` | `urls` | `{ success, id }` — async job ID |
 | `crw_check_extract_status` | `id` | `{ status, results: [{url, status, data, error, llmUsage}] }` |
+| `crw_cancel_extract` | `id` | `{ success, id, status, results, creditsUsed, tokensUsed }` |
 | `crw_parse_file` | `contentBase64` | `{ success, data: { markdown } }` |
 
 **Key points:**

@@ -87,24 +87,46 @@ Use this page when you want the common CRW envelopes in one place. The endpoint 
 
 ## Search
 
-`data` is a wrapper around the actual results. When you do not use any LLM feature, the wrapper still holds the results in `data.results` and the other fields stay empty/null.
+**Two hosts, two shapes — read `data.results` when present, otherwise `data`.** A self-hosted engine wraps the results, as shown below. The hosted API at `api.fastcrw.com` puts the results **directly in `data`** and hoists `answer`, `citations`, `llmUsage` and `warnings` to the top level, so adding `answer: true` never changes `data`'s shape.
+
+`answer`, `citations`, `llmUsage` and `warnings` are **omitted entirely** when they have nothing to report — they are not emitted as `null` or `[]`. A plain self-hosted search is usually just `{"success": true, "data": {"results": [...]}}`. Test with `"answer" in data`, never by truthiness of a key you assume exists.
+
+Two of them appear without any LLM feature being used: `data.warnings` is populated when a search leg degrades, and a top-level `warning` (singular, on the envelope) appears when `scrapeOptions` enrichment fails. Both are routine partial-success signals, not errors — do not assert on the exact key set.
+
+The self-hosted wrapper, with every optional field populated:
 
 ```json
 {
   "success": true,
   "data": {
     "results": <flat array OR grouped object — see below>,
-    "answer": "string or null",
+    "answer": "Synthesized answer over the top results.",
     "citations": [
       { "url": "https://...", "title": "...", "position": 0 }
     ],
-    "llmUsage": { "inputTokens": 3420, "outputTokens": 96, "totalTokens": 3516, "estimatedCostUsd": 0.0008, "model": "gpt-4o-mini", "provider": "openai" },
-    "warnings": []
+    "llmUsage": { "inputTokens": 3420, "outputTokens": 96, "totalTokens": 3516, "estimatedCostUsd": 0.0008, "model": "...", "provider": "..." },
+    "warnings": ["answer synthesis unavailable"]
   }
 }
 ```
 
-`results` shape:
+The hosted equivalent of the same response — same fields, one level higher:
+
+```json
+{
+  "success": true,
+  "data": <flat array OR grouped object — same two shapes as below>,
+  "answer": "Synthesized answer over the top results.",
+  "citations": [
+    { "url": "https://...", "title": "...", "position": 0 }
+  ],
+  "llmUsage": { "inputTokens": 3420, "outputTokens": 96, "totalTokens": 3516 },
+  "warnings": ["answer synthesis unavailable"],
+  "_meta": { "...": "request accounting; present on the LLM path" }
+}
+```
+
+`results` shape (identical on both hosts — only its position differs):
 
 - flat array when `sources` is not set
 - grouped object when `sources` is set

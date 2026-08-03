@@ -307,8 +307,13 @@ Flat response (no sources param):
     }
   }
 
-Grouped response (when sources:["web","news"] set): data.results is a keyed object
+Grouped response (when sources:["web","news"] set): the results are a keyed object
   {"web": [...], "news": [...]}
+
+Two hosts, two positions for the SAME results. A self-hosted engine nests them as
+data.results, alongside answer/citations/llmUsage/warnings. The hosted API at
+api.fastcrw.com puts them directly in data and hoists those four to the top level.
+Portable read: use data.results when present, otherwise data.
 
 ────────────────────────────────────────────────────────────────────────────────
 ### 4.5  POST /firecrawl/v2/parse
@@ -701,7 +706,13 @@ Credit-aware crawl in Python (copy-paste-runnable, stdlib + requests):
   Example:
     resp = requests.post(f"{BASE}/v1/search",
         headers=H, json={"query": "fastCRW web scraping", "limit": 5})
-    for item in resp.json()["data"]["results"]:
+    data = resp.json()["data"]
+    # hosted API returns the results directly in data; a self-hosted engine
+    # nests them one level deeper as data.results. Read results when present,
+    # fall back to data. (With sources set, both forms hold a keyed object
+    # instead of a list — iterate the per-source arrays inside it.)
+    results = data["results"] if isinstance(data, dict) and "results" in data else data
+    for item in results:
         page = requests.post(f"{BASE}/v1/scrape",
             headers=H, json={"url": item["url"], "formats": ["markdown"]})
         print(page.json()["data"]["markdown"][:500])

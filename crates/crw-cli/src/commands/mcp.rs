@@ -245,6 +245,20 @@ async fn proxy_call_tool(
                 .map_err(|e| format!("HTTP request failed: {e}"))?;
             parse_response(resp).await
         }
+        "crw_cancel_extract" => {
+            let id = args
+                .get("id")
+                .and_then(|v| v.as_str())
+                .ok_or("missing required parameter: id")?;
+            let resp = client
+                .delete(format!("{base_url}/v1/extract/{id}"))
+                .headers(headers)
+                .timeout(TIMEOUT_CRAWL_STATUS)
+                .send()
+                .await
+                .map_err(|e| format!("HTTP request failed: {e}"))?;
+            parse_response(resp).await
+        }
         "crw_parse_file" => {
             use base64::Engine;
             let b64 = args

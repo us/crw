@@ -158,7 +158,7 @@ This yields a ~4.2 MB binary (vs ~17 MB for the default embedded build) because 
 | `crw_search` | Search the web → titles, URLs, descriptions | `POST /v1/search` | Always in proxy mode; embedded only when a search backend is configured |
 | `crw_parse_file` | Parse a local PDF (base64) → markdown | `POST /firecrawl/v2/parse` (multipart) | All modes |
 
-> **Output bounding:** Tool results are bounded by default to keep agent context small. Content fields (markdown/html/etc.) are truncated to ~15 000 chars; `crw_map` returns at most 100 URLs. Truncated responses include `truncated: true` and `totalDiscovered` markers. Pass `maxLength: 0` (scrape / check_status / parse_file) or `limit: 0` (map) to opt out.
+> **Output bounding:** Tool results are bounded by default to keep agent context small. Content fields (markdown/html/etc.) are truncated to ~15 000 chars — including page content inlined into `crw_search` results via `scrapeOptions` — and `crw_map` returns at most 100 URLs. Truncated responses include `truncated: true` and `totalDiscovered` markers. Pass `maxLength: 0` (scrape / check_status / parse_file) or `limit: 0` (map) to opt out. `crw_search` does not *advertise* `maxLength`, so an agent will not discover it, but bounding is applied per-tool from the call's own arguments — a hand-written client may still pass `maxLength: 0` on a search to opt out, or a smaller value to tighten it.
 
 ## Browser Automation (`crw-browse`)
 
@@ -358,7 +358,9 @@ In embedded mode, the scraping engine runs in-process with zero overhead. In pro
 
 Protocol version: `2025-06-18`
 
-The `crw_search` tool declares an `outputSchema` and therefore returns its result both as the usual text content block and as a spec-compliant `structuredContent` object (MCP 2025-06-18) shaped like `{ success, data: { results: [...] } }` — strict clients can validate it directly, while lenient clients keep reading the text block unchanged.
+Every tool call returns its result as a text content block, and tools with a structured result also return it as a spec-compliant `structuredContent` object (MCP 2025-06-18). The two are always the same value, so lenient clients can keep reading the text block unchanged.
+
+An `outputSchema` is advertised by the two surfaces that produce the body themselves — **embedded stdio** and the engine's own **HTTP `/mcp`** — because there the shape is guaranteed. The **stdio proxy** (`crw-mcp --api-url …`) advertises none: `--api-url` can point at a self-hosted engine (which nests the results as `data.results`) or at the hosted API (which puts them directly in `data`), and under MCP 2025-06-18 a declared schema is a promise the server MUST keep — on a mismatch, a strict client rejects the entire call. `structuredContent` is still emitted in proxy mode; there is simply no advertised schema to validate it against. See [response shapes](/response-shapes) for both bodies.
 
 ## Operational Notes
 

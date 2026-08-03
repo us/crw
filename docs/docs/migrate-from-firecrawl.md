@@ -335,7 +335,8 @@ curl -s -X POST https://api.fastcrw.com/v1/search \
   | python3 -m json.tool | head -30
 ```
 
-Expected: `"data": {"results": [...]}` with search results.
+Expected: `"data": [...]` with search results. (Against a self-hosted engine the same
+call returns `"data": {"results": [...]}` — see [Response shapes](/response-shapes).)
 
 **5. SDK round-trip (Python)**
 

@@ -129,6 +129,11 @@ For most filtering tasks you want `markdown` (the main content) and
 
 ### MCP `crw_search` output (when using MCP, not CLI)
 
+The results sit in one of two places depending on which backend served the call:
+directly in `data` on the hosted API (`api.fastcrw.com`), or nested as
+`data.results` on a self-hosted engine. Read `data.results` when present and fall
+back to `data`. The nested form:
+
 ```json
 {
   "success": true,

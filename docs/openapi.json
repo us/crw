@@ -1009,9 +1009,92 @@
             "type": "boolean"
           },
           "data": {
+            "description": "Search results. On the hosted API (https://api.fastcrw.com) the results ARE the value of `data`. A self-hosted engine wraps them one level deeper as `data.results`, and carries `answer`/`citations`/`llmUsage`/`warnings` inside `data` instead of at the top level. Clients that must work against both should read `data.results` when present and fall back to `data`.",
+            "anyOf": [
+              {
+                "title": "Flat results",
+                "description": "Returned when `sources` is not set.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SearchResult"
+                }
+              },
+              {
+                "title": "Grouped results",
+                "description": "Returned when `sources` is set.",
+                "type": "object",
+                "properties": {
+                  "web": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SearchResult"
+                    }
+                  },
+                  "news": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SearchResult"
+                    }
+                  },
+                  "images": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  }
+                }
+              },
+              {
+                "title": "Self-hosted wrapper",
+                "description": "The self-hosted engine nests the flat or grouped results under `results`.",
+                "type": "object",
+                "required": [
+                  "results"
+                ],
+                "properties": {
+                  "results": {},
+                  "answer": {
+                    "type": "string"
+                  },
+                  "citations": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "llmUsage": {
+                    "type": "object"
+                  },
+                  "warnings": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "answer": {
+            "type": "string",
+            "description": "Hosted API only — synthesized answer over the top results, present when `answer: true` was set. A self-hosted engine returns this inside `data`."
+          },
+          "citations": {
             "type": "array",
+            "description": "Hosted API only — sources for `answer`, in citation order. A self-hosted engine returns this inside `data`.",
             "items": {
-              "$ref": "#/components/schemas/SearchResult"
+              "type": "object"
+            }
+          },
+          "llmUsage": {
+            "type": "object",
+            "description": "Hosted API only — token usage for the answer synthesis. A self-hosted engine returns this inside `data`."
+          },
+          "warnings": {
+            "type": "array",
+            "description": "Hosted API only — soft-failure notices (e.g. an answer leg that was rate-limited). A self-hosted engine returns this inside `data`.",
+            "items": {
+              "type": "string"
             }
           }
         }

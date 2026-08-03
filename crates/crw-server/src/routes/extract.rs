@@ -64,8 +64,10 @@ pub struct ExtractRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ExtractStartResponse {
     /// Response envelope carried by every native `/v1` response (and required by
-    /// the MCP `crw_extract` outputSchema, which the stdio/CLI proxies validate
-    /// this body against). Always `true` here — a rejected start is a 4xx error.
+    /// the MCP `crw_extract` outputSchema, which the engine's own `/mcp` advertises
+    /// and emits this body against — proxy mode advertises no schema, since the body
+    /// there comes from a remote we do not author). Always `true` here — a rejected
+    /// start is a 4xx error.
     pub success: bool,
     pub id: String,
     pub status: String,
@@ -268,9 +270,10 @@ impl From<UrlResult> for ExtractUrlResult {
 #[serde(rename_all = "camelCase")]
 pub struct ExtractStatusResponse {
     /// Response envelope carried by every native `/v1` response (and required by
-    /// the MCP `crw_check_extract_status` / `crw_cancel_extract` outputSchema,
-    /// which the stdio/CLI proxies validate this body against). `false` only when
-    /// the whole job failed.
+    /// the MCP `crw_check_extract_status` / `crw_cancel_extract` outputSchema, which
+    /// the engine's own `/mcp` advertises and emits this body against — proxy mode
+    /// advertises no schema, since the body there comes from a remote we do not
+    /// author). `false` only when the whole job failed.
     pub success: bool,
     pub id: String,
     pub status: String,

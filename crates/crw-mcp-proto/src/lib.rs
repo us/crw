@@ -400,8 +400,8 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
     // decided one level up, in `handle_protocol_method`'s `tools/list` arm, which
     // retains it out when `search_available` is false (an embedded install with no
     // search backend configured). Proxy mode always has it: the remote decides.
-    // The tool set itself does not depend on the mode, hence the discard.
-    let _ = proxy_mode;
+    // The tool SET does not depend on the mode; the advertised output contract does
+    // (see the `proxy_mode` strip below the last push).
     tools.push(json!({
         "name": "crw_search",
         "title": "Web search",
@@ -539,15 +539,50 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
         }
     }));
 
+    // In proxy mode the body is whatever the REMOTE returns, and we do not control that
+    // remote: `--api-url` may point at a self-hosted crw-server (which nests the results
+    // under `data.results`) or at the managed API (whose public REST contract puts them
+    // directly in `data`). A declared `outputSchema` is a promise about a body we do not
+    // author, and the spec says a server MUST conform to a schema it declares. A strict
+    // client then hard-fails the ENTIRE call when it does not: the official SDKs raise
+    // `-32602 Structured content does not match the tool's output schema` (issue #391).
+    // Stripping it is spec-legal — `outputSchema` is optional — and callers lose no data:
+    // `structuredContent` is still emitted, it just carries no advertised schema for a
+    // client to validate it against. The managed connector reached the same rule
+    // independently for the same reason (crw-saas `src/lib/mcp/dispatch.ts`,
+    // `managedSearchTool`).
+    //
+    // Applied to EVERY tool rather than a hand-picked list: "we do not author this body"
+    // is true of all of them in proxy mode, and a per-tool list has to be re-audited on
+    // every future shape change — which is exactly how `crw_extract` stayed broken after
+    // `crw_search` was already known to be.
+    //
+    // Embedded/engine mode (`proxy_mode == false`) keeps its schemas: there the body is
+    // ours and its shape is locked by tests.
+    if proxy_mode {
+        for tool in &mut tools {
+            if let Some(obj) = tool.as_object_mut() {
+                obj.remove("outputSchema");
+            }
+        }
+    }
+
     json!({ "tools": tools })
 }
 
-/// Returns the declared `outputSchema` for a tool, if it declares one.
+/// Returns the ENGINE's declared `outputSchema` for a tool, if it declares one.
 ///
-/// Single source of truth: `structuredContent` emission is derived from the
-/// same `tool_definitions` declaration that `tools/list` advertises, so the two
-/// can never drift. Recomputes `tool_definitions` per call — `tools/call` is not
-/// hot; memoize behind a `OnceLock` only if profiling ever demands it.
+/// Reads `tool_definitions(false)` deliberately, and that asymmetry is the point:
+/// it is the "does this tool have a structured shape at all" question, which drives
+/// `structuredContent` emission in [`tool_result_response`]. In proxy mode the schema
+/// is not *advertised* (we do not author the remote's body — see the strip in
+/// `tool_definitions`), but the structured value is still emitted, unvalidated. Do
+/// not "fix" this into taking `proxy_mode`: that would silently stop emitting
+/// `structuredContent` on the proxy. Pinned by
+/// `proxy_mode_still_emits_structured_content_without_a_schema`.
+///
+/// Recomputes `tool_definitions` per call — `tools/call` is not hot; memoize behind a
+/// `OnceLock` only if profiling ever demands it.
 pub fn tool_output_schema(tool_name: &str) -> Option<Value> {
     tool_definitions(false)["tools"]
         .as_array()?
@@ -644,11 +679,17 @@ pub fn handle_protocol_method(
 ///
 /// On success the structured `value` is emitted **both** as a text content block
 /// (verbatim, for backward compatibility with lenient clients and clients that
-/// negotiated an older protocol revision) **and**, when the called tool declares
-/// an `outputSchema`, as a top-level `structuredContent` field (MCP 2025-06-18)
-/// so strict clients can validate it. Both representations derive from the same
-/// `value` binding, so `serde_json::from_str(content[0].text) == structuredContent`
+/// negotiated an older protocol revision) **and**, when the called tool has a
+/// structured shape at all ([`tool_output_schema`]), as a top-level
+/// `structuredContent` field (MCP 2025-06-18). Both representations derive from the
+/// same `value` binding, so `serde_json::from_str(content[0].text) == structuredContent`
 /// holds by construction — the two can never disagree.
+///
+/// Note the deliberate asymmetry in proxy mode: the schema is not advertised in
+/// `tools/list` (see the `proxy_mode` strip in [`tool_definitions`]) yet
+/// `structuredContent` is still emitted. That is spec-legal — the spec asks clients to
+/// validate only when a schema was advertised — and it means proxy callers keep the
+/// structured value without the hard failure that a promise we cannot keep would cause.
 pub fn tool_result_response(
     id: Value,
     tool_name: &str,
@@ -789,11 +830,20 @@ fn bound_map_links(value: &mut Value, limit: usize) {
 }
 
 /// Truncate any scrape content inlined into `crw_search` results (via
-/// `scrapeOptions`). `results` lives at `data.results` and is either a flat array
-/// of items or a grouped `{web,news,images}` object of arrays.
+/// `scrapeOptions`). The results are either a flat array of items or a grouped
+/// `{web,news,images}` object of arrays, and they live in one of two places: under
+/// `data.results` on the engine's own envelope, or **directly** in `data` on the
+/// managed REST contract, which hoists them one level. Bound both — the proxy fronts
+/// either, and on the shape this helper did not handle the default bound was a silent
+/// no-op that let whole scraped pages through (issue #391).
 fn bound_search_results(value: &mut Value, max: usize) {
-    let Some(results) = value.get_mut("data").and_then(|d| d.get_mut("results")) else {
+    let Some(data) = value.get_mut("data") else {
         return;
+    };
+    let results = if data.get("results").is_some() {
+        data.get_mut("results").expect("presence checked above")
+    } else {
+        data
     };
     match results {
         Value::Array(items) => {
@@ -863,10 +913,17 @@ pub fn apply_bounds(tool_name: &str, args: &Value, mut value: Value) -> Value {
 /// are intentionally NOT stripped: `/v1/map` now drives sitemap discovery depth
 /// from `limit`, so forwarding it lets a deliberate large limit actually find
 /// (not just slice) more URLs. `apply_bounds` still caps the response.
+///
+/// `crw_search` strips `maxLength` even though its `inputSchema` does not advertise
+/// the knob: `apply_bounds` honours it for every tool (see [`resolve_bound`]), so a
+/// hand-written client can still send one, and it must not reach the REST body.
+/// Advertising it on `crw_search` would push `tools/list` past the token ceiling
+/// guarded by `tools_list_token_budget`; search results are bounded by the default
+/// either way.
 pub fn strip_mcp_only_args(tool_name: &str, mut args: Value) -> Value {
     if let Some(obj) = args.as_object_mut() {
         match tool_name {
-            "crw_scrape" | "crw_parse_file" | "crw_check_crawl_status" => {
+            "crw_scrape" | "crw_parse_file" | "crw_check_crawl_status" | "crw_search" => {
                 obj.remove("maxLength");
             }
             _ => {}
@@ -1338,9 +1395,14 @@ mod tests {
         let map = strip_mcp_only_args("crw_map", json!({ "url": "u", "limit": 50 }));
         assert_eq!(map["limit"], json!(50));
 
-        // crw_search.limit is a real backend param — must NOT be stripped.
-        let search = strip_mcp_only_args("crw_search", json!({ "query": "q", "limit": 5 }));
+        // crw_search.limit is a real backend param — must NOT be stripped. Its
+        // maxLength, like crw_scrape's, is MCP-only and must be.
+        let search = strip_mcp_only_args(
+            "crw_search",
+            json!({ "query": "q", "limit": 5, "maxLength": 100 }),
+        );
         assert_eq!(search["limit"], json!(5));
+        assert!(search.get("maxLength").is_none());
     }
 
     /// B10 — unknown/other tools pass through apply_bounds unchanged.
@@ -1550,5 +1612,185 @@ mod tests {
         let out = apply_bounds("crw_search", &json!({}), grouped);
         assert_eq!(out["data"]["results"]["web"][0]["truncated"], json!(true));
         assert!(out["data"]["results"]["news"][0].get("truncated").is_none());
+    }
+
+    // --- Proxy-mode output contract (issue #391) ---
+
+    /// The managed `/v1/search` body: results sit DIRECTLY in `data`, because the
+    /// public REST contract hoists them one level out of the engine's envelope.
+    fn managed_search_value() -> Value {
+        json!({
+            "success": true,
+            "data": [search_result_item(1), search_result_item(2)]
+        })
+    }
+
+    /// The managed `/v1/extract` body: the proxy resolves the job synchronously and
+    /// returns results inline instead of the engine's `{id, status, urls}` accept.
+    fn managed_extract_value() -> Value {
+        json!({
+            "success": true,
+            "results": [{
+                "url": "https://example.com/",
+                "status": "completed",
+                "data": { "title": "Example Domain" }
+            }]
+        })
+    }
+
+    /// P1 — proxy mode advertises no output contract at all, embedded mode keeps
+    /// every one it has. A remote we do not author must not be promised a shape.
+    #[test]
+    fn p1_proxy_mode_advertises_no_output_schema() {
+        let proxied = tool_definitions(true);
+        for tool in proxied["tools"].as_array().expect("tools array") {
+            assert!(
+                tool.get("outputSchema").is_none(),
+                "{} must not advertise an outputSchema in proxy mode",
+                tool["name"]
+            );
+        }
+
+        let embedded = tool_definitions(false);
+        let declared: Vec<&str> = embedded["tools"]
+            .as_array()
+            .expect("tools array")
+            .iter()
+            .filter(|t| t.get("outputSchema").is_some())
+            .map(|t| t["name"].as_str().expect("name"))
+            .collect();
+        assert_eq!(
+            declared,
+            vec![
+                "crw_extract",
+                "crw_check_extract_status",
+                "crw_cancel_extract",
+                "crw_search"
+            ],
+            "embedded mode must keep the schemas it can honour"
+        );
+    }
+
+    /// P2 — the deliberate asymmetry: no schema advertised in proxy mode, yet
+    /// `structuredContent` is still emitted. Threading `proxy_mode` into
+    /// `tool_output_schema` in the name of consistency would silently stop that,
+    /// with every other test still green. This is the guard against that refactor.
+    #[test]
+    fn p2_proxy_mode_still_emits_structured_content_without_a_schema() {
+        let proxied = tool_definitions(true);
+        let search = tool_by_name(&proxied, "crw_search");
+        assert!(search.get("outputSchema").is_none());
+
+        let resp = tool_result_response(json!(1), "crw_search", Ok(managed_search_value()));
+        let result = result_of(&resp);
+        assert_eq!(result["structuredContent"], managed_search_value());
+        assert_eq!(
+            serde_json::from_str::<Value>(result["content"][0]["text"].as_str().expect("text"))
+                .expect("text block is the same JSON"),
+            managed_search_value()
+        );
+    }
+
+    /// P3 — why P1 is not cosmetic: neither managed body can satisfy the schema the
+    /// engine declares, so advertising it to a proxy caller is a promise that hard-
+    /// fails the whole call on every strict client. Asserts the SPECIFIC mismatch,
+    /// not merely "some validation error" — a vaguer assertion would keep passing if
+    /// the fixture drifted or the schema started rejecting an unrelated field.
+    /// The managed synchronous extract body has no coverage anywhere else (the
+    /// existing extract locks in `crw-server/tests/mcp.rs` all exercise the ENGINE's
+    /// async accept envelope, which does satisfy the schema).
+    #[test]
+    fn p3_managed_bodies_cannot_satisfy_the_engine_schemas() {
+        // `crw_search`: `data` is an array, the schema demands an object with `results`.
+        let search_errors = schema_errors("crw_search", &managed_search_value());
+        assert!(
+            search_errors
+                .iter()
+                .any(|(path, msg)| path == "/data" && msg.contains("object")),
+            "crw_search: expected `/data` to fail the object requirement, got {search_errors:?}"
+        );
+
+        // `crw_extract`: the engine's accept envelope requires `id`/`status`/`urls`,
+        // none of which a synchronously-resolved managed body carries, and `results`
+        // is rejected outright by `additionalProperties: false`.
+        let extract_errors = schema_errors("crw_extract", &managed_extract_value());
+        let joined = extract_errors
+            .iter()
+            .map(|(p, m)| format!("{p}: {m}"))
+            .collect::<Vec<_>>()
+            .join(" | ");
+        for missing in ["id", "status", "urls"] {
+            assert!(
+                joined.contains(missing),
+                "crw_extract: expected a complaint about the missing `{missing}`, got {joined}"
+            );
+        }
+        assert!(
+            joined.contains("results"),
+            "crw_extract: expected `results` to be rejected by additionalProperties:false, \
+             got {joined}"
+        );
+
+        // And therefore proxy mode must advertise neither.
+        for tool in ["crw_search", "crw_extract"] {
+            assert!(
+                tool_by_name(&tool_definitions(true), tool)
+                    .get("outputSchema")
+                    .is_none(),
+                "{tool}: proxy mode must not advertise a schema it cannot honour"
+            );
+        }
+    }
+
+    /// `(instance_path, message)` for every way `body` fails `tool`'s engine schema.
+    fn schema_errors(tool: &str, body: &Value) -> Vec<(String, String)> {
+        let schema = tool_output_schema(tool).expect("engine declares a schema");
+        let validator = jsonschema::validator_for(&schema).expect("schema compiles");
+        let errors: Vec<(String, String)> = validator
+            .iter_errors(body)
+            .map(|e| (e.instance_path().to_string(), e.to_string()))
+            .collect();
+        assert!(
+            !errors.is_empty(),
+            "{tool}: the managed body was expected to FAIL the engine schema; if this starts \
+             passing the surfaces have converged and the proxy strip can be revisited"
+        );
+        errors
+    }
+
+    /// P4 — the default bound also has to bite on the managed shape. It used to
+    /// silently no-op there, so a `crw_search` with `scrapeOptions` shipped whole
+    /// pages into the model's context.
+    #[test]
+    fn p4_search_inlined_content_is_bounded_on_the_managed_shape() {
+        // Flat: results directly in `data`.
+        let flat = json!({
+            "success": true,
+            "data": [
+                { "url": "https://e.com/1", "markdown": long_md(DEFAULT_MAX_LENGTH + 100) },
+                { "url": "https://e.com/2", "description": "no scrape content" }
+            ]
+        });
+        let out = apply_bounds("crw_search", &json!({}), flat);
+        assert!(
+            out["data"][0]["markdown"]
+                .as_str()
+                .expect("markdown")
+                .contains("[truncated")
+        );
+        assert_eq!(out["data"][0]["truncated"], json!(true));
+        assert!(out["data"][1].get("truncated").is_none());
+
+        // Grouped: `{web,news,images}` directly in `data`.
+        let grouped = json!({
+            "success": true,
+            "data": {
+                "web": [{ "url": "https://e.com/w", "html": long_md(DEFAULT_MAX_LENGTH + 100) }],
+                "news": [{ "url": "https://e.com/n", "description": "short" }]
+            }
+        });
+        let out = apply_bounds("crw_search", &json!({}), grouped);
+        assert_eq!(out["data"]["web"][0]["truncated"], json!(true));
+        assert!(out["data"]["news"][0].get("truncated").is_none());
     }
 }

@@ -122,7 +122,7 @@ This is a **capability matrix**, not an API-shape compatibility matrix (which th
 
 **Surface match:** both products ship MCP. Tool names differ (Firecrawl uses `firecrawl_*`, fastCRW uses `crw_*`); semantic mapping is straightforward.
 
-**Structured output:** `crw_search` additionally emits MCP-2025-06-18 `structuredContent` shaped to fastCRW's own `/v1/search` envelope (`data.results`), **not** Firecrawl's `data.web` shape — it mirrors the body fastCRW clients already consume, so this is not a Firecrawl-shape parity claim. The legacy text content block is retained for lenient clients.
+**Structured output:** `crw_search` additionally emits MCP-2025-06-18 `structuredContent` shaped to whichever fastCRW `/v1/search` body served the call — `data.results` from a self-hosted engine, results directly in `data` from the hosted API — and **not** Firecrawl's `data.web` shape. It mirrors the body fastCRW clients already consume, so this is not a Firecrawl-shape parity claim. An `outputSchema` is advertised by the surfaces that produce the body themselves (embedded stdio and the engine's own HTTP `/mcp`), but not by the stdio proxy, where the body comes from a remote the MCP server does not author. The legacy text content block is retained for lenient clients.
 
 ---
 

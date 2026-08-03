@@ -75,10 +75,16 @@ resp = requests.post(
 #     json={"query": "web scraping tools", "limit": 5},
 # )
 
+# The results sit directly in `data` on the hosted API; a self-hosted engine
+# nests them one level deeper as `data.results`. Read `results` when present,
+# fall back to `data` — works on both hosts.
+data = resp.json()["data"]
+results = data["results"] if isinstance(data, dict) and "results" in data else data
+
 # Each result row has: title, url, snippet, description, position, score.
 # `snippet` is the LLM-ready summary line (Firecrawl-compatible name);
 # `description` is the same value, kept as an alias.
-for item in resp.json()["data"]:
+for item in results:
     print(item["title"], item["url"], item["snippet"])
 ```
 ::tab{title="Node.js"}
@@ -90,7 +96,10 @@ const resp = await fetch("http://localhost:3000/v1/search", {
 });
 
 const body = await resp.json();
-console.log(body.data);
+// Hosted puts the results directly in `data`; a self-hosted engine nests them
+// as `data.results`. Read `results` when present, fall back to `data`.
+const { data } = body;
+console.log(data?.results ?? data);
 ```
 ::tab{title="cURL"}
 ```bash
@@ -127,9 +136,20 @@ curl -X POST https://api.fastcrw.com/v1/search \
 
 `snippet` is the LLM-ready summary line — name kept identical to Firecrawl
 so existing pipelines work unchanged. `description` is the same value
-under the SearXNG-native name. Pick whichever; both are emitted.
+under the search-backend-native name. Pick whichever; both are emitted.
 
 That is the flat response shape used when `sources` is not set.
+
+:::note
+**Where the results live depends on the host.** The shape of a result row is
+identical everywhere, but its position is not. The hosted API
+(`api.fastcrw.com`) returns the results **as `data` itself**, exactly as shown
+above, and puts `answer`, `citations`, `llmUsage` and `warnings` at the top
+level. A self-hosted engine wraps them one level deeper as `data.results`, with
+those four fields as siblings inside `data`. Portable clients should read
+`data.results` when it is present and fall back to `data`. Full side-by-side in
+[Response shapes](/response-shapes).
+:::
 
 ## Parameters
 
@@ -253,7 +273,9 @@ Each scraped result that produced markdown gets a `result.summary` field. Per-re
 }
 ```
 
-The response wrapper carries:
+A self-hosted engine carries these inside `data`; the hosted API puts `answer`,
+`citations`, `llmUsage` and `warnings` at the top level, next to the results. Fields
+with nothing to report are omitted, not emitted as `null` or `[]`. Self-hosted:
 
 ```json
 {
@@ -265,7 +287,7 @@ The response wrapper carries:
       { "url": "https://...", "title": "...", "position": 0 }
     ],
     "llmUsage": { "inputTokens": 3420, "outputTokens": 96, "totalTokens": 3516, "estimatedCostUsd": 0.0008, "model": "gpt-4o-mini", "provider": "openai" },
-    "warnings": []
+    "warnings": ["answer synthesis unavailable"]
   }
 }
 ```

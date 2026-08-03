@@ -159,12 +159,17 @@ class CrwTavilyShim:
             body["answer"] = True  # CRW has no basic/advanced depth knob
         r = requests.post(f"{self.base_url}/v1/search", json=body, headers=self.headers)
         r.raise_for_status()
-        data = r.json()["data"]
-        results = data["results"]
+        body_json = r.json()
+        data = body_json["data"]
+        # Hosted returns the results as `data` and hoists `answer` to the top
+        # level; a self-hosted engine nests both inside `data`. Handle both.
+        nested = isinstance(data, dict) and "results" in data
+        results = data["results"] if nested else data
+        answer = (data if nested else body_json).get("answer", "")
         web = results["web"] if isinstance(results, dict) and "web" in results else results
         return {
             "query": query,
-            "answer": data.get("answer", ""),  # present only when answer: true
+            "answer": answer,  # present only when answer: true
             "results": [
                 {
                     "title": item["title"],
