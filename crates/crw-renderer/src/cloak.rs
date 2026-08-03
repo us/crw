@@ -23,8 +23,6 @@ use crw_core::Deadline;
 use crw_core::error::{CrwError, CrwResult};
 use crw_core::types::FetchResult;
 use std::collections::HashMap;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -106,15 +104,6 @@ impl CloakRenderer {
 
     fn call_budget(&self, deadline: &Deadline) -> Duration {
         deadline.remaining().min(self.timeout)
-    }
-
-    /// Stable per-host sessid for the primary attempt (deterministic hash), so a
-    /// repeat request to the same host reuses the same sidecar cache key + exit
-    /// IP → warm replay.
-    fn deterministic_sessid(host: &str) -> String {
-        let mut h = DefaultHasher::new();
-        host.hash(&mut h);
-        format!("crwd{:016x}", h.finish())
     }
 
     /// Compose the DataImpulse sticky proxy URL for one attempt, injecting the
@@ -216,15 +205,20 @@ impl PageFetcher for CloakRenderer {
             None => parsed.path().to_string(),
         };
 
-        // Primary sessid: a proven-good one for this host if we have it (and it
-        // hasn't aged out), else the deterministic per-host sessid.
-        let primary_sessid = {
+        // A proven-good sessid for this host if we have a warm one (survived the
+        // TTL). We do NOT fall back to a deterministic per-host sessid on a cold
+        // host: that pinned every cold attempt to one fixed exit IP, so if that IP
+        // was blocked (common on hard CF hosts) a tight recovery budget gave the
+        // host a single doomed shot. A fresh random sessid = a new exit IP per
+        // attempt — measured ~87% CF-solve vs ~8% for the pinned path — and still
+        // warms the cache on success below.
+        let warm_sessid: Option<String> = {
             let mut map = self.sessid_map.lock().expect("cloak sessid map poisoned");
             match map.get(&host) {
-                Some((s, at)) if at.elapsed() < SESSID_TTL => s.clone(),
+                Some((s, at)) if at.elapsed() < SESSID_TTL => Some(s.clone()),
                 _ => {
                     map.remove(&host);
-                    Self::deterministic_sessid(&host)
+                    None
                 }
             }
         };
@@ -234,13 +228,15 @@ impl PageFetcher for CloakRenderer {
             if deadline.remaining() < crate::MIN_TIER_BUDGET {
                 break;
             }
-            let (sessid, bypass) = if attempt == 0 {
-                (primary_sessid.clone(), false)
-            } else {
-                // Fresh random sessid = new exit IP + new sidecar cache key,
-                // with x-bypass-cache to force a fresh solve.
-                let n: u64 = rand::random();
-                (format!("crwr{n:016x}"), true)
+            let (sessid, bypass) = match (attempt, &warm_sessid) {
+                // Warm reuse: a proven-good exit IP, use the sidecar cache.
+                (0, Some(s)) => (s.clone(), false),
+                // Cold host, or the warm attempt already failed: a fresh random
+                // exit IP + a forced fresh solve.
+                _ => {
+                    let n: u64 = rand::random();
+                    (format!("crwr{n:016x}"), true)
+                }
             };
             match self
                 .mirror_once(&host, &path_and_query, &sessid, bypass, &deadline)
@@ -453,6 +449,40 @@ mod tests {
             )
             .await
             .expect("second attempt (fresh sessid + bypass) should recover");
+        assert!(r.html.contains("real review content"));
+    }
+
+    #[tokio::test]
+    async fn cold_host_uses_fresh_bypass_on_first_attempt() {
+        // A cold host (no warm sessid) goes straight to the fresh-IP + bypass
+        // strategy on attempt 0 — the pinned deterministic-sessid path is gone,
+        // so the non-bypass challenge branch must never be hit.
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/page"))
+            .and(header("x-bypass-cache", "true"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(REAL_BODY))
+            .with_priority(1)
+            .mount(&server)
+            .await;
+        // The old pinned (no-bypass) attempt-0 path must NOT be taken: assert it
+        // is matched zero times (verified on server drop).
+        Mock::given(method("GET"))
+            .and(path("/page"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(CHALLENGE_BODY))
+            .with_priority(5)
+            .expect(0)
+            .mount(&server)
+            .await;
+        let r = renderer(&server.uri())
+            .fetch(
+                &format!("{}/page", server.uri()),
+                &HashMap::new(),
+                None,
+                Deadline::from_request_ms(30_000),
+            )
+            .await
+            .expect("cold host must recover via fresh+bypass on attempt 0");
         assert!(r.html.contains("real review content"));
     }
 
