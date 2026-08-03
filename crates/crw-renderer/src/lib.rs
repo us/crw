@@ -575,6 +575,12 @@ pub struct FallbackRenderer {
     /// Phase 2 (latency-qn): gate chrome_proxy as a hard-block-only recovery arm
     /// (removed from the normal ladder) instead of an always-on tier.
     auto_egress_escalation: bool,
+    /// Give the post-ladder cloak CF-recovery arm a fresh, decoupled budget
+    /// (`CLOAK_ARM_RECOVER_BUDGET_MS`) instead of skipping it when the shared
+    /// deadline is below `CLOAK_ARM_FLOOR_MS`. Unconditional field (like
+    /// `auto_egress_escalation`) — inert in a lean (no-`cloak`) build since
+    /// `route_to_cloak` folds to `false` there. Default off.
+    cloak_recover_on_cf: bool,
     /// latency-qn: conditional hedge — race lightpanda+chrome concurrently.
     chrome_hedge: bool,
     /// Headroom gate for the hedge: bounds concurrent hedges to pool_size/2 so the
@@ -758,6 +764,7 @@ impl FallbackRenderer {
                 render_js_default: config.render_js_default,
                 latency_breakdown: config.latency_breakdown,
                 auto_egress_escalation: config.auto_egress_escalation,
+                cloak_recover_on_cf: config.cloak_recover_on_cf,
                 chrome_hedge: config.chrome_hedge,
                 hedge_sem: Arc::new(tokio::sync::Semaphore::new((config.pool_size / 2).max(1))),
                 chrome_proxy_arm_sem: Arc::new(tokio::sync::Semaphore::new(
@@ -1055,6 +1062,7 @@ impl FallbackRenderer {
             render_js_default: config.render_js_default,
             latency_breakdown: config.latency_breakdown,
             auto_egress_escalation: config.auto_egress_escalation,
+            cloak_recover_on_cf: config.cloak_recover_on_cf,
             chrome_hedge: config.chrome_hedge,
             hedge_sem: Arc::new(tokio::sync::Semaphore::new((config.pool_size / 2).max(1))),
             chrome_proxy_arm_sem: Arc::new(tokio::sync::Semaphore::new(
@@ -3097,6 +3105,7 @@ impl FallbackRenderer {
             #[cfg(not(feature = "cloak"))]
             {
                 let _ = cloak_attempted;
+                let _ = self.cloak_recover_on_cf;
                 false
             }
         };
@@ -3244,18 +3253,52 @@ impl FallbackRenderer {
         if route_to_cloak && let Some(arm) = &self.cloak_arm {
             let kind = RendererKind::Cloak;
             let floor = std::time::Duration::from_millis(crw_core::config::CLOAK_ARM_FLOOR_MS);
-            let permit = if deadline.remaining() >= floor
-                && !self.breakers.host_for(&host, kind).await.is_open()
-            {
+            let deadline_ok = deadline.remaining() >= floor;
+            // `cloak_recover_on_cf` relaxes the entry gate itself (not just the
+            // `Deadline` passed to `.fetch()` below) — reproducing the original
+            // starvation bug is exactly "permit gated on `deadline_ok`, fetch
+            // deadline relaxed": the permit would still never be acquired under
+            // a small SaaS deadline. `cloak_sem` load-shed and the per-host
+            // breaker check are unchanged either way (mirrors `arm_wanted` in
+            // the chrome_proxy arm above, breaker-open excluded from "wanted"
+            // so it isn't double-counted against `armShed`).
+            let wanted = (self.cloak_recover_on_cf || deadline_ok)
+                && !self.breakers.host_for(&host, kind).await.is_open();
+            let permit = if wanted {
                 self.cloak_sem.clone().try_acquire_owned().ok()
             } else {
                 None
             };
+            if wanted && permit.is_none() {
+                // Wanted to recover but the cloak pool was saturated — shed
+                // rather than queue. Mirrors the chrome_proxy arm's `armShed`
+                // so the A/B is measurable.
+                metrics()
+                    .render_route_decision_total
+                    .with_label_values(&[kind.as_str(), "armShed"])
+                    .inc();
+            }
             if let Some(_permit) = permit {
                 chain.push(kind);
+                // Fresh, decoupled budget when the shared deadline can't clear
+                // the floor and the caller opted in: a cold Turnstile solve
+                // needs ~21-40s regardless of how little of the shared deadline
+                // is left. Reuses the shared deadline unchanged otherwise (byte
+                // identical to today when it still clears the floor).
+                let arm_deadline = if deadline_ok {
+                    deadline
+                } else {
+                    crw_core::Deadline::now_plus(std::time::Duration::from_millis(
+                        crw_core::config::CLOAK_ARM_RECOVER_BUDGET_MS,
+                    ))
+                };
+                metrics()
+                    .render_route_decision_total
+                    .with_label_values(&[kind.as_str(), "fired"])
+                    .inc();
                 let entry = self.pick_proxy_for_url(url);
                 let attempt = REQUEST_PROXY
-                    .scope(entry, arm.fetch(url, headers, wait_for_ms, deadline))
+                    .scope(entry, arm.fetch(url, headers, wait_for_ms, arm_deadline))
                     .await;
                 match attempt {
                     Ok(r) => {
@@ -3275,6 +3318,12 @@ impl FallbackRenderer {
                                 BreakerOutcome::RenderError
                             };
                             self.breakers.record_outcome(&host, kind, outcome).await;
+                        }
+                        if r_ok {
+                            metrics()
+                                .render_route_decision_total
+                                .with_label_values(&[kind.as_str(), "success"])
+                                .inc();
                         }
                         let better = r_ok
                             && match &thin_result {
@@ -5510,5 +5559,165 @@ mod tests {
             "force_cloak=false must never fire cloak"
         );
         assert!(res.html.contains("LADDER"));
+    }
+
+    // ---- Post-ladder cloak recovery arm: fresh decoupled budget (`cloak_recover_on_cf`) ----
+
+    /// A cloak-arm stub that records the `Deadline::remaining()` it was called
+    /// with, so a test can tell a FRESH budget apart from the exhausted shared
+    /// one, and returns a caller-chosen "solved" body.
+    #[cfg(feature = "cloak")]
+    struct DeadlineRecordingFetcher {
+        recorded_remaining: Arc<std::sync::Mutex<Option<Duration>>>,
+        html: String,
+    }
+
+    #[cfg(feature = "cloak")]
+    #[async_trait::async_trait]
+    impl PageFetcher for DeadlineRecordingFetcher {
+        async fn fetch(
+            &self,
+            url: &str,
+            _headers: &HashMap<String, String>,
+            _wait_for_ms: Option<u64>,
+            deadline: crw_core::Deadline,
+        ) -> CrwResult<FetchResult> {
+            *self.recorded_remaining.lock().unwrap() = Some(deadline.remaining());
+            Ok(FetchResult {
+                url: url.to_string(),
+                final_url: None,
+                status_code: 200,
+                html: self.html.clone(),
+                content_type: Some("text/html".to_string()),
+                raw_bytes: None,
+                rendered_with: Some("cloak".to_string()),
+                elapsed_ms: 0,
+                warning: None,
+                render_decision: None,
+                credit_cost: 0,
+                warnings: Vec::new(),
+                truncated: false,
+                deadline_exceeded: false,
+                captured_responses: Vec::new(),
+                screenshot: None,
+            })
+        }
+        fn name(&self) -> &str {
+            "cloak"
+        }
+        fn supports_js(&self) -> bool {
+            true
+        }
+        async fn is_available(&self) -> bool {
+            true
+        }
+    }
+
+    /// A CF managed-challenge shell — same shape used by
+    /// `cloak_first_suppresses_post_ladder_recovery_arm` — thin enough to be
+    /// detected as a challenge but large enough (300 filler bytes) to win the
+    /// largest-HTML best-result-wins race as `thin_result`.
+    #[cfg(feature = "cloak")]
+    fn cf_challenge_html() -> String {
+        format!(
+            "<html><head><script>window._cf_chl_opt={{cvId:'3'}};</script></head><body>{}</body></html>",
+            "x".repeat(300)
+        )
+    }
+
+    /// A solved cloak body, larger than [`cf_challenge_html`] so it always wins
+    /// the best-result-wins length race in these tests (real solves are real
+    /// page content, typically far larger than a challenge shell).
+    #[cfg(feature = "cloak")]
+    fn solved_html() -> String {
+        format!(
+            "<html><body><article>SOLVED{}</article></body></html>",
+            "x".repeat(500)
+        )
+    }
+
+    /// `cloak_recover_on_cf=true`: a CF-challenge thin result on a near-exhausted
+    /// shared deadline (5s, below the 24s `CLOAK_ARM_FLOOR_MS`) still FIRES the
+    /// post-ladder cloak recovery arm — on a FRESH budget
+    /// (`CLOAK_ARM_RECOVER_BUDGET_MS`, 40s), not the exhausted shared one — and
+    /// the solved body wins.
+    #[cfg(feature = "cloak")]
+    #[tokio::test]
+    async fn cloak_recover_on_cf_fires_on_fresh_budget_when_enabled() {
+        let recorded = Arc::new(std::sync::Mutex::new(None));
+        let cloak = Arc::new(DeadlineRecordingFetcher {
+            recorded_remaining: recorded.clone(),
+            html: solved_html(),
+        });
+        let ladder = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Ok(cf_challenge_html()),
+        });
+        let mut r = renderer_with_cloak(cloak, vec![ladder]);
+        r.cloak_recover_on_cf = true;
+        let res = r
+            .fetch_hinted(
+                "https://glassdoor.com/x",
+                &HashMap::new(),
+                Some(true),
+                None,
+                None,
+                false, // force_cloak off: exercise ONLY the post-ladder recovery arm
+                crw_core::Deadline::from_request_ms(5_000), // below CLOAK_ARM_FLOOR_MS (24s)
+            )
+            .await
+            .unwrap();
+        let remaining = recorded
+            .lock()
+            .unwrap()
+            .expect("cloak recovery arm must have been called");
+        assert!(
+            remaining > Duration::from_secs(20),
+            "cloak arm must run on a FRESH ~40s budget, not the exhausted 5s shared \
+             deadline (recorded remaining: {remaining:?})"
+        );
+        assert!(
+            res.html.contains("SOLVED"),
+            "the solved cloak body must win over the CF-challenge thin result"
+        );
+        assert_eq!(res.rendered_with.as_deref(), Some("cloak"));
+    }
+
+    /// `cloak_recover_on_cf=false` (default): byte-identical to today — the same
+    /// near-exhausted deadline + CF challenge must NOT fire the recovery arm.
+    #[cfg(feature = "cloak")]
+    #[tokio::test]
+    async fn cloak_recover_on_cf_false_skips_arm_on_exhausted_deadline() {
+        let recorded = Arc::new(std::sync::Mutex::new(None));
+        let cloak = Arc::new(DeadlineRecordingFetcher {
+            recorded_remaining: recorded.clone(),
+            html: solved_html(),
+        });
+        let ladder = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Ok(cf_challenge_html()),
+        });
+        let r = renderer_with_cloak(cloak, vec![ladder]); // cloak_recover_on_cf defaults false
+        let res = r
+            .fetch_hinted(
+                "https://glassdoor.com/x",
+                &HashMap::new(),
+                Some(true),
+                None,
+                None,
+                false,
+                crw_core::Deadline::from_request_ms(5_000),
+            )
+            .await
+            .unwrap();
+        assert!(
+            recorded.lock().unwrap().is_none(),
+            "cloak recovery arm must be skipped when cloak_recover_on_cf is off"
+        );
+        assert_eq!(
+            res.rendered_with.as_deref(),
+            Some("chrome"),
+            "the CF-challenge thin ladder result must ship unchanged (byte-identical to today)"
+        );
     }
 }

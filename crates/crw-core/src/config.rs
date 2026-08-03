@@ -214,6 +214,17 @@ pub const CLOAK_DEFAULT_TIMEOUT_MS: u64 = 35_000;
 /// default); enabling it grows the ladder tax and this floor must be revisited.
 pub const CLOAK_ARM_FLOOR_MS: u64 = 24_000;
 
+/// Fresh, decoupled budget (ms) for the post-ladder cloak recovery arm when
+/// [`RendererConfig::cloak_recover_on_cf`] is enabled and the shared request
+/// deadline is below [`CLOAK_ARM_FLOOR_MS`]. Matches [`RendererConfig::cloak_timeout`]'s
+/// default: a cold interactive Turnstile solve is ~21-30s, and the DataImpulse
+/// mobile-proxy replay adds margin — 40s covers a cold solve end to end. Only
+/// meaningful when the caller's outer request timeout can absorb it (the SaaS
+/// widens its engine deadline to 58s behind `CLOAK_TIER_ENABLED=1` for exactly
+/// this reason). `pub const` (not `pub(crate)`) for the same lean-build
+/// `dead_code` reason as [`CLOAK_ARM_FLOOR_MS`] above.
+pub const CLOAK_ARM_RECOVER_BUDGET_MS: u64 = 40_000;
+
 /// Budget (ms) the cloak-FIRST hint reserves for the normal ladder when it fires
 /// before the ladder. Unlike the post-ladder recovery arm (which runs last, so
 /// eating the deadline is harmless), cloak-first runs first on the SHARED
@@ -675,6 +686,18 @@ pub struct RendererConfig {
     /// default; requires a configured `[renderer.chrome_proxy]` tier to do anything.
     #[serde(default)]
     pub auto_egress_escalation: bool,
+    /// Give the post-ladder cloak CF-recovery arm a fresh, decoupled budget
+    /// ([`CLOAK_ARM_RECOVER_BUDGET_MS`]) when a Cloudflare challenge is
+    /// detected and the shared request deadline is already below
+    /// [`CLOAK_ARM_FLOOR_MS`] — instead of skipping the arm outright, as it
+    /// does today under a small SaaS-supplied deadline. Only relaxes the
+    /// cloak arm's own entry gate; the `chrome_proxy` CF-suppression, the
+    /// `cloak_sem` load-shed, and the per-host breaker check are unchanged.
+    /// Default off (clean keep/revert A/B); only meaningful when the outer
+    /// request timeout can absorb the fresh budget (see
+    /// `CLOAK_ARM_RECOVER_BUDGET_MS` doc).
+    #[serde(default)]
+    pub cloak_recover_on_cf: bool,
     /// Phase 0 (latency-qn): when true, the renderer emits a structured
     /// `target: "latency_breakdown"` tracing event per fetch with total wall
     /// time and the tier that produced the accepted result. Off by default;
@@ -966,6 +989,7 @@ impl Default for RendererConfig {
             chrome_fast_ready: false,
             chrome_hedge: false,
             auto_egress_escalation: false,
+            cloak_recover_on_cf: false,
             latency_breakdown: false,
             render_js_default: None,
             lightpanda: None,
@@ -1055,6 +1079,23 @@ impl RendererConfig {
                 .is_some_and(|c| c.include_in_auto && configured(c)),
             _ => false,
         }
+    }
+
+    /// True when the post-ladder cloak CF-recovery arm can fire: the `cloak`
+    /// feature is built in, a cloak endpoint is configured, and
+    /// [`RendererConfig::cloak_recover_on_cf`] is on. Unlike [`cloak_in_ladder`],
+    /// this is independent of `include_in_auto` — the recovery arm lives OUTSIDE
+    /// the ladder and fires on a fresh [`CLOAK_ARM_RECOVER_BUDGET_MS`] budget, so
+    /// the outer request-timeout envelope must reserve room for it even though it
+    /// is not a ladder tier. `false` in the lean (no-`cloak`) build.
+    pub fn cloak_recovery_active(&self) -> bool {
+        cfg!(feature = "cloak")
+            && self.cloak_recover_on_cf
+            && !matches!(self.mode, RendererMode::None)
+            && self
+                .cloak
+                .as_ref()
+                .is_some_and(|c| !c.base_url.trim().is_empty())
     }
 
     /// True when the Camoufox REST tier participates in the *auto* ladder for
@@ -1184,6 +1225,15 @@ impl RendererConfig {
         // contributes when explicitly pinned / opted into the auto ladder.)
         if self.cloak_in_ladder() {
             sum = sum.saturating_add(self.cloak_timeout());
+        } else if self.cloak_recovery_active() {
+            // The post-ladder cloak CF-recovery arm fires on a fresh
+            // `CLOAK_ARM_RECOVER_BUDGET_MS` budget (not a ladder tier), so the
+            // outer request-timeout envelope must reserve room for it — otherwise
+            // the static Tower timeout, sized only from the ladder sum, can abort
+            // a cloak solve mid-flight (wasting the sidecar slot + proxy egress and
+            // skipping the breaker-outcome record). Only reserved when the
+            // recovery flag is on, so it is inert by default.
+            sum = sum.saturating_add(CLOAK_ARM_RECOVER_BUDGET_MS);
         }
 
         // CDP tiers only contribute when the binary was built with the `cdp`
@@ -2235,6 +2285,47 @@ mod tests {
             15_000 + 2_500 + 30_000 + 2 * 28_000
         );
         assert_eq!(r.cdp_tier_count(), 2);
+    }
+
+    #[test]
+    #[cfg(all(feature = "cdp", feature = "cloak"))]
+    fn min_deadline_reserves_cloak_recovery_budget_when_enabled() {
+        // Cloak configured as a RECOVERY arm (include_in_auto = false), with the
+        // recovery flag on: the ladder-min must reserve CLOAK_ARM_RECOVER_BUDGET_MS
+        // so the outer request-timeout envelope can absorb a fresh cloak solve.
+        let base = RendererConfig {
+            mode: RendererMode::Auto,
+            page_timeout_ms: 15_000,
+            http_timeout_ms: Some(15_000),
+            lightpanda_timeout_ms: Some(2_500),
+            chrome_timeout_ms: Some(30_000),
+            lightpanda: Some(CdpEndpoint {
+                ws_url: "ws://lp:9222".into(),
+            }),
+            chrome: Some(CdpEndpoint {
+                ws_url: "ws://chrome:9222".into(),
+            }),
+            cloak: Some(CloakEndpoint {
+                base_url: "http://cloak:8000".into(),
+                api_key: String::new(),
+                include_in_auto: false,
+            }),
+            ..Default::default()
+        };
+        let ladder = 15_000 + 2_500 + 30_000 + 2 * 28_000;
+        // Flag off (default): recovery arm not reserved — byte-identical to today.
+        assert!(!base.cloak_recovery_active());
+        assert_eq!(base.min_deadline_for_full_ladder_ms(), ladder);
+        // Flag on: reserves the fresh recovery budget on top of the ladder sum.
+        let on = RendererConfig {
+            cloak_recover_on_cf: true,
+            ..base
+        };
+        assert!(on.cloak_recovery_active());
+        assert_eq!(
+            on.min_deadline_for_full_ladder_ms(),
+            ladder + CLOAK_ARM_RECOVER_BUDGET_MS
+        );
     }
 
     #[test]
