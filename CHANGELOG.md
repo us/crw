@@ -2,6 +2,37 @@
 
 All notable changes to CRW are documented here.
 
+## [0.29.0](https://github.com/us/crw/compare/v0.28.0...v0.29.0) (2026-08-04)
+
+
+### Features
+
+* **extract:** expand table rowspan/colspan into a flat grid ([0f486aa](https://github.com/us/crw/commit/0f486aa556fda6e24f2b683e9f593ae39f8013d4))
+* **extract:** support openai-responses LLM provider ([ed551e3](https://github.com/us/crw/commit/ed551e3257da61a238efc188c9c064462591851d))
+* **renderer:** cf_clearance cookie cache — solve a Cloudflare challenge once, reuse across the host ([c9b6e6d](https://github.com/us/crw/commit/c9b6e6d5cafb361cbfc637dc34c3e1acd1cef96b))
+* **renderer:** decouple chrome_proxy arm pool from renderer.pool_size ([3b0ef22](https://github.com/us/crw/commit/3b0ef229802677fe29a74f1b06b4582be323f7c7))
+* **renderer:** fire the cloak CF-recovery arm on a fresh budget (gated) ([9f1e5ea](https://github.com/us/crw/commit/9f1e5ea5555bbf29cd41e454902be0cd804a15e4))
+
+
+### Bug Fixes
+
+* **antibot:** catch Reddit/Cloudflare/Vercel block pages sent as 200 ([e7b2f5b](https://github.com/us/crw/commit/e7b2f5b988aec7188592ad4d128e3f8f1115d556))
+* **antibot:** catch Vercel block pages that beat the markdown guard ([0d95dad](https://github.com/us/crw/commit/0d95dadc91c1583f8ef482767854bcea9932f792))
+* **core:** stop SSRF guard over-blocking public /16s ([555d62b](https://github.com/us/crw/commit/555d62bc2e55fd0ccb870ab4b5f6732281393a1d))
+* **extract:** drop two over-broad boilerplate patterns ([ee5993c](https://github.com/us/crw/commit/ee5993c9d03705f165f05a849346ad416662c25f))
+* **extract:** keep Elementor page content and collapse repeated nav ([86c1d2d](https://github.com/us/crw/commit/86c1d2d1ab4c92e3b85c6a6530c92aa4f5ad2df8))
+* **extract:** stop deleting article content under onlyMainContent ([682a731](https://github.com/us/crw/commit/682a731c56bf31da1b14f716ae26a227de8c6285))
+* **extract:** validate Responses status and stop echoing error bodies ([9cd06f4](https://github.com/us/crw/commit/9cd06f43bd77fc48863c51e6906e8d3d1bd76657))
+* **mcp:** stop advertising an output schema the proxy cannot honour ([e76bcbc](https://github.com/us/crw/commit/e76bcbcdbb37291cedadd122a59d104c0c7683f8)), closes [#391](https://github.com/us/crw/issues/391)
+* **renderer:** cloak solves cold hosts on a fresh exit IP, not a pinned one ([c2403f2](https://github.com/us/crw/commit/c2403f25013598ea5be162a66605649b288fde5e))
+* **renderer:** pool the chrome_proxy tier so its targets get reaped ([1bf32e8](https://github.com/us/crw/commit/1bf32e8caf058bde8016e17af11d0458472ee21e))
+* **renderer:** reap orphaned chrome targets on cancelled renders ([727a041](https://github.com/us/crw/commit/727a0419a7f91bf0de1414d0324565b40917fd79))
+* **renderer:** stop anti-bot blocks from stranding the recovery tier ([223de6c](https://github.com/us/crw/commit/223de6c4c32ff4ba1bd1f13fdf9ed310a3a6f540))
+* **renderer:** stop discarding good content when the JS ladder fails ([6d36665](https://github.com/us/crw/commit/6d366651de0801525857e95e16569d242daf3e68))
+* **scrape:** stop reporting a thin page as an anti-bot block ([544d4aa](https://github.com/us/crw/commit/544d4aa1a76bff2789c1d368d15c665e630bdbd9))
+* **scrape:** stop selling a CDN's error page as the page that was asked for ([d9ddca9](https://github.com/us/crw/commit/d9ddca9e9a22eb1d108e1f34bbd182543f67c54f))
+* **search:** validate `lang` at the API boundary ([52711fe](https://github.com/us/crw/commit/52711fe42b1acbdff54b18b57f1e44653c2aad7c))
+
 ## [0.28.0](https://github.com/us/crw/compare/v0.27.1...v0.28.0) (2026-07-23)
 
 
