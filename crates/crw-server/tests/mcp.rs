@@ -30,6 +30,13 @@ fn test_app_with_search() -> TestServer {
     TestServer::new(app)
 }
 
+/// App state with `[mcp] hide_credits = true`, the self-hosted option that
+/// strips credit-billing fields from MCP tool responses.
+fn test_state_hide_credits() -> AppState {
+    let config: AppConfig = toml::from_str("[mcp]\nhide_credits = true").unwrap();
+    AppState::new(config).expect("AppState::new failed")
+}
+
 fn pending_extract_record(created_at: Instant) -> ExtractRecord {
     ExtractRecord {
         status: ExtractStatus::Processing,
@@ -229,6 +236,67 @@ async fn mcp_extract_status_and_cancel_share_canonical_http_serializer() {
     assert_eq!(cancelled["results"][0]["status"], "cancelled");
     // A cancelled job is not a failed one, so it still reports success: true.
     assert_eq!(cancelled["success"], true);
+}
+
+/// `[mcp] hide_credits = true` strips the SaaS credit-billing fields from MCP
+/// tool results — in both the text block and `structuredContent` — while
+/// `tokensUsed` (real LLM telemetry) survives. The default config must keep
+/// emitting `creditsUsed` so existing consumers see no shape change.
+#[tokio::test]
+async fn mcp_extract_status_hides_credits_when_configured() {
+    for (state, expect_credits) in [
+        (test_state_hide_credits(), false),
+        (
+            AppState::new(toml::from_str::<AppConfig>("").unwrap()).unwrap(),
+            true,
+        ),
+    ] {
+        let id = Uuid::new_v4();
+        let mut rec = pending_extract_record(Instant::now());
+        rec.credits_used = 5;
+        rec.tokens_used = 42;
+        state.extract_jobs.write().await.insert(id, rec);
+        let server = TestServer::new(create_app(state));
+
+        let resp: Value = server
+            .post("/mcp")
+            .content_type("application/json")
+            .json(&mcp_request(
+                "tools/call",
+                json!(301),
+                json!({"name": "crw_check_extract_status", "arguments": {"id": id}}),
+            ))
+            .await
+            .json();
+        let status = &resp["result"]["structuredContent"];
+
+        if expect_credits {
+            assert_eq!(status["creditsUsed"], json!(5));
+        } else {
+            assert!(
+                status.get("creditsUsed").is_none(),
+                "creditsUsed must be stripped: {status}"
+            );
+            // The strip must cover the text block too, not just structuredContent.
+            let text = resp["result"]["content"][0]["text"].as_str().unwrap();
+            assert!(!text.contains("creditsUsed"), "text block: {text}");
+            // A stripped body must still validate against the advertised schema
+            // (creditsUsed is schema-optional since this feature).
+            let schema = tool_output_schema("crw_check_extract_status").unwrap();
+            let validator = jsonschema::validator_for(&schema).expect("schema compiles");
+            let errors: Vec<String> = validator
+                .iter_errors(status)
+                .map(|error| error.to_string())
+                .collect();
+            assert!(
+                errors.is_empty(),
+                "stripped body must validate: {errors:#?}"
+            );
+        }
+        // tokensUsed is real LLM provider consumption, never stripped.
+        assert_eq!(status["tokensUsed"], json!(42));
+        assert_eq!(status["id"], id.to_string());
+    }
 }
 
 /// The stdio/CLI MCP proxies ship the raw `GET /v1/extract/{id}` REST body

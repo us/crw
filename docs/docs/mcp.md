@@ -128,7 +128,17 @@ claude mcp add --transport http crw http://localhost:3000/mcp
 | `--api-url` | `CRW_API_URL` | Remote server URL (enables proxy mode) |
 | `--api-key` | `CRW_API_KEY` | Bearer token for remote server auth |
 | `--config` | `CRW_CONFIG` | Config file path (embedded mode only) |
+| `--hide-credits` | `CRW_MCP__HIDE_CREDITS` | Strip `creditCost`/`creditsUsed` from tool responses |
 | — | `RUST_LOG` | Log level (default: `crw_mcp=info`, logs go to stderr) |
+
+> **Hiding credit fields (self-hosted):** credits exist for the managed SaaS
+> billing layer. On a self-hosted deployment they are unused bookkeeping that
+> still costs context tokens on every tool response, so the `[mcp]`
+> `hide_credits = true` config key strips them server-side (covers the `/mcp`
+> endpoint and embedded mode; `tokensUsed` LLM telemetry is kept). In proxy
+> mode the server cannot re-shape the remote body from the client config, so
+> `crw-mcp --hide-credits` strips the same fields client-side after each tool
+> call.
 
 ## Feature Flags
 

@@ -29,6 +29,20 @@ pub async fn validate_url(url: &str) -> Result<(), String> {
 /// result value. Extract lifecycle responses carry `success` on the shared `/v1`
 /// struct itself, so no per-tool envelope patching happens here.
 pub async fn call_tool(state: &AppState, tool_name: &str, args: Value) -> Result<Value, String> {
+    let mut result = call_tool_inner(state, tool_name, args).await?;
+    // Self-hosted operators can suppress the SaaS credit-billing fields
+    // (`creditCost` / `creditsUsed`) — dead weight in the model's context when
+    // no billing layer consumes them. Applied at the dispatch boundary so the
+    // stripped shape reaches every consumer of this fn (the `/mcp` endpoint
+    // here and the embedded backend of both `crw-mcp` and `crw mcp`), in both
+    // the text block and `structuredContent`. The REST API is untouched.
+    if state.config.mcp.hide_credits {
+        crw_core::mcp::strip_credit_fields(&mut result);
+    }
+    Ok(result)
+}
+
+async fn call_tool_inner(state: &AppState, tool_name: &str, args: Value) -> Result<Value, String> {
     match tool_name {
         "crw_scrape" => {
             let req: ScrapeRequest =

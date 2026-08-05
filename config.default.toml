@@ -307,3 +307,13 @@ sandbox = false
 # Hard address-space limit (bytes) for a sandbox child (RLIMIT_AS). Aborted by
 # the OS if exceeded — the ultimate memory-DoS backstop. Default 512 MiB.
 sandbox_memory_bytes = 536870912
+
+[mcp]
+# Strip credit-billing fields (`creditCost` / `creditsUsed`) from every MCP
+# tool response. Credits exist for the managed SaaS billing layer; a
+# self-hosted deployment has no billing consumer for them, so hiding them
+# saves a few context tokens per response and keeps the model's attention on
+# the payload fields. Affects only the MCP surfaces (/mcp endpoint, `crw-mcp`,
+# `crw mcp`) — the REST API keeps emitting credit fields. Default false
+# preserves the existing response shape.
+# hide_credits = false

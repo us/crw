@@ -69,6 +69,10 @@ The value reflects the renderer cost only (a flat 1 credit for every renderer). 
 
 The field is omitted when its value would be 0 (internal paths that have not yet been priced).
 
+## Hiding credit fields on self-hosted MCP
+
+Self-hosted instances have no billing layer, so `creditCost` / `creditsUsed` in MCP tool responses are pure context overhead (a handful of tokens per response). Set `[mcp] hide_credits = true` (or `CRW_MCP__HIDE_CREDITS=true`) to strip them from every tool result on the `/mcp` endpoint, embedded `crw-mcp`, and `crw mcp`; `crw-mcp --hide-credits` does the same client-side in proxy mode. The REST API response shape is unchanged. See [Configuration](/docs/configuration).
+
 ## Balance check
 
 Use `GET /api/v1/account/balance` (cloud only — fastcrw.com) with your API key to inspect included credits, purchased balance, and total available credits.

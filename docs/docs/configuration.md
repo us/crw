@@ -128,6 +128,13 @@ max_concurrency = 4          # bounded fan-out for per-result summaries in /v1/s
 # sandbox = false            # isolate each parse in a child process (Unix only)
 # sandbox_memory_bytes = 536870912   # RLIMIT_AS for sandbox child (Unix); 512 MiB
 
+# MCP tool-response shaping (self-hosted). Strips credit-billing fields
+# (`creditCost` / `creditsUsed`) from MCP tool results — saves context tokens
+# and keeps the model's attention on the payload. MCP surfaces only; the REST
+# API is unchanged.
+# [mcp]
+# hide_credits = false
+
 [auth]
 # api_keys = ["crw_live_key-1234"]
 ```
@@ -197,6 +204,7 @@ Use the `CRW_` prefix with `__` as a nesting separator:
 | `extraction.llm.max_html_bytes` | `CRW_EXTRACTION__LLM__MAX_HTML_BYTES` |
 | `extraction.llm.max_concurrency` | `CRW_EXTRACTION__LLM__MAX_CONCURRENCY` |
 | `extraction.llm.require_byok_header` | `CRW_EXTRACTION__LLM__REQUIRE_BYOK_HEADER` |
+| `mcp.hide_credits` | `CRW_MCP__HIDE_CREDITS` |
 | _(boot guard)_ | `CRW_DISABLE_SERVER_LLM_KEY` — when set to `1`, refuses to boot if `[extraction.llm].api_key` is also configured. Use behind a SaaS proxy that injects per-request LLM keys. |
 
 ## Renderer modes

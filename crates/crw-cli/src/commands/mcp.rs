@@ -33,6 +33,15 @@ pub struct McpArgs {
     /// Config file path (embedded mode only, overrides config.local.toml).
     #[arg(long, env = "CRW_CONFIG")]
     pub config: Option<String>,
+
+    /// Hide credit-billing fields (`creditCost`/`creditsUsed`) from tool
+    /// responses. Saves context tokens for self-hosted deployments, where
+    /// credits are unused bookkeeping. In embedded mode the `[mcp]`
+    /// `hide_credits` config key covers this — the flag (or its env var) just
+    /// forces it on. In proxy mode this is the client-side counterpart, since
+    /// the remote REST bodies are not re-shaped by the server config.
+    #[arg(long, env = "CRW_MCP__HIDE_CREDITS")]
+    pub hide_credits: bool,
 }
 
 // --- Backend ---
@@ -42,6 +51,7 @@ enum Backend {
         client: reqwest::Client,
         base_url: String,
         api_key: Option<String>,
+        hide_credits: bool,
     },
     #[cfg(feature = "mcp-embedded")]
     Embedded { state: crw_server::state::AppState },
@@ -54,6 +64,7 @@ impl Backend {
                 client,
                 base_url,
                 api_key,
+                ..
             } => proxy_call_tool(client, base_url, api_key, tool_name, args).await,
             #[cfg(feature = "mcp-embedded")]
             Backend::Embedded { state } => {
@@ -73,6 +84,17 @@ impl Backend {
             Backend::Proxy { .. } => true,
             #[cfg(feature = "mcp-embedded")]
             Backend::Embedded { state } => state.searxng.is_some(),
+        }
+    }
+
+    /// Whether to strip credit fields at this dispatch layer. Proxy mode only:
+    /// the embedded backend strips inside `call_tool` (driven by server
+    /// config), and re-stripping here would be a wasted no-op walk.
+    fn hide_credits(&self) -> bool {
+        match self {
+            Backend::Proxy { hide_credits, .. } => *hide_credits,
+            #[cfg(feature = "mcp-embedded")]
+            Backend::Embedded { .. } => false,
         }
     }
 
@@ -109,10 +131,14 @@ impl Backend {
                 let arguments = req.params.get("arguments").cloned().unwrap_or(json!({}));
 
                 // Bound the result at the MCP layer before it reaches context.
-                let result = self
-                    .call_tool(tool_name, arguments.clone())
-                    .await
-                    .map(|v| crw_core::mcp::apply_bounds(tool_name, &arguments, v));
+                let hide_credits = self.hide_credits();
+                let result = self.call_tool(tool_name, arguments.clone()).await.map(|v| {
+                    let mut v = crw_core::mcp::apply_bounds(tool_name, &arguments, v);
+                    if hide_credits {
+                        crw_core::mcp::strip_credit_fields(&mut v);
+                    }
+                    v
+                });
                 Some(tool_result_response(id, tool_name, result))
             }
 
@@ -349,6 +375,7 @@ pub async fn run(args: McpArgs) -> Result<(), CmdError> {
     //   1. CLI flag / env (already merged by clap)
     //   2. `client.api_url` / `client.api_key` in ~/.config/crw/config.toml
     //   3. None — falls through to embedded mode below
+    let hide_credits = args.hide_credits;
     let (resolved_api_url, resolved_api_key) =
         resolve_client_credentials(args.api_url, args.api_key);
 
@@ -366,6 +393,7 @@ pub async fn run(args: McpArgs) -> Result<(), CmdError> {
             client,
             base_url: api_url,
             api_key: resolved_api_key,
+            hide_credits,
         }
     } else {
         #[cfg(feature = "mcp-embedded")]
@@ -389,8 +417,13 @@ pub async fn run(args: McpArgs) -> Result<(), CmdError> {
                     map: Default::default(),
                     document: Default::default(),
                     client: Default::default(),
+                    mcp: Default::default(),
                 }
             });
+            // The CLI flag forces the config knob on for this process.
+            if hide_credits {
+                config.mcp.hide_credits = true;
+            }
 
             let user_configured_renderer = std::env::var("CRW_RENDERER__LIGHTPANDA__WS_URL")
                 .is_ok()

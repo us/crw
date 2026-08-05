@@ -25,6 +25,27 @@ pub struct AppConfig {
     /// hosted SaaS. Written by `crw setup` into the user-config file.
     #[serde(default)]
     pub client: ClientConfig,
+    /// `[mcp]` — MCP tool-response shaping knobs for self-hosted deployments.
+    #[serde(default)]
+    pub mcp: McpConfig,
+}
+
+/// `[mcp]` section — controls how the MCP surfaces shape tool responses.
+/// Honors the `CRW_MCP__*` env overrides (e.g. `CRW_MCP__HIDE_CREDITS=true`).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct McpConfig {
+    /// Strip credit-billing fields (`creditCost`, `creditsUsed`) from every
+    /// MCP tool result before it reaches the model's context. These fields
+    /// exist for the managed SaaS billing layer; on a self-hosted deployment
+    /// they carry no information, cost tokens on every response, and can
+    /// distract the model from the fields that matter. Default `false`
+    /// preserves the existing response shape for compatibility.
+    ///
+    /// Only the MCP surfaces are affected (`/mcp` endpoint, `crw-mcp`,
+    /// `crw mcp`); the REST API keeps emitting credit fields so billing
+    /// integrations and response consumers see no change.
+    pub hide_credits: bool,
 }
 
 /// `[client]` — cloud-proxy credentials populated by `crw setup` and read by
@@ -2235,6 +2256,27 @@ mod tests {
         let r = RequestConfig::default();
         assert_eq!(r.deadline_ms_default, 8000);
         assert!(r.auto_extend_deadline_for_ladder);
+    }
+
+    #[test]
+    fn mcp_hide_credits_defaults_false() {
+        let cfg: AppConfig = toml::from_str("").unwrap();
+        assert!(!cfg.mcp.hide_credits);
+    }
+
+    #[test]
+    fn mcp_hide_credits_from_toml() {
+        let cfg: AppConfig = toml::from_str("[mcp]\nhide_credits = true").unwrap();
+        assert!(cfg.mcp.hide_credits);
+    }
+
+    #[test]
+    fn env_var_mcp_hide_credits() {
+        let _g = ENV_LOCK.lock().unwrap();
+        unsafe { std::env::set_var("CRW_MCP__HIDE_CREDITS", "true") };
+        let cfg = AppConfig::load().unwrap();
+        unsafe { std::env::remove_var("CRW_MCP__HIDE_CREDITS") };
+        assert!(cfg.mcp.hide_credits);
     }
 
     #[test]

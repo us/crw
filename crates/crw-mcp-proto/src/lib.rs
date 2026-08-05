@@ -139,7 +139,12 @@ fn extract_status_output_schema() -> Value {
             "creditsUsed": { "type": "integer" },
             "tokensUsed": { "type": "integer" }
         },
-        "required": ["success", "id", "status", "results", "expiresAt", "creditsUsed", "tokensUsed"]
+        // `creditsUsed` is NOT required: `[mcp] hide_credits` (self-hosted
+        // deployments, where credit bookkeeping is billing noise) strips it
+        // from every tool response, and a strict client must still validate
+        // the stripped body. It stays a declared property, so deployments
+        // that do emit it validate identically. See [`strip_credit_fields`].
+        "required": ["success", "id", "status", "results", "expiresAt", "tokensUsed"]
     })
 }
 
@@ -930,6 +935,54 @@ pub fn strip_mcp_only_args(tool_name: &str, mut args: Value) -> Value {
         }
     }
     args
+}
+
+// --- Credit-field stripping (MCP-layer, context-footprint control) ---
+
+/// Serialized keys that carry credit-billing bookkeeping. `creditCost` is the
+/// camelCase form of `ScrapeData.credit_cost` (per-page price); `creditsUsed`
+/// is the aggregate billed on job/envelope responses (extract status, v2
+/// scrape/crawl/search envelopes and their `metadata` blocks). Both exist for
+/// the managed SaaS billing layer; on a self-hosted deployment they are dead
+/// weight in the model's context.
+const CREDIT_FIELDS: &[&str] = &["creditCost", "creditsUsed"];
+
+/// Recursively remove [`CREDIT_FIELDS`] keys from every object in `value`.
+///
+/// Shape-agnostic (unlike [`apply_bounds`], which navigates known layouts):
+/// credit keys appear at the top level (`ScrapeData.creditCost`), inside a
+/// `data` envelope page array, and under v2 `metadata` — a recursive walk
+/// covers current and future placements with one rule, and unknown shapes pass
+/// through untouched.
+///
+/// Tool-agnostic for the same reason, and deliberately **not** driven by
+/// `tool_name`: the bodies this walks are ones the engine authored (embedded
+/// mode, or the `/mcp` endpoint) or a same-versioned self-hosted REST upstream
+/// (proxy mode with `--hide-credits`), so no caller can surprise-strip a key a
+/// remote actually needed. `tokensUsed` is kept — it measures real LLM
+/// provider consumption, useful to a self-hosted operator tuning prompts, not
+/// SaaS credit bookkeeping.
+///
+/// Caller contract: apply to the tool result `Value` *before*
+/// [`tool_result_response`] wraps it, so the stripped shape lands in both the
+/// text content block and `structuredContent`.
+pub fn strip_credit_fields(value: &mut Value) {
+    match value {
+        Value::Object(map) => {
+            for field in CREDIT_FIELDS {
+                map.remove(*field);
+            }
+            for v in map.values_mut() {
+                strip_credit_fields(v);
+            }
+        }
+        Value::Array(items) => {
+            for v in items.iter_mut() {
+                strip_credit_fields(v);
+            }
+        }
+        _ => {}
+    }
 }
 
 #[cfg(test)]
@@ -1792,5 +1845,84 @@ mod tests {
         let out = apply_bounds("crw_search", &json!({}), grouped);
         assert_eq!(out["data"]["web"][0]["truncated"], json!(true));
         assert!(out["data"]["news"][0].get("truncated").is_none());
+    }
+
+    // --- strip_credit_fields ---
+
+    /// Every known placement of a credit key is stripped, at any depth, while
+    /// sibling fields (incl. `tokensUsed`, which is real LLM telemetry and not
+    /// SaaS credit bookkeeping) are left intact.
+    #[test]
+    fn strip_credit_fields_covers_all_known_placements() {
+        // Mimics the union of credit-bearing shapes: bare ScrapeData
+        // (embedded crw_scrape), an enveloped crawl page array, a v2
+        // metadata block, and an extract-status envelope.
+        let mut value = json!({
+            "success": true,
+            "creditsUsed": 4,
+            "tokensUsed": 1200,
+            "creditCost": 1,
+            "data": [
+                { "url": "https://e.com/1", "creditCost": 1, "markdown": "a" },
+                { "url": "https://e.com/2", "creditCost": 0, "metadata": {
+                    "creditsUsed": 1, "title": "t"
+                } }
+            ],
+            "results": [
+                { "url": "https://e.com/3", "status": "completed", "data": {
+                    "json": { "creditsUsed": 2, "title": "nested" }
+                } }
+            ]
+        });
+        strip_credit_fields(&mut value);
+
+        let serialized = serde_json::to_string(&value).expect("serialize");
+        assert!(
+            !serialized.contains("creditCost"),
+            "no creditCost anywhere: {serialized}"
+        );
+        assert!(
+            !serialized.contains("creditsUsed"),
+            "no creditsUsed anywhere: {serialized}"
+        );
+        assert_eq!(value["success"], json!(true));
+        assert_eq!(value["tokensUsed"], json!(1200));
+        assert_eq!(value["data"][0]["markdown"], json!("a"));
+        assert_eq!(value["data"][1]["metadata"]["title"], json!("t"));
+        assert_eq!(
+            value["results"][0]["data"]["json"]["title"],
+            json!("nested")
+        );
+    }
+
+    /// A body with no credit keys is returned byte-identical — the strip is a
+    /// pure no-op, never a rewrite of unrelated content.
+    #[test]
+    fn strip_credit_fields_noop_without_credits() {
+        let mut value = json!({
+            "success": true,
+            "tokensUsed": 7,
+            "data": { "markdown": "hello", "metadata": { "title": "t" } }
+        });
+        let before = value.clone();
+        strip_credit_fields(&mut value);
+        assert_eq!(value, before);
+    }
+
+    /// The extract-status output schema must accept a response whose
+    /// `creditsUsed` key was stripped: the self-hosted `hide_credits` option
+    /// makes that key disappear, and `additionalProperties: false` means a
+    /// stale `required` entry would hard-fail strict clients. Companion to the
+    /// server-side test that asserts the stripped body validates.
+    #[test]
+    fn extract_status_schema_does_not_require_credits_used() {
+        let schema = extract_status_output_schema();
+        let required = schema["required"].as_array().expect("required array");
+        assert!(
+            !required.iter().any(|v| v == "creditsUsed"),
+            "creditsUsed must stay schema-optional so hide_credits bodies validate"
+        );
+        assert!(required.iter().any(|v| v == "tokensUsed"));
+        assert!(schema["properties"]["creditsUsed"].is_object());
     }
 }

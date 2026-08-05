@@ -2331,7 +2331,6 @@
           "status",
           "results",
           "expiresAt",
-          "creditsUsed",
           "tokensUsed"
         ],
         "properties": {
@@ -2367,7 +2366,8 @@
             "format": "date-time"
           },
           "creditsUsed": {
-            "type": "integer"
+            "type": "integer",
+            "description": "Credit-billing total. Absent when the deployment runs with [mcp] hide_credits (self-hosted) and the response is consumed via MCP."
           },
           "tokensUsed": {
             "type": "integer"
