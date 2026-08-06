@@ -103,6 +103,13 @@ ws_url = "ws://chrome:9222/"
 # exceed the old 2g under load). Drop to 6 if RAM headroom tightens.
 [renderer.chrome_pool]
 size = 8
+# Interactive render reserve (B lane). Of the 8-slot pool, guarantee 3 slots for
+# interactive single /scrape so one tenant's batch/crawl of slow sites can't
+# squeeze other tenants' interactive scrapes below 3 (batch keeps 8-3=5). Was an
+# effective 2 (pool/4); raised after the 2026-07-30 cross-tenant timeout leak.
+# Fast revert without redeploy: CRW_RENDERER__CHROME_POOL__RESERVED_INTERACTIVE_RENDERS=2
+# (env overrides this file; merely unsetting it falls back to 3, not the old 2).
+reserved_interactive_renders = 3
 
 # /v1/search points at the bundled SearXNG sidecar. On the reference
 # docker-compose stack the sidecar is reachable as `searxng:8080` over the

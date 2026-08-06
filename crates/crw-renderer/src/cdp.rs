@@ -493,9 +493,13 @@ impl CdpRenderer {
             blocklist: Blocklist::defaults(),
             host_intercept_disable: Vec::new(),
             conn_semaphore: Arc::new(Semaphore::new(pool_size)),
+            // Conn/no-context-pool path (per-request-proxy, self-host). Keeps the
+            // default reserve; the configurable override lives only on the pool
+            // gate (the path with the 12-30s render hold). `pool_size` here may be
+            // the small default (4), so an absolute override must NOT reach it.
             conn_batch_gate: crw_core::BatchGate::new(
                 pool_size,
-                crate::render_reserve(pool_size),
+                crw_core::config::resolve_interactive_reserve(None, pool_size),
                 "render",
             ),
             pool: None,
@@ -582,7 +586,10 @@ impl CdpRenderer {
             .set(cfg.size as i64);
         self.pool_batch_gate = Some(crw_core::BatchGate::new(
             cfg.size,
-            crate::render_reserve(cfg.size),
+            crw_core::config::resolve_interactive_reserve(
+                cfg.reserved_interactive_renders,
+                cfg.size,
+            ),
             "render",
         ));
         self.pool = Some(crate::browser_pool::BrowserContextPool::new(cfg, factory));
@@ -3172,6 +3179,33 @@ mod tests {
         let lp = CdpRenderer::new("lightpanda", "ws://x/", 1000, 1);
         assert_eq!(chrome.budget_truncated_warning(), "chrome_budget_truncated");
         assert_eq!(lp.budget_truncated_warning(), "lightpanda_budget_truncated");
+    }
+
+    #[test]
+    fn pool_gate_reflects_configured_reserved_interactive_renders() {
+        // Guards the FULL config→PoolCfg→with_pool threading, not just the
+        // resolver arithmetic: a configured reserve must actually reach the pool
+        // gate. If the `cdp.rs` resolve call regressed to `None`, the first
+        // assert (expecting 2) would read 6 and fail.
+        use crate::browser_pool::PoolCfg;
+        // Some(6) on a size-8 pool → batch gate = 8 - 6 = 2.
+        let r = CdpRenderer::new("chrome", "ws://x/", 1000, 8).with_pool(PoolCfg {
+            size: 8,
+            reserved_interactive_renders: Some(6),
+            ..Default::default()
+        });
+        assert_eq!(
+            r.pool_batch_gate.as_ref().unwrap().available(),
+            2,
+            "pool gate must use the configured reserve (8-6=2), not the default"
+        );
+        // None → pool/4 = 2 → batch gate = 8 - 2 = 6 (default preserved).
+        let r2 = CdpRenderer::new("chrome", "ws://x/", 1000, 8).with_pool(PoolCfg {
+            size: 8,
+            reserved_interactive_renders: None,
+            ..Default::default()
+        });
+        assert_eq!(r2.pool_batch_gate.as_ref().unwrap().available(), 6);
     }
 
     #[test]

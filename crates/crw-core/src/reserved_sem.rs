@@ -255,6 +255,68 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn configured_reserve_three_guarantees_three_interactive_pool_slots() {
+        // The prod shape: chrome_pool size=8, reserved_interactive_renders=3
+        // resolves to reserve=3 → batch gate = total-reserved = 5, so at least
+        // 3 downstream pool slots stay reachable by interactive even when batch
+        // pins its whole lane. Guards the config resolver + gate arithmetic the
+        // pool gate (cdp.rs with_pool) relies on.
+        use crate::config::resolve_interactive_reserve;
+        assert_eq!(
+            resolve_interactive_reserve(None, 8),
+            2,
+            "None preserves old pool/4"
+        );
+        assert_eq!(resolve_interactive_reserve(Some(3), 8), 3);
+
+        let pool = std::sync::Arc::new(Semaphore::new(8)); // mock downstream chrome pool
+        let gate = BatchGate::new(8, resolve_interactive_reserve(Some(3), 8), "render"); // gate=5
+
+        // 5 batch holders each take a gate permit AND a pool slot.
+        let mut batch = Vec::new();
+        for _ in 0..5 {
+            let g = gate
+                .enter(ScrapeClass::Batch)
+                .await
+                .expect("batch gate permit");
+            let p = Semaphore::acquire_owned(pool.clone()).await.unwrap();
+            batch.push((g, p));
+        }
+        assert_eq!(gate.available(), 0, "batch gate exhausted at 5 holders");
+
+        // Exactly 3 interactive acquire the reserved pool slots (skip the gate).
+        let mut inter = Vec::new();
+        for _ in 0..3 {
+            assert!(gate.enter(ScrapeClass::Interactive).await.is_none());
+            inter.push(Semaphore::acquire_owned(pool.clone()).await.unwrap());
+        }
+        assert_eq!(
+            pool.available_permits(),
+            0,
+            "pool full: 5 batch + 3 interactive = 8"
+        );
+
+        // A 4th interactive blocks (pool full) and a 6th batch blocks (gate empty).
+        assert!(
+            tokio::time::timeout(
+                Duration::from_millis(100),
+                Semaphore::acquire_owned(pool.clone())
+            )
+            .await
+            .is_err(),
+            "4th interactive must block on a full pool"
+        );
+        assert!(
+            tokio::time::timeout(Duration::from_millis(100), gate.enter(ScrapeClass::Batch))
+                .await
+                .is_err(),
+            "6th batch must block on an exhausted gate"
+        );
+        drop(batch);
+        drop(inter);
+    }
+
+    #[tokio::test]
     async fn task_local_class_drives_lane_end_to_end() {
         // Proves the full mechanism the real lanes use: REQUEST_CLASS scope →
         // current_scrape_class() → correct lane. total=2, reserve 1 => batch_gate=1.

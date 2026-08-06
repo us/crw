@@ -918,6 +918,15 @@ pub struct ChromePoolConfig {
     /// in-flight chrome requests per pool.
     #[serde(default)]
     pub size: Option<usize>,
+    /// Interactive render-slot reserve (the B lane), the 4th sibling of
+    /// `reserved_interactive_{parses,extracts,llm}`. `None` → `pool/4` (the
+    /// historical `render_reserve` default), so batch keeps `size - reserve`
+    /// render slots and interactive is guaranteed `reserve`. Bounds one tenant's
+    /// batch/crawl from squeezing other tenants' interactive scrapes below
+    /// `reserve` Chrome slots. Resolved via `resolve_interactive_reserve` and
+    /// clamped by `BatchGate::new` (never zeroes batch).
+    #[serde(default)]
+    pub reserved_interactive_renders: Option<usize>,
     /// Recycle policy: v1 always recreates the context after each release.
     /// Reserved for a future "reuse N navigations then recreate" mode.
     #[serde(default = "default_recycle_after_navs")]
@@ -937,6 +946,7 @@ impl Default for ChromePoolConfig {
     fn default() -> Self {
         Self {
             size: None,
+            reserved_interactive_renders: None,
             recycle_after_navs: default_recycle_after_navs(),
             idle_timeout_secs: default_idle_timeout_secs(),
             health_check_secs: default_health_check_secs(),

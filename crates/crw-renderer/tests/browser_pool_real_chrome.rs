@@ -89,6 +89,7 @@ fn build_pool(ws_url: String, size: usize) -> Arc<BrowserContextPool<CdpConnecti
     BrowserContextPool::new(
         PoolCfg {
             size,
+            reserved_interactive_renders: None,
             recycle_after_navs: 1,
             idle_timeout: Duration::from_secs(300),
             health_check_after: Duration::from_secs(60),

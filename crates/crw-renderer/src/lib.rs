@@ -110,19 +110,6 @@ tokio::task_local! {
     pub static REQUEST_SCREENSHOT: Option<ScreenshotReq>;
 }
 
-/// Interactive render-slot reserve for a Chrome pool of `pool_size` (the B
-/// reserved lane). About a quarter of the pool, floored at 1 whenever there are
-/// ≥2 slots so even small (2–3 slot) self-hosted pools keep interactive render
-/// isolation; only a 1-slot pool disables it (a reserve there would starve
-/// batch). Always kept below `pool_size` so the batch gate stays ≥1.
-pub fn render_reserve(pool_size: usize) -> usize {
-    if pool_size <= 1 {
-        0
-    } else {
-        (pool_size / 4).max(1).min(pool_size - 1)
-    }
-}
-
 /// Attach the browser-context pool to a CDP tier, when enabled and supported.
 ///
 /// Every pooled tier gets its own pool, sized from the shared
@@ -155,6 +142,7 @@ fn maybe_with_pool(
             tracing::info!(tier, pool_size = size, "browser-context pool enabled");
             renderer.with_pool(browser_pool::PoolCfg {
                 size,
+                reserved_interactive_renders: pcfg.reserved_interactive_renders,
                 recycle_after_navs: pcfg.recycle_after_navs,
                 idle_timeout: std::time::Duration::from_secs(pcfg.idle_timeout_secs),
                 health_check_after: std::time::Duration::from_secs(pcfg.health_check_secs),

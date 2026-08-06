@@ -206,6 +206,10 @@ pub type ConnFactory<C> =
 #[derive(Clone, Debug)]
 pub struct PoolCfg {
     pub size: usize,
+    /// Interactive render reserve override (`None` → `pool/4`). Carried from
+    /// `[renderer.chrome_pool].reserved_interactive_renders`; resolved into the
+    /// pool `BatchGate` at construction.
+    pub reserved_interactive_renders: Option<usize>,
     pub recycle_after_navs: u32,
     pub idle_timeout: Duration,
     pub health_check_after: Duration,
@@ -219,6 +223,7 @@ impl Default for PoolCfg {
     fn default() -> Self {
         Self {
             size: 4,
+            reserved_interactive_renders: None,
             recycle_after_navs: 1,
             idle_timeout: Duration::from_secs(300),
             health_check_after: Duration::from_secs(60),
@@ -993,6 +998,7 @@ mod tests {
     fn small_pool_cfg() -> PoolCfg {
         PoolCfg {
             size: 2,
+            reserved_interactive_renders: None,
             recycle_after_navs: 1,
             idle_timeout: Duration::from_secs(300),
             health_check_after: Duration::from_secs(60),
