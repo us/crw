@@ -30,16 +30,17 @@ pub struct McpArgs {
     #[arg(long, env = "CRW_API_KEY")]
     pub api_key: Option<String>,
 
-    /// Config file path (embedded mode only, overrides config.local.toml).
+    /// Config file path, overriding config.local.toml. Read in both modes:
+    /// proxy mode uses its `client.*` and `[mcp]` keys too.
     #[arg(long, env = "CRW_CONFIG")]
     pub config: Option<String>,
 
     /// Hide credit-billing fields (`creditCost`/`creditsUsed`) from tool
     /// responses. Saves context tokens for self-hosted deployments, where
-    /// credits are unused bookkeeping. In embedded mode the `[mcp]`
-    /// `hide_credits` config key covers this — the flag (or its env var) just
-    /// forces it on. In proxy mode this is the client-side counterpart, since
-    /// the remote REST bodies are not re-shaped by the server config.
+    /// credits are unused bookkeeping. Equivalent to setting `[mcp]`
+    /// `hide_credits = true` in the config file, which works in both modes;
+    /// this flag is the one-off override. In proxy mode the strip runs
+    /// client-side, since a remote's REST body is not shaped by local config.
     #[arg(long, env = "CRW_MCP__HIDE_CREDITS")]
     pub hide_credits: bool,
 }
@@ -375,9 +376,20 @@ pub async fn run(args: McpArgs) -> Result<(), CmdError> {
     //   1. CLI flag / env (already merged by clap)
     //   2. `client.api_url` / `client.api_key` in ~/.config/crw/config.toml
     //   3. None — falls through to embedded mode below
-    let hide_credits = args.hide_credits;
-    let (resolved_api_url, resolved_api_key) =
+    let flag_hide_credits = args.hide_credits;
+    // Point `AppConfig::load()` at `--config` before anything reads config —
+    // `resolve_client_credentials` loads it too, so setting this later would
+    // leave that first load reading the default chain instead of the named
+    // file. Applies to both modes: the file also carries `client.*`.
+    // SAFETY: single-threaded startup, before any other thread reads the env.
+    if let Some(ref config_path) = args.config {
+        unsafe { std::env::set_var("CRW_CONFIG", config_path) };
+    }
+    let (resolved_api_url, resolved_api_key, config_hide_credits) =
         resolve_client_credentials(args.api_url, args.api_key);
+    // Flag/env or the config file turns it on. Both are needed: proxy mode
+    // never builds an `AppConfig`, and the flag never reaches `AppConfig::load`.
+    let hide_credits = flag_hide_credits || config_hide_credits;
 
     let backend = if let Some(api_url) = resolved_api_url {
         tracing::info!("Starting {SERVER_NAME} v{SERVER_VERSION} (proxy mode)");
@@ -400,10 +412,7 @@ pub async fn run(args: McpArgs) -> Result<(), CmdError> {
         {
             tracing::info!("Starting {SERVER_NAME} v{SERVER_VERSION} (embedded mode)");
 
-            if let Some(ref config_path) = args.config {
-                unsafe { std::env::set_var("CRW_CONFIG", config_path) };
-            }
-
+            // `--config` was already exported to CRW_CONFIG above.
             let mut config = crw_core::config::AppConfig::load().unwrap_or_else(|e| {
                 tracing::warn!("Failed to load config, using defaults: {e}");
                 crw_core::config::AppConfig {
@@ -537,19 +546,24 @@ async fn run_stdio_loop(backend: Backend) {
 /// win; otherwise consult `client.{api_url,api_key}` from
 /// `~/.config/crw/config.toml`. This is what lets `crw setup --cloud` -> fresh
 /// shell -> `crw mcp` start in proxy mode without a manual `source ~/.zshrc`.
+/// Also returns `hide_credits`: the config file is read even when `--api-url`
+/// was passed, because `[mcp] hide_credits` is independent of where the backend
+/// lives and proxy mode builds no `AppConfig` of its own.
 fn resolve_client_credentials(
     cli_url: Option<String>,
     cli_key: Option<String>,
-) -> (Option<String>, Option<String>) {
+) -> (Option<String>, Option<String>, bool) {
+    let cfg = crw_core::config::AppConfig::load().ok();
+    let hide_credits = cfg.as_ref().is_some_and(|c| c.mcp.hide_credits);
     if cli_url.is_some() {
-        return (cli_url, cli_key);
+        return (cli_url, cli_key, hide_credits);
     }
-    match crw_core::config::AppConfig::load() {
-        Ok(cfg) => {
-            let file_url = cfg.client.api_url;
-            let file_key = cli_key.or(cfg.client.api_key);
-            (file_url, file_key)
-        }
-        Err(_) => (None, cli_key),
+    match cfg {
+        Some(cfg) => (
+            cfg.client.api_url,
+            cli_key.or(cfg.client.api_key),
+            hide_credits,
+        ),
+        None => (None, cli_key, hide_credits),
     }
 }

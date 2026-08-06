@@ -415,9 +415,32 @@ async fn mcp_extract_output_schemas_match_openapi_lifecycle_components() {
         has_required_success(openapi_status),
         "openapi ExtractStatus missing success"
     );
+    // `creditsUsed` is the one field the two surfaces legitimately disagree on,
+    // so it is compared explicitly below instead of field-for-field: REST always
+    // emits it (`ExtractStatusResponse.credits_used` is a plain `u32`, no
+    // `Option`, no `skip_serializing_if`), so the public OpenAPI contract must
+    // keep requiring it; the MCP outputSchema must leave it optional because
+    // `[mcp] hide_credits` strips it and the stripped body still has to validate
+    // against `additionalProperties: false`. Everything else stays locked.
+    let without_credits = |mut required: Vec<String>| -> Vec<String> {
+        required.retain(|f| f != "creditsUsed");
+        required
+    };
     assert_eq!(
-        required_without_success(&status),
+        without_credits(required_without_success(&status)),
+        without_credits(required_without_success(openapi_status))
+    );
+    assert!(
+        !required_without_success(&status)
+            .iter()
+            .any(|f| f == "creditsUsed"),
+        "MCP schema must leave creditsUsed optional so hide_credits bodies validate"
+    );
+    assert!(
         required_without_success(openapi_status)
+            .iter()
+            .any(|f| f == "creditsUsed"),
+        "REST always emits creditsUsed, so the OpenAPI contract must keep requiring it"
     );
     assert_eq!(
         status["properties"]["status"],

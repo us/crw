@@ -133,12 +133,13 @@ claude mcp add --transport http crw http://localhost:3000/mcp
 
 > **Hiding credit fields (self-hosted):** credits exist for the managed SaaS
 > billing layer. On a self-hosted deployment they are unused bookkeeping that
-> still costs context tokens on every tool response, so the `[mcp]`
-> `hide_credits = true` config key strips them server-side (covers the `/mcp`
-> endpoint and embedded mode; `tokensUsed` LLM telemetry is kept). In proxy
-> mode the server cannot re-shape the remote body from the client config, so
-> `crw-mcp --hide-credits` strips the same fields client-side after each tool
-> call.
+> still costs context tokens on every tool response, so `[mcp] hide_credits =
+> true` strips them from every tool result. It covers all three surfaces: the
+> `/mcp` endpoint and embedded mode strip server-side, and proxy mode strips
+> client-side after each call, since a remote's REST body is not shaped by your
+> local config. `--hide-credits` is the one-off override. Values you extracted
+> yourself are never touched, only the engine's own bookkeeping, and
+> `tokensUsed` LLM telemetry is kept.
 
 ## Feature Flags
 

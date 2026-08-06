@@ -314,6 +314,7 @@ sandbox_memory_bytes = 536870912
 # self-hosted deployment has no billing consumer for them, so hiding them
 # saves a few context tokens per response and keeps the model's attention on
 # the payload fields. Affects only the MCP surfaces (/mcp endpoint, `crw-mcp`,
-# `crw mcp`) — the REST API keeps emitting credit fields. Default false
+# `crw mcp`, embedded and proxy alike) — the REST API keeps emitting credit
+# fields, and fields you extracted yourself are never stripped. Default false
 # preserves the existing response shape.
 # hide_credits = false

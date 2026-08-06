@@ -71,7 +71,7 @@ The field is omitted when its value would be 0 (internal paths that have not yet
 
 ## Hiding credit fields on self-hosted MCP
 
-Self-hosted instances have no billing layer, so `creditCost` / `creditsUsed` in MCP tool responses are pure context overhead (a handful of tokens per response). Set `[mcp] hide_credits = true` (or `CRW_MCP__HIDE_CREDITS=true`) to strip them from every tool result on the `/mcp` endpoint, embedded `crw-mcp`, and `crw mcp`; `crw-mcp --hide-credits` does the same client-side in proxy mode. The REST API response shape is unchanged. See [Configuration](/docs/configuration).
+Self-hosted instances have no billing layer, so `creditCost` / `creditsUsed` in MCP tool responses are pure context overhead (a handful of tokens per response). Set `[mcp] hide_credits = true` (or `CRW_MCP__HIDE_CREDITS=true`, or `--hide-credits` for a one-off) to strip them from every tool result on the `/mcp` endpoint, embedded `crw-mcp`, `crw mcp`, and proxy mode. Fields you extracted yourself are never stripped, even if your schema happens to name one `creditCost`. The REST API response shape is unchanged. See [Configuration](/docs/configuration).
 
 ## Balance check
 

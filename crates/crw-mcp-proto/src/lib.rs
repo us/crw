@@ -949,36 +949,55 @@ const CREDIT_FIELDS: &[&str] = &["creditCost", "creditsUsed"];
 
 /// Recursively remove [`CREDIT_FIELDS`] keys from every object in `value`.
 ///
-/// Shape-agnostic (unlike [`apply_bounds`], which navigates known layouts):
-/// credit keys appear at the top level (`ScrapeData.creditCost`), inside a
-/// `data` envelope page array, and under v2 `metadata` — a recursive walk
-/// covers current and future placements with one rule, and unknown shapes pass
-/// through untouched.
+/// Recursive rather than layout-driven (unlike [`apply_bounds`], which
+/// navigates known shapes): credit keys appear at the top level
+/// (`ScrapeData.creditCost`), inside a `data` envelope page array, and under v2
+/// `metadata` — one rule covers current and future placements, and unknown
+/// shapes pass through untouched.
 ///
 /// Tool-agnostic for the same reason, and deliberately **not** driven by
-/// `tool_name`: the bodies this walks are ones the engine authored (embedded
-/// mode, or the `/mcp` endpoint) or a same-versioned self-hosted REST upstream
-/// (proxy mode with `--hide-credits`), so no caller can surprise-strip a key a
-/// remote actually needed. `tokensUsed` is kept — it measures real LLM
-/// provider consumption, useful to a self-hosted operator tuning prompts, not
-/// SaaS credit bookkeeping.
+/// `tool_name`. Nothing confines this to a self-hosted upstream: pointed at a
+/// managed API, `--hide-credits` hides that account's real credit spend, which
+/// is the operator's explicit choice and why the default is off. `tokensUsed`
+/// is kept — it measures real LLM provider consumption, useful to a
+/// self-hosted operator tuning prompts, not SaaS credit bookkeeping.
+///
+/// Caller-shaped payloads are exempt: `ScrapeData.json`, `V2Document.json`,
+/// `changeTracking.snapshot.json` / `.diff.json`, and an extract
+/// `results[].data` are filled from the caller's own `jsonSchema`, so a key
+/// named `creditCost` in there is the caller's extracted value, not our
+/// bookkeeping. Removing it would be silent data loss in the one part of the
+/// response the engine does not author. The `json`-key rule is what covers the
+/// first four; do not narrow it to a fixed path list. `metadata` is still walked — it carries
+/// the engine's own v2 credit block, and a page whose raw `<meta>` tags flatten
+/// to a key named `creditCost` is not a shape worth losing that to.
 ///
 /// Caller contract: apply to the tool result `Value` *before*
 /// [`tool_result_response`] wraps it, so the stripped shape lands in both the
 /// text content block and `structuredContent`.
 pub fn strip_credit_fields(value: &mut Value) {
+    strip_credit_fields_inner(value, false);
+}
+
+/// `in_results` marks that `value` sits under an extract `results` array, where
+/// the `data` key holds caller-shaped extraction output rather than a crawl
+/// page. A top-level `data` envelope (crawl/batch page array) is still walked.
+fn strip_credit_fields_inner(value: &mut Value, in_results: bool) {
     match value {
         Value::Object(map) => {
             for field in CREDIT_FIELDS {
                 map.remove(*field);
             }
-            for v in map.values_mut() {
-                strip_credit_fields(v);
+            for (key, v) in map.iter_mut() {
+                if key == "json" || (in_results && key == "data") {
+                    continue;
+                }
+                strip_credit_fields_inner(v, key == "results");
             }
         }
         Value::Array(items) => {
             for v in items.iter_mut() {
-                strip_credit_fields(v);
+                strip_credit_fields_inner(v, in_results);
             }
         }
         _ => {}
@@ -1869,9 +1888,8 @@ mod tests {
                 } }
             ],
             "results": [
-                { "url": "https://e.com/3", "status": "completed", "data": {
-                    "json": { "creditsUsed": 2, "title": "nested" }
-                } }
+                { "url": "https://e.com/3", "status": "completed", "creditsUsed": 3,
+                  "data": { "title": "nested" } }
             ]
         });
         strip_credit_fields(&mut value);
@@ -1889,10 +1907,46 @@ mod tests {
         assert_eq!(value["tokensUsed"], json!(1200));
         assert_eq!(value["data"][0]["markdown"], json!("a"));
         assert_eq!(value["data"][1]["metadata"]["title"], json!("t"));
+        assert_eq!(value["results"][0]["data"]["title"], json!("nested"));
+    }
+
+    /// Caller-shaped extraction output is never touched. `ScrapeData.json` and
+    /// an extract `results[].data` are built from the caller's own
+    /// `jsonSchema`, so a field they named `creditCost` is their scraped value
+    /// — stripping it would be silent data loss in the one part of the response
+    /// the engine does not author. Engine bookkeeping around them still goes.
+    #[test]
+    fn strip_credit_fields_preserves_caller_extraction_output() {
+        // Someone extracting a pricing page with `{ creditCost, creditsUsed }`
+        // in their schema: plausible, and indistinguishable by key name alone.
+        let mut value = json!({
+            "creditCost": 1,
+            "json": { "plan": "pro", "creditCost": 19.99, "creditsUsed": 500 },
+            "data": [
+                { "url": "https://e.com/1", "creditCost": 1,
+                  "json": { "creditCost": 4.5 } }
+            ],
+            "results": [
+                { "url": "https://e.com/2", "creditsUsed": 2,
+                  "data": { "creditCost": 7, "nested": { "creditsUsed": 9 } } }
+            ]
+        });
+        strip_credit_fields(&mut value);
+
+        // Caller payloads intact, at every depth.
+        assert_eq!(value["json"]["creditCost"], json!(19.99));
+        assert_eq!(value["json"]["creditsUsed"], json!(500));
+        assert_eq!(value["data"][0]["json"]["creditCost"], json!(4.5));
+        assert_eq!(value["results"][0]["data"]["creditCost"], json!(7));
         assert_eq!(
-            value["results"][0]["data"]["json"]["title"],
-            json!("nested")
+            value["results"][0]["data"]["nested"]["creditsUsed"],
+            json!(9)
         );
+
+        // Engine bookkeeping wrapping those payloads is still stripped.
+        assert!(value.get("creditCost").is_none());
+        assert!(value["data"][0].get("creditCost").is_none());
+        assert!(value["results"][0].get("creditsUsed").is_none());
     }
 
     /// A body with no credit keys is returned byte-identical — the strip is a

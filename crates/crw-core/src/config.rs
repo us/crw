@@ -43,8 +43,10 @@ pub struct McpConfig {
     /// preserves the existing response shape for compatibility.
     ///
     /// Only the MCP surfaces are affected (`/mcp` endpoint, `crw-mcp`,
-    /// `crw mcp`); the REST API keeps emitting credit fields so billing
-    /// integrations and response consumers see no change.
+    /// `crw mcp`, in both embedded and proxy mode); the REST API keeps emitting
+    /// credit fields so billing integrations and response consumers see no
+    /// change. Caller-shaped extraction output is exempt from the strip — see
+    /// [`crw_mcp_proto::strip_credit_fields`].
     pub hide_credits: bool,
 }
 
