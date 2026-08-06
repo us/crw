@@ -622,7 +622,24 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
     // document as it is.
     let md = md.map(|m| {
         if only_main_content {
-            markdown::drop_repeated_nav_lines(&m)
+            let m = markdown::drop_repeated_nav_lines(&m);
+            // `drop_repeated_nav_lines` only catches a menu that a responsive
+            // template rendered more than once. A menu rendered once survives
+            // it, and the class-name rules in `clean` miss it whenever the site
+            // does not name the container (`nav`, `sidebar`, …). What is left
+            // is a run of short lines that are nothing but a link, which is the
+            // same shape in every language. Drop those too, unless too little
+            // text would survive — then the links are the page.
+            //
+            // Never when the caller narrowed the page themselves: asking for
+            // `includeTags: ["nav"]` and getting the nav removed would be
+            // absurd, and a `css_selector` means they already said what they
+            // want.
+            if user_selected || !include_tags.is_empty() {
+                m
+            } else {
+                quality::strip_nav_lines(&m).unwrap_or(m)
+            }
         } else {
             m
         }
