@@ -2,6 +2,33 @@
 
 All notable changes to CRW are documented here.
 
+## [0.30.0](https://github.com/us/crw/compare/v0.29.0...v0.30.0) (2026-08-07)
+
+
+### Features
+
+* **mcp:** add option to hide credit-billing fields ([bc951f1](https://github.com/us/crw/commit/bc951f1ce687657341c8844e173b7664632c65a5))
+* **renderer:** make the interactive render reserve configurable ([9fdcde8](https://github.com/us/crw/commit/9fdcde8d5ee071cc75e933b2dfdb92c7c4172508))
+
+
+### Bug Fixes
+
+* **extract:** drop single-render nav menus under onlyMainContent ([c5bd7e6](https://github.com/us/crw/commit/c5bd7e6f27ec56abbc82eb1394cc0fef03964d34))
+* **mcp:** scope credit-field strip and honor config in proxy mode ([b8899d6](https://github.com/us/crw/commit/b8899d66b2021ae9d14e79bca3e5634c1756610d))
+* **renderer:** attribute nav-budget log to the real renderer tier ([a8af83a](https://github.com/us/crw/commit/a8af83a4539a0e12fd797563c13b0d0344a1af41))
+* **renderer:** classify a blackholed origin with a hung proxy rescue as unreachable ([329c478](https://github.com/us/crw/commit/329c478ccc2e942159204ab9516106430f3909ba))
+* **renderer:** close the guard's remaining fail-open and budget holes ([1f5edeb](https://github.com/us/crw/commit/1f5edeba3e35427cb27abc8e23647b4c2bf0c477))
+* **renderer:** keep the outbound guard closed under teardown and pressure ([4695bfa](https://github.com/us/crw/commit/4695bfaa6a1f3f739d2f6888c1a376db77c06c22))
+* **renderer:** reap cancelled legacy renders and keep denials attributable ([27807f6](https://github.com/us/crw/commit/27807f672361639fea2a4707c7da8c91ba715bd7))
+* **renderer:** stop releasing unjudged requests at render teardown ([d57f6a4](https://github.com/us/crw/commit/d57f6a411cff2c6c009a54b43b2daef79583e437))
+* **renderer:** validate outbound destinations in the CDP render tiers ([30ca299](https://github.com/us/crw/commit/30ca299d15b65b352e67edf90ccf28eb33f6cc02))
+
+
+### Performance
+
+* **crawl:** stop rendering JSON bodies that score low on quality ([a973993](https://github.com/us/crw/commit/a973993dd91ede70c658f5fd92ff0183a9577012))
+* **renderer:** cut chrome challenge retries 3 to 1 in docker config ([81774c7](https://github.com/us/crw/commit/81774c767e09ab1be05c2ff4aff3d29d0e638531))
+
 ## [0.29.0](https://github.com/us/crw/compare/v0.28.0...v0.29.0) (2026-08-04)
 
 
