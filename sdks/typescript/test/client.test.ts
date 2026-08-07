@@ -149,6 +149,46 @@ test("non-2xx body surfaces engine error as CrwApiError", async () => {
   await assert.rejects(() => c.scrape("https://example.com"), /boom/);
 });
 
+test("batchScrape follows the next cursor to return every page", async () => {
+  const responses: unknown[] = [
+    { success: true, id: "b1" }, // start
+    {
+      success: true,
+      status: "completed",
+      data: [{ markdown: "p1" }],
+      next: "https://fastcrw.com/api/v2/batch/scrape/b1?skip=1",
+    },
+    { success: true, status: "completed", data: [{ markdown: "p2" }], next: null },
+  ];
+  const calls: string[] = [];
+  globalThis.fetch = (async (url: string) => {
+    calls.push(String(url));
+    const body = responses.shift();
+    return { ok: true, status: 200, statusText: "OK", text: async () => JSON.stringify(body) } as Response;
+  }) as typeof fetch;
+  const c = new CrwClient({ apiUrl: "https://fastcrw.com/api" });
+  const docs = await c.batchScrape(["a", "b"]);
+  assert.deepEqual(docs, [{ markdown: "p1" }, { markdown: "p2" }]);
+  // Page 2 rebuilt from our base path + the cursor, no double `/api` prefix.
+  assert.equal(calls[2], "https://fastcrw.com/api/v2/batch/scrape/b1?skip=1");
+});
+
+test("batchScrape stops on a cancelled job instead of hanging", async () => {
+  const responses: unknown[] = [
+    { success: true, id: "b1" },
+    { success: true, status: "cancelled" },
+  ];
+  let n = 0;
+  globalThis.fetch = (async () => {
+    n++;
+    const body = responses.shift();
+    return { ok: true, status: 200, statusText: "OK", text: async () => JSON.stringify(body) } as Response;
+  }) as typeof fetch;
+  const c = new CrwClient({ apiUrl: "https://fastcrw.com/api" });
+  await assert.rejects(() => c.batchScrape(["a"]), /cancelled/);
+  assert.equal(n, 2); // start + one poll, no spinning
+});
+
 test("extract starts a /v1/extract job and returns per-URL results", async () => {
   let n = 0;
   const calls: Array<{ url: string; init?: RequestInit }> = [];

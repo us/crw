@@ -8,7 +8,7 @@ import os
 import subprocess
 import time
 from typing import Any, cast
-from urllib.parse import quote, urlencode
+from urllib.parse import parse_qs, quote, urlencode, urlsplit
 
 from crw._binary import ensure_binary
 from crw.exceptions import CrwApiError, CrwError, CrwExtractCancelledError, CrwTimeoutError
@@ -45,6 +45,20 @@ def _next_id() -> int:
     global _REQUEST_ID
     _REQUEST_ID += 1
     return _REQUEST_ID
+
+
+def _page_path(base_path: str, next_url: str) -> str:
+    """Next page request, rebuilt from OUR base path + the cursor's skip/limit.
+
+    The server's `next` is an absolute URL built from its own public origin/prefix
+    (e.g. `https://host/api/v2/batch/scrape/{id}?skip=100`). Reusing that path
+    verbatim double-prefixes when the configured `api_url` already carries a path
+    (`.../api`), and trusts a host that may not match `api_url`. We only borrow the
+    cursor position (`skip`/`limit`) and re-issue against our own path.
+    """
+    q = parse_qs(urlsplit(next_url).query)
+    params = [f"{k}={q[k][0]}" for k in ("skip", "limit") if q.get(k)]
+    return base_path + ("?" + "&".join(params) if params else "")
 
 
 def _read_json_response(req: Any) -> dict:
@@ -616,18 +630,48 @@ class CrwClient:
             raise CrwError(f"Batch scrape did not return job ID: {start}")
 
         deadline = time.monotonic() + timeout
+        status_path = f"/v2/batch/scrape/{job_id}"
+
+        # Poll the first page until the job reaches a terminal state.
         while True:
             if time.monotonic() > deadline:
                 raise CrwTimeoutError(f"Batch scrape {job_id} timed out after {timeout}s")
             status_result = self._http_request(
-                "GET", f"/v2/batch/scrape/{job_id}", raw=True, check_success=False
+                "GET", status_path, raw=True, check_success=False
             )
             status = status_result.get("status")
             if status == "completed":
-                return status_result.get("data", [])
+                break
             if status == "failed":
                 raise CrwError(f"Batch scrape failed: {status_result.get('error', 'unknown')}")
+            if status == "cancelled":
+                # Terminal: a cancelled job never completes, so returning here
+                # instead of looping avoids hanging until `timeout`.
+                raise CrwError(f"Batch scrape {job_id} was cancelled")
             time.sleep(poll_interval)
+
+        # Page through the full result set. The batch status returns at most ~100
+        # documents per page and sets `next` to the cursor for the following page
+        # (null on the last). Returning only page 1 silently truncated any batch
+        # larger than one page.
+        # `.get("data") or []`, not `.get("data", [])`: a page may carry
+        # `"data": null`, and `list(None)` would raise instead of yielding [].
+        docs: list[dict] = list(status_result.get("data") or [])
+        next_url = status_result.get("next")
+        # Seed with page 1's path: a `next` that rebuilds to it (skip=0, or no
+        # cursor at all) is a repeat, not a new page — stop rather than re-append.
+        seen: set[str] = {status_path}
+        while next_url:
+            page_path = _page_path(status_path, next_url)
+            if page_path in seen:  # repeating/empty cursor; nothing new to fetch
+                break
+            if time.monotonic() > deadline:
+                raise CrwTimeoutError(f"Batch scrape {job_id} timed out after {timeout}s")
+            seen.add(page_path)
+            page = self._http_request("GET", page_path, raw=True, check_success=False)
+            docs.extend(page.get("data") or [])
+            next_url = page.get("next")
+        return docs
 
     def capabilities(self) -> dict:
         """Return what this engine instance supports (HTTP mode only).
@@ -756,6 +800,8 @@ class CrwClient:
                 return result.get("data", [])
             if status == "failed":
                 raise CrwError(f"Crawl failed: {result.get('error', 'unknown')}")
+            if status == "cancelled":
+                raise CrwError(f"Crawl {job_id} was cancelled")
 
             time.sleep(poll_interval)
 
@@ -830,5 +876,7 @@ class CrwClient:
                 return status_result.get("data", [])
             if status == "failed":
                 raise CrwError(f"Crawl failed: {status_result.get('error', 'unknown')}")
+            if status == "cancelled":
+                raise CrwError(f"Crawl {job_id} was cancelled")
 
             time.sleep(poll_interval)

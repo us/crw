@@ -53,6 +53,26 @@ function httpOnlyHint(name: string, reason: string): string {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Next page request, rebuilt from OUR base path + the cursor's skip/limit. The
+ * server's `next` is an absolute URL from its own public origin/prefix; reusing
+ * it verbatim double-prefixes when apiUrl carries a path (`.../api`) and trusts a
+ * host that may not match apiUrl. We only borrow the cursor position.
+ */
+function pageCursorPath(basePath: string, nextUrl: string): string {
+  let search = "";
+  try {
+    search = new URL(nextUrl, "http://placeholder.invalid").search;
+  } catch {
+    return basePath;
+  }
+  const q = new URLSearchParams(search);
+  const params = ["skip", "limit"]
+    .filter((k) => q.get(k) !== null)
+    .map((k) => `${k}=${q.get(k)}`);
+  return params.length ? `${basePath}?${params.join("&")}` : basePath;
+}
+
 export class CrwClient {
   private apiUrl: string | null;
   private apiKey: string | undefined;
@@ -318,13 +338,38 @@ export class CrwClient {
     const jobId = start.id as string | undefined;
     if (!jobId) throw new CrwError(`Batch scrape did not return job ID: ${JSON.stringify(start)}`);
     const deadline = Date.now() + timeout * 1000;
+    const statusPath = `/v2/batch/scrape/${jobId}`;
+
+    // Poll the first page until the job reaches a terminal state.
+    let status: Json;
     for (;;) {
       if (Date.now() > deadline) throw new CrwTimeoutError(`Batch scrape ${jobId} timed out after ${timeout}s`);
-      const status = await this.httpRequest("GET", `/v2/batch/scrape/${jobId}`, undefined, { raw: true, checkSuccess: false });
-      if (status.status === "completed") return (status.data as BatchResult) ?? [];
+      status = await this.httpRequest("GET", statusPath, undefined, { raw: true, checkSuccess: false });
+      if (status.status === "completed") break;
       if (status.status === "failed") throw new CrwError(`Batch scrape failed: ${status.error ?? "unknown"}`);
+      // A cancelled job never completes; stop instead of spinning until timeout.
+      if (status.status === "cancelled") throw new CrwError(`Batch scrape ${jobId} was cancelled`);
       await sleep(pollInterval * 1000);
     }
+
+    // Page through the full result set. The batch status returns at most ~100
+    // documents per page and sets `next` to the cursor for the next page (null on
+    // the last). Returning only page 1 silently truncated batches over one page.
+    const docs: BatchResult = [...((status.data as BatchResult) ?? [])];
+    let nextUrl = status.next as string | undefined;
+    // Seed with page 1's path: a `next` that rebuilds to it (skip=0, or no cursor
+    // at all) is a repeat, not a new page — stop rather than re-append.
+    const seen = new Set<string>([statusPath]);
+    while (nextUrl) {
+      const pagePath = pageCursorPath(statusPath, nextUrl);
+      if (seen.has(pagePath)) break; // repeating/empty cursor; nothing new
+      if (Date.now() > deadline) throw new CrwTimeoutError(`Batch scrape ${jobId} timed out after ${timeout}s`);
+      seen.add(pagePath);
+      const page = await this.httpRequest("GET", pagePath, undefined, { raw: true, checkSuccess: false });
+      docs.push(...((page.data as BatchResult) ?? []));
+      nextUrl = page.next as string | undefined;
+    }
+    return docs;
   }
 
   /** Feature-detect the engine (HTTP mode only). */
@@ -365,6 +410,7 @@ export class CrwClient {
       const result = await this.localTransport().toolCall("crw_check_crawl_status", { id: jobId });
       if (result.status === "completed") return (result.data as CrawlResult) ?? [];
       if (result.status === "failed") throw new CrwError(`Crawl failed: ${result.error ?? "unknown"}`);
+      if (result.status === "cancelled") throw new CrwError(`Crawl ${jobId} was cancelled`);
       await sleep(pollInterval * 1000);
     }
   }
@@ -439,6 +485,7 @@ export class CrwClient {
       const status = await this.httpRequest("GET", `/v1/crawl/${jobId}`, undefined, { raw: true });
       if (status.status === "completed") return (status.data as CrawlResult) ?? [];
       if (status.status === "failed") throw new CrwError(`Crawl failed: ${status.error ?? "unknown"}`);
+      if (status.status === "cancelled") throw new CrwError(`Crawl ${jobId} was cancelled`);
       await sleep(pollInterval * 1000);
     }
   }

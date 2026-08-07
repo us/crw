@@ -382,6 +382,51 @@ class TestHttpOnlyMethods:
         assert req.call_args_list[0][0][:2] == ("POST", "/v1/extract")
         assert req.call_args_list[0].kwargs["headers"] == {"Prefer": "respond-async"}
 
+    def test_batch_scrape_follows_pagination_to_completion(self) -> None:
+        # A batch larger than one page must return EVERY document, not just the
+        # first ~100 the completed status page carries. The SDK follows `next`.
+        client = CrwClient(api_url="https://fastcrw.com/api")
+        start = {"success": True, "id": "job-1"}
+        page1 = {
+            "success": True,
+            "status": "completed",
+            "data": [{"i": 0}],
+            "next": "https://fastcrw.com/api/v2/batch/scrape/job-1?skip=1",
+        }
+        page2 = {"success": True, "status": "completed", "data": [{"i": 1}], "next": None}
+        with patch.object(
+            client, "_http_request", side_effect=[start, page1, page2]
+        ) as req:
+            with patch("time.sleep"):
+                result = client.batch_scrape(["a", "b"])
+        assert result == [{"i": 0}, {"i": 1}]
+        # Page 2 fetched via the cursor's path+query, host stripped.
+        assert req.call_args_list[2][0][:2] == ("GET", "/v2/batch/scrape/job-1?skip=1")
+
+    def test_batch_scrape_tolerates_null_data_page(self) -> None:
+        # A page may serialize `"data": null`; `list(None)` would crash. The
+        # completed job here has no docs yet — must yield [], not raise.
+        client = CrwClient(api_url="https://fastcrw.com/api")
+        start = {"success": True, "id": "job-1"}
+        done = {"success": True, "status": "completed", "data": None, "next": None}
+        with patch.object(client, "_http_request", side_effect=[start, done]):
+            with patch("time.sleep"):
+                assert client.batch_scrape(["a"]) == []
+
+    def test_batch_scrape_raises_on_cancel_without_hanging(self) -> None:
+        # A cancelled job never reaches "completed"; the poll must stop, not spin
+        # until `timeout`.
+        client = CrwClient(api_url="https://fastcrw.com/api")
+        start = {"success": True, "id": "job-1"}
+        cancelled = {"success": True, "status": "cancelled"}
+        with patch.object(
+            client, "_http_request", side_effect=[start, cancelled]
+        ) as req:
+            with patch("time.sleep"):
+                with pytest.raises(CrwError, match="cancelled"):
+                    client.batch_scrape(["a"])
+        assert req.call_count == 2  # start + one status poll, no spinning
+
     def test_start_extract_prefer_managed_and_self_hosted_fixtures(self) -> None:
         accepted = {"id": "job-1", "status": "processing", "urls": 1}
         for client in (
