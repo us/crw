@@ -16,8 +16,14 @@ updates:
       # scraper 0.25 (latest) pins ego-tree 0.10; NodeId comes from scraper's
       # ElementRef, so a direct ego-tree 0.11 bump is a type mismatch.
       - dependency-name: "ego-tree"
-      # pdf-inspector 0.1.3 (latest, github.com/firecrawl/pdf-inspector) pins
-      # lopdf 0.41; a direct bump leaves 0.41 in the tree anyway.
+      # pdf-inspector 0.1.7 (latest, github.com/firecrawl/pdf-inspector) still
+      # pins lopdf 0.41; a direct bump leaves 0.41 in the tree anyway. lopdf
+      # 0.42 carries the RUSTSEC-2026-0187 fix (stack-overflow SIGABRT on
+      # deeply nested objects, uncatchable by catch_unwind). Contained for us:
+      # `document.sandbox` runs every parse in a child process and is ON in
+      # config.docker.toml, so an abort kills the worker, not the server.
+      # Drop this ignore once pdf-inspector publishes a crate release built on
+      # lopdf >= 0.42 (fixed on their main in 1c32e4bd, unreleased).
       - dependency-name: "lopdf"
 
   - package-ecosystem: "github-actions"
