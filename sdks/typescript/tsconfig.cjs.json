@@ -2,8 +2,10 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "module": "CommonJS",
-    "moduleResolution": "Node",
-    "ignoreDeprecations": "6.0",
+    // TypeScript 7 removed `node10` resolution ("Node"); `bundler` is the only
+    // resolution mode it still pairs with `module: CommonJS`. Emit is unchanged
+    // (verified byte-identical against the tsc 6 output).
+    "moduleResolution": "Bundler",
     "outDir": "dist/cjs",
     "declaration": false
   }
