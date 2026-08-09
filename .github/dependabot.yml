@@ -25,6 +25,12 @@ updates:
       # Drop this ignore once pdf-inspector publishes a crate release built on
       # lopdf >= 0.42 (fixed on their main in 1c32e4bd, unreleased).
       - dependency-name: "lopdf"
+      # 0.1.7 specifically: it extracts 13,732 fewer characters than 0.1.6 over
+      # our 30-PDF measurement corpus, one document losing six whole pages. The
+      # workspace pin holds 0.1.6; this keeps dependabot from re-proposing the
+      # bad release while still offering 0.1.8 when it lands.
+      - dependency-name: "pdf-inspector"
+        versions: ["0.1.7"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
