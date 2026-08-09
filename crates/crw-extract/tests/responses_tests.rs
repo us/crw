@@ -8,6 +8,19 @@ use serde_json::json;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+/// Start a mock server that outlives the test.
+///
+/// wiremock frees the server's ephemeral port when the `MockServer` is dropped,
+/// and this crate's LLM client is a process-wide pooled `reqwest::Client`. On
+/// Linux a later `MockServer::start()` can be handed that same port while the
+/// pool still holds an idle connection to it with nothing behind it any more,
+/// and reqwest does not retry a POST that fails on a reused connection, so the
+/// call surfaces as a transport error instead of reaching the mock. Never
+/// releasing a port makes that rebind impossible.
+async fn start_mock_server() -> &'static MockServer {
+    Box::leak(Box::new(MockServer::start().await))
+}
+
 fn responses_llm(base_url: String) -> LlmConfig {
     LlmConfig {
         provider: "openai-responses".into(),
@@ -21,7 +34,7 @@ fn responses_llm(base_url: String) -> LlmConfig {
 
 #[tokio::test]
 async fn text_call_uses_responses_wire_shape_and_parses_usage() {
-    let server = MockServer::start().await;
+    let server = start_mock_server().await;
     Mock::given(method("POST"))
         .and(path("/v1/responses"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
@@ -39,7 +52,7 @@ async fn text_call_uses_responses_wire_shape_and_parses_usage() {
                 "input_tokens_details": { "cached_tokens": 8 }
             }
         })))
-        .mount(&server)
+        .mount(server)
         .await;
 
     let mut llm = responses_llm(format!("{}/v1", server.uri()));
@@ -69,7 +82,7 @@ async fn text_call_uses_responses_wire_shape_and_parses_usage() {
 
 #[tokio::test]
 async fn structured_call_forces_flat_function_tool_and_parses_arguments() {
-    let server = MockServer::start().await;
+    let server = start_mock_server().await;
     Mock::given(method("POST"))
         .and(path("/v1/responses"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
@@ -85,7 +98,7 @@ async fn structured_call_forces_flat_function_tool_and_parses_arguments() {
             }],
             "usage": { "input_tokens": 100, "output_tokens": 12, "total_tokens": 112 }
         })))
-        .mount(&server)
+        .mount(server)
         .await;
 
     let llm = responses_llm(format!("{}/v1/", server.uri()));
@@ -118,7 +131,7 @@ async fn structured_call_forces_flat_function_tool_and_parses_arguments() {
 
 #[tokio::test]
 async fn structured_call_still_validates_function_arguments_locally() {
-    let server = MockServer::start().await;
+    let server = start_mock_server().await;
     Mock::given(method("POST"))
         .and(path("/v1/responses"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
@@ -128,7 +141,7 @@ async fn structured_call_still_validates_function_arguments_locally() {
                 "arguments": "{\"count\":\"not-an-integer\"}"
             }]
         })))
-        .mount(&server)
+        .mount(server)
         .await;
 
     let llm = responses_llm(format!("{}/v1", server.uri()));
@@ -147,14 +160,14 @@ async fn structured_call_still_validates_function_arguments_locally() {
 async fn text_call_returning(
     payload: serde_json::Value,
 ) -> (
-    MockServer,
+    &'static MockServer,
     Result<crw_extract::llm::LlmCallResult, crw_core::error::CrwError>,
 ) {
-    let server = MockServer::start().await;
+    let server = start_mock_server().await;
     Mock::given(method("POST"))
         .and(path("/v1/responses"))
         .respond_with(ResponseTemplate::new(200).set_body_json(payload))
-        .mount(&server)
+        .mount(server)
         .await;
 
     let llm = responses_llm(format!("{}/v1", server.uri()));
@@ -289,13 +302,13 @@ async fn refusal_only_response_errors_instead_of_returning_an_empty_answer() {
 async fn http_error_body_is_never_echoed_to_the_caller() {
     // A gateway that mirrors the request back in its error body would otherwise
     // hand the bearer key or the prompt to the API caller.
-    let server = MockServer::start().await;
+    let server = start_mock_server().await;
     Mock::given(method("POST"))
         .and(path("/v1/responses"))
         .respond_with(ResponseTemplate::new(400).set_body_string(
             "{\"error\":{\"message\":\"echoed Authorization: Bearer SENTINEL-LEAK-TOKEN\"}}",
         ))
-        .mount(&server)
+        .mount(server)
         .await;
 
     let llm = responses_llm(format!("{}/v1", server.uri()));
