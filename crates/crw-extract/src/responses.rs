@@ -51,15 +51,16 @@ async fn post(
     timeout: Duration,
 ) -> CrwResult<serde_json::Value> {
     let url = responses_url(llm.base_url.as_deref());
-    let resp = shared_client()
-        .post(&url)
-        .timeout(timeout)
-        .bearer_auth(&llm.api_key)
-        .header("content-type", "application/json")
-        .json(body)
-        .send()
-        .await
-        .map_err(|e| CrwError::ExtractionError(format!("Responses API request failed: {e}")))?;
+    let resp = crate::llm::send_provider_post(
+        shared_client()
+            .post(&url)
+            .timeout(timeout)
+            .bearer_auth(&llm.api_key)
+            .header("content-type", "application/json")
+            .json(body),
+    )
+    .await
+    .map_err(|e| CrwError::ExtractionError(format!("Responses API request failed: {e}")))?;
 
     let status = resp.status();
     let text = resp.text().await.map_err(|e| {
