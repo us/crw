@@ -3429,9 +3429,20 @@ impl FallbackRenderer {
 /// where a renderer returned HTML but failed to execute JavaScript.
 fn html_body_text_len(html: &str) -> usize {
     // Extract body content if present, otherwise use entire HTML.
+    //
+    // The closing tag is searched from `start`, not from 0. Searching the whole
+    // document finds the FIRST `</body>` anywhere, which on a page that mentions
+    // the literal string before its real body — a script writing markup, an
+    // escaped snippet in a docs page, plain malformed HTML — lands BEFORE the
+    // opening tag. `&html[start..end]` then panics with
+    // "byte range starts at 198294 but ends at 197897" and kills the request.
+    // Seen in production 2026-08-11, 9 times in 30 minutes.
     let body = if let Some(start) = html.find("<body") {
         let start = html[start..].find('>').map(|i| start + i + 1).unwrap_or(0);
-        let end = html.find("</body>").unwrap_or(html.len());
+        let end = html[start..]
+            .find("</body>")
+            .map(|i| start + i)
+            .unwrap_or(html.len());
         &html[start..end]
     } else {
         html
@@ -3473,6 +3484,39 @@ mod tests {
     /// Generous deadline used by tests that don't care about budget enforcement.
     fn tdl() -> crw_core::Deadline {
         crw_core::Deadline::now_plus(Duration::from_secs(60))
+    }
+
+    #[test]
+    fn body_text_len_survives_a_closing_tag_before_the_opening_one() {
+        // A page that prints the literal "</body>" before its real body — a script
+        // writing markup, an escaped snippet in documentation, or plain malformed
+        // HTML. Searching the whole document for the closing tag found this one,
+        // producing end < start and panicking on the slice. Production hit it 9
+        // times in 30 minutes on 2026-08-11.
+        let html = concat!(
+            "<html><head><script>var tpl = \"</body>\";</script></head>",
+            "<body><p>real content here</p></body></html>"
+        );
+        assert!(html.find("</body>").unwrap() < html.find("<body").unwrap());
+        assert!(html_body_text_len(html) > 0);
+    }
+
+    #[test]
+    fn body_text_len_measures_only_the_body() {
+        let html = "<html><head><title>ignored</title></head><body>hello there</body></html>";
+        // "hello there" collapses to 11 visible characters; the head must not count.
+        assert_eq!(html_body_text_len(html), 11);
+    }
+
+    #[test]
+    fn body_text_len_handles_a_missing_closing_tag() {
+        let html = "<html><body><p>unclosed document";
+        assert!(html_body_text_len(html) > 0);
+    }
+
+    #[test]
+    fn body_text_len_handles_no_body_at_all() {
+        assert!(html_body_text_len("<html><p>fragment</p></html>") > 0);
     }
 
     fn base_cfg(mode: RendererMode) -> RendererConfig {
