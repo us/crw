@@ -34,8 +34,13 @@ step.
 crw --version          # binary on PATH?  (brew install us/crw/crw)
 ```
 
-- **No binary?** Use the MCP tools instead (`crw_scrape`, `crw_search`, …) — see
-  `crw-self-host` for setup, or run zero-install with `npx crw-mcp`.
+- **No binary?** If your harness has MCP, use the MCP tools (`crw_scrape`,
+  `crw_search`, …) — see `crw-self-host` for setup, or run zero-install with
+  `npx crw-mcp`.
+- **No binary and no MCP?** Use REST with `curl`. Every verb below has a REST
+  equivalent and needs nothing installed. Set `CRW_API_URL`, then call
+  `POST $CRW_API_URL/v1/{scrape,crawl,map,search}`. Each verb skill shows the
+  exact request.
 - **Auth:** self-hosted needs none. Managed/cloud needs `CRW_API_KEY=crw_live_…`
   and `CRW_API_URL=https://api.fastcrw.com` (free tier: 500 one-time lifetime
   credits, never resets).
