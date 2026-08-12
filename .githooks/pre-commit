@@ -4,6 +4,15 @@
 
 set -e
 
+# The checks below build and test the whole workspace. Nothing they cover can
+# be affected by a commit that touches no Rust sources, so skip them entirely
+# for docs-only and script-only commits.
+STAGED_RUST=$(git diff --cached --name-only --diff-filter=ACMR -- '*.rs' '*.toml' 'Cargo.lock' || true)
+if [ -z "$STAGED_RUST" ]; then
+    echo "⏭️  No Rust files staged, skipping cargo checks."
+    exit 0
+fi
+
 echo "🔍 cargo fmt --check..."
 cargo fmt --all -- --check
 
