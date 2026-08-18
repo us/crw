@@ -2,6 +2,33 @@
 
 All notable changes to CRW are documented here.
 
+## [0.31.0](https://github.com/us/crw/compare/v0.30.0...v0.31.0) (2026-08-18)
+
+
+### Features
+
+* **search:** carry a paid-rescue entitlement to the search backend ([d7812a0](https://github.com/us/crw/commit/d7812a0e62fd4f5d92660df3254ce01146f78d8e))
+* **search:** per-request query-expand override and deadline-bounded scout ([8436b43](https://github.com/us/crw/commit/8436b434ca3b5ebc615bc81337ca7ec27e2c5118))
+* **search:** snippet-first lazy-scrape answer path (gated, default off) ([32382c4](https://github.com/us/crw/commit/32382c46f5bcb015b2d4a3c38a241a75ae33064b))
+* **setup:** offer MCP registration for detected AI tools ([8d78c0c](https://github.com/us/crw/commit/8d78c0cf937c0988e4de189ec5ed5198bb7b95a5))
+* simplify onboarding and align documentation truth ([9748877](https://github.com/us/crw/commit/974887780f0653ec8a96f450eb79843088533d8d))
+
+
+### Bug Fixes
+
+* **cli:** drop emoji from setup output ([a781671](https://github.com/us/crw/commit/a781671b3ad7ff4125b2689d1ac3422906319245))
+* **cli:** keep the smoke fixture inside the published crate ([b3f85c6](https://github.com/us/crw/commit/b3f85c61d1539e79deba09cc8643fb6b44131d46))
+* **config:** pin the deployed config shape, and sync the embedded spec ([16ea2ef](https://github.com/us/crw/commit/16ea2efe188e3dabe3e24ccb5b28e9fb50983b2f))
+* **crawl:** apply the block verdict on crawl, batch and extract ([def3f9c](https://github.com/us/crw/commit/def3f9c7dd2a1334d1cb26b5cca605f59a3449ea))
+* **deps:** hold pdf-inspector at 0.1.6, 0.1.7 loses page content ([aef4719](https://github.com/us/crw/commit/aef471913b82e526a758263639b461f11a2943f7))
+* **extract:** retry an LLM POST that died before reaching the provider ([a9da7db](https://github.com/us/crw/commit/a9da7db01e78b76795b3f69073eec19577205447))
+* **extract:** stop calling valid non-HTML content an anti-bot block ([04c5f63](https://github.com/us/crw/commit/04c5f6370dc864e10dfd56473fed833d545ef1d3))
+* **install:** resolve latest via GitHub redirect, not the REST API ([cd78a60](https://github.com/us/crw/commit/cd78a6099bbc64da2faedbece82a453b81b0ff85))
+* **renderer:** report a blackholed origin as unreachable, not a timeout ([6250190](https://github.com/us/crw/commit/625019081de6e086e520774bba7b4541aaca2d54))
+* **renderer:** search for &lt;/body&gt; after &lt;body&gt;, not from the start ([28564bb](https://github.com/us/crw/commit/28564bbb129b526bc931b26149877ad0094d3f46))
+* **scrape:** stop returning an origin error page as a successful scrape ([13106ae](https://github.com/us/crw/commit/13106aed62def301ad4ed853827a2bf598a70d86))
+* **scrape:** stop selling registrar parking pages as content ([68f4545](https://github.com/us/crw/commit/68f45456231bfc6895db81131b59a92ce1f14b6d))
+
 ## [0.30.0](https://github.com/us/crw/compare/v0.29.0...v0.30.0) (2026-08-07)
 
 
