@@ -184,9 +184,9 @@ dependencies = [
 
 [[package]]
 name = "async-trait"
-version = "0.1.91"
+version = "0.1.92"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae36dc4177970ef04fde5178d3e2429882def40e57a451f919c098f72baa6cec"
+checksum = "82f6aeea286b8eb4dd3431a1be1b59d290ace00f5bfd8e2a159bc2a05e2c1667"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -794,7 +794,7 @@ checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
 name = "crw-browse"
-version = "0.30.0"
+version = "0.31.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -824,7 +824,7 @@ dependencies = [
 
 [[package]]
 name = "crw-cli"
-version = "0.30.0"
+version = "0.31.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -863,7 +863,7 @@ dependencies = [
 
 [[package]]
 name = "crw-core"
-version = "0.30.0"
+version = "0.31.0"
 dependencies = [
  "config",
  "crw-mcp-proto",
@@ -882,7 +882,7 @@ dependencies = [
 
 [[package]]
 name = "crw-crawl"
-version = "0.30.0"
+version = "0.31.0"
 dependencies = [
  "crw-core",
  "crw-diff",
@@ -909,7 +909,7 @@ dependencies = [
 
 [[package]]
 name = "crw-diff"
-version = "0.30.0"
+version = "0.31.0"
 dependencies = [
  "crw-core",
  "hex",
@@ -924,7 +924,7 @@ dependencies = [
 
 [[package]]
 name = "crw-extract"
-version = "0.30.0"
+version = "0.31.0"
 dependencies = [
  "crw-core",
  "ego-tree",
@@ -958,7 +958,7 @@ dependencies = [
 
 [[package]]
 name = "crw-mcp"
-version = "0.30.0"
+version = "0.31.0"
 dependencies = [
  "base64",
  "clap",
@@ -974,7 +974,7 @@ dependencies = [
 
 [[package]]
 name = "crw-mcp-proto"
-version = "0.30.0"
+version = "0.31.0"
 dependencies = [
  "jsonschema",
  "serde",
@@ -984,7 +984,7 @@ dependencies = [
 
 [[package]]
 name = "crw-renderer"
-version = "0.30.0"
+version = "0.31.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -1013,7 +1013,7 @@ dependencies = [
 
 [[package]]
 name = "crw-search"
-version = "0.30.0"
+version = "0.31.0"
 dependencies = [
  "crw-core",
  "futures",
@@ -1031,7 +1031,7 @@ dependencies = [
 
 [[package]]
 name = "crw-server"
-version = "0.30.0"
+version = "0.31.0"
 dependencies = [
  "axum",
  "axum-test",
@@ -2653,9 +2653,9 @@ dependencies = [
 
 [[package]]
 name = "moka"
-version = "0.12.15"
+version = "0.12.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "957228ad12042ee839f93c8f257b62b4c0ab5eaae1d4fa60de53b27c9d7c5046"
+checksum = "4293f18e7567a1caf3c584855554377025c65e0aa445344d04171f5ad63d19b9"
 dependencies = [
  "async-lock",
  "crossbeam-channel",
@@ -4932,9 +4932,9 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "uuid"
-version = "1.24.0"
+version = "1.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf3923a6f5c4c6382e0b653c4117f48d631ea17f38ed86e2a828e6f7412f5239"
+checksum = "2cefc03fd367c0c6d4305de1b312cf00248c4114f4a0418ce6a6af769e3b0bd9"
 dependencies = [
  "getrandom 0.4.3",
  "js-sys",
