@@ -38,18 +38,29 @@
 curl -fsSL https://fastcrw.com/install | sh
 ```
 
-Then point it at the Cloud:
+Runs local and free, no account needed. To use the Cloud, paste your key into
+the same command and it installs the binary, connects the key, and registers the
+MCP server with the AI coding tools you already have:
 
 ```bash
-crw setup
+curl -fsSL https://fastcrw.com/install | CRW_API_KEY=crw_live_... sh
 ```
+
+```bash
+crw search "rust tutorials"
+```
+
+Claude Code, Cursor, Codex, Gemini CLI, OpenCode and Windsurf are picked up
+automatically when they are already set up; nothing else is touched, and your
+key stays in `~/.config/crw/config.toml` rather than being copied into each
+tool. Add `CRW_NO_AGENTS=1` to skip that step, or run `crw setup` on its own to
+choose interactively.
 
 **1000 free credits, no credit card.** Managed proxies, JS rendering and search,
 with nothing to run or keep up to date.
 [Get my free key →](https://fastcrw.com/register)
 
-The same command configures a fully local install if you would rather run it
-yourself. macOS and Linux, Intel and ARM.
+macOS and Linux, Intel and ARM.
 [More install options →](https://docs.fastcrw.com/installation/)
 
 ## What it does
