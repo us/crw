@@ -39,6 +39,15 @@ pub struct SetupArgs {
     #[arg(long, value_name = "KEY", conflicts_with_all = ["local", "reset", "reset_shell"])]
     pub api_key: Option<String>,
 
+    /// Skip registering the CRW MCP server and skill with your AI coding tools.
+    ///
+    /// Registration is on by default: the interactive wizard asks which tools
+    /// to use, and `--api-key` installs into every detected one. Only tools
+    /// that are already configured are touched, and the installer merges into
+    /// their existing MCP config rather than replacing it.
+    #[arg(long)]
+    pub no_agents: bool,
+
     /// Disable colored output.
     #[arg(long)]
     pub no_color: bool,
@@ -101,10 +110,13 @@ pub async fn run(args: SetupArgs) {
         }
     }
 
-    // MCP registration is a post-setup convenience, never part of scripted
-    // setup. `--api-key` is intentionally non-interactive even when the caller
-    // did not repeat `--non-interactive`.
-    let offer_agent_setup = !args.non_interactive && args.api_key.is_none();
+    // MCP registration runs by default, because connecting an agent is the
+    // point of setup rather than an afterthought. `--api-key` arrives from a
+    // piped installer with no tty, so it registers every detected tool and
+    // announces it; the interactive wizard still asks which ones. `--no-agents`
+    // opts out of both.
+    let scripted_agent_setup = args.api_key.is_some();
+    let agent_setup = !args.no_agents && (scripted_agent_setup || !args.non_interactive);
 
     // If specific mode is requested, run that directly
     let result = if let Some(key) = args.api_key.clone() {
@@ -136,8 +148,12 @@ pub async fn run(args: SetupArgs) {
 
     match result {
         Ok(()) => {
-            if offer_agent_setup {
-                agents::offer_install();
+            if agent_setup {
+                if scripted_agent_setup {
+                    agents::install_detected();
+                } else {
+                    agents::offer_install();
+                }
             }
         }
         Err(e) => {
