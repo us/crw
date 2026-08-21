@@ -112,7 +112,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 url = { version = "2", features = ["serde"] }
 sha2 = "0.11"
 hex = "0.4"
-base64 = "0.22"
+base64 = "0.23"
 
 # Unix process-group kill (browser teardown). Unix-only; already present
 # transitively. Used by crw-renderer's BROWSER_PGIDS group-kill registry.
