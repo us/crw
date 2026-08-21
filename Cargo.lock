@@ -184,9 +184,9 @@ dependencies = [
 
 [[package]]
 name = "async-trait"
-version = "0.1.91"
+version = "0.1.92"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae36dc4177970ef04fde5178d3e2429882def40e57a451f919c098f72baa6cec"
+checksum = "82f6aeea286b8eb4dd3431a1be1b59d290ace00f5bfd8e2a159bc2a05e2c1667"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -918,7 +918,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.0",
- "similar 3.1.2",
+ "similar 3.2.0",
  "tracing",
 ]
 
@@ -2653,9 +2653,9 @@ dependencies = [
 
 [[package]]
 name = "moka"
-version = "0.12.15"
+version = "0.12.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "957228ad12042ee839f93c8f257b62b4c0ab5eaae1d4fa60de53b27c9d7c5046"
+checksum = "4293f18e7567a1caf3c584855554377025c65e0aa445344d04171f5ad63d19b9"
 dependencies = [
  "async-lock",
  "crossbeam-channel",
@@ -4151,9 +4151,9 @@ checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 
 [[package]]
 name = "similar"
-version = "3.1.2"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85ee016af5d736b69fc89e19254540fa4b5f5492853fb5503920f084011c78b6"
+checksum = "4f66ca1f7aca2474dc10c942eb22feffc897735f54cd1db90138c2fddb490987"
 dependencies = [
  "bstr",
 ]
@@ -4932,9 +4932,9 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "uuid"
-version = "1.24.0"
+version = "1.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf3923a6f5c4c6382e0b653c4117f48d631ea17f38ed86e2a828e6f7412f5239"
+checksum = "2cefc03fd367c0c6d4305de1b312cf00248c4114f4a0418ce6a6af769e3b0bd9"
 dependencies = [
  "getrandom 0.4.3",
  "js-sys",
