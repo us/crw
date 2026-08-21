@@ -2,6 +2,14 @@
 
 All notable changes to CRW are documented here.
 
+## [0.31.1](https://github.com/us/crw/compare/v0.31.0...v0.31.1) (2026-08-21)
+
+
+### Bug Fixes
+
+* **browse:** satisfy the lints Rust 1.98 turned on ([a338091](https://github.com/us/crw/commit/a338091983cf697d84bf2e51d251c7538c45832b))
+* **renderer:** stop treating a cleared page as a Cloudflare challenge ([0b91afb](https://github.com/us/crw/commit/0b91afb6f19ed0458cd09a7edcc3e19d1c38b453))
+
 ## [0.31.0](https://github.com/us/crw/compare/v0.30.0...v0.31.0) (2026-08-18)
 
 
