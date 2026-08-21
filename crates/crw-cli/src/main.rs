@@ -181,6 +181,7 @@ async fn main() {
             cloud: false,
             local: false,
             api_key: None,
+            no_agents: false,
             no_color: false,
             reset_shell: false,
             reset: true,

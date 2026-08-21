@@ -9,6 +9,9 @@
 #   CRW_INSTALL_DIR=~/.local/bin   Custom install directory
 #   CRW_BINARY=crw-mcp    Install crw-mcp (MCP server) or crw-server instead of
 #                         the default crw CLI
+#   CRW_API_KEY=crw_live_…  Connect to CRW Cloud and register the MCP server
+#                         with every detected AI coding tool, in one command
+#   CRW_NO_AGENTS=1       With CRW_API_KEY, skip the AI-tool registration
 
 set -eu
 
@@ -183,8 +186,16 @@ install() {
       echo ""
       info "Connecting to CRW Cloud with your API key…"
       echo ""
-      "${INSTALL_DIR}/${BINARY}" setup --api-key "${CRW_API_KEY}" \
-        || info "Cloud connect failed. Run 'crw setup --api-key <key>' to retry."
+      # Registration into detected AI tools is part of the same command; the
+      # pasted CRW_API_KEY is the consent a piped installer cannot prompt for.
+      # CRW_NO_AGENTS=1 opts out.
+      if [ -n "${CRW_NO_AGENTS:-}" ]; then
+        "${INSTALL_DIR}/${BINARY}" setup --api-key "${CRW_API_KEY}" --no-agents \
+          || info "Cloud connect failed. Run 'crw setup --api-key <key>' to retry."
+      else
+        "${INSTALL_DIR}/${BINARY}" setup --api-key "${CRW_API_KEY}" \
+          || info "Cloud connect failed. Run 'crw setup --api-key <key>' to retry."
+      fi
     else
       echo ""
       echo "  Run:       crw https://example.com"

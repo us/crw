@@ -2,9 +2,16 @@
 //!
 //! The npm `crw-mcp` package owns the per-agent config formats. This module
 //! deliberately does only three things: mirror its lightweight directory
-//! detection, ask for explicit consent, and delegate the selected targets to
-//! that installer. Keeping the mutation logic in one place prevents the Rust
+//! detection, establish consent, and delegate the selected targets to that
+//! installer. Keeping the mutation logic in one place prevents the Rust
 //! wizard and npm entry point from drifting.
+//!
+//! Consent has two shapes. The interactive wizard asks which tools to touch.
+//! The scripted `--api-key` path (what `curl … | CRW_API_KEY=… sh` runs) takes
+//! the command the user deliberately pasted as the consent and registers every
+//! detected tool, because a piped installer has no tty to prompt on. Either way
+//! `--no-agents` opts out, only already-configured tools are touched, and the
+//! installer merges rather than replaces.
 
 use crate::commands::setup::{shell, ui};
 use dialoguer::{MultiSelect, Select};
@@ -122,6 +129,36 @@ pub fn offer_install() {
     }
 
     run_installer(&selected);
+}
+
+/// Register with every detected tool without prompting.
+///
+/// Used by the scripted `--api-key` path, which runs under `curl … | sh` and
+/// therefore has no tty to ask on. Announces what it touched instead of asking
+/// first; `--no-agents` is the opt-out. Non-fatal like [`offer_install`]: a
+/// failed integration must never fail an otherwise valid setup.
+pub fn install_detected() {
+    let Some(home) = shell::home_dir() else {
+        return;
+    };
+    let detected = detect_agents(&home);
+    if detected.is_empty() {
+        return;
+    }
+
+    println!();
+    ui::print_section_header("AI TOOL INTEGRATION");
+    ui::print_detail(&format!(
+        "Detected: {}",
+        detected
+            .iter()
+            .map(|agent| agent.name)
+            .collect::<Vec<_>>()
+            .join(", ")
+    ));
+    ui::print_detail("Skip this with `crw setup --api-key <KEY> --no-agents`.");
+
+    run_installer(&detected);
 }
 
 fn detect_agents(home: &Path) -> Vec<Agent> {
