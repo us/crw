@@ -299,7 +299,7 @@ The following table lists the gaps documented in [the capability matrix](https:/
 | **Fire-engine anti-bot** | Firecrawl Cloud only | Not available (same as Firecrawl self-host) | For heavy bot-protected pages, compare output quality on real targets. |
 | **Screenshot format** | Supported | Supported on an instance with a capture-capable browser tier (Chrome or Playwright); LightPanda and Camoufox cannot capture | Check `screenshot.supported` on `GET /v1/capabilities` before relying on it. |
 | **`data.metadata` field names** | Some keys differ | Minor divergence on a few keys | Inspect `metadata` on a real response; don't assume key names are identical. |
-| **MCP tool names** | `firecrawl_scrape`, `firecrawl_crawl`, … | `crw_scrape`, `crw_crawl`, `crw_check_crawl_status`, `crw_map`, `crw_extract`, `crw_check_extract_status`, `crw_search`, `crw_parse_file` | Update any MCP client tool-name references. |
+| **MCP tool names** | `firecrawl_scrape`, `firecrawl_crawl`, … | `crw_scrape`, `crw_crawl`, `crw_check_crawl_status`, `crw_map`, `crw_extract`, `crw_check_extract_status`, `crw_cancel_extract`, `crw_search`, `crw_parse_file` | Update any MCP client tool-name references. |
 
 ---
 
