@@ -20,7 +20,7 @@
   <div class="playground-copy">Use a small query and <code>limit: 5</code> first. Add <code>scrapeOptions</code> only when you already know you need page content from those search results.</div>
   <div class="playground-actions">
     <a class="page-btn primary" href="https://fastcrw.com/playground" target="_blank" rel="noopener">Open Playground</a>
-    <a class="page-btn secondary" href="https://fastcrw.com/register" target="_blank" rel="noopener">Get API Key</a>
+    <a class="page-btn secondary" href="https://fastcrw.com/register?ref=docs-search-inline" target="_blank" rel="noopener">Get API Key</a>
   </div>
 </div>
 

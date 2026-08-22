@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://fastcrw.com/register"><strong>Get 1000 free credits →</strong></a> ·
+  <a href="https://fastcrw.com/register?ref=gh-hero"><strong>Get 1000 free credits →</strong></a> ·
   <a href="#one-command-install"><strong>Install</strong></a> ·
   <a href="https://docs.fastcrw.com"><strong>Docs</strong></a>
 </p>
@@ -46,7 +46,7 @@ crw setup
 
 **1000 free credits, no credit card.** Managed proxies, JS rendering and search,
 with nothing to run or keep up to date.
-[Get my free key →](https://fastcrw.com/register)
+[Get my free key →](https://fastcrw.com/register?ref=gh-quickstart)
 
 The same command configures a fully local install if you would rather run it
 yourself. macOS and Linux, Intel and ARM.
@@ -89,7 +89,7 @@ crw search "rust async runtime"    # search, after `crw setup`
 
 ### Python SDK
 
-Using Cloud? [Get an API key](https://fastcrw.com/register), then export it once:
+Using Cloud? [Get an API key](https://fastcrw.com/register?ref=gh-sdk), then export it once:
 
 ```bash
 export CRW_API_KEY="crw_live_..."
@@ -144,7 +144,7 @@ also do this step, so either path is enough.
 | | Managed API | Local / self-hosted |
 |---|---|---|
 | Best for | Zero infrastructure and managed scaling | Data control, private networks, or custom infrastructure |
-| Start | [Create an API key](https://fastcrw.com/register), then `crw setup` | Install and run `crw <URL>` |
+| Start | [Create an API key](https://fastcrw.com/register?ref=gh-table), then `crw setup` | Install and run `crw <URL>` |
 | Operations | Managed proxies, billing, and hosted capabilities | You choose renderers, search, auth, proxies, and capacity |
 
 Capabilities and response shapes can differ by deployment:

@@ -166,6 +166,13 @@ function buildPage(slug, title, description, content) {
     `<meta name="twitter:description" content="${escHtml(description)}">`
   );
 
+  // ── Signup CTA attribution ──
+  // The template's two /register CTAs are tagged for the docs home page; every
+  // generated page rewrites them to its own slug. Referers from docs arrive
+  // truncated to the origin (strict-origin-when-cross-origin), so without this
+  // all 58 pages collapse into one row and we cannot tell which doc converts.
+  page = page.split("ref=docs-home-").join(`ref=docs-${slug}-`);
+
   // ── Article: inject pre-rendered content ──
   page = page.replace(
     /<article id="article" role="main"><\/article>/,

@@ -8,7 +8,7 @@
     <div class="page-capability"><strong>Free tier:</strong> 1000 credits, no card required</div>
   </div>
   <div class="page-actions">
-    <a class="page-btn primary" href="https://fastcrw.com/register" target="_blank" rel="noopener">Get API key</a>
+    <a class="page-btn primary" href="https://fastcrw.com/register?ref=docs-quick-start-inline" target="_blank" rel="noopener">Get API key</a>
     <a class="page-btn secondary" href="https://fastcrw.com/playground" target="_blank" rel="noopener">Open Playground</a>
   </div>
 </div>
@@ -22,13 +22,13 @@
 
 - **Terminal** — macOS Terminal, Linux shell, or Windows [WSL](https://learn.microsoft.com/en-us/windows/wsl/install)
 - **`curl`** — ships with macOS 10.15+ and most Linux distros; Windows users can use WSL or [download curl](https://curl.se/windows/)
-- **A free account** at [fastcrw.com/register](https://fastcrw.com/register) — 1000 credits, one-time, no card required
+- **A free account** at [fastcrw.com/register](https://fastcrw.com/register?ref=docs-quick-start-inline) — 1000 credits, one-time, no card required
 - **Node.js 18+** — only for the MCP path (optional, described at the bottom of this page)
 :::
 
 ## Get a key
 
-Register at [fastcrw.com/register](https://fastcrw.com/register). Once you confirm your email, your API key appears on the dashboard. Your account starts with **1000 free credits** — one credit equals one basic scrape request, so you have plenty to explore.
+Register at [fastcrw.com/register](https://fastcrw.com/register?ref=docs-quick-start-inline). Once you confirm your email, your API key appears on the dashboard. Your account starts with **1000 free credits** — one credit equals one basic scrape request, so you have plenty to explore.
 
 Copy the key and keep it somewhere safe. You will paste it into the `Authorization` header below.
 

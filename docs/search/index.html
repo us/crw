@@ -252,7 +252,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
           <span>us/crw</span>
         </a>
         <a href="https://fastcrw.com" target="_blank" rel="noopener" class="navbar-link">Status</a>
-        <a href="https://fastcrw.com/register" target="_blank" rel="noopener" class="navbar-signup">Sign Up</a>
+        <a href="https://fastcrw.com/register?ref=docs-search-nav" target="_blank" rel="noopener" class="navbar-signup">Sign Up</a>
         <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
           <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="5"></circle>
@@ -302,7 +302,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
   <div class="playground-copy">Use a small query and <code>limit: 5</code> first. Add <code>scrapeOptions</code> only when you already know you need page content from those search results.</div>
   <div class="playground-actions">
     <a class="page-btn primary" href="https://fastcrw.com/playground" target="_blank" rel="noopener">Open Playground</a>
-    <a class="page-btn secondary" href="https://fastcrw.com/register" target="_blank" rel="noopener">Get API Key</a>
+    <a class="page-btn secondary" href="https://fastcrw.com/register?ref=docs-search-inline" target="_blank" rel="noopener">Get API Key</a>
   </div>
 </div><div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">**Self-hosted users**: `docker compose up` boots the search sidecar automatically (reachable inside the Compose network as `searxng:8080`). `/v1/search` is live on `http://localhost:3000` with no extra setup. To point at a search backend you already run instead, set `CRW_SEARCH__SEARCH_BACKEND_URL=http://your-host:8080` and remove the `searxng` service from your compose file. To disable search entirely, set `[search].enabled = false` — the route returns a clear `search_disabled` error (HTTP 503). See the [Docker → Search backend](/docker) section for the full setup, the `SEARXNG_BASE_URL` vs `search_backend_url` distinction, and cold-start timing.</div></div><h2 id="searching-the-web-with-crw">Searching the web with CRW</h2>
 <h3 id="v1search">/v1/search</h3>
@@ -788,7 +788,7 @@ with nothing to report are omitted, not emitted as <code>null</code> or <code>[]
         </div>
         <div class="toc-cta-title">Ready to scrape?</div>
         <div class="toc-cta-desc">Sign up and get 1000 free credits instantly. No credit card required.</div>
-        <a href="https://fastcrw.com/register" target="_blank" rel="noopener" class="toc-cta-btn primary">Get started, 1000 free credits</a>
+        <a href="https://fastcrw.com/register?ref=docs-search-cta" target="_blank" rel="noopener" class="toc-cta-btn primary">Get started, 1000 free credits</a>
         <a href="https://github.com/us/crw" target="_blank" rel="noopener" class="toc-cta-btn outline">View on GitHub</a>
       </div>
     </aside>

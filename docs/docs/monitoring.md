@@ -9,7 +9,7 @@
     <div class="page-capability"><strong>Start with:</strong> one scrape target, daily schedule</div>
   </div>
   <div class="page-actions">
-    <a class="page-btn primary" href="https://fastcrw.com/register" target="_blank" rel="noopener">Get API Key</a>
+    <a class="page-btn primary" href="https://fastcrw.com/register?ref=docs-monitoring-inline" target="_blank" rel="noopener">Get API Key</a>
     <a class="page-btn secondary" href="#crawling">View Crawl</a>
   </div>
 </div>

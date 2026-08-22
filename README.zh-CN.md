@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="#安装"><strong>本地运行 ↓</strong></a> ·
-  <a href="https://fastcrw.com/register"><strong>使用托管 API</strong></a> ·
+  <a href="https://fastcrw.com/register?ref=gh-zh"><strong>使用托管 API</strong></a> ·
   <a href="https://docs.fastcrw.com"><strong>文档</strong></a> ·
   <a href="README.md"><strong>English</strong></a>
 </p>
