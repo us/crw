@@ -37,7 +37,7 @@ npx crw-mcp@latest init      # skill only
 
 ## MCP Tools
 
-> **Output bounds:** By default, content is truncated to ~15 000 chars (`crw_scrape`, `crw_check_crawl_status`, `crw_parse_file`, and any page content inlined into `crw_search` results via `scrapeOptions`) and `crw_map` returns ≤ 100 URLs. Truncated results carry a `truncated: true` marker (`crw_map` also adds `totalDiscovered`). Pass `maxLength: 0` or `limit: 0` to opt out of bounding. `crw_search` does not advertise `maxLength`, so an agent will not discover it, but a hand-written client may still pass it.
+> **Output bounds:** By default, content is truncated to ~15 000 chars (`crw_scrape`, `crw_check_crawl_status`, `crw_parse_file`, and any page content inlined into `crw_search` results via `scrapeOptions`) and `crw_map` returns ≤ 100 URLs and ≤ 100 sitemaps. Truncated results carry a `truncated: true` marker (`crw_map` also adds `totalDiscovered` for links and `totalSitemaps` for sitemaps). Pass `maxLength: 0` or `limit: 0` to opt out of bounding. `crw_search` does not advertise `maxLength`, so an agent will not discover it, but a hand-written client may still pass it.
 
 ### crw_scrape
 
