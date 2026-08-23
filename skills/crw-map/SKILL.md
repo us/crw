@@ -54,8 +54,10 @@ crw_map(url="https://example.com", crawlFallback=false)    # sitemap only
 curl -X POST "$CRW_API_URL/v1/map" -H "Authorization: Bearer $CRW_API_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"url":"https://docs.example.com","maxDepth":2,"limit":200}'
-# Response: {"success":true,"data":{"links":[...]}}  — links are under data.links
-# jq tip for REST: jq '.data.links[]'
+# Response: {"success":true,"data":{"links":[...],"sitemaps":[...]}}
+# links and sitemaps both live under data; sitemap files are not pages, so
+# they are kept out of links
+# jq tip for REST: jq '.data.links[]' / jq '.data.sitemaps[]'
 ```
 
 ## Options
@@ -74,8 +76,9 @@ curl -X POST "$CRW_API_URL/v1/map" -H "Authorization: Bearer $CRW_API_KEY" \
 | Concurrency | `--concurrency N` (default 10) | — |
 | Per-page timeout | `--timeout MS` (default 15000) | — |
 
-MCP truncates to 100 URLs by default (`truncated: true` + `totalDiscovered`
-in response). Pass `limit: 0` to opt out.
+MCP truncates to 100 URLs and 100 sitemaps by default, bounded independently
+(`truncated: true`, plus `totalDiscovered` when the link list was cut and
+`totalSitemaps` when the sitemap list was). Pass `limit: 0` to opt out.
 
 ## The map → scrape / crawl pattern
 

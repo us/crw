@@ -803,9 +803,10 @@ fn scrape_target_mut(value: &mut Value) -> Option<&mut Value> {
     }
 }
 
-/// Truncate the `links` list to `limit` with markers, wherever it lives: top-level
-/// (embedded `{success, links}`) or under the `data` envelope (proxy
-/// `ApiResponse<MapData>` = `{success, data:{links}}`).
+/// Truncate the `links` and `sitemaps` lists to `limit` with markers, wherever
+/// they live: top-level (embedded `{success, links}`) or under the `data`
+/// envelope (proxy `ApiResponse<MapData>` = `{success, data:{links}}`). The two
+/// lists are bounded independently, so a short one does not exempt a long one.
 fn bound_map_links(value: &mut Value, limit: usize) {
     let in_envelope = value.get("data").and_then(|d| d.get("links")).is_some();
     let Some(container) = (if in_envelope {
