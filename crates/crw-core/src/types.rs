@@ -1633,6 +1633,12 @@ pub struct MapData {
     /// `0` when the filter is disabled.
     #[serde(default)]
     pub stripped_tracking_count: usize,
+    /// Sitemap documents discovered and parsed while mapping the site, e.g.
+    /// `/sitemap.xml`, `/sitemap_index.xml`, `/product-sitemap.xml`. Kept out
+    /// of `links` because a sitemap file is not a page. Empty when
+    /// `useSitemap` is false or the site exposes no reachable sitemap.
+    #[serde(default)]
+    pub sitemaps: Vec<String>,
 }
 
 /// POST /v1/map response body.

@@ -555,6 +555,9 @@ pub struct DiscoverResult {
     pub urls: Vec<String>,
     pub dropped_action_count: usize,
     pub stripped_tracking_count: usize,
+    /// Sitemap documents fetched and parsed during discovery (issue #440).
+    /// Empty when `use_sitemap` is off or the site has no reachable sitemap.
+    pub sitemaps: Vec<String>,
 }
 
 /// If the sitemap phase yields at least this many URLs and `crawl_fallback`
@@ -760,6 +763,7 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResul
     // not among the discovered URLs — a caller asking for 10 would get 11.
     let mut all_urls: HashSet<String> = HashSet::new();
     all_urls.insert(base_url.to_string());
+    let mut sitemaps: Vec<String> = Vec::new();
 
     // robots.txt is fetched OUTSIDE the `use_sitemap` block: the BFS phase needs
     // its Disallow rules even when sitemap discovery is switched off. (It used to
@@ -878,7 +882,7 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResul
         // zero-result 504 this whole change exists to prevent. The inner deadline
         // still does the real work (it returns partial sitemap results); this timeout
         // is the guarantee that the phase can never outlive its budget.
-        let sitemap_urls = match remaining_budget(overall_deadline) {
+        let walk = match remaining_budget(overall_deadline) {
             Some(budget) => tokio::time::timeout(
                 budget,
                 crate::sitemap::fetch_sitemap_tree(
@@ -895,9 +899,10 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResul
             )
             .await
             .unwrap_or_default(),
-            None => Vec::new(),
+            None => crate::sitemap::SitemapWalk::default(),
         };
-        for u in sitemap_urls {
+        sitemaps = walk.sitemaps;
+        for u in walk.pages {
             if all_urls.len() >= max_urls {
                 break;
             }
@@ -916,6 +921,7 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResul
             urls,
             dropped_action_count,
             stripped_tracking_count,
+            sitemaps,
         });
     }
 
@@ -1095,6 +1101,7 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResul
         urls,
         dropped_action_count,
         stripped_tracking_count,
+        sitemaps,
     })
 }
 

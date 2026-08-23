@@ -254,10 +254,16 @@ Response:
   {
     "success": true,
     "data": {
-      "links": ["https://example.com", "https://example.com/about", "..."]
+      "links": ["https://example.com", "https://example.com/about", "..."],
+      "sitemaps": ["https://example.com/sitemap.xml", "https://example.com/product-sitemap.xml"]
     }
   }
   If truncated: "truncated": true, "totalDiscovered": N
+
+  "sitemaps" lists the sitemap documents that were fetched and parsed during
+  discovery (robots.txt declarations, the well-known fallback paths, and every
+  nested child of a sitemap index). Sitemap files are not pages, so they stay
+  out of "links". Empty when useSitemap is false or no sitemap is reachable.
 
 ────────────────────────────────────────────────────────────────────────────────
 ### 4.4  POST /v1/search

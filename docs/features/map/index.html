@@ -19,25 +19,34 @@ it to plan a crawl, build a sitemap, or filter links before a scrape pass.</p>
 <h2>Request body</h2>
 <pre><code>{
   "url": "https://example.com",
-  "search": "docs",
   "limit": 100,
-  "includeSubdomains": false
+  "maxDepth": 2,
+  "useSitemap": true
 }</code></pre>
-<p>Required: <code>url</code>. Optional: <code>search</code> substring filter,
-<code>limit</code> (default 5000), <code>includeSubdomains</code> boolean,
-<code>ignoreSitemap</code> boolean.</p>
+<p>Required: <code>url</code>. Optional: <code>limit</code>,
+<code>maxDepth</code> (default 2), <code>useSitemap</code> boolean (default
+true), <code>crawlFallback</code> boolean (default true),
+<code>timeout</code> seconds.</p>
 
 <h2>Response shape</h2>
 <pre><code>{
   "success": true,
-  "links": [
-    "https://example.com/",
-    "https://example.com/docs",
-    "https://example.com/docs/quickstart"
-  ]
+  "data": {
+    "links": [
+      "https://example.com/",
+      "https://example.com/docs",
+      "https://example.com/docs/quickstart"
+    ],
+    "sitemaps": [
+      "https://example.com/sitemap.xml",
+      "https://example.com/product-sitemap.xml"
+    ]
+  }
 }</code></pre>
-<p>Top-level <code>links</code> is a flat string array (not objects). Order is
-discovery order; dedup is applied.</p>
+<p><code>data.links</code> is a flat string array (not objects); dedup is
+applied. <code>data.sitemaps</code> holds the sitemap documents that were
+fetched and parsed during discovery, kept separate because a sitemap file is
+not a page.</p>
 
 <h2>Python (stdlib)</h2>
 <pre><code>#!/usr/bin/env python3
@@ -55,8 +64,11 @@ req = urllib.request.Request(
 with urllib.request.urlopen(req) as r:
     body = json.loads(r.read())
 
-for link in body["links"][:20]:
+for link in body["data"]["links"][:20]:
     print(link)
+
+for sitemap in body["data"]["sitemaps"]:
+    print("sitemap:", sitemap)
 # Run with: python3 map.py</code></pre>
 
 <p>&rarr; Canonical page: <a href="/map/">/map/</a></p>

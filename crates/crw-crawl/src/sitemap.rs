@@ -339,6 +339,19 @@ impl<'a> SitemapEscalator<'a> {
     }
 }
 
+/// Outcome of a sitemap-tree walk: the page URLs the tree declared, plus the
+/// sitemap documents we actually fetched and parsed on the way (issue #440).
+/// The sitemap files are useful output in their own right — `/map` surfaces
+/// them so a caller does not have to re-derive robots.txt and the well-known
+/// fallback paths itself.
+#[derive(Debug, Clone, Default)]
+pub struct SitemapWalk {
+    pub pages: Vec<String>,
+    /// Sitemap documents that answered with parseable content, in BFS order.
+    /// Probed-but-404 fallback guesses are not listed.
+    pub sitemaps: Vec<String>,
+}
+
 /// BFS over a sitemap tree. Same-origin filter applies to both child sitemaps
 /// and page URLs to prevent the engine from being abused as a sitemap-fetch
 /// proxy (a crafted index could otherwise point us at arbitrary public hosts).
@@ -359,7 +372,7 @@ pub async fn fetch_sitemap_tree(
     max_concurrency: usize,
     escalator: Option<&SitemapEscalator<'_>>,
     deadline: Option<std::time::Instant>,
-) -> Vec<String> {
+) -> SitemapWalk {
     use futures::stream::{self, StreamExt};
     use std::collections::HashSet;
 
@@ -367,7 +380,7 @@ pub async fn fetch_sitemap_tree(
 
     let target_key = match site_key(target_origin) {
         Some(k) => k,
-        None => return Vec::new(),
+        None => return SitemapWalk::default(),
     };
     // Sitemap fetches are light (10 MB cap, 15 s timeout), but we still bound
     // them so a sitemap-index with N children never exceeds the configured
@@ -377,6 +390,7 @@ pub async fn fetch_sitemap_tree(
 
     let mut visited: HashSet<String> = HashSet::new();
     let mut all_pages: HashSet<String> = HashSet::new();
+    let mut found_sitemaps: Vec<String> = Vec::new();
     let mut current: Vec<String> = seeds
         .into_iter()
         .filter(|u| same_site(u, &target_key))
@@ -437,7 +451,12 @@ pub async fn fetch_sitemap_tree(
         // pages and zero song tabs. Interleaving makes a capped map representative
         // of the whole site instead of just its alphabetically-first section.
         let mut page_lists: Vec<std::vec::IntoIter<String>> = Vec::new();
-        for (_parent, res) in results {
+        for (parent, res) in results {
+            // A document that parsed to nothing was a 404/blocked/HTML guess —
+            // reporting it as a sitemap of the site would be a lie.
+            if !res.is_empty() {
+                found_sitemaps.push(parent);
+            }
             page_lists.push(res.page_urls.into_iter());
             for child in res.child_sitemaps {
                 if same_site(&child, &target_key) && !visited.contains(&child) {
@@ -480,7 +499,10 @@ pub async fn fetch_sitemap_tree(
         );
     }
 
-    all_pages.into_iter().collect()
+    SitemapWalk {
+        pages: all_pages.into_iter().collect(),
+        sitemaps: found_sitemaps,
+    }
 }
 
 /// Site identity for sitemap scoping: the lowercased host with a single leading
@@ -749,7 +771,8 @@ mod tests {
             None,
             None,
         )
-        .await;
+        .await
+        .pages;
 
         let mut sorted = urls.clone();
         sorted.sort();
@@ -757,6 +780,72 @@ mod tests {
         assert!(sorted[0].ends_with("/page-a"));
         assert!(sorted[1].ends_with("/page-b"));
         assert!(sorted[2].ends_with("/page-c"));
+    }
+
+    /// Issue #440: the walk reports the sitemap documents it parsed (index and
+    /// both children), and never a seed that answered 404.
+    #[tokio::test]
+    async fn fetch_sitemap_tree_reports_parsed_sitemap_documents() {
+        let mock = wiremock::MockServer::start().await;
+        let host = mock.uri().replace("http://", "");
+
+        let index_body = format!(
+            r#"<?xml version="1.0"?><sitemapindex>
+  <sitemap><loc>http://{host}/product-sitemap.xml</loc></sitemap>
+</sitemapindex>"#
+        );
+        let leaf = format!(
+            r#"<?xml version="1.0"?><urlset>
+  <url><loc>http://{host}/product/1</loc></url>
+</urlset>"#
+        );
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/sitemap_index.xml"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string(index_body))
+            .mount(&mock)
+            .await;
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/product-sitemap.xml"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string(leaf))
+            .mount(&mock)
+            .await;
+        // A well-known fallback guess that does not exist must not be reported.
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/sitemap.xml"))
+            .respond_with(wiremock::ResponseTemplate::new(404))
+            .mount(&mock)
+            .await;
+
+        let target = url::Url::parse(&mock.uri()).unwrap();
+        let client = reqwest::Client::new();
+        let walk = fetch_sitemap_tree(
+            vec![
+                format!("{}/sitemap.xml", mock.uri()),
+                format!("{}/sitemap_index.xml", mock.uri()),
+            ],
+            &target,
+            &client,
+            3,
+            25,
+            5000,
+            8,
+            None,
+            None,
+        )
+        .await;
+
+        let mut sitemaps = walk.sitemaps.clone();
+        sitemaps.sort();
+        assert_eq!(
+            sitemaps,
+            vec![
+                format!("{}/product-sitemap.xml", mock.uri()),
+                format!("{}/sitemap_index.xml", mock.uri()),
+            ],
+            "expected both parsed sitemaps and no 404 seed"
+        );
+        assert_eq!(walk.pages.len(), 1);
+        assert!(walk.pages[0].ends_with("/product/1"));
     }
 
     #[tokio::test]
@@ -799,7 +888,8 @@ mod tests {
             None,
             None,
         )
-        .await;
+        .await
+        .pages;
 
         // Cross-origin sitemap was filtered → only same-host pages returned.
         assert_eq!(urls.len(), 1);
@@ -845,7 +935,8 @@ mod tests {
             None,
             None,
         )
-        .await;
+        .await
+        .pages;
         assert!(urls.is_empty());
     }
 
@@ -899,8 +990,9 @@ mod tests {
         let seeds = vec![format!("{}/sitemap.xml", mock.uri())];
 
         // Without an escalator the challenge is dropped → empty.
-        let none =
-            fetch_sitemap_tree(seeds.clone(), &target, &client, 3, 25, 5000, 8, None, None).await;
+        let none = fetch_sitemap_tree(seeds.clone(), &target, &client, 3, 25, 5000, 8, None, None)
+            .await
+            .pages;
         assert!(
             none.is_empty(),
             "challenge must be dropped without escalator"
@@ -918,7 +1010,8 @@ mod tests {
             Some(&escalator),
             None,
         )
-        .await;
+        .await
+        .pages;
         got.sort();
         assert_eq!(
             got,

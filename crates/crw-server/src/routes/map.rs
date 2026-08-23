@@ -120,5 +120,6 @@ pub async fn map(
         links: result.urls,
         dropped_action_count: result.dropped_action_count,
         stripped_tracking_count: result.stripped_tracking_count,
+        sitemaps: result.sitemaps,
     })))
 }

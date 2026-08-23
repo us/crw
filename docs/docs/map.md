@@ -109,6 +109,10 @@ curl -X POST https://api.fastcrw.com/v1/map \
     "links": [
       "https://example.com",
       "https://example.com/about"
+    ],
+    "sitemaps": [
+      "https://example.com/sitemap.xml",
+      "https://example.com/product-sitemap.xml"
     ]
   }
 }
@@ -140,6 +144,14 @@ Good default:
 - keep depth low,
 - inspect the discovered links,
 - then decide whether crawl is worth it.
+
+The response also carries `sitemaps`: every sitemap document CRW actually
+fetched and parsed during discovery. That covers the ones declared in
+`robots.txt`, the well-known fallback paths (`/sitemap.xml`,
+`/sitemap_index.xml`, `/sitemap-index.xml`, `/wp-sitemap.xml`) and every nested
+child of a sitemap index. Paths that answered 404 or returned nothing
+parseable are not listed. Sitemap files stay out of `links` because they are
+not pages. The list is empty when `useSitemap` is `false`.
 
 ## When map is better than crawl
 

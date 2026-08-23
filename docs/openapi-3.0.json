@@ -1083,6 +1083,14 @@
               },
               "strippedTrackingCount": {
                 "type": "integer"
+              },
+              "sitemaps": {
+                "description": "Sitemap documents discovered and parsed while mapping the site (e.g. /sitemap.xml, /sitemap_index.xml). Not included in links, because a sitemap file is not a page.",
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uri"
+                }
               }
             }
           }

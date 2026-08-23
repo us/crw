@@ -184,6 +184,10 @@ pub async fn run(mut args: MapArgs) -> Result<(), CmdError> {
                     result.stripped_tracking_count
                 );
             }
+            // stderr, not stdout: stdout stays a clean pipeable list of pages.
+            for sm in &result.sitemaps {
+                eprintln!("  Sitemap: {sm}");
+            }
         }
         MapFormat::Json => {
             let output = serde_json::json!({
@@ -191,6 +195,7 @@ pub async fn run(mut args: MapArgs) -> Result<(), CmdError> {
                 "links": result.urls,
                 "droppedActionCount": result.dropped_action_count,
                 "strippedTrackingCount": result.stripped_tracking_count,
+                "sitemaps": result.sitemaps,
             });
             match serde_json::to_string_pretty(&output) {
                 Ok(s) => println!("{s}"),
