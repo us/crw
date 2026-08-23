@@ -258,12 +258,15 @@ Response:
       "sitemaps": ["https://example.com/sitemap.xml", "https://example.com/product-sitemap.xml"]
     }
   }
-  If truncated: "truncated": true, "totalDiscovered": N
+  ("truncated": true and "totalDiscovered": N are added by the MCP crw_map
+  tool when it bounds the list; the REST endpoint returns links unbounded up
+  to the requested limit.)
 
   "sitemaps" lists the sitemap documents that were fetched and parsed during
   discovery (robots.txt declarations, the well-known fallback paths, and every
   nested child of a sitemap index). Sitemap files are not pages, so they stay
-  out of "links". Empty when useSitemap is false or no sitemap is reachable.
+  out of "links". Empty when useSitemap is false or no sitemap is reachable,
+  and partial when discovery stops early on limit or timeout.
 
 ────────────────────────────────────────────────────────────────────────────────
 ### 4.4  POST /v1/search

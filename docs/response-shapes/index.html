@@ -357,8 +357,8 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 }</code></pre>
 <p><code>sitemaps</code> lists the sitemap documents CRW fetched and parsed while discovering
 the site. It is empty when <code>useSitemap</code> is <code>false</code> or the site exposes no
-reachable sitemap. Sitemap files are kept out of <code>links</code> because they are not
-pages.</p>
+reachable sitemap, and partial when discovery stops early on <code>limit</code> or
+<code>timeout</code>. Sitemap files are kept out of <code>links</code> because they are not pages.</p>
 <h2 id="search">Search</h2>
 <p><strong>Two hosts, two shapes — read <code>data.results</code> when present, otherwise <code>data</code>.</strong> A self-hosted engine wraps the results, as shown below. The hosted API at <code>api.fastcrw.com</code> puts the results <strong>directly in <code>data</code></strong> and hoists <code>answer</code>, <code>citations</code>, <code>llmUsage</code> and <code>warnings</code> to the top level, so adding <code>answer: true</code> never changes <code>data</code>&#39;s shape.</p>
 <p><code>answer</code>, <code>citations</code>, <code>llmUsage</code> and <code>warnings</code> are <strong>omitted entirely</strong> when they have nothing to report — they are not emitted as <code>null</code> or <code>[]</code>. A plain self-hosted search is usually just <code>{&quot;success&quot;: true, &quot;data&quot;: {&quot;results&quot;: [...]}}</code>. Test with <code>&quot;answer&quot; in data</code>, never by truthiness of a key you assume exists.</p>

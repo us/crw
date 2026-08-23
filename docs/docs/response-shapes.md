@@ -91,8 +91,8 @@ Use this page when you want the common CRW envelopes in one place. The endpoint 
 
 `sitemaps` lists the sitemap documents CRW fetched and parsed while discovering
 the site. It is empty when `useSitemap` is `false` or the site exposes no
-reachable sitemap. Sitemap files are kept out of `links` because they are not
-pages.
+reachable sitemap, and partial when discovery stops early on `limit` or
+`timeout`. Sitemap files are kept out of `links` because they are not pages.
 
 ## Search
 

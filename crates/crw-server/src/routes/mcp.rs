@@ -130,6 +130,7 @@ async fn call_tool_inner(state: &AppState, tool_name: &str, args: Value) -> Resu
                 "links": result.urls,
                 "droppedActionCount": result.dropped_action_count,
                 "strippedTrackingCount": result.stripped_tracking_count,
+                "sitemaps": result.sitemaps,
             }))
         }
         "crw_search" => {

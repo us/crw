@@ -461,8 +461,10 @@ fetched and parsed during discovery. That covers the ones declared in
 <code>robots.txt</code>, the well-known fallback paths (<code>/sitemap.xml</code>,
 <code>/sitemap_index.xml</code>, <code>/sitemap-index.xml</code>, <code>/wp-sitemap.xml</code>) and every nested
 child of a sitemap index. Paths that answered 404 or returned nothing
-parseable are not listed. Sitemap files stay out of <code>links</code> because they are
-not pages. The list is empty when <code>useSitemap</code> is <code>false</code>.</p>
+parseable are not listed, and a valid sitemap that currently lists no URLs
+still counts. Sitemap files stay out of <code>links</code> because they are not pages. The
+list is empty when <code>useSitemap</code> is <code>false</code>, and partial when discovery stops
+early on <code>limit</code>, <code>timeout</code>, or the internal sitemap budget.</p>
 <h2 id="when-map-is-better-than-crawl">When map is better than crawl</h2>
 <p>Use map when:</p>
 <ul>
