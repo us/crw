@@ -21,7 +21,13 @@ startCommand:
     (config) => ({
       command: 'npx',
       args: ['-y', 'crw-mcp'],
-      env: config.crwApiKey ? { CRW_API_KEY: config.crwApiKey } : {}
+      // A key alone is inert: crw-mcp picks cloud vs embedded mode on
+      // CRW_API_URL being set (crw-mcp/src/main.rs), so a key with no URL
+      // silently runs local mode. Pair them, exactly as the canonical
+      // installer does (mcp/crw-mcp/bin/install.js).
+      env: config.crwApiKey
+        ? { CRW_API_KEY: config.crwApiKey, CRW_API_URL: 'https://api.fastcrw.com' }
+        : {}
     })
   exampleConfig:
     crwApiKey: crw_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
