@@ -840,6 +840,43 @@ mod tests {
         assert!(msg.contains("schema validation"), "got: {msg}");
     }
 
+    /// jsonschema 0.48.1 fixed an upstream bug where `required` errors went
+    /// missing from `evaluate()` on a schema pairing `properties` with a
+    /// TWO-entry `required` array. Before that fix an LLM could omit a required
+    /// field and still validate clean, so the caller got a silently incomplete
+    /// extraction. This pins the exact shape, since the single-entry case above
+    /// never reproduced it.
+    #[test]
+    fn test_validate_against_schema_missing_one_of_two_required() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "name": { "type": "string" },
+                "email": { "type": "string" }
+            },
+            "required": ["name", "email"]
+        });
+
+        // Second of the two missing.
+        let err = validate_against_schema(&json!({ "name": "Alice" }), &schema).unwrap_err();
+        assert!(
+            err.to_string().contains("schema validation"),
+            "missing `email` must fail, got: {err}"
+        );
+
+        // First of the two missing.
+        let err = validate_against_schema(&json!({ "email": "a@b.c" }), &schema).unwrap_err();
+        assert!(
+            err.to_string().contains("schema validation"),
+            "missing `name` must fail, got: {err}"
+        );
+
+        // Both present still passes, so the guard is not over-rejecting.
+        assert!(
+            validate_against_schema(&json!({ "name": "Alice", "email": "a@b.c" }), &schema).is_ok()
+        );
+    }
+
     #[test]
     fn test_validate_against_schema_wrong_type() {
         let schema = json!({
