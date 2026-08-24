@@ -2,6 +2,25 @@
 
 All notable changes to CRW are documented here.
 
+## [0.32.0](https://github.com/us/crw/compare/v0.31.0...v0.32.0) (2026-08-24)
+
+
+### Features
+
+* **map:** return discovered sitemap document URLs ([c65ea1c](https://github.com/us/crw/commit/c65ea1c607609b3f6c2e7874f2789c307fb56fa6)), closes [#440](https://github.com/us/crw/issues/440)
+* **setup:** register MCP with detected agents on scripted setup ([2cb5f71](https://github.com/us/crw/commit/2cb5f711f48f8bbf04def1e6a62dc44ed3939272))
+
+
+### Bug Fixes
+
+* **browse:** satisfy the lints Rust 1.98 turned on ([a338091](https://github.com/us/crw/commit/a338091983cf697d84bf2e51d251c7538c45832b))
+* **map:** report a sitemap by retrieval, not by entry count ([38b1c1f](https://github.com/us/crw/commit/38b1c1ffd1e4e881e25ea20ffebf17bfc90fa43f)), closes [#440](https://github.com/us/crw/issues/440)
+* **mcp:** bound the map sitemaps list like the links list ([579910a](https://github.com/us/crw/commit/579910a5259a81cc80ad199fddeeed3e43fd54be)), closes [#440](https://github.com/us/crw/issues/440)
+* **mcp:** pair the Smithery API key with the cloud API URL ([566eb85](https://github.com/us/crw/commit/566eb85eaa1d1fa6b3a2fda491f49816ea244a23))
+* **renderer:** stop treating a cleared page as a Cloudflare challenge ([0b91afb](https://github.com/us/crw/commit/0b91afb6f19ed0458cd09a7edcc3e19d1c38b453))
+* **research:** restore arXiv coverage and unbreak the OpenAlex pool ([a942b6d](https://github.com/us/crw/commit/a942b6d303dec0e2461062cab2c74dedf0ba0ec8))
+* **sdk:** follow batch pagination and stop on cancel in both SDKs ([47dd99b](https://github.com/us/crw/commit/47dd99b9ee4b56b13c86d44173af7b1a3ed70893))
+
 ## [0.31.0](https://github.com/us/crw/compare/v0.30.0...v0.31.0) (2026-08-18)
 
 
