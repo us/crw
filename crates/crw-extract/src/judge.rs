@@ -133,6 +133,7 @@ pub async fn judge_change(
                 JUDGE_TOOL_NAME,
                 JUDGE_TOOL_DESC,
                 timeout,
+                true,
             )
             .await
         }
@@ -144,6 +145,7 @@ pub async fn judge_change(
                 JUDGE_TOOL_NAME,
                 JUDGE_TOOL_DESC,
                 timeout,
+                true,
             )
             .await
         }
@@ -155,6 +157,7 @@ pub async fn judge_change(
                 JUDGE_TOOL_NAME,
                 JUDGE_TOOL_DESC,
                 timeout,
+                true,
             )
             .await
         }

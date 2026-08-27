@@ -215,6 +215,7 @@ pub(crate) async fn call_tool(
     tool_name: &str,
     tool_desc: &str,
     timeout: Duration,
+    force_tool: bool,
 ) -> CrwResult<(serde_json::Value, Option<LlmUsage>)> {
     let mut body = serde_json::json!({
         "model": llm.model,
@@ -228,11 +229,14 @@ pub(crate) async fn call_tool(
             "description": tool_desc,
             "parameters": schema,
         }],
-        "tool_choice": {
-            "type": "function",
-            "name": tool_name,
-        },
     });
+    if force_tool {
+        // Same rule as the chat transports: force the tool only when there is a
+        // caller schema to hold the result to. A prompt-only extraction has no
+        // validation behind it, so forcing there would trade a loud failure for
+        // an invented object.
+        body["tool_choice"] = serde_json::json!({ "type": "function", "name": tool_name });
+    }
     apply_optional_generation_fields(&mut body, llm);
 
     let payload = post(llm, &body, timeout).await?;

@@ -141,6 +141,14 @@ pub struct Metrics {
     pub judge_calls_total: IntCounterVec,
     /// LLM judge token usage, labeled by kind (`input` | `output`).
     pub judge_tokens_total: IntCounterVec,
+    /// Structured extractions where the model's first tool call failed the
+    /// caller's schema and we re-asked with the validation errors.
+    ///
+    /// This is the ONLY place a retry is visible in aggregate: the retried
+    /// attempt's tokens are deliberately not billed and therefore never reach
+    /// `UsageEvent`, so a retry storm would double our provider spend without
+    /// moving any of the cost dashboards. Watch this counter instead.
+    pub structured_retries_total: IntCounter,
     // -------- Document (PDF) parsing --------
     /// Document conversions, labeled by outcome (`ok` | `empty` | `error`).
     pub document_conversions_total: IntCounterVec,
@@ -493,6 +501,12 @@ impl Metrics {
             registry
         )
         .unwrap();
+        let structured_retries_total = register_int_counter_with_registry!(
+            "crw_structured_retries_total",
+            "Structured extractions re-asked after the first tool call failed the caller's schema",
+            registry
+        )
+        .unwrap();
         let document_conversions_total = register_int_counter_vec_with_registry!(
             "crw_document_conversions_total",
             "Document conversions by outcome (ok | empty | error)",
@@ -570,6 +584,7 @@ impl Metrics {
             change_tracking_snapshot_bytes,
             judge_calls_total,
             judge_tokens_total,
+            structured_retries_total,
             document_conversions_total,
             document_conversion_duration_seconds,
             document_pages_total,

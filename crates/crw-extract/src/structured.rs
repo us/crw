@@ -12,6 +12,11 @@ use std::time::Duration;
 /// Request timeout for LLM API calls.
 pub(crate) const LLM_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// Below this much remaining budget a schema-validation retry is not attempted:
+/// a second full call would not finish, and burning the tokens to find that out
+/// helps nobody. The whole operation stays inside the caller's original timeout.
+const MIN_RETRY_BUDGET: Duration = Duration::from_secs(15);
+
 /// Request timeout for a basis extraction. Basis rides the same call but grows
 /// its **output** by 2-4k tokens, and output tokens are the serial-decode term:
 /// at the slower providers' 15-30 tok/s that alone exceeds the 60s default.
@@ -214,15 +219,28 @@ async fn extract_inner(
     // The caller-supplied prompt (trusted API input, not scraped content) steers
     // extraction. Fall back to the generic schema-driven instruction when absent.
     let user_prompt = user_prompt.map(str::trim).filter(|p| !p.is_empty());
+    // Grounding clause. With the tool forced the model can no longer decline, and
+    // `classify_block` only catches WALLS, not thin pages: it returns `None`
+    // unconditionally once the markdown trims to >= `http_retry_threshold_bytes`
+    // (default 100 — one sentence), so a sparse-but-unblocked stub does reach
+    // here. Nothing downstream can catch an invented value either: `align_basis`
+    // downgrades the EVIDENCE to unsupported but leaves the value in place, and
+    // basis is opt-in anyway. So the instruction itself has to carry the licence
+    // to say nothing.
+    const GROUNDING: &str = "\nOnly use information present in the Content below. \
+         If the content does not contain a value for a property, use null (or an \
+         empty array for a list) rather than guessing. Never invent a value, and \
+         never infer one from the URL alone.";
     let instruction = match user_prompt {
         Some(p) => format!(
             "Extract structured data from the following content. \
              Follow this instruction: {p}\n\
-             Call the extract_data tool with the extracted data."
+             Call the extract_data tool with the extracted data.{GROUNDING}"
         ),
-        None => "Extract structured data from the following content according to the JSON schema. \
-                 Call the extract_data tool with the extracted data."
-            .to_string(),
+        None => format!(
+            "Extract structured data from the following content according to the JSON schema. \
+             Call the extract_data tool with the extracted data.{GROUNDING}"
+        ),
     };
     let evidence = basis_for.map(basis::prompt_section).unwrap_or_default();
     let prompt = format!("{instruction}{evidence}\n\n## Content\n{clipped}");
@@ -233,62 +251,149 @@ async fn extract_inner(
         LLM_REQUEST_TIMEOUT
     };
 
-    let (mut value, mut usage) = match llm.provider.as_str() {
-        "anthropic" => {
-            call_anthropic(
-                &prompt,
-                tool_schema,
-                llm,
-                "extract_data",
-                "Extract structured data from the content",
-                timeout,
-            )
-            .await
-        }
-        "openai" | "deepseek" | "openai-compatible" => {
-            call_openai(
-                &prompt,
-                tool_schema,
-                llm,
-                "extract_data",
-                "Extract structured data from the content",
-                timeout,
-            )
-            .await
-        }
-        "openai-responses" => {
-            call_responses(
-                &prompt,
-                tool_schema,
-                llm,
-                "extract_data",
-                "Extract structured data from the content",
-                timeout,
-            )
-            .await
-        }
-        other => Err(CrwError::ExtractionError(format!(
-            "Unsupported LLM provider: {other}. Use 'anthropic', 'openai', 'deepseek', 'openai-compatible', or 'openai-responses'."
-        ))),
-    }?;
+    // One attempt = dispatch, lift the basis out, validate. Wrapped in a loop so a
+    // model that returns a schema-violating object gets exactly one more chance,
+    // with the concrete validation errors handed back to it. The provider cannot
+    // guarantee compliance on the models we run (Azure Foundry does not enforce
+    // `strict` on non-OpenAI deployments), so the engine has to.
+    let deadline = std::time::Instant::now() + timeout;
+    let mut retry_note: Option<String> = None;
 
-    if truncated && let Some(u) = usage.as_mut() {
-        u.truncated = true;
-    }
+    let (value, usage, model_basis) = loop {
+        // `timeout` is the budget for the WHOLE operation, not per attempt. The
+        // outer envelope is the SaaS poller's 260s, and /v1/extract is an async
+        // job so nothing else bounds this — a naive second full-length call could
+        // double the wall time and turn a fast, clear schema error into a slow
+        // 504 that also cost twice as much.
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
 
-    // Lift the basis out of the response BEFORE validation: what remains is the
-    // caller's own object, which is what their schema describes. A model that
-    // ignored the basis instruction entirely still produces a valid extract —
-    // every leaf just lands `unsupported`. Degrade honestly, never hard-fail.
-    let model_basis = basis_for
-        .and_then(|_| value.as_object_mut())
-        .and_then(|o| o.remove("basis"));
+        let attempt_prompt = match &retry_note {
+            None => std::borrow::Cow::Borrowed(&prompt),
+            Some(note) => std::borrow::Cow::Owned(format!("{prompt}{note}")),
+        };
 
-    // Only validate against a caller-supplied schema; a prompt-only extraction
-    // has no contract to check the permissive result against.
-    if let Some(schema) = schema {
-        validate_against_schema(&value, schema)?;
-    }
+        // Force the tool ONLY when a caller schema exists. Forcing removes the
+        // model's ability to decline, and on a prompt-only extraction there is no
+        // schema and therefore no validation (see below) — so a forced call on a
+        // sparse page would return invented fields with nothing to catch them.
+        // With no schema we keep today's behaviour: the model may answer in prose
+        // and the text fallback fails loudly instead of fabricating.
+        let force_tool = schema.is_some();
+
+        let dispatched = match llm.provider.as_str() {
+            "anthropic" => {
+                call_anthropic(
+                    &attempt_prompt,
+                    tool_schema,
+                    llm,
+                    "extract_data",
+                    "Extract structured data from the content",
+                    remaining,
+                    force_tool,
+                )
+                .await
+            }
+            "openai" | "deepseek" | "openai-compatible" => {
+                call_openai(
+                    &attempt_prompt,
+                    tool_schema,
+                    llm,
+                    "extract_data",
+                    "Extract structured data from the content",
+                    remaining,
+                    force_tool,
+                )
+                .await
+            }
+            "openai-responses" => {
+                call_responses(
+                    &attempt_prompt,
+                    tool_schema,
+                    llm,
+                    "extract_data",
+                    "Extract structured data from the content",
+                    remaining,
+                    force_tool,
+                )
+                .await
+            }
+            other => Err(CrwError::ExtractionError(format!(
+                "Unsupported LLM provider: {other}. Use 'anthropic', 'openai', 'deepseek', 'openai-compatible', or 'openai-responses'."
+            ))),
+        };
+        // A malformed tool-call payload is retryable for the same reason a schema
+        // violation is: it is the model's output, not our request, and it is not
+        // deterministic. Observed live under concurrency — a tool call truncated
+        // at ~1.9k characters, far below the 4k token cap, so a second attempt
+        // has a real chance. Only THIS error class retries; a provider HTTP
+        // error, a bad config or an unsupported provider is not the model being
+        // flaky and must surface immediately.
+        let (mut value, mut usage) = match dispatched {
+            Ok(v) => v,
+            Err(e) => {
+                let retryable = matches!(&e, CrwError::ExtractionError(m)
+                    if m.contains("function call arguments") || m.contains("returned invalid JSON"));
+                let left = deadline.saturating_duration_since(std::time::Instant::now());
+                if !retryable || retry_note.is_some() || left < MIN_RETRY_BUDGET {
+                    return Err(e);
+                }
+                crw_core::metrics::metrics().structured_retries_total.inc();
+                tracing::warn!(error = %e, "model returned an unparseable tool call; retrying once");
+                retry_note = Some(format!(
+                    "\n\n## Correction\nYour previous tool call could not be parsed: {e}\n\
+                     Call the extract_data tool again and return ONE complete, valid JSON object."
+                ));
+                continue;
+            }
+        };
+
+        if truncated && let Some(u) = usage.as_mut() {
+            u.truncated = true;
+        }
+
+        // Lift the basis out of the response BEFORE validation: what remains is
+        // the caller's own object, which is what their schema describes. A model
+        // that ignored the basis instruction entirely still produces a valid
+        // extract — every leaf just lands `unsupported`. Degrade honestly, never
+        // hard-fail. Re-done per attempt: the retry has its own fresh response,
+        // and validating the already-stripped object again could never succeed.
+        let model_basis = basis_for
+            .and_then(|_| value.as_object_mut())
+            .and_then(|o| o.remove("basis"));
+
+        // Only validate against a caller-supplied schema; a prompt-only
+        // extraction has no contract to check the permissive result against.
+        let Some(schema) = schema else {
+            break (value, usage, model_basis);
+        };
+        let Err(err) = validate_against_schema(&value, schema) else {
+            break (value, usage, model_basis);
+        };
+
+        // Second failure, or not enough budget left to be worth spending: give
+        // the caller the validation error, which is the honest answer.
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        if retry_note.is_some() || left < MIN_RETRY_BUDGET {
+            return Err(err);
+        }
+
+        crw_core::metrics::metrics().structured_retries_total.inc();
+        tracing::warn!(
+            error = %err,
+            "structured extraction failed schema validation; retrying once with the errors fed back"
+        );
+        retry_note = Some(format!(
+            "\n\n## Correction\nYour previous tool call did not satisfy the schema:\n{err}\n\
+             Call the extract_data tool again and return the COMPLETE object, with \
+             every required property present."
+        ));
+        // NOTE: usage from this failed attempt is deliberately DROPPED, not
+        // merged. `LlmUsage::merge` would be the obvious move and its doc comment
+        // says "tokens add up", but the SaaS bills the customer straight off these
+        // token counts with a 3x markup, so merging would charge them for a retry
+        // that exists because OUR call was unreliable. We absorb it. The retry is
+        // still visible: `calls` below, and the counter above.
+    };
 
     // `value` is now schema-validated and authoritative. The model's claims are
     // checked against it and against the bytes we actually sent; they never
@@ -303,6 +408,18 @@ async fn extract_inner(
             clipped,
         ),
         _ => (vec![], vec![]),
+    };
+
+    // Deliberate exception to `LlmUsage::merge`'s "tokens add up, calls counts the
+    // legs" contract: on a retried extraction `calls` is 2 while the tokens are
+    // one leg's. Do NOT "fix" this into a merge — that reintroduces the customer
+    // double-charge described above.
+    let usage = match (usage, retry_note.is_some()) {
+        (Some(mut u), true) => {
+            u.calls = u.calls.saturating_add(1);
+            Some(u)
+        }
+        (u, _) => u,
     };
 
     Ok(StructuredExtractResult {
@@ -324,6 +441,13 @@ struct AnthropicRequest {
     messages: Vec<Message>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tools: Option<Vec<AnthropicTool>>,
+    /// Force the single tool, same reason as [`OpenAiRequest::tool_choice`].
+    /// Anthropic spells it `{"type":"tool","name":...}`. Note the Messages API
+    /// rejects forcing when MANUAL extended thinking is enabled; nothing wires
+    /// `thinking` into `LlmConfig` today, so this is unconditional. If that ever
+    /// changes, this has to become conditional with it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_choice: Option<serde_json::Value>,
 }
 
 #[derive(Serialize)]
@@ -387,43 +511,61 @@ pub(crate) async fn call_anthropic(
     tool_name: &str,
     tool_desc: &str,
     timeout: Duration,
+    force_tool: bool,
 ) -> CrwResult<(serde_json::Value, Option<LlmUsage>)> {
     // D reserved lane (covers structured JSON + the change-tracking judge, which
     // both route through here). Held across the provider HTTP call.
     let _llm_permit = crate::llm_gate::acquire_llm().await;
     let url = anthropic_messages_url(llm.base_url.as_deref(), "https://api.anthropic.com");
 
-    let body = AnthropicRequest {
-        model: llm.model.clone(),
-        max_tokens: llm.max_tokens,
-        messages: vec![Message {
-            role: "user".into(),
-            content: prompt.to_string(),
-        }],
-        tools: Some(vec![AnthropicTool {
-            name: tool_name.into(),
-            description: tool_desc.into(),
-            input_schema: schema.clone(),
-        }]),
-    };
-
     let client = shared_client();
-    let resp = crate::llm::send_provider_post(
-        client
-            .post(&url)
-            .timeout(timeout)
-            .header("x-api-key", &llm.api_key)
-            .header("anthropic-version", "2023-06-01")
-            .header("content-type", "application/json")
-            .json(&body),
-    )
-    .await
-    .map_err(|e| CrwError::ExtractionError(format!("Anthropic API request failed: {e}")))?;
+    // Same drop-the-force-once guard as the OpenAI transport: a proxy in front of
+    // the Messages API that does not accept `tool_choice` must not become a hard
+    // extraction failure where it works today.
+    let mut forcing = force_tool;
+    let (status, text) = loop {
+        let body = AnthropicRequest {
+            model: llm.model.clone(),
+            max_tokens: llm.max_tokens,
+            messages: vec![Message {
+                role: "user".into(),
+                content: prompt.to_string(),
+            }],
+            tools: Some(vec![AnthropicTool {
+                name: tool_name.into(),
+                description: tool_desc.into(),
+                input_schema: schema.clone(),
+            }]),
+            tool_choice: forcing.then(|| serde_json::json!({ "type": "tool", "name": tool_name })),
+        };
 
-    let status = resp.status();
-    let text = resp.text().await.map_err(|e| {
-        CrwError::ExtractionError(format!("Failed to read Anthropic response: {e}"))
-    })?;
+        let resp = crate::llm::send_provider_post(
+            client
+                .post(&url)
+                .timeout(timeout)
+                .header("x-api-key", &llm.api_key)
+                .header("anthropic-version", "2023-06-01")
+                .header("content-type", "application/json")
+                .json(&body),
+        )
+        .await
+        .map_err(|e| CrwError::ExtractionError(format!("Anthropic API request failed: {e}")))?;
+
+        let status = resp.status();
+        let text = resp.text().await.map_err(|e| {
+            CrwError::ExtractionError(format!("Failed to read Anthropic response: {e}"))
+        })?;
+
+        if forcing && status.is_client_error() {
+            tracing::warn!(
+                %status,
+                "provider rejected a forced tool_choice; retrying without it"
+            );
+            forcing = false;
+            continue;
+        }
+        break (status, text);
+    };
 
     if !status.is_success() {
         // NOTE: body may contain the request echoed back by some gateways.
@@ -503,6 +645,20 @@ struct OpenAiRequest {
     messages: Vec<Message>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tools: Option<Vec<OpenAiToolDef>>,
+    /// Only the FIRST tool call is consumed below, so never invite more than
+    /// one. Forcing a tool raises the odds of multi-call emission on gateways
+    /// that support it, and silently dropping calls 2..n would look exactly like
+    /// the partial extraction this change exists to fix. `responses.rs` has
+    /// always set this.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    parallel_tool_calls: Option<bool>,
+    /// Force the single tool. Without it the endpoint defaults to
+    /// `tool_choice: "auto"` and the model may answer in prose, or emit a tool
+    /// call that ignores half the schema — measured at 7/34 complete responses
+    /// against 34/34 with the tool forced. `responses.rs` has always forced it;
+    /// this is the chat-completions transport catching up.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_choice: Option<serde_json::Value>,
 }
 
 #[derive(Serialize)]
@@ -633,6 +789,7 @@ pub(crate) async fn call_openai(
     tool_name: &str,
     tool_desc: &str,
     timeout: Duration,
+    force_tool: bool,
 ) -> CrwResult<(serde_json::Value, Option<LlmUsage>)> {
     // D reserved lane (structured JSON + judge). Held across the HTTP call.
     let _llm_permit = crate::llm_gate::acquire_llm().await;
@@ -642,40 +799,62 @@ pub(crate) async fn call_openai(
     };
     let url = openai_chat_url(llm.base_url.as_deref(), default_base);
 
-    let body = OpenAiRequest {
-        model: llm.model.clone(),
-        max_tokens: llm.max_tokens,
-        messages: vec![Message {
-            role: "user".into(),
-            content: prompt.to_string(),
-        }],
-        tools: Some(vec![OpenAiToolDef {
-            r#type: "function".into(),
-            function: OpenAiFunctionDef {
-                name: tool_name.into(),
-                description: tool_desc.into(),
-                parameters: schema.clone(),
-            },
-        }]),
-    };
-
     let client = shared_client();
-    let resp = crate::llm::send_provider_post(
-        client
-            .post(&url)
-            .timeout(timeout)
-            .header("Authorization", format!("Bearer {}", llm.api_key))
-            .header("content-type", "application/json")
-            .json(&body),
-    )
-    .await
-    .map_err(|e| CrwError::ExtractionError(format!("OpenAI API request failed: {e}")))?;
+    // Force the tool, but do not let that force become a new way to fail. An
+    // arbitrary `base_url` is explicitly supported config, and a gateway that
+    // does not implement the `tool_choice` object form would reject the whole
+    // request — and the "model answered in prose" fallback below is only
+    // reachable on a 200. So on a 4xx from a forced request, drop the force once
+    // and retry: a setup that works today keeps working.
+    let mut forcing = force_tool;
+    let (status, text) = loop {
+        let body = OpenAiRequest {
+            model: llm.model.clone(),
+            max_tokens: llm.max_tokens,
+            messages: vec![Message {
+                role: "user".into(),
+                content: prompt.to_string(),
+            }],
+            tools: Some(vec![OpenAiToolDef {
+                r#type: "function".into(),
+                function: OpenAiFunctionDef {
+                    name: tool_name.into(),
+                    description: tool_desc.into(),
+                    parameters: schema.clone(),
+                },
+            }]),
+            parallel_tool_calls: forcing.then_some(false),
+            tool_choice: forcing.then(
+                || serde_json::json!({ "type": "function", "function": { "name": tool_name } }),
+            ),
+        };
 
-    let status = resp.status();
-    let text = resp
-        .text()
+        let resp = crate::llm::send_provider_post(
+            client
+                .post(&url)
+                .timeout(timeout)
+                .header("Authorization", format!("Bearer {}", llm.api_key))
+                .header("content-type", "application/json")
+                .json(&body),
+        )
         .await
-        .map_err(|e| CrwError::ExtractionError(format!("Failed to read OpenAI response: {e}")))?;
+        .map_err(|e| CrwError::ExtractionError(format!("OpenAI API request failed: {e}")))?;
+
+        let status = resp.status();
+        let text = resp.text().await.map_err(|e| {
+            CrwError::ExtractionError(format!("Failed to read OpenAI response: {e}"))
+        })?;
+
+        if forcing && status.is_client_error() {
+            tracing::warn!(
+                %status,
+                "provider rejected a forced tool_choice; retrying without it"
+            );
+            forcing = false;
+            continue;
+        }
+        break (status, text);
+    };
 
     if !status.is_success() {
         // Same rule as the Anthropic branch above: never echo the provider
@@ -768,9 +947,13 @@ pub(crate) async fn call_responses(
     tool_name: &str,
     tool_desc: &str,
     timeout: Duration,
+    force_tool: bool,
 ) -> CrwResult<(serde_json::Value, Option<LlmUsage>)> {
     let _llm_permit = crate::llm_gate::acquire_llm().await;
-    crate::responses::call_tool(llm, prompt, schema, tool_name, tool_desc, timeout).await
+    crate::responses::call_tool(
+        llm, prompt, schema, tool_name, tool_desc, timeout, force_tool,
+    )
+    .await
 }
 
 /// Parse JSON from LLM response, stripping markdown fences if present.
@@ -1938,6 +2121,362 @@ mod tests {
         assert!(sent.contains("according to the JSON schema"));
     }
 
+    // ── forced tool_choice + one bounded schema-validation retry ─────────
+
+    #[tokio::test]
+    async fn openai_request_forces_the_single_tool() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(openai_tool_call_response(&json!({ "name": "P" }))),
+            )
+            .mount(&server)
+            .await;
+
+        let llm = mock_llm("openai-compatible", format!("{}/v1", server.uri()));
+        let schema = json!({ "type": "object", "properties": { "name": { "type": "string" } } });
+        extract_structured_with_usage("content", Some(&schema), None, &llm, None)
+            .await
+            .unwrap();
+
+        let requests = server.received_requests().await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&requests[0].body).unwrap();
+        assert_eq!(
+            body["tool_choice"],
+            json!({ "type": "function", "function": { "name": "extract_data" } })
+        );
+    }
+
+    #[tokio::test]
+    async fn anthropic_request_forces_the_single_tool() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/messages"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(anthropic_tool_use_response(json!({ "name": "P" }))),
+            )
+            .mount(&server)
+            .await;
+
+        let llm = mock_llm("anthropic", format!("{}/v1", server.uri()));
+        let schema = json!({ "type": "object", "properties": { "name": { "type": "string" } } });
+        extract_structured_with_usage("content", Some(&schema), None, &llm, None)
+            .await
+            .unwrap();
+
+        let requests = server.received_requests().await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&requests[0].body).unwrap();
+        assert_eq!(
+            body["tool_choice"],
+            json!({ "type": "tool", "name": "extract_data" })
+        );
+    }
+
+    /// A gateway that rejects the `tool_choice` object form must not become a
+    /// hard extraction failure where it worked before: drop the force once and
+    /// retry, then succeed.
+    #[tokio::test]
+    async fn openai_4xx_on_forced_tool_choice_retries_without_it() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(ResponseTemplate::new(400).set_body_string("unknown field tool_choice"))
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(openai_tool_call_response(&json!({ "name": "P" }))),
+            )
+            .mount(&server)
+            .await;
+
+        let llm = mock_llm("openai-compatible", format!("{}/v1", server.uri()));
+        let schema = json!({ "type": "object", "properties": { "name": { "type": "string" } } });
+        let out = extract_structured_with_usage("content", Some(&schema), None, &llm, None)
+            .await
+            .unwrap();
+        assert_eq!(out.value["name"], "P");
+
+        let requests = server.received_requests().await.unwrap();
+        assert_eq!(requests.len(), 2, "expected exactly one un-forced retry");
+        let first: serde_json::Value = serde_json::from_slice(&requests[0].body).unwrap();
+        let second: serde_json::Value = serde_json::from_slice(&requests[1].body).unwrap();
+        assert!(first.get("tool_choice").is_some());
+        assert!(
+            second.get("tool_choice").is_none(),
+            "the retry must not carry the field the gateway rejected"
+        );
+    }
+
+    /// The incident this whole change exists for: the model returns an object
+    /// that does not satisfy the caller's schema. One re-ask, with the concrete
+    /// validation errors handed back.
+    #[tokio::test]
+    async fn schema_violation_is_retried_once_with_the_errors_fed_back() {
+        let server = MockServer::start().await;
+        // First reply omits the required property entirely (the real failure was
+        // an object carrying only the injected `basis`).
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(openai_tool_call_response(&json!({}))),
+            )
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(openai_tool_call_response(&json!({ "name": "Dub" }))),
+            )
+            .mount(&server)
+            .await;
+
+        let llm = mock_llm("openai-compatible", format!("{}/v1", server.uri()));
+        let schema = json!({
+            "type": "object",
+            "properties": { "name": { "type": "string" } },
+            "required": ["name"]
+        });
+        let out = extract_structured_with_usage("content", Some(&schema), None, &llm, None)
+            .await
+            .unwrap();
+        assert_eq!(out.value["name"], "Dub");
+
+        let requests = server.received_requests().await.unwrap();
+        assert_eq!(requests.len(), 2, "exactly one retry, never a loop");
+        let second: serde_json::Value = serde_json::from_slice(&requests[1].body).unwrap();
+        let sent = second["messages"][0]["content"].as_str().unwrap();
+        assert!(
+            sent.contains("did not satisfy the schema"),
+            "the retry must tell the model what was wrong"
+        );
+        assert!(
+            sent.contains("\"name\" is a required property"),
+            "the concrete validation error must be fed back, not a generic nudge"
+        );
+
+        // Money path: the customer is billed off these tokens with a markup, so
+        // the failed attempt's tokens must NOT be added in. One leg's tokens,
+        // `calls` = 2 as the breadcrumb that a retry happened.
+        let usage = out.usage.expect("usage");
+        assert_eq!(usage.input_tokens, 30, "one leg's tokens, not the sum");
+        assert_eq!(usage.output_tokens, 15);
+        assert_eq!(usage.calls, 2, "the retry stays visible in telemetry");
+    }
+
+    /// Observed live under concurrency: a tool call truncated mid-string at ~1.9k
+    /// characters, far below the token cap. That is the model being flaky, not a
+    /// bad request, so it retries like a schema violation does.
+    #[tokio::test]
+    async fn an_unparseable_tool_call_is_retried_once() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "choices": [{ "message": { "tool_calls": [{
+                    "function": { "name": "extract_data", "arguments": "{\"name\": \"Du" }
+                }] } }]
+            })))
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(openai_tool_call_response(&json!({ "name": "Dub" }))),
+            )
+            .mount(&server)
+            .await;
+
+        let llm = mock_llm("openai-compatible", format!("{}/v1", server.uri()));
+        let schema = json!({ "type": "object", "properties": { "name": { "type": "string" } } });
+        let out = extract_structured_with_usage("content", Some(&schema), None, &llm, None)
+            .await
+            .unwrap();
+        assert_eq!(out.value["name"], "Dub");
+        assert_eq!(server.received_requests().await.unwrap().len(), 2);
+    }
+
+    /// But a provider-side or config error is NOT the model being flaky: it must
+    /// surface on the first attempt rather than burning a second call.
+    #[tokio::test]
+    async fn a_provider_http_error_is_not_retried() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(ResponseTemplate::new(500).set_body_string("upstream exploded"))
+            .mount(&server)
+            .await;
+
+        let llm = mock_llm("openai-compatible", format!("{}/v1", server.uri()));
+        let schema = json!({ "type": "object", "properties": { "name": { "type": "string" } } });
+        let err = extract_structured_with_usage("content", Some(&schema), None, &llm, None)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("OpenAI API error"), "{err}");
+        assert_eq!(
+            server.received_requests().await.unwrap().len(),
+            1,
+            "a 5xx is not the model being flaky; do not pay for a second call"
+        );
+    }
+
+    /// Two bad replies must surface the validation error, not spin.
+    #[tokio::test]
+    async fn a_second_schema_violation_is_returned_to_the_caller() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(openai_tool_call_response(&json!({}))),
+            )
+            .mount(&server)
+            .await;
+
+        let llm = mock_llm("openai-compatible", format!("{}/v1", server.uri()));
+        let schema = json!({
+            "type": "object",
+            "properties": { "name": { "type": "string" } },
+            "required": ["name"]
+        });
+        let err = extract_structured_with_usage("content", Some(&schema), None, &llm, None)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("failed schema validation"), "{err}");
+
+        let requests = server.received_requests().await.unwrap();
+        assert_eq!(requests.len(), 2, "one retry only");
+    }
+
+    /// Regression guard for a real near-miss: an early draft of the plan wrote the
+    /// literal `"extract_data"` into tool_choice. The judge passes its own tool
+    /// name, so that would have shipped `tools[0].name = "judge_change"` beside
+    /// `tool_choice.name = "extract_data"` — a hard 400 on every monitor judge
+    /// call, on every provider. Assert the two MATCH, not merely that one exists.
+    #[tokio::test]
+    async fn forced_tool_choice_names_the_tool_that_was_offered() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "choices": [{ "message": { "tool_calls": [{
+                    "function": { "name": "judge_change", "arguments": "{\"ok\":true}" }
+                }] } }]
+            })))
+            .mount(&server)
+            .await;
+
+        let llm = mock_llm("openai-compatible", format!("{}/v1", server.uri()));
+        let schema = json!({ "type": "object", "properties": { "ok": { "type": "boolean" } } });
+        call_openai(
+            "p",
+            &schema,
+            &llm,
+            "judge_change",
+            "desc",
+            LLM_REQUEST_TIMEOUT,
+            true,
+        )
+        .await
+        .unwrap();
+
+        let requests = server.received_requests().await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&requests[0].body).unwrap();
+        assert_eq!(body["tools"][0]["function"]["name"], "judge_change");
+        assert_eq!(
+            body["tool_choice"]["function"]["name"], body["tools"][0]["function"]["name"],
+            "tool_choice must name the tool actually offered"
+        );
+        assert_eq!(body["parallel_tool_calls"], false);
+    }
+
+    /// Forcing removes the model's ability to decline. With no caller schema
+    /// there is no validation behind it, so a forced call on a sparse page would
+    /// return invented fields with nothing to catch them. Must stay unforced.
+    #[tokio::test]
+    async fn prompt_only_extraction_does_not_force_the_tool() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(openai_tool_call_response(&json!({ "anything": 1 }))),
+            )
+            .mount(&server)
+            .await;
+
+        let llm = mock_llm("openai-compatible", format!("{}/v1", server.uri()));
+        extract_structured_with_usage("content", None, Some("grab the name"), &llm, None)
+            .await
+            .unwrap();
+
+        let requests = server.received_requests().await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&requests[0].body).unwrap();
+        assert!(
+            body.get("tool_choice").is_none(),
+            "prompt-only must not force the tool"
+        );
+    }
+
+    /// The forced call must ship the licence to say nothing, or a sparse page
+    /// becomes fabricated data that validates cleanly and gets billed.
+    #[tokio::test]
+    async fn the_prompt_tells_the_model_not_to_invent_values() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(openai_tool_call_response(&json!({ "name": "P" }))),
+            )
+            .mount(&server)
+            .await;
+
+        let llm = mock_llm("openai-compatible", format!("{}/v1", server.uri()));
+        let schema = json!({ "type": "object", "properties": { "name": { "type": "string" } } });
+        extract_structured_with_usage("content", Some(&schema), None, &llm, None)
+            .await
+            .unwrap();
+
+        let requests = server.received_requests().await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&requests[0].body).unwrap();
+        let sent = body["messages"][0]["content"].as_str().unwrap();
+        assert!(sent.contains("Never invent a value"), "{sent}");
+        assert!(sent.contains("never infer one from the URL alone"));
+    }
+
+    /// A prompt-only extraction has no schema to violate, so it must never retry.
+    #[tokio::test]
+    async fn prompt_only_extraction_never_retries() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(openai_tool_call_response(&json!({}))),
+            )
+            .mount(&server)
+            .await;
+
+        let llm = mock_llm("openai-compatible", format!("{}/v1", server.uri()));
+        extract_structured_with_usage("content", None, Some("grab the name"), &llm, None)
+            .await
+            .unwrap();
+
+        let requests = server.received_requests().await.unwrap();
+        assert_eq!(requests.len(), 1);
+    }
+
     // ── basis end-to-end: attribution lifted out before schema validation ─
 
     #[tokio::test]
@@ -2077,6 +2616,7 @@ mod tests {
             "extract_data",
             "desc",
             LLM_REQUEST_TIMEOUT,
+            true,
         )
         .await
         .unwrap();
@@ -2105,6 +2645,7 @@ mod tests {
             "extract_data",
             "desc",
             LLM_REQUEST_TIMEOUT,
+            true,
         )
         .await
         .unwrap();
