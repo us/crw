@@ -285,11 +285,9 @@ async fn run_crawl_inner(opts: CrawlOptions<'_>) {
             }
             None => renderer.pick_proxy_for_url(&url),
         };
-        let empty_headers: std::collections::HashMap<String, String> =
-            std::collections::HashMap::new();
         let fetch_fut = renderer.fetch(
             &url,
-            &empty_headers,
+            &req.headers,
             effective_render_js,
             req.wait_for,
             pinned_renderer,
@@ -302,21 +300,62 @@ async fn run_crawl_inner(opts: CrawlOptions<'_>) {
             Ok(r) => r,
             Err(e) => {
                 tracing::warn!(url, error = %e, "Crawl: failed to fetch page");
+                let mut md = crw_core::types::PageMetadata::default();
+                md.source_url = url.clone();
+                let mut data = ScrapeData::default();
+                data.metadata = md;
+                data.error = Some(e.to_string());
+                data.block = Some(crw_core::types::BlockOutcome {
+                    vendor: crw_core::types::HTTP_ERROR_VENDOR.to_string(),
+                    reason: e.to_string(),
+                });
+                
+                results.push(data);
+                blocked += 1;
+                let _ = state_tx.send(CrawlState {
+                    id,
+                    success: true,
+                    status: CrawlStatus::InProgress,
+                    total: total_pages as u32,
+                    completed: results.len() as u32,
+                    blocked,
+                    data: Vec::new(),
+                    error: None,
+                });
                 continue;
             }
         };
 
         // The CDN answered for a dead origin, so this page has no content and no
-        // links worth following — its body is the CDN's error page. Skipped like
-        // any other failed fetch (the `continue` above) rather than counted as a
-        // crawled page: a crawl of a site whose origin is down was reporting
-        // `completed: 1` with Cloudflare's apology as the page.
+        // links worth following — its body is the CDN's error page.
         if crate::single::is_cdn_origin_error(fetch_result.status_code) {
             tracing::warn!(
                 url,
                 status = fetch_result.status_code,
                 "Crawl: CDN could not reach the origin"
             );
+            let mut md = crw_core::types::PageMetadata::default();
+            md.source_url = url.clone();
+            md.status_code = fetch_result.status_code;
+            let mut data = ScrapeData::default();
+            data.metadata = md;
+            data.error = Some("CDN could not reach origin".to_string());
+            data.block = Some(crw_core::types::BlockOutcome {
+                vendor: crw_core::types::HTTP_ERROR_VENDOR.to_string(),
+                reason: "CDN origin error".to_string(),
+            });
+            results.push(data);
+            blocked += 1;
+            let _ = state_tx.send(CrawlState {
+                id,
+                success: true,
+                status: CrawlStatus::InProgress,
+                total: total_pages as u32,
+                completed: results.len() as u32,
+                blocked,
+                data: Vec::new(),
+                error: None,
+            });
             continue;
         }
 

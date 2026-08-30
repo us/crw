@@ -477,7 +477,7 @@ fn default_true() -> bool {
 }
 
 /// Metadata about a scraped page.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PageMetadata {
     pub title: Option<String>,
@@ -652,7 +652,7 @@ pub struct ScrapedImage {
 }
 
 /// Data returned for a single scraped page.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ScrapeData {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -724,6 +724,8 @@ pub struct ScrapeData {
     /// Credit cost attributed to this page (0 = not yet priced).
     #[serde(default, skip_serializing_if = "is_zero_u32")]
     pub credit_cost: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
     pub metadata: PageMetadata,
     /// Extraction debug trace; populated only when the request opts in.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1147,6 +1149,8 @@ pub struct CrawlRequest {
     /// `sticky_per_host`). `None` = server default (`sticky_per_host`).
     #[serde(default, alias = "proxy_rotation")]
     pub proxy_rotation: Option<crate::proxy::ProxyRotation>,
+    #[serde(default)]
+    pub headers: std::collections::HashMap<String, String>,
 }
 
 /// Resolve the effective `render_js` decision from a per-request value and the
@@ -5125,4 +5129,20 @@ pub struct ChangeTrackingResult {
     /// True when the diff AST was truncated (mirrors `DiffAst.truncated`).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub truncated: bool,
+}
+
+#[cfg(test)]
+mod additional_tests {
+    use super::*;
+
+    #[test]
+    fn crawl_request_headers_round_trip() {
+        let json = serde_json::json!({
+            "url": "https://example.com",
+            "headers": { "X-Custom": "1", "User-Agent": "test" }
+        });
+        let req: CrawlRequest = serde_json::from_value(json).unwrap();
+        assert_eq!(req.headers.get("X-Custom"), Some(&"1".to_string()));
+        assert_eq!(req.headers.len(), 2);
+    }
 }
