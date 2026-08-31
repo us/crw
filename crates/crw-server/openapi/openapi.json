@@ -1705,6 +1705,13 @@
             "minimum": 0,
             "default": 2
           },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Custom HTTP request headers applied to every page the crawl fetches. On a browser render they apply to every request the page makes, subresources included, so avoid cross-origin-sensitive credentials here."
+          },
           "scrapeOptions": {
             "$ref": "#/components/schemas/CrawlScrapeOptions"
           },
@@ -2527,6 +2534,13 @@
             "type": "integer",
             "minimum": 0,
             "description": "Milliseconds to wait after JS rendering on each page."
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Custom HTTP request headers applied to every page the crawl fetches. On a browser render they apply to every request the page makes, subresources included, so avoid cross-origin-sensitive credentials here."
           }
         }
       }

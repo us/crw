@@ -98,10 +98,13 @@ pub fn to_v2_document(data: ScrapeData, proxy_used: &str, scrape_id: String) -> 
         concurrency_limited: false,
         // Engine does not price requests (the SaaS layer bills); surface
         // whatever the engine attributed, defaulting to 1 like the live API.
-        credits_used: if data.credit_cost == 0 {
-            1
-        } else {
-            data.credit_cost
+        // A blocked page is 0: nobody is charged for it, the envelope total at
+        // `build_crawl_status` already excludes it, and this field disagreeing
+        // was the only place a refused page still advertised a credit.
+        credits_used: match (data.block.is_some(), data.credit_cost) {
+            (true, _) => 0,
+            (false, 0) => 1,
+            (false, c) => c,
         },
         scrape_id,
         page_count: m.page_count,
@@ -611,6 +614,21 @@ mod tests {
         data.credit_cost = 0;
         let doc = to_v2_document(data, "basic", "sid".to_string());
         assert_eq!(doc.metadata.credits_used, 1);
+    }
+
+    /// `block` is set on an anti-bot wall, an origin error page, and now on a
+    /// URL the crawl could not read at all. None of the three is billed, so
+    /// none of them may report a credit on the document either.
+    #[test]
+    fn a_blocked_document_reports_zero_credits() {
+        let mut data = fake_doc("https://x");
+        data.credit_cost = 0;
+        data.block = Some(crw_core::types::BlockOutcome {
+            vendor: crw_core::types::HTTP_ERROR_VENDOR.to_string(),
+            reason: "CDN could not reach origin".to_string(),
+        });
+        let doc = to_v2_document(data, "basic", "sid".to_string());
+        assert_eq!(doc.metadata.credits_used, 0);
     }
 
     #[test]

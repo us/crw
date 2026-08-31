@@ -174,6 +174,30 @@ mod tests {
         assert!(req.only_main_content);
     }
 
+    /// `headers` arrives either flat or nested, like every other per-page key.
+    #[test]
+    fn headers_lift_out_of_scrape_options() {
+        let req = parse(json!({
+            "url": "https://example.com",
+            "scrapeOptions": { "headers": { "X-Env": "staging" } },
+        }));
+        assert_eq!(req.headers.get("X-Env"), Some(&"staging".to_string()));
+
+        let req = parse(json!({
+            "url": "https://example.com",
+            "headers": { "X-Env": "prod" },
+        }));
+        assert_eq!(req.headers.get("X-Env"), Some(&"prod".to_string()));
+
+        // Nothing supplied stays an empty map, so pre-existing bodies are
+        // byte-for-byte unaffected.
+        assert!(
+            parse(json!({ "url": "https://example.com" }))
+                .headers
+                .is_empty()
+        );
+    }
+
     #[test]
     fn a_non_object_scrape_options_is_ignored_not_fatal() {
         // A caller sending `scrapeOptions: null` (some SDKs do) must not 400.

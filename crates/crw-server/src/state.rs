@@ -1179,6 +1179,7 @@ mod tests {
             country: None,
             proxy_list: Vec::new(),
             proxy_rotation: None,
+            headers: std::collections::HashMap::new(),
         }
     }
 

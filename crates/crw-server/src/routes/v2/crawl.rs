@@ -8,6 +8,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::HeaderMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crw_core::error::CrwError;
@@ -75,6 +76,7 @@ pub struct PageQuery {
 /// Internal projection of a v2 `scrapeOptions` object.
 pub(crate) struct ScrapeOpts {
     pub formats: Vec<OutputFormat>,
+    pub headers: HashMap<String, String>,
     pub json_schema: Option<Value>,
     pub only_main_content: bool,
     pub wait_for: Option<u64>,
@@ -85,6 +87,7 @@ pub(crate) struct ScrapeOpts {
 pub(crate) fn scrape_opts_to_internal(opts: &Option<Value>) -> Result<ScrapeOpts, CrwError> {
     let mut out = ScrapeOpts {
         formats: vec![OutputFormat::Markdown],
+        headers: HashMap::new(),
         json_schema: None,
         only_main_content: true,
         wait_for: None,
@@ -98,6 +101,19 @@ pub(crate) fn scrape_opts_to_internal(opts: &Option<Value>) -> Result<ScrapeOpts
             let d = decompose(&specs).map_err(CrwError::InvalidRequest)?;
             out.formats = d.formats;
             out.json_schema = d.json_schema;
+        }
+        // Firecrawl carries per-page request headers here, and `/v2/scrape`
+        // already honours its own `headers`. Dropping them on the crawl path
+        // would be the same silent-ignore failure as #346, so a non-object (or
+        // a non-string value) is an error rather than a quiet no-op.
+        if let Some(h) = m.get("headers")
+            && !h.is_null()
+        {
+            out.headers = serde_json::from_value(h.clone()).map_err(|e| {
+                CrwError::InvalidRequest(format!(
+                    "scrapeOptions.headers must be an object of strings: {e}"
+                ))
+            })?;
         }
         if let Some(b) = m.get("onlyMainContent").and_then(Value::as_bool) {
             out.only_main_content = b;
@@ -151,6 +167,7 @@ pub async fn start_crawl(
         country: v2.country,
         proxy_list: v2.proxy_list,
         proxy_rotation: v2.proxy_rotation,
+        headers: opts.headers,
     };
     validate_crawl_renderer(&req, &state)?;
 
@@ -279,13 +296,52 @@ mod tests {
         // "No scrapeOptions at all", "scrapeOptions without renderJs" and an
         // explicit null must all stay None so the server's render_js_default
         // still applies.
-        assert_eq!(scrape_opts_to_internal(&None).unwrap().render_js, None);
         for opts in [
             serde_json::json!({ "onlyMainContent": false }),
             serde_json::json!({ "renderJs": null }),
         ] {
             let parsed = scrape_opts_to_internal(&Some(opts.clone())).unwrap();
             assert_eq!(parsed.render_js, None, "{opts}");
+        }
+        assert_eq!(scrape_opts_to_internal(&None).unwrap().render_js, None);
+    }
+
+    /// Firecrawl bodies put per-page headers under `scrapeOptions`, and
+    /// `/v2/scrape` already honours its own `headers`. A crawl that dropped
+    /// them would be the same silent-ignore as #346.
+    #[test]
+    fn scrape_options_headers_reach_the_crawl_request() {
+        let opts = Some(serde_json::json!({
+            "headers": { "Authorization": "Bearer x", "X-Env": "staging" }
+        }));
+        let parsed = scrape_opts_to_internal(&opts).unwrap();
+        assert_eq!(
+            parsed.headers.get("Authorization"),
+            Some(&"Bearer x".to_string())
+        );
+        assert_eq!(parsed.headers.get("X-Env"), Some(&"staging".to_string()));
+
+        // Absent or null stays empty rather than erroring.
+        assert!(scrape_opts_to_internal(&None).unwrap().headers.is_empty());
+        assert!(
+            scrape_opts_to_internal(&Some(serde_json::json!({ "headers": null })))
+                .unwrap()
+                .headers
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn a_malformed_scrape_options_headers_is_rejected_not_ignored() {
+        for bad in [
+            serde_json::json!({ "headers": "Authorization: x" }),
+            serde_json::json!({ "headers": { "X-Num": 1 } }),
+            serde_json::json!({ "headers": ["a", "b"] }),
+        ] {
+            assert!(
+                scrape_opts_to_internal(&Some(bad.clone())).is_err(),
+                "should reject {bad}"
+            );
         }
     }
 
