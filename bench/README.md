@@ -87,7 +87,7 @@ $PY bench/orchestrate.py report $RID --benchmarks
 - **scrape** — crw-vs-gold on the 1000-URL set (no competitor connector this pass
   → absolute only).
 - **map** — per-GOLD-URL Bernoulli judgments → single-system recall CI.
-- **research** — arXivQA paper-retrieval recall over alphaXiv's 191-question set
+- **research**: arXivQA paper-retrieval recall over alphaXiv's 191-question set
   (the 61.0% headline). Own directory, own scorer, own stored run:
   `bench/arxivqa/` (`score.py --selfcheck` proves the scorer offline).
 
