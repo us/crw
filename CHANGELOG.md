@@ -2,6 +2,23 @@
 
 All notable changes to CRW are documented here.
 
+## [0.33.0](https://github.com/us/crw/compare/v0.32.0...v0.33.0) (2026-09-02)
+
+
+### Features
+
+* enhance crawl error diagnostics and configurable headers ([93b4c11](https://github.com/us/crw/commit/93b4c117dd7dd569f1f0b9abce8d3416cf162e75))
+
+
+### Bug Fixes
+
+* **crawl:** report unreadable pages and honour per-request headers ([c58a8f6](https://github.com/us/crw/commit/c58a8f6e4d09bff7c5686b1db093f1571fa47988))
+* **deps:** move PDF parsing to lopdf 0.42, clearing RUSTSEC-2026-0187 ([10f4341](https://github.com/us/crw/commit/10f4341eaa9bb957e5b2bcfb7424fdb131e844b1))
+* **extract:** enforce structured output on the chat transports ([aeb55ca](https://github.com/us/crw/commit/aeb55ca844b32197859252679d9a28290aab31d7))
+* **renderer:** don't feed binary bodies to the HTML extractor ([ab5e93e](https://github.com/us/crw/commit/ab5e93e6d116ed1aa5a17c5a4193122fb18b035e))
+* **renderer:** keep the binary-body check off real pages ([4f741d5](https://github.com/us/crw/commit/4f741d57d03170617b30e6dbbc4e83e7af6afbff))
+* **scrape:** classify a wall and an empty result as failures ([96a4b43](https://github.com/us/crw/commit/96a4b4395366cafcd1a6314b7a0af8fb6db82cab))
+
 ## [0.32.0](https://github.com/us/crw/compare/v0.31.0...v0.32.0) (2026-08-24)
 
 
