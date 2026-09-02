@@ -63,12 +63,13 @@ regex = "1"
 # libraries — preserves the single-static-binary story. The open-core
 # boundary gate asserts lopdf/ttf-parser are ABSENT when `pdf` is disabled.
 #
-# Held at 0.1.6 on purpose. 0.1.7 guts six consecutive pages of some documents:
-# measured over 30 real PDFs it extracts 13,732 fewer characters in total than
-# 0.1.6, all of it one document (arXiv 1412.6980) losing pages 6-11 down to
-# 4-13% of their text. 0.1.6 is the best release we have measured: +23,148
-# characters over 0.1.4 across the same corpus. Re-evaluate on 0.1.8.
-pdf-inspector = "=0.1.6"
+# Was held at 0.1.6 because 0.1.7 gutted pages 6-11 of arXiv 1412.6980. Measured
+# again over 29 real PDFs (papers, IRS forms, RFCs, 10-K, the 756-page PDF spec)
+# scoring word recall against poppler as ground truth: 1.17.0 reaches 98.15% vs
+# 0.1.6's 97.72%, better on 23 of 29 documents, and every page of 1412.6980 now
+# comes back at 97-100%. The raw character count drops slightly only because
+# 1.17.0 rejoins hyphenated line breaks and stops duplicating table rows.
+pdf-inspector = "=1.17.0"
 
 # Diffing (change-tracking / monitor). Myers diff over lines; the parse-diff
 # AST and the unified text surface are both derived from its op stream.
@@ -112,7 +113,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 url = { version = "2", features = ["serde"] }
 sha2 = "0.11"
 hex = "0.4"
-base64 = "0.22"
+base64 = "0.23"
 
 # Unix process-group kill (browser teardown). Unix-only; already present
 # transitively. Used by crw-renderer's BROWSER_PGIDS group-kill registry.

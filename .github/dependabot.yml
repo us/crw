@@ -10,27 +10,12 @@ updates:
         update-types: ["minor", "patch"]
     # Direct bumps that can never resolve: a parent crate pins the old major and
     # its API type flows into our code. The real fix arrives when the PARENT
-    # ships a new release, so watch for a `scraper` / `pdf-inspector` bump PR and
-    # remove the matching ignore entry then.
+    # ships a new release, so watch for a `scraper` bump PR and remove the
+    # matching ignore entry then.
     ignore:
       # scraper 0.25 (latest) pins ego-tree 0.10; NodeId comes from scraper's
       # ElementRef, so a direct ego-tree 0.11 bump is a type mismatch.
       - dependency-name: "ego-tree"
-      # pdf-inspector 0.1.7 (latest, github.com/firecrawl/pdf-inspector) still
-      # pins lopdf 0.41; a direct bump leaves 0.41 in the tree anyway. lopdf
-      # 0.42 carries the RUSTSEC-2026-0187 fix (stack-overflow SIGABRT on
-      # deeply nested objects, uncatchable by catch_unwind). Contained for us:
-      # `document.sandbox` runs every parse in a child process and is ON in
-      # config.docker.toml, so an abort kills the worker, not the server.
-      # Drop this ignore once pdf-inspector publishes a crate release built on
-      # lopdf >= 0.42 (fixed on their main in 1c32e4bd, unreleased).
-      - dependency-name: "lopdf"
-      # 0.1.7 specifically: it extracts 13,732 fewer characters than 0.1.6 over
-      # our 30-PDF measurement corpus, one document losing six whole pages. The
-      # workspace pin holds 0.1.6; this keeps dependabot from re-proposing the
-      # bad release while still offering 0.1.8 when it lands.
-      - dependency-name: "pdf-inspector"
-        versions: ["0.1.7"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
