@@ -196,19 +196,19 @@ fn thin_html_short_truncated_page_still_thin() {
 #[test]
 fn bot_wall_scanpy_style() {
     let html = r#"<html><body><h1>Performing security verification</h1><p>This page checks your browser.</p></body></html>"#;
-    assert!(looks_like_generic_bot_wall(html));
+    assert!(looks_like_generic_bot_wall(html, false));
 }
 
 #[test]
 fn bot_wall_dnb_style() {
     let html = r#"<html><body><div><span class="icon"></span><p>Performing security verification</p></div></body></html>"#;
-    assert!(looks_like_generic_bot_wall(html));
+    assert!(looks_like_generic_bot_wall(html, false));
 }
 
 #[test]
 fn bot_wall_verify_human() {
     let html = r#"<html><body><h1>Please verify you are human</h1></body></html>"#;
-    assert!(looks_like_generic_bot_wall(html));
+    assert!(looks_like_generic_bot_wall(html, false));
 }
 
 #[test]
@@ -218,7 +218,7 @@ fn bot_wall_false_positive_long_article() {
         r#"<html><body><article><h1>On Authorization</h1><p>{filler}</p><p>The system returned access denied for unauthorized requests, which we discuss below.</p><p>{filler}</p></article></body></html>"#
     );
     assert!(html.len() > 2000);
-    assert!(!looks_like_generic_bot_wall(&html));
+    assert!(!looks_like_generic_bot_wall(&html, false));
 }
 
 #[test]

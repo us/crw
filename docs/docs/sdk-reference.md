@@ -167,7 +167,7 @@ Key options (both SDKs):
 | `formats` / `formats` | `string[]` | engine default | `markdown`, `html`, `rawHtml`, `plainText`, `links`, `json`, `summary`, `changeTracking` |
 | `only_main_content` / `onlyMainContent` | `bool` | `true` | strips nav/boilerplate |
 | `render_js` / `renderJs` | `bool` | — | force JS renderer on/off |
-| `renderer` | `string` | — | `auto`, `lightpanda`, `chrome`, `chrome_proxy`, `playwright` |
+| `renderer` | `string` | — | `auto`, `lightpanda`, `chrome`, `chrome_proxy` (self-host may also configure `playwright`) |
 | `wait_for` / `waitFor` | `int` | — | milliseconds to wait after page load |
 | `json_schema` / `jsonSchema` | `dict` | — | JSON Schema for structured LLM extraction; auto-adds `json` format |
 

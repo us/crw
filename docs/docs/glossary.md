@@ -54,7 +54,7 @@ Model Context Protocol is an open standard that lets AI assistants (Claude Code,
 
 ## renderer / renderedWith
 
-`renderer` is a per-request field that pins which rendering engine to use for a scrape: `"auto"` (default fallback chain), `"lightpanda"`, `"chrome"`, `"chrome_proxy"` (residential-proxy Chrome tier), or `"playwright"`. It overrides the server-level `mode` setting for that one request. `renderedWith` is the response-side counterpart — a field in `data.metadata` that tells you which renderer actually ran (`"http"`, `"lightpanda"`, `"chrome"`, `"chrome_proxy"`, or `"http_only_fallback"`). Inspecting `renderedWith` is the first step in debugging empty or incomplete scrape results on JavaScript-heavy pages. See [JS Rendering](/docs/js-rendering).
+`renderer` is a per-request field that pins which rendering engine to use for a scrape: `"auto"` (default fallback chain), `"lightpanda"`, `"chrome"`, `"chrome_proxy"` (residential-proxy Chrome tier). Self-hosted instances can additionally configure `"playwright"`; it is not available on the managed cloud. It overrides the server-level `mode` setting for that one request. `renderedWith` is the response-side counterpart — a field in `data.metadata` that tells you which renderer actually ran (`"http"`, `"lightpanda"`, `"chrome"`, `"chrome_proxy"`, or `"http_only_fallback"`). Inspecting `renderedWith` is the first step in debugging empty or incomplete scrape results on JavaScript-heavy pages. See [JS Rendering](/docs/js-rendering).
 
 ---
 

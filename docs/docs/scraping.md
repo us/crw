@@ -132,7 +132,7 @@ That is the default CRW success shape: requested content plus a compact metadata
 | `onlyMainContent` | boolean | `true` | Remove nav, footer, and boilerplate before conversion |
 | `renderJs` | boolean or null | `null` | `null` auto-detects, `true` forces browser rendering, `false` stays HTTP-only |
 | `waitFor` | number | -- | Milliseconds to wait after JS rendering |
-| `renderer` | string | `auto` | Pin to a specific renderer: `auto`, `lightpanda`, `chrome`, `chrome_proxy`, `playwright`, or `camoufox`. Non-`auto` values hard-pin (no fallback) and imply `renderJs:true` unless `renderJs:false` is set explicitly. See [JS rendering](#js-rendering) |
+| `renderer` | string | `auto` | Pin to a specific renderer: `auto`, `lightpanda`, `chrome`, `chrome_proxy`, or `camoufox`. Self-hosted instances can also configure `playwright`; the managed cloud does not run it, and pinning a tier an instance has not configured returns HTTP 400. `GET /v1/capabilities` reports the tiers a given instance actually has. Non-`auto` values hard-pin (no fallback) and imply `renderJs:true` unless `renderJs:false` is set explicitly. See [JS rendering](#js-rendering) |
 | `includeTags` | string[] | `[]` | CSS selectors to keep |
 | `excludeTags` | string[] | `[]` | CSS selectors to remove |
 | `headers` | object | `{}` | Custom HTTP headers, forwarded on both the HTTP and browser render paths. A `User-Agent` here overrides the default. On a browser render they apply to every request the page makes (subresources included), so avoid putting cross-origin-sensitive credentials like `Authorization` here. |

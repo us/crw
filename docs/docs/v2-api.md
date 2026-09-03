@@ -82,7 +82,7 @@ Scrape one URL synchronously. Returns immediately with a `V2Document`.
 | `proxyList` | `string[]` | `[]` | BYOP proxy URLs (rotated per `proxyRotation`) |
 | `proxyRotation` | `"round_robin" \| "random"` | — | Rotation strategy for `proxyList` |
 | `timeout` | `number` | server default | Request deadline in milliseconds |
-| `renderer` | `"auto" \| "lightpanda" \| "chrome" \| "chrome_proxy" \| "playwright"` | — | Pin a renderer tier |
+| `renderer` | `"auto" \| "lightpanda" \| "chrome" \| "chrome_proxy"` | — | Pin a renderer tier. Self-hosted instances may also configure `"playwright"`; the managed cloud does not run it |
 | `renderJs` | `boolean` | — | `true` forces JS rendering, `false` keeps the request HTTP-only, omitted uses auto-detection. Same semantics as on `/v1/scrape`, see [JS Rendering](js-rendering.md) |
 | `parsers` | `ParserSpec[]` | — | Document parser directives (e.g. `["pdf"]`) |
 | `llmApiKey` | `string` | — | Per-request LLM API key (required for `summary` / `json` if no server key) |

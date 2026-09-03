@@ -97,9 +97,7 @@ impl CamoufoxRenderer {
     ) -> CrwResult<serde_json::Value> {
         let budget = self.call_budget(deadline);
         if budget.is_zero() {
-            return Err(CrwError::Timeout(
-                deadline.overrun().as_millis().max(1) as u64
-            ));
+            return Err(CrwError::Timeout(deadline.requested_ms()));
         }
         let url = format!("{}{}", self.base_url, path);
         let fut = self.auth(self.client.post(&url).json(body)).send();
@@ -280,9 +278,7 @@ impl PageFetcher for CamoufoxRenderer {
         deadline: Deadline,
     ) -> CrwResult<FetchResult> {
         if deadline.expired() {
-            return Err(CrwError::Timeout(
-                deadline.overrun().as_millis().max(1) as u64
-            ));
+            return Err(CrwError::Timeout(deadline.requested_ms()));
         }
         let start = Instant::now();
         let user_id = Self::rand_id("crw_");
@@ -345,6 +341,40 @@ mod tests {
 
     fn deadline() -> Deadline {
         Deadline::from_request_ms(30_000)
+    }
+
+    /// A spent deadline must report the budget the caller was given, not how
+    /// many milliseconds late we noticed. Prod told customers holding a 30s
+    /// budget that their scrape "timed out after 1ms" 326 times in ten days.
+    /// This exercises the real call site: `fetch` checks `expired()` before it
+    /// touches the network, so no server is needed.
+    #[tokio::test]
+    async fn expired_deadline_reports_the_requested_budget() {
+        let r = renderer("http://127.0.0.1:1");
+        let spent = Deadline::from_request_ms(0);
+        assert!(spent.expired());
+
+        let err = r
+            .fetch("https://example.com", &HashMap::new(), None, spent)
+            .await
+            .expect_err("an expired deadline must not attempt a fetch");
+
+        match err {
+            CrwError::Timeout(ms) => assert_eq!(
+                ms, 0,
+                "must echo the caller's budget, not the overrun since it lapsed"
+            ),
+            other => panic!("expected Timeout, got {other:?}"),
+        }
+
+        // And the message a customer actually reads.
+        let long = Deadline::from_request_ms(30_000);
+        std::thread::sleep(std::time::Duration::from_millis(1));
+        let budget = long.requested_ms();
+        assert_eq!(
+            CrwError::Timeout(budget).to_string(),
+            "Timeout after 30000ms"
+        );
     }
 
     async fn mount_delete_session(server: &MockServer) {

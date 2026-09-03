@@ -1374,9 +1374,7 @@ impl FallbackRenderer {
         let _host_permit = if let Some(key) = host_key.as_deref() {
             let remaining = deadline.remaining();
             if remaining.is_zero() {
-                return Err(CrwError::Timeout(
-                    deadline.overrun().as_millis().max(1) as u64
-                ));
+                return Err(CrwError::Timeout(deadline.requested_ms()));
             }
             match tokio::time::timeout(
                 remaining,
@@ -1403,9 +1401,7 @@ impl FallbackRenderer {
                     Some(permit)
                 }
                 Err(_) => {
-                    return Err(CrwError::Timeout(
-                        deadline.overrun().as_millis().max(1) as u64
-                    ));
+                    return Err(CrwError::Timeout(deadline.requested_ms()));
                 }
             }
         } else {
@@ -1497,7 +1493,7 @@ impl FallbackRenderer {
                                     && !detector::looks_like_cloudflare_challenge(&r.html)
                                     // See the recovery arms: CF alone is not the
                                     // only wall this tier can fail to clear.
-                                    && !detector::looks_like_generic_bot_wall(&r.html)
+                                    && !detector::looks_like_generic_bot_wall(&r.html, r.truncated)
                                     && detector::looks_like_vendor_block(&r.html).is_none();
                                 // Ship only a fully-rendered body: a curl_cffi shell
                                 // that passes `arm_ok` but is thin still falls
@@ -1824,7 +1820,8 @@ impl FallbackRenderer {
                     Some("waf_challenge") => !is_hard_pinned,
                     _ => false,
                 };
-                let is_generic_bot_wall = detector::looks_like_generic_bot_wall(&result.html);
+                let is_generic_bot_wall =
+                    detector::looks_like_generic_bot_wall(&result.html, result.truncated);
                 let is_blocked = challenge_header_signal
                     || detector::looks_like_cloudflare_challenge(&result.html)
                     || is_generic_bot_wall;
@@ -1976,7 +1973,7 @@ impl FallbackRenderer {
         let text_len = html_body_text_len(&result.html);
         let is_placeholder = detector::looks_like_loading_placeholder(&result.html);
         let failed_render = detector::looks_like_failed_render(&result.html);
-        let is_bot_wall = detector::looks_like_generic_bot_wall(&result.html);
+        let is_bot_wall = detector::looks_like_generic_bot_wall(&result.html, result.truncated);
         let vendor_block = detector::looks_like_vendor_block(&result.html);
         // Size-independent Cloudflare interstitial check: modern managed
         // challenges are 100-300KB with the challenge marker deep in the body,
@@ -2592,7 +2589,8 @@ impl FallbackRenderer {
                     let text_len = html_body_text_len(&result.html);
                     let is_placeholder = detector::looks_like_loading_placeholder(&result.html);
                     let failed_render = detector::looks_like_failed_render(&result.html);
-                    let is_bot_wall = detector::looks_like_generic_bot_wall(&result.html);
+                    let is_bot_wall =
+                        detector::looks_like_generic_bot_wall(&result.html, result.truncated);
                     let vendor_block = detector::looks_like_vendor_block(&result.html);
                     // Size-independent Cloudflare interstitial check (see
                     // `classify_js_attempt`): large managed-challenge pages evade
@@ -3231,7 +3229,7 @@ impl FallbackRenderer {
                         let r_ok = r_text >= Self::MIN_RENDERED_TEXT_LEN
                             && detector::looks_like_failed_render(&r.html).is_none()
                             && !detector::looks_like_loading_placeholder(&r.html)
-                            && !detector::looks_like_generic_bot_wall(&r.html)
+                            && !detector::looks_like_generic_bot_wall(&r.html, r.truncated)
                             && detector::looks_like_vendor_block(&r.html).is_none()
                             && !detector::looks_like_cloudflare_challenge(&r.html);
                         if !host.is_empty() {
@@ -3349,7 +3347,7 @@ impl FallbackRenderer {
                             // Same gap as the chrome_proxy arm: the stealth tier
                             // clears CF, but a DataDome / generic ban shell it
                             // cannot clear would otherwise ship as content.
-                            && !detector::looks_like_generic_bot_wall(&r.html)
+                            && !detector::looks_like_generic_bot_wall(&r.html, r.truncated)
                             && detector::looks_like_vendor_block(&r.html).is_none();
                         if !host.is_empty() {
                             let outcome = if r_ok {

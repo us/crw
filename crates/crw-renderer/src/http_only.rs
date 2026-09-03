@@ -519,11 +519,11 @@ impl PageFetcher for HttpFetcher {
         let resp = loop {
             let remaining = deadline.remaining();
             if remaining.is_zero() {
-                // Already past the budget — report elapsed-since-call so the
-                // message reads "Timeout after Xms" instead of a useless 0.
-                return Err(CrwError::Timeout(
-                    (start.elapsed().as_millis().max(1)) as u64,
-                ));
+                // Past the budget. Report the budget the caller was given, not
+                // how long this call has been running: nothing was awaited here,
+                // so elapsed-since-call is a couple of milliseconds and reads as
+                // "Timeout after 1ms" to someone who asked for 30s.
+                return Err(CrwError::Timeout(deadline.requested_ms()));
             }
             // While trying the proxy first, hold back a FULL direct-rescue budget. A
             // HANGING proxy is the dangerous case: without the reserve it would eat
@@ -577,9 +577,9 @@ impl PageFetcher for HttpFetcher {
                     direct_rescue_used = true;
                     continue;
                 }
-                return Err(CrwError::Timeout(
-                    (start.elapsed().as_millis().max(1)) as u64,
-                ));
+                // Same rule as the budget check above: report the caller's
+                // budget, not the near-zero time spent inside this call.
+                return Err(CrwError::Timeout(deadline.requested_ms()));
             }
             let remaining = attempt_budget;
             // On the cert-error fallback path use the verification-disabled
@@ -1050,7 +1050,7 @@ impl PageFetcher for HttpFetcher {
             && !self.has_static_proxy
             && !is_pdf
             && let Some(h) = &host
-            && crate::detector::looks_like_generic_bot_wall(&html)
+            && crate::detector::looks_like_generic_bot_wall(&html, false)
             && !crate::detector::looks_like_cloudflare_challenge(&html)
             && crate::detector::looks_like_vendor_block(&html).is_none()
         {

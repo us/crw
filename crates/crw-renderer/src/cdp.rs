@@ -1813,11 +1813,11 @@ impl PageFetcher for CdpRenderer {
             internal_timeout
         };
         if overall_timeout.is_zero() {
-            // Caller's deadline is already past — surface how late we are so
-            // the error reads "Timeout after Xms" instead of a useless 0.
-            return Err(CrwError::Timeout(
-                (deadline.overrun().as_millis().max(1)) as u64,
-            ));
+            // Caller's deadline is already past. Report the budget they were
+            // given: the overrun is measured the instant `remaining()` hits
+            // zero, so it is always a few milliseconds and reads as a nonsense
+            // "Timeout after 1ms".
+            return Err(CrwError::Timeout(deadline.requested_ms()));
         }
 
         let first = self

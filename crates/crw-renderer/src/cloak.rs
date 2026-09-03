@@ -149,9 +149,7 @@ impl CloakRenderer {
     ) -> CrwResult<(u16, String)> {
         let budget = self.call_budget(deadline);
         if budget.is_zero() {
-            return Err(CrwError::Timeout(
-                deadline.overrun().as_millis().max(1) as u64
-            ));
+            return Err(CrwError::Timeout(deadline.requested_ms()));
         }
         let url = format!("{}{}", self.base_url, path_and_query);
         let mut rb = self.auth(self.client.get(&url)).header("x-hostname", host);
@@ -189,9 +187,7 @@ impl PageFetcher for CloakRenderer {
         deadline: Deadline,
     ) -> CrwResult<FetchResult> {
         if deadline.expired() {
-            return Err(CrwError::Timeout(
-                deadline.overrun().as_millis().max(1) as u64
-            ));
+            return Err(CrwError::Timeout(deadline.requested_ms()));
         }
         let start = Instant::now();
         let parsed = url::Url::parse(url)
@@ -286,8 +282,7 @@ impl PageFetcher for CloakRenderer {
         // Fallback: if the loop broke before any attempt (deadline pressure),
         // surface a Timeout so the breaker classifies it as deadline-clamped
         // rather than a render failure — mirrors the ladder's budget-drained idiom.
-        Err(last_err
-            .unwrap_or_else(|| CrwError::Timeout(deadline.overrun().as_millis().max(1) as u64)))
+        Err(last_err.unwrap_or_else(|| CrwError::Timeout(deadline.requested_ms())))
     }
 
     fn name(&self) -> &str {
