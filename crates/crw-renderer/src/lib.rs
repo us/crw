@@ -3430,6 +3430,27 @@ impl FallbackRenderer {
                 );
                 result.warnings.push(hint);
             }
+            // A wall no tier could clear is not content. Every tier already
+            // classified it — that verdict is exactly why the result landed in
+            // `thin_result` instead of being accepted — and this was the one
+            // place that discarded it: the interstitial went back stamped with a
+            // page credit under `success: true`, so the caller paid for
+            // "Checking your browser" and an agent read it as the page.
+            //
+            // Scoped deliberately to the generic phrase-list wall. A CF
+            // challenge or a named vendor shell keeps shipping as a thin result:
+            // those have their own recovery arms (cloak, chrome_proxy) that read
+            // the body back, and `cloak_recover_on_cf_false_skips_arm_on_exhausted_deadline`
+            // pins that shape. A genuinely thin but real page still ships too,
+            // because returning the best available body is the point of this
+            // tail; the recall invariant depends on that staying true.
+            if detector::looks_like_generic_bot_wall(&result.html, result.truncated) {
+                return Err(CrwError::HttpError(format!(
+                    "blocked by an anti-bot wall that none of the {} renderer tier(s) \
+                     attempted could clear",
+                    chain.len().max(1),
+                )));
+            }
             Ok(result)
         } else {
             Err(last_error
@@ -4860,6 +4881,94 @@ mod tests {
                 chosen: RendererKind::Chrome
             })
         ));
+    }
+
+    /// Prod shipped an anti-bot interstitial to a paying customer as
+    /// `success: true` with `creditCost: 1`, because the ladder tail returned
+    /// the best thin result without re-reading the verdict every tier had
+    /// already reached. Live case: https://www.prlib.ru/en/history/619410 on
+    /// 2026-09-03, "Security Check / Checking your browser", 95 chars.
+    #[tokio::test]
+    async fn wall_the_whole_ladder_failed_to_clear_is_not_a_success() {
+        let wall = "<html><body><h1>Security Check</h1>\
+                    <p>Checking your browser before accessing the site</p></body></html>";
+        let lp = Arc::new(MockFetcher {
+            name: "lightpanda",
+            behavior: MockBehavior::Ok(wall.to_string()),
+        }) as Arc<dyn PageFetcher>;
+        let chrome = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Ok(wall.to_string()),
+        }) as Arc<dyn PageFetcher>;
+        let mut r = make_renderer_with_mocks(vec![lp, chrome]);
+        // The HTTP tier cannot reach the origin, so the JS ladder actually runs
+        // — the real shape of the prod case, where HTTP escalated and every JS
+        // tier then hit the same wall.
+        r.http = Arc::new(Unreachable);
+
+        let out = r
+            .fetch(
+                "https://example.com",
+                &HashMap::new(),
+                Some(true),
+                None,
+                None,
+                tdl(),
+            )
+            .await;
+
+        match out {
+            Err(CrwError::HttpError(msg)) => {
+                assert!(
+                    msg.contains("anti-bot wall"),
+                    "expected the wall to be named, got: {msg}"
+                );
+            }
+            Ok(r) => panic!(
+                "a wall no tier could clear must not ship as a success: rendered_with={:?} html={:?}",
+                r.rendered_with, r.html
+            ),
+            Err(e) => panic!("expected HttpError naming the wall, got {e:?}"),
+        }
+    }
+
+    /// The other half of the same gate: a page that is merely thin, with no
+    /// wall phrasing, must still ship. Returning the best available body is the
+    /// point of the ladder tail and the recall invariant rests on it.
+    #[tokio::test]
+    async fn thin_but_real_page_still_ships_from_the_ladder_tail() {
+        let thin = "<html><body><h1>Notice</h1><p>Short but genuine page.</p></body></html>";
+        let lp = Arc::new(MockFetcher {
+            name: "lightpanda",
+            behavior: MockBehavior::Ok(thin.to_string()),
+        }) as Arc<dyn PageFetcher>;
+        let chrome = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Ok(thin.to_string()),
+        }) as Arc<dyn PageFetcher>;
+        let mut r = make_renderer_with_mocks(vec![lp, chrome]);
+        // The forced-JS arm fetches HTTP first for the content-type check, so
+        // the real fetcher would answer before the ladder ever runs.
+        r.http = Arc::new(MockFetcher {
+            name: "http",
+            behavior: MockBehavior::Ok(thin.to_string()),
+        });
+
+        let out = r
+            .fetch(
+                "https://example.com",
+                &HashMap::new(),
+                Some(true),
+                None,
+                None,
+                tdl(),
+            )
+            .await;
+        assert!(
+            out.is_ok(),
+            "a thin but wall-free body must still be returned, got {:?}",
+            out.err()
+        );
     }
 
     #[tokio::test]
