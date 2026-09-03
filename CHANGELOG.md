@@ -2,6 +2,15 @@
 
 All notable changes to CRW are documented here.
 
+## [0.33.1](https://github.com/us/crw/compare/v0.33.0...v0.33.1) (2026-09-03)
+
+
+### Bug Fixes
+
+* **renderer:** keep the HTTP shell from resurrecting a refused wall ([c74bcf3](https://github.com/us/crw/commit/c74bcf365a72d77e025ddfcefd8640f822a1d5c2))
+* **renderer:** report scrape outcomes truthfully ([294eb3d](https://github.com/us/crw/commit/294eb3d8a7cfb55026da493df9951b9d058a5968))
+* **renderer:** stop shipping an unclearable wall as a success ([82a56f6](https://github.com/us/crw/commit/82a56f6bfa5f097bd046789a5db647eab2f8045e))
+
 ## [0.33.0](https://github.com/us/crw/compare/v0.32.0...v0.33.0) (2026-09-02)
 
 
