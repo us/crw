@@ -1690,7 +1690,22 @@ impl FallbackRenderer {
                         // pixels), and an explicit renderer pin is a caller
                         // contract that forbids silent substitution. Both fail
                         // closed, matching the no-renderer arm directly above.
-                        Err(e) if screenshot_requested() || is_hard_pinned => Err(e),
+                        // The HTTP shell substitutes for a failed ladder so the
+                        // caller gets content instead of nothing. But when that
+                        // shell IS the wall the ladder just refused to clear,
+                        // returning it hands back exactly what every tier
+                        // rejected, as a billed success. Fail instead; a shell
+                        // that is not a wall still substitutes as before.
+                        Err(e)
+                            if screenshot_requested()
+                                || is_hard_pinned
+                                || detector::looks_like_generic_bot_wall(
+                                    &http_result.html,
+                                    http_result.truncated,
+                                ) =>
+                        {
+                            Err(e)
+                        }
                         Err(e) => {
                             if is_auth_blocked {
                                 tracing::error!(
@@ -1911,9 +1926,16 @@ impl FallbackRenderer {
                         .await
                     {
                         Ok(js_result) => Ok(js_result),
-                        Err(e) if is_hard_pinned => {
-                            // User explicitly pinned a renderer — surface the error
-                            // instead of silently returning the (likely useless) HTTP body.
+                        Err(e)
+                            if is_hard_pinned
+                                || detector::looks_like_generic_bot_wall(
+                                    &result.html,
+                                    result.truncated,
+                                ) =>
+                        {
+                            // Pinned: the caller's contract forbids substitution.
+                            // Wall: see the sibling arm — the shell is the very
+                            // thing the ladder rejected, so it is not a fallback.
                             Err(e)
                         }
                         Err(e) => {
@@ -4881,6 +4903,43 @@ mod tests {
                 chosen: RendererKind::Chrome
             })
         ));
+    }
+
+    /// The ladder correctly refuses a wall, and then the HTTP-shell fallback
+    /// hands the same wall back anyway. Prod log, 2026-09-03: "JS escalation
+    /// failed for soft-block status; surfacing HTTP shell with warning: ...
+    /// blocked by an anti-bot wall that none of the 3 renderer tier(s)
+    /// attempted could clear". The ladder's verdict has to survive that
+    /// substitution, or rejecting the wall upstream buys nothing.
+    #[tokio::test]
+    async fn http_shell_fallback_does_not_resurrect_a_wall() {
+        let wall = "<html><body><h1>Security Check</h1>\
+                    <p>Checking your browser before accessing the site</p></body></html>";
+        let lp = Arc::new(MockFetcher {
+            name: "lightpanda",
+            behavior: MockBehavior::Ok(wall.to_string()),
+        }) as Arc<dyn PageFetcher>;
+        let mut r = make_renderer_with_mocks(vec![lp]);
+        r.http = Arc::new(MockFetcher {
+            name: "http",
+            behavior: MockBehavior::Ok(wall.to_string()),
+        });
+
+        let out = r
+            .fetch(
+                "https://example.com",
+                &HashMap::new(),
+                Some(true),
+                None,
+                None,
+                tdl(),
+            )
+            .await;
+        assert!(
+            out.is_err(),
+            "the wall must not come back through the HTTP shell: {:?}",
+            out.ok().map(|r| (r.rendered_with, r.html.len()))
+        );
     }
 
     /// Prod shipped an anti-bot interstitial to a paying customer as
