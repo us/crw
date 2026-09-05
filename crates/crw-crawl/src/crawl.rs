@@ -109,14 +109,14 @@ fn enqueue_discovered_links(
     }
 }
 
-/// Build the placeholder document a crawl returns for a URL it could not read.
+/// Build the placeholder document a crawl or batch returns for a URL it could not read.
 ///
 /// Carries only the URL, the status (0 when there was no response at all) and
 /// the reason, stamped through the same `block` field the scrape and batch
 /// paths already use, so every surface that already understands "this document
 /// is not a page you asked for" understands this one too, and the caller's
 /// `completed - blocked` billing keeps it free.
-fn failed_page(url: &str, status_code: u16, reason: String) -> ScrapeData {
+pub fn failed_page(url: &str, status_code: u16, reason: String) -> ScrapeData {
     ScrapeData {
         metadata: crw_core::types::PageMetadata {
             source_url: url.to_string(),
