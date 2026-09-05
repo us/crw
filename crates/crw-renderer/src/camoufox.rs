@@ -273,6 +273,14 @@ impl CamoufoxRenderer {
                 break;
             }
             tokio::time::sleep(CHALLENGE_POLL_INTERVAL.min(remaining)).await;
+            // The sleep can consume what was left of the shared deadline. Stop
+            // here rather than dispatching an evaluate with no budget: that call
+            // would return `Timeout`, replacing this tier's informative wall
+            // error (and the antibot attribution that rides on it) with a bare
+            // "timed out".
+            if deadline.remaining().is_zero() {
+                break;
+            }
             html = self.evaluate_outer_html(&tab_id, user_id, deadline).await?;
         }
 
@@ -300,19 +308,36 @@ impl CamoufoxRenderer {
 /// report a retryable failure instead of returning a useless challenge page.
 fn looks_like_wall(html: &str) -> Option<&'static str> {
     let h = html.to_ascii_lowercase();
-    const NEEDLES: &[(&str, &str)] = &[
-        ("just a moment", "challenge"),
-        ("verifying you are human", "challenge"),
-        ("checking your browser before", "challenge"),
-        ("cf-challenge", "challenge"),
-        ("/cdn-cgi/challenge-platform", "challenge"),
-        ("attention required! | cloudflare", "wall"),
-        ("enable javascript and cookies to continue", "wall"),
+    // Terminal refusals are checked FIRST. A page routinely carries both kinds
+    // of marker, and matching in list order would classify such a page as a
+    // clearing challenge and poll it for the whole ceiling to arrive at the same
+    // refusal. A wall is not work in progress, so it wins.
+    const WALLS: &[&str] = &[
+        "attention required! | cloudflare",
+        "enable javascript and cookies to continue",
     ];
-    NEEDLES
-        .iter()
-        .find(|(needle, _)| h.contains(needle))
-        .map(|(_, kind)| *kind)
+    if WALLS.iter().any(|needle| h.contains(needle)) {
+        return Some("wall");
+    }
+    // `challenge-platform/h/`, not the bare `/cdn-cgi/challenge-platform`
+    // directory. Both live under it and they mean opposite things: the
+    // orchestrator is always served from `/h/`, while `scripts/jsd/main.js` is
+    // the ordinary Bot-Management loader that Cloudflare re-injects into pages
+    // that have ALREADY cleared. Matching the bare directory therefore fires on
+    // a solved page. `crw_crawl::single::classify_block` and
+    // `detector::looks_like_cloudflare_challenge` both dropped it for exactly
+    // that reason, each after a live capture; this list had kept it.
+    const CHALLENGES: &[&str] = &[
+        "just a moment",
+        "verifying you are human",
+        "checking your browser before",
+        "cf-challenge",
+        "challenge-platform/h/",
+    ];
+    if CHALLENGES.iter().any(|needle| h.contains(needle)) {
+        return Some("challenge");
+    }
+    None
 }
 
 #[async_trait]
@@ -649,11 +674,16 @@ mod tests {
             .up_to_n_times(1)
             .mount(&server)
             .await;
+        // The cleared page, shaped like a real one: Cloudflare re-injects the
+        // Bot-Management telemetry loader into pages that have already passed,
+        // so a fixture without it would let a predicate that matches the bare
+        // `/cdn-cgi/challenge-platform` directory pass this test while polling
+        // every real managed site to the ceiling and then discarding it.
         Mock::given(method("POST"))
             .and(path("/tabs/t1/evaluate"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "ok": true,
-                "result": "<html><body><h1>real page</h1></body></html>"
+                "result": "<html><head><script src=\"/cdn-cgi/challenge-platform/scripts/jsd/main.js\"></script></head><body><h1>real page</h1></body></html>"
             })))
             .mount(&server)
             .await;
@@ -697,7 +727,6 @@ mod tests {
         // A ceiling far larger than one poll interval: if the wall were polled
         // this would take seconds.
         let r = renderer(&server.uri()).with_challenge_wait(30_000);
-        let started = Instant::now();
         let err = r
             .fetch("https://example.com", &HashMap::new(), None, deadline())
             .await
@@ -706,11 +735,17 @@ mod tests {
             CrwError::RendererError(m) => assert!(m.contains("wall"), "got: {m}"),
             other => panic!("expected RendererError, got {other:?}"),
         }
-        assert!(
-            started.elapsed() < CHALLENGE_POLL_INTERVAL,
-            "terminal wall must not be polled, took {:?}",
-            started.elapsed()
-        );
+        // Count the evaluates rather than the elapsed time: a wall-clock assert
+        // on a loaded runner is a flake, and the request count proves the same
+        // thing exactly. One evaluate means the loop was never entered.
+        let evaluates = server
+            .received_requests()
+            .await
+            .expect("recorded requests")
+            .iter()
+            .filter(|r| r.url.path() == "/tabs/t1/evaluate")
+            .count();
+        assert_eq!(evaluates, 1, "a terminal wall must not be polled");
     }
 
     #[tokio::test]
@@ -759,8 +794,28 @@ mod tests {
     fn wall_needles_match_and_clean_html_passes() {
         assert_eq!(looks_like_wall("Just a moment..."), Some("challenge"));
         assert_eq!(
-            looks_like_wall("<script src=/cdn-cgi/challenge-platform/x>"),
+            looks_like_wall("<script src=/cdn-cgi/challenge-platform/h/g/orchestrate/chl_page/v1>"),
             Some("challenge")
+        );
+        // The telemetry loader ships on pages that have already cleared, so it
+        // must NOT read as a challenge: matching it would poll out the whole
+        // ceiling and then discard a page camoufox had successfully rendered.
+        assert_eq!(
+            looks_like_wall(
+                "<html><head><script src=/cdn-cgi/challenge-platform/scripts/jsd/main.js></script>\
+                 </head><body><article>Real content served after the challenge cleared.</article>\
+                 </body></html>"
+            ),
+            None
+        );
+        // A page carrying both kinds of marker is a refusal, not work in
+        // progress, so it must classify as a wall and fail immediately.
+        assert_eq!(
+            looks_like_wall(
+                "<html><body><h1>Verifying you are human</h1>\
+                 <p>Enable JavaScript and cookies to continue</p></body></html>"
+            ),
+            Some("wall")
         );
         assert_eq!(
             looks_like_wall("<div class=cf-challenge>"),
