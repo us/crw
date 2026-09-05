@@ -221,6 +221,15 @@ pub const MAX_WAIT_FOR_MS: u64 = 60_000;
 /// and must never be charged CDP overhead.
 pub const CAMOUFOX_DEFAULT_TIMEOUT_MS: u64 = 60_000;
 
+/// Default ceiling (ms) for polling a Camoufox tab while a Cloudflare-style JS
+/// challenge clears itself, before giving up and reporting the wall. The CDP
+/// tiers already run this loop ([`crw-renderer`'s `CHALLENGE_MAX_RETRIES`] ×
+/// `CHALLENGE_POLL_INTERVAL_MS` = 9s); Camoufox is a slower engine reached
+/// after the CDP tiers have already failed, so it gets a wider ceiling. 20s
+/// covers the commonly observed 5-25s clear without eating most of a 60s
+/// request budget. Used by [`RendererConfig::camoufox_challenge_wait`].
+pub const CAMOUFOX_DEFAULT_CHALLENGE_WAIT_MS: u64 = 20_000;
+
 /// Default cloak (Turnstile-solver sidecar) per-request budget (ms) — the
 /// per-attempt solve budget bounding one sidecar mirror call. A cold interactive
 /// Turnstile solve is ~21s; 35s leaves margin for the browser solve + curl_cffi
@@ -803,6 +812,14 @@ pub struct RendererConfig {
     /// [`CAMOUFOX_DEFAULT_TIMEOUT_MS`] when unset.
     #[serde(default)]
     pub camoufox_timeout_ms: Option<u64>,
+    /// Ceiling (ms) for polling a Camoufox tab while a bot-challenge
+    /// interstitial clears, before giving up and reporting the wall. Falls back
+    /// to [`CAMOUFOX_DEFAULT_CHALLENGE_WAIT_MS`] when unset; `Some(0)` disables
+    /// the poll and restores the single-shot behaviour. The Camoufox analogue
+    /// of `chrome_challenge_max_retries`.
+    /// Env: `CRW_RENDERER__CAMOUFOX_CHALLENGE_WAIT_MS`.
+    #[serde(default)]
+    pub camoufox_challenge_wait_ms: Option<u64>,
     /// Opt-in cloak Turnstile-solver sidecar endpoint. See [`CloakEndpoint`].
     /// `None` = not configured (default) → the tier is never constructed and the
     /// engine is byte-identical to a build without it. Fired only as a
@@ -1080,6 +1097,7 @@ impl Default for RendererConfig {
             chrome_proxy_timeout_ms: None,
             camoufox: None,
             camoufox_timeout_ms: None,
+            camoufox_challenge_wait_ms: None,
             cloak: None,
             cloak_timeout_ms: None,
             cloak_proxy_host: None,
@@ -1132,6 +1150,12 @@ impl RendererConfig {
     pub fn camoufox_timeout(&self) -> u64 {
         self.camoufox_timeout_ms
             .unwrap_or(CAMOUFOX_DEFAULT_TIMEOUT_MS)
+    }
+    /// Camoufox bot-challenge poll ceiling (ms). Unconditional (no `#[cfg]`),
+    /// like [`Self::camoufox_timeout`].
+    pub fn camoufox_challenge_wait(&self) -> u64 {
+        self.camoufox_challenge_wait_ms
+            .unwrap_or(CAMOUFOX_DEFAULT_CHALLENGE_WAIT_MS)
     }
     /// Per-attempt cloak solve budget (ms). Unconditional (no `#[cfg]`) so
     /// `tier_timeouts_from` can reference it in every build, like
@@ -3171,6 +3195,7 @@ search_backend_url = "http://from-file:8080"
         assert_eq!(r.chrome_proxy_timeout_ms, None);
         assert!(r.camoufox.is_none());
         assert_eq!(r.camoufox_timeout_ms, None);
+        assert_eq!(r.camoufox_challenge_wait_ms, None);
         assert!(r.cloak.is_none());
         assert_eq!(r.cloak_timeout_ms, None);
         assert_eq!(r.cloak_proxy_host, None);
@@ -3353,6 +3378,26 @@ search_backend_url = "http://from-file:8080"
             ..Default::default()
         };
         assert_eq!(r2.camoufox_timeout(), 1_234);
+    }
+
+    #[test]
+    fn camoufox_challenge_wait_default_and_override() {
+        let r = RendererConfig::default();
+        assert_eq!(
+            r.camoufox_challenge_wait(),
+            CAMOUFOX_DEFAULT_CHALLENGE_WAIT_MS
+        );
+        let r2 = RendererConfig {
+            camoufox_challenge_wait_ms: Some(4_321),
+            ..Default::default()
+        };
+        assert_eq!(r2.camoufox_challenge_wait(), 4_321);
+        // Explicit 0 must disable the poll, not fall back to the default.
+        let r3 = RendererConfig {
+            camoufox_challenge_wait_ms: Some(0),
+            ..Default::default()
+        };
+        assert_eq!(r3.camoufox_challenge_wait(), 0);
     }
 
     #[test]

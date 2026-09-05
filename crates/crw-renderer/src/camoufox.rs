@@ -25,6 +25,7 @@
 
 use async_trait::async_trait;
 use crw_core::Deadline;
+use crw_core::config::CAMOUFOX_DEFAULT_CHALLENGE_WAIT_MS;
 use crw_core::error::{CrwError, CrwResult};
 use crw_core::types::FetchResult;
 use std::collections::HashMap;
@@ -40,6 +41,11 @@ const OUTER_HTML_EXPR: &str = "document.documentElement.outerHTML";
 const CLEANUP_TIMEOUT: Duration = Duration::from_secs(5);
 /// Budget for the `is_available` health probe.
 const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
+/// Delay between polls while a bot challenge is clearing. Same cadence as the
+/// CDP tiers' `cdp::CHALLENGE_POLL_INTERVAL_MS`; kept as a separate constant
+/// because the `camoufox` feature does not imply `cdp`, so that module is not
+/// compiled in a camoufox-only build.
+const CHALLENGE_POLL_INTERVAL: Duration = Duration::from_secs(3);
 
 /// Opt-in Camoufox stealth renderer. Construct via [`CamoufoxRenderer::new`].
 pub struct CamoufoxRenderer {
@@ -50,6 +56,9 @@ pub struct CamoufoxRenderer {
     api_key: String,
     /// Overall per-request REST budget (`config.camoufox_timeout()`).
     timeout: Duration,
+    /// Ceiling for polling a tab while a bot challenge clears
+    /// (`config.camoufox_challenge_wait()`). `ZERO` disables the poll.
+    challenge_wait: Duration,
     client: reqwest::Client,
 }
 
@@ -60,8 +69,17 @@ impl CamoufoxRenderer {
             base_url: base_url.trim_end_matches('/').to_string(),
             api_key: api_key.to_string(),
             timeout: Duration::from_millis(timeout_ms),
+            challenge_wait: Duration::from_millis(CAMOUFOX_DEFAULT_CHALLENGE_WAIT_MS),
             client: reqwest::Client::new(),
         }
+    }
+
+    /// Override the bot-challenge poll ceiling. Mirrors
+    /// `CdpRenderer::with_challenge_retries`, so the tier is configured the
+    /// same way the CDP tiers are. `0` disables the poll.
+    pub fn with_challenge_wait(mut self, challenge_wait_ms: u64) -> Self {
+        self.challenge_wait = Duration::from_millis(challenge_wait_ms);
+        self
     }
 
     /// Attach the bearer header when an API key is configured.
@@ -228,7 +246,36 @@ impl CamoufoxRenderer {
         deadline: &Deadline,
     ) -> CrwResult<(u16, String)> {
         let tab_id = self.create_tab(url, user_id, session_key, deadline).await?;
-        let html = self.evaluate_outer_html(&tab_id, user_id, deadline).await?;
+        let mut html = self.evaluate_outer_html(&tab_id, user_id, deadline).await?;
+
+        // A Cloudflare-style JS challenge resolves client-side, empirically
+        // 5-25s after navigation. A single immediate evaluate() can therefore
+        // only ever observe the interstitial, and this tier reported a wall for
+        // pages it would have gotten had it looked again. Poll until the
+        // challenge clears or the budget runs out.
+        //
+        // Only `"challenge"` is polled, never `"wall"`. The wall markers
+        // ("attention required! | cloudflare", "enable javascript and cookies
+        // to continue") are terminal refusals rather than work in progress —
+        // waiting on those would spend the whole budget to arrive at the same
+        // error.
+        //
+        // The ceiling is clamped by the deadline's own remaining time, so a
+        // challenge that never clears cannot outlive the request. A clean page
+        // never enters the loop: `looks_like_wall` is `None` on the first
+        // evaluate, and a deployment that sets the ceiling to 0 keeps exactly
+        // today's single-shot behaviour.
+        let challenge_budget = self.challenge_wait.min(deadline.remaining());
+        let poll_start = Instant::now();
+        while looks_like_wall(&html) == Some("challenge") {
+            let remaining = challenge_budget.saturating_sub(poll_start.elapsed());
+            if remaining.is_zero() {
+                break;
+            }
+            tokio::time::sleep(CHALLENGE_POLL_INTERVAL.min(remaining)).await;
+            html = self.evaluate_outer_html(&tab_id, user_id, deadline).await?;
+        }
+
         // A bot wall or an empty body is a failure for THIS tier — surface it as
         // a retryable RendererError so the fallback loop / breaker can react.
         if html.trim().is_empty() {
@@ -564,7 +611,11 @@ mod tests {
             .await;
         mount_delete_session(&server).await;
 
-        let r = renderer(&server.uri());
+        // Tiny challenge ceiling: this challenge never clears, so the poll must
+        // exhaust its budget. 50ms keeps that in the millisecond range instead
+        // of spending the production ceiling in CI, while still running the
+        // loop body at least once.
+        let r = renderer(&server.uri()).with_challenge_wait(50);
         let err = r
             .fetch("https://example.com", &HashMap::new(), None, deadline())
             .await
@@ -573,6 +624,93 @@ mod tests {
             CrwError::RendererError(m) => assert!(m.contains("challenge")),
             other => panic!("expected RendererError, got {other:?}"),
         }
+    }
+
+    /// The point of the poll: a challenge that clears between evaluates now
+    /// yields the real page instead of the interstitial.
+    #[tokio::test]
+    async fn challenge_that_clears_on_a_later_poll_is_returned_as_content() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/tabs"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"tabId": "t1"})),
+            )
+            .mount(&server)
+            .await;
+        // First evaluate: the interstitial. Registered first and capped at one
+        // call, so the second evaluate falls through to the real page below.
+        Mock::given(method("POST"))
+            .and(path("/tabs/t1/evaluate"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "ok": true,
+                "result": "<html><head><title>Just a moment...</title></head></html>"
+            })))
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/tabs/t1/evaluate"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "ok": true,
+                "result": "<html><body><h1>real page</h1></body></html>"
+            })))
+            .mount(&server)
+            .await;
+        mount_delete_session(&server).await;
+
+        // 200ms ceiling: one poll, sub-second in CI. The loop sleeps
+        // `CHALLENGE_POLL_INTERVAL.min(remaining)`, so the budget bounds the
+        // wait rather than the production cadence.
+        let r = renderer(&server.uri()).with_challenge_wait(200);
+        let res = r
+            .fetch("https://example.com", &HashMap::new(), None, deadline())
+            .await
+            .expect("challenge cleared, so the page must be returned");
+        assert_eq!(res.status_code, 200);
+        assert!(res.html.contains("real page"), "got: {}", res.html);
+    }
+
+    /// `looks_like_wall` separates a clearing "challenge" from a terminal
+    /// "wall". Only the former is worth polling; a wall must fail immediately
+    /// rather than burn the whole ceiling to reach the same error.
+    #[tokio::test]
+    async fn terminal_wall_is_not_polled() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/tabs"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"tabId": "t1"})),
+            )
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/tabs/t1/evaluate"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "ok": true,
+                "result": "<html><head><title>Attention Required! | Cloudflare</title></head></html>"
+            })))
+            .mount(&server)
+            .await;
+        mount_delete_session(&server).await;
+
+        // A ceiling far larger than one poll interval: if the wall were polled
+        // this would take seconds.
+        let r = renderer(&server.uri()).with_challenge_wait(30_000);
+        let started = Instant::now();
+        let err = r
+            .fetch("https://example.com", &HashMap::new(), None, deadline())
+            .await
+            .expect_err("a terminal wall is still an error");
+        match err {
+            CrwError::RendererError(m) => assert!(m.contains("wall"), "got: {m}"),
+            other => panic!("expected RendererError, got {other:?}"),
+        }
+        assert!(
+            started.elapsed() < CHALLENGE_POLL_INTERVAL,
+            "terminal wall must not be polled, took {:?}",
+            started.elapsed()
+        );
     }
 
     #[tokio::test]

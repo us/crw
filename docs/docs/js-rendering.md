@@ -235,6 +235,10 @@ configured endpoint stays out of the `auto` failover chain until you ask for it.
    #                             # if you front the sidecar with an auth proxy
    # include_in_auto = false     # default: stay OUT of the auto ladder
    # camoufox_timeout_ms = 60000 # per-request REST budget (default 60s)
+   # camoufox_challenge_wait_ms = 20000
+   #                             # ceiling for polling a tab while a Cloudflare-style
+   #                             # JS challenge clears itself (default 20s; 0 disables
+   #                             # the poll and reports the interstitial immediately)
    ```
 
 ### Three ways to use it

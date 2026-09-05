@@ -66,6 +66,7 @@ ws_url = "ws://127.0.0.1:9222/"
 # api_key = ""                 # optional bearer token if the sidecar is protected
 # include_in_auto = false      # default: stay out of the auto ladder
 # camoufox_timeout_ms = 60000  # optional per-request REST budget override
+# camoufox_challenge_wait_ms = 20000  # ceiling for polling out a CF-style JS challenge (0 disables)
 
 [crawler]
 max_concurrency = 10
