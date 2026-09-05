@@ -1245,6 +1245,59 @@ impl FallbackRenderer {
         self.js_renderers.iter().map(|r| r.name()).collect()
     }
 
+    /// The JS tiers the auto chain may enter on its own, in construction order.
+    ///
+    /// Drops the two tiers a name-pin would otherwise smuggle past a gate
+    /// `fetch_with_js` applies:
+    ///
+    /// * camoufox held out by `include_in_auto = false` — an internally chosen
+    ///   escalation must not override a deliberate opt-out;
+    /// * chrome_proxy under `auto_egress_escalation`, where the chain lifts it
+    ///   out of the ladder and holds it as a hard-block-gated, load-shed
+    ///   recovery arm. Pinning it by name skips that gate and puts a paid
+    ///   residential render on every page instead of the blocked ones.
+    ///
+    /// This is construction order, not the per-request order: `fetch_with_js`
+    /// reorders for a host the preference learner has promoted, and filters for
+    /// a screenshot. Callers that need one tier should express which one they
+    /// want rather than trusting position alone.
+    pub fn auto_ladder_names(&self) -> Vec<&str> {
+        self.js_renderers
+            .iter()
+            .map(|r| r.name())
+            .filter(|name| *name != "chrome_proxy" || !self.auto_egress_escalation)
+            .filter(|name| {
+                #[cfg(feature = "camoufox")]
+                {
+                    *name != "camoufox" || self.camoufox_in_auto
+                }
+                #[cfg(not(feature = "camoufox"))]
+                {
+                    let _ = name;
+                    true
+                }
+            })
+            .collect()
+    }
+
+    /// Which tier a post-LightPanda escalation should aim at, or `None` when
+    /// this pool has nothing above lightpanda and the escalation should be
+    /// skipped rather than dispatched.
+    ///
+    /// chrome first, so a pool that holds it behaves exactly as the old
+    /// hardcoded target did, including for a host the preference learner has
+    /// promoted to chrome. Otherwise the next tier in [`Self::auto_ladder_names`],
+    /// which is what makes the escalation work on a deployment that runs no
+    /// Chrome sidecar instead of failing on a pin the pool cannot satisfy.
+    pub fn lightpanda_escalation_target(&self) -> Option<&str> {
+        let ladder = self.auto_ladder_names();
+        ladder
+            .iter()
+            .copied()
+            .find(|name| *name == "chrome")
+            .or_else(|| ladder.iter().copied().find(|name| *name != "lightpanda"))
+    }
+
     /// Whether this instance can actually capture a screenshot: at least one
     /// constructed JS renderer speaks CDP `Page.captureScreenshot`. Both the
     /// build features (no CDP feature ⇒ no tier is constructable) and the
@@ -3688,6 +3741,126 @@ mod tests {
             r.js_renderer_names(),
             vec!["lightpanda", "chrome", "chrome_proxy"]
         );
+    }
+
+    /// The escalation after a thin LightPanda body picks the first non-lightpanda
+    /// entry of `auto_ladder_names`. Pinning a fixed name instead dead-ends on any
+    /// pool that does not hold it, so these four shapes are what that choice has
+    /// to get right.
+    #[cfg(feature = "cdp")]
+    #[test]
+    fn lightpanda_escalation_target_picks_a_tier_the_pool_actually_holds() {
+        let ladder = |cfg: &RendererConfig| {
+            let r =
+                FallbackRenderer::new(cfg, "crw-test", None, &StealthConfig::default()).unwrap();
+            r.lightpanda_escalation_target().map(str::to_string)
+        };
+        let lp = || {
+            Some(CdpEndpoint {
+                ws_url: "ws://127.0.0.1:9222/".into(),
+            })
+        };
+        let ep = |p: &str| {
+            Some(CdpEndpoint {
+                ws_url: format!("ws://127.0.0.1:{p}/"),
+            })
+        };
+
+        // Production shape: chrome present, so the target is unchanged.
+        assert_eq!(
+            ladder(&RendererConfig {
+                mode: RendererMode::Auto,
+                lightpanda: lp(),
+                chrome: ep("9223"),
+                chrome_proxy: ep("9224"),
+                ..Default::default()
+            }),
+            Some("chrome".to_string())
+        );
+
+        // No chrome sidecar: the escalation must reach the tier that IS configured
+        // instead of failing on a pin the pool cannot satisfy.
+        assert_eq!(
+            ladder(&RendererConfig {
+                mode: RendererMode::Auto,
+                lightpanda: lp(),
+                chrome_proxy: ep("9224"),
+                ..Default::default()
+            }),
+            Some("chrome_proxy".to_string())
+        );
+        assert_eq!(
+            ladder(&RendererConfig {
+                mode: RendererMode::Auto,
+                lightpanda: lp(),
+                playwright: ep("9225"),
+                ..Default::default()
+            }),
+            Some("playwright".to_string())
+        );
+
+        // Nothing stronger than lightpanda: no target, so no unsatisfiable pin.
+        assert_eq!(
+            ladder(&RendererConfig {
+                mode: RendererMode::Auto,
+                lightpanda: lp(),
+                ..Default::default()
+            }),
+            None
+        );
+
+        // chrome stays the first choice even when it is not first in construction
+        // order, so a pool that already reached chrome keeps reaching chrome.
+        assert_eq!(
+            ladder(&RendererConfig {
+                mode: RendererMode::Auto,
+                lightpanda: lp(),
+                playwright: ep("9225"),
+                chrome: ep("9223"),
+                ..Default::default()
+            }),
+            Some("chrome".to_string())
+        );
+
+        // Under auto_egress_escalation the chain lifts chrome_proxy out of the
+        // ladder and gates it behind a hard block, so it must not become the
+        // escalation target: pinning it by name would skip that gate and put a
+        // paid residential render on every thin page.
+        assert_eq!(
+            ladder(&RendererConfig {
+                mode: RendererMode::Auto,
+                lightpanda: lp(),
+                chrome_proxy: ep("9224"),
+                auto_egress_escalation: true,
+                ..Default::default()
+            }),
+            None
+        );
+    }
+
+    /// A camoufox held out of the auto chain is constructed and pinnable, but an
+    /// internally chosen escalation must not reach it: naming it bypasses the
+    /// exclusion, which would override a deliberate `include_in_auto = false`.
+    #[cfg(all(feature = "cdp", feature = "camoufox"))]
+    #[test]
+    fn auto_ladder_names_respects_the_camoufox_opt_out() {
+        let with_lp = |include_in_auto: bool| {
+            let mut cfg = camoufox_cfg(RendererMode::Auto, include_in_auto);
+            cfg.lightpanda = Some(CdpEndpoint {
+                ws_url: "ws://127.0.0.1:9222/".into(),
+            });
+            FallbackRenderer::new(&cfg, "crw-test", None, &StealthConfig::default()).unwrap()
+        };
+
+        let held_out = with_lp(false);
+        assert!(
+            held_out.js_renderer_names().contains(&"camoufox"),
+            "the tier is still constructed so an explicit pin can reach it"
+        );
+        assert_eq!(held_out.auto_ladder_names(), vec!["lightpanda"]);
+
+        let in_chain = with_lp(true);
+        assert_eq!(in_chain.auto_ladder_names(), vec!["lightpanda", "camoufox"]);
     }
 
     /// The HTTP tier decodes every non-PDF body as HTML regardless of its
