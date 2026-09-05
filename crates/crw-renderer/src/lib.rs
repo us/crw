@@ -986,12 +986,15 @@ impl FallbackRenderer {
                 .as_ref()
                 .filter(|c| !c.base_url.trim().is_empty())
             {
-                js_renderers.push(Arc::new(camoufox::CamoufoxRenderer::new(
-                    "camoufox",
-                    &cf.base_url,
-                    &cf.api_key,
-                    config.camoufox_timeout(),
-                )) as Arc<dyn PageFetcher>);
+                js_renderers.push(Arc::new(
+                    camoufox::CamoufoxRenderer::new(
+                        "camoufox",
+                        &cf.base_url,
+                        &cf.api_key,
+                        config.camoufox_timeout(),
+                    )
+                    .with_challenge_wait(config.camoufox_challenge_wait()),
+                ) as Arc<dyn PageFetcher>);
                 tracing::info!(
                     base_url = %cf.base_url,
                     include_in_auto = cf.include_in_auto,
