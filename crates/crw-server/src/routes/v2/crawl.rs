@@ -260,11 +260,28 @@ pub async fn get_errors(
     let job = jobs
         .get(&id)
         .ok_or_else(|| CrwError::NotFound(format!("Crawl job {id} not found")))?;
-    let err = job.rx.borrow().error.clone();
-    let errors: Vec<Value> = err
-        .into_iter()
+    // Job-level failure first (the whole job died), then the per-URL ones. A URL
+    // the engine could not turn into a document is retained as a placeholder
+    // carrying `block`, and `V2Document` has no field to show that, so without
+    // this it would reach the caller as an empty document with nothing to
+    // explain it while this route, the one documented to carry these, said there
+    // were no errors at all.
+    let guard = job.rx.borrow();
+    let mut errors: Vec<Value> = guard
+        .error
+        .iter()
         .map(|e| serde_json::json!({ "id": id.to_string(), "error": e }))
         .collect();
+    errors.extend(guard.data.iter().filter_map(|d| {
+        d.block.as_ref().map(|b| {
+            serde_json::json!({
+                "id": id.to_string(),
+                "url": d.metadata.source_url,
+                "error": b.reason,
+            })
+        })
+    }));
+    drop(guard);
     Ok(Json(
         serde_json::json!({ "success": true, "errors": errors, "robotsBlocked": [] }),
     ))
@@ -273,6 +290,50 @@ pub async fn get_errors(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A batch URL the engine could not turn into a document is retained with a
+    /// `block`, but `V2Document` has no field that can show it, so on this
+    /// surface it is otherwise an empty document with nothing to explain it.
+    /// This route is the one documented to carry those failures, so it has to.
+    #[tokio::test]
+    async fn get_errors_reports_the_per_url_failures_of_a_batch() {
+        let config: crw_core::config::AppConfig = toml::from_str("").unwrap();
+        let state = AppState::new(config).unwrap();
+        // `actions` is rejected per URL inside the scrape, which is the shortest
+        // deterministic way to make one URL fail without touching the network.
+        let template = crw_core::types::ScrapeRequest {
+            actions: Some(serde_json::json!([])),
+            ..Default::default()
+        };
+        let url = "https://example.com/error";
+        let id = state
+            .start_batch_job(vec![url.to_string()], template, None)
+            .await;
+
+        let mut settled = false;
+        for _ in 0..100 {
+            tokio::task::yield_now().await;
+            let jobs = state.crawl_jobs.read().await;
+            if jobs.get(&id).unwrap().rx.borrow().status != CrawlStatus::InProgress {
+                settled = true;
+                break;
+            }
+        }
+        assert!(settled, "batch job did not settle");
+
+        let Ok(Json(body)) = get_errors(State(state.clone()), Path(id)).await else {
+            panic!("errors route should succeed for an existing job");
+        };
+        let errors = body["errors"].as_array().expect("errors array");
+        assert_eq!(errors.len(), 1, "got: {body}");
+        assert_eq!(errors[0]["url"], url, "got: {body}");
+        assert!(
+            errors[0]["error"]
+                .as_str()
+                .is_some_and(|e| e.contains("actions")),
+            "got: {body}"
+        );
+    }
 
     /// Regression for #346. `scrapeOptions` is parsed key-by-key out of a raw
     /// `Value`, so a key nobody reads is silently dropped; `renderJs` was such a
