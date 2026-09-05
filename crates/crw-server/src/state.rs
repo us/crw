@@ -5,7 +5,7 @@ use crw_core::types::{
     CrawlRequest, CrawlState, CrawlStatus, RequestedRenderer, ScrapeRequest,
     resolve_pinned_renderer, resolve_render_js,
 };
-use crw_crawl::crawl::{CrawlOptions, run_crawl};
+use crw_crawl::crawl::{CrawlOptions, failed_page, run_crawl};
 use crw_crawl::single::scrape_url;
 use crw_renderer::FallbackRenderer;
 use crw_search::SearxngClient;
@@ -668,41 +668,40 @@ impl AppState {
                                     render_js_default,
                                     deadline,
                                 )
-                                .await
-                                .ok();
+                                .await;
                                 // Mutate the shared status in place — push one document
                                 // and bump the counter without cloning the whole
                                 // accumulated Vec on every completion (avoids O(n^2)
                                 // copying on large batches). A failed scrape still
                                 // advances `completed`.
                                 tx.send_modify(|st| {
-                                    if let Some(mut d) = scraped {
-                                        // `scrape_url` stamps the verdict but this
-                                        // path used to push it through untouched,
-                                        // so a wall shipped as an ordinary batch
-                                        // document (and `/v2`'s adapter drops
-                                        // `block`, hiding it completely). Clear the
-                                        // shell and count it, exactly as the single
-                                        // scrape route does.
-                                        let is_wall = d.block.is_some();
-                                        if !is_wall && let Some(reason) = d.http_error() {
-                                            d.block = Some(crw_core::types::BlockOutcome {
-                                                vendor: crw_core::types::HTTP_ERROR_VENDOR
-                                                    .to_string(),
-                                                reason,
-                                            });
-                                        }
-                                        if d.block.is_some() {
-                                            // Same split as `/v1/scrape` and the crawl
-                                            // loop: a wall loses its shell, an origin
-                                            // error page stays readable.
-                                            if is_wall {
-                                                d.clear_body();
-                                            }
-                                            st.blocked += 1;
-                                        }
-                                        st.data.push(d);
+                                    let mut d = scraped.unwrap_or_else(|err| {
+                                        failed_page(&req.url, 0, err.to_string())
+                                    });
+                                    // `scrape_url` stamps the verdict but this
+                                    // path used to push it through untouched,
+                                    // so a wall shipped as an ordinary batch
+                                    // document (and `/v2`'s adapter drops
+                                    // `block`, hiding it completely). Clear the
+                                    // shell and count it, exactly as the single
+                                    // scrape route does.
+                                    let is_wall = d.block.is_some();
+                                    if !is_wall && let Some(reason) = d.http_error() {
+                                        d.block = Some(crw_core::types::BlockOutcome {
+                                            vendor: crw_core::types::HTTP_ERROR_VENDOR.to_string(),
+                                            reason,
+                                        });
                                     }
+                                    if d.block.is_some() {
+                                        // Same split as `/v1/scrape` and the crawl
+                                        // loop: a wall loses its shell, an origin
+                                        // error page stays readable.
+                                        if is_wall {
+                                            d.clear_body();
+                                        }
+                                        st.blocked += 1;
+                                    }
+                                    st.data.push(d);
                                     st.completed += 1;
                                     // Only flip to Completed from InProgress — never
                                     // overwrite a terminal Cancelled set by DELETE.
@@ -1540,6 +1539,49 @@ mod tests {
         assert_eq!(job.total, 0);
         assert_eq!(job.completed, 0);
         assert!(job.data.is_empty());
+    }
+
+    #[tokio::test]
+    async fn start_batch_job_records_scrape_errors_as_blocked_documents() {
+        let config: AppConfig = toml::from_str("").unwrap();
+        let state = AppState::new(config).unwrap();
+        let template = ScrapeRequest {
+            actions: Some(serde_json::json!([])),
+            ..Default::default()
+        };
+        let url = "https://example.com/error";
+        let id = state
+            .start_batch_job(vec![url.to_string()], template, None)
+            .await;
+
+        let mut settled = None;
+        for _ in 0..100 {
+            tokio::task::yield_now().await;
+            let jobs = state.crawl_jobs.read().await;
+            let job = jobs.get(&id).unwrap().rx.borrow().clone();
+            if job.status != CrawlStatus::InProgress {
+                settled = Some(job);
+                break;
+            }
+        }
+        let job = settled.expect("batch job did not settle");
+        assert_eq!(job.status, CrawlStatus::Completed);
+        assert_eq!(job.completed, 1);
+        assert_eq!(job.blocked, 1);
+        assert_eq!(job.data.len(), 1);
+        assert_eq!(job.data[0].metadata.source_url, url);
+        let block = job.data[0]
+            .block
+            .as_ref()
+            .expect("failed URL carries a block");
+        assert_eq!(block.vendor, crw_core::types::HTTP_ERROR_VENDOR);
+        // Substring, not the whole sentence: the wording lives in `crw-crawl` and
+        // rewording a customer-facing message must not break a `crw-server` test.
+        assert!(
+            block.reason.contains("actions"),
+            "reason should name the rejected parameter, got: {}",
+            block.reason
+        );
     }
 
     #[tokio::test]

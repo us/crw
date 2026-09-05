@@ -221,12 +221,11 @@ pub fn build_crawl_status(
         None
     };
 
-    // A blocked page is not billed, so it must not be counted here either.
-    // Note this is a lower bound rather than the exact charge on the batch path:
-    // `completed` also advances for a URL whose scrape returned `Err` and pushed
-    // no document, and the SaaS bills `completed - blocked`. Pre-existing; fixing
-    // it means changing what `completed` counts, which the job-completion gate
-    // depends on.
+    // A blocked page is not billed, so it must not be counted here either. This
+    // is the exact charge on both paths: a batch URL whose scrape returns `Err`
+    // now pushes a placeholder carrying `block` and bumps `blocked`, so it is
+    // excluded here for the same reason a wall is, and `completed - blocked`
+    // agrees with this sum instead of over-counting it.
     let credits_used: u32 = state
         .data
         .iter()
