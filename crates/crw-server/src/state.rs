@@ -1570,14 +1570,17 @@ mod tests {
         assert_eq!(job.blocked, 1);
         assert_eq!(job.data.len(), 1);
         assert_eq!(job.data[0].metadata.source_url, url);
-        assert_eq!(
-            job.data[0]
-                .block
-                .as_ref()
-                .map(|block| block.reason.as_str()),
-            Some(
-                "Invalid request: The 'actions' parameter is not yet supported. Use cssSelector or xpath for element targeting."
-            )
+        let block = job.data[0]
+            .block
+            .as_ref()
+            .expect("failed URL carries a block");
+        assert_eq!(block.vendor, crw_core::types::HTTP_ERROR_VENDOR);
+        // Substring, not the whole sentence: the wording lives in `crw-crawl` and
+        // rewording a customer-facing message must not break a `crw-server` test.
+        assert!(
+            block.reason.contains("actions"),
+            "reason should name the rejected parameter, got: {}",
+            block.reason
         );
     }
 
