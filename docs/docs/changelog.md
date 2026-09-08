@@ -8,6 +8,29 @@ The source of truth is the repository root changelog. Do not edit this docs page
 
 All notable changes to CRW are documented here.
 
+## [0.34.0](https://github.com/us/crw/compare/v0.33.0...v0.34.0) (2026-09-08)
+
+
+### Features
+
+* **renderer:** align browser locale with the proxy exit country ([6155ac6](https://github.com/us/crw/commit/6155ac6e670a65f594270f7a39157df8c66644b6)), closes [#385](https://github.com/us/crw/issues/385)
+* **renderer:** let camoufox wait out a JS challenge instead of reporting it ([86766d5](https://github.com/us/crw/commit/86766d5b329bdb2fa8af0f3d197dbae098ee9e6f))
+
+
+### Bug Fixes
+
+* **batch:** retain failed scrape results ([63b00af](https://github.com/us/crw/commit/63b00aff293ee86a17f104f0a237f63a89ad5e1b))
+* keep internal URLs and proxy credentials out of error strings ([59f7a15](https://github.com/us/crw/commit/59f7a15ac0fc8baea7e1ec0af5708b358efb7a7a))
+* **renderer:** escalate lightpanda to a tier the pool actually holds ([5c9f6cc](https://github.com/us/crw/commit/5c9f6cc1676a7162e84778861310ad78ba95ae30))
+* **renderer:** give the chrome_proxy recovery arm time to finish ([595a3c5](https://github.com/us/crw/commit/595a3c53b008fc4bc2b03f38578b7a438b0fb582))
+* **renderer:** keep the HTTP shell from resurrecting a refused wall ([c74bcf3](https://github.com/us/crw/commit/c74bcf365a72d77e025ddfcefd8640f822a1d5c2))
+* **renderer:** poll the interstitial camoufox actually sees ([49a3eb9](https://github.com/us/crw/commit/49a3eb93e22626b86c98f4a5988c4094bc831614))
+* **renderer:** report scrape outcomes truthfully ([294eb3d](https://github.com/us/crw/commit/294eb3d8a7cfb55026da493df9951b9d058a5968))
+* **renderer:** stop camoufox polling out a page that already cleared ([800a30c](https://github.com/us/crw/commit/800a30c8f7c716e293dc64bc24664ddee44c93a6))
+* **renderer:** stop shipping an unclearable wall as a success ([82a56f6](https://github.com/us/crw/commit/82a56f6bfa5f097bd046789a5db647eab2f8045e))
+* **server:** make the retained batch failure legible on every surface ([15e9bb9](https://github.com/us/crw/commit/15e9bb9f3e26e41311071a4c632582d281d565a5))
+* **v2:** report per-URL batch and crawl failures on the errors route ([c486731](https://github.com/us/crw/commit/c486731c52c509b6f9a7d356fef8c5b4d446c450))
+
 ## [0.33.0](https://github.com/us/crw/compare/v0.32.0...v0.33.0) (2026-09-02)
 
 
