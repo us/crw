@@ -106,6 +106,27 @@ pub async fn scrape_url(
     })
 }
 
+/// Reject the faults in a scrape template that no fetch can repair, before any
+/// network work. Shared by the single scrape and the batch route, so a bad
+/// template is one 400 on both surfaces rather than one placeholder document
+/// per URL labelled as a block.
+pub fn validate_scrape_template(req: &ScrapeRequest) -> CrwResult<()> {
+    if req.actions.is_some() {
+        return Err(crw_core::error::CrwError::InvalidRequest(
+            "The 'actions' parameter is not yet supported. Use cssSelector or xpath for element targeting.".into()
+        ));
+    }
+    // A screenshot is captured via CDP and cannot be produced on the HTTP-only
+    // path. An explicit `renderJs:false` + `screenshot` is contradictory: reject
+    // it rather than silently return a null screenshot.
+    if req.formats.contains(&OutputFormat::Screenshot) && req.render_js == Some(false) {
+        return Err(crw_core::error::CrwError::InvalidRequest(
+            "screenshot format requires JS rendering; remove renderJs:false (or omit it)".into(),
+        ));
+    }
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn scrape_url_inner(
     req: &ScrapeRequest,
@@ -117,12 +138,7 @@ async fn scrape_url_inner(
     render_js_default: Option<bool>,
     deadline: Deadline,
 ) -> CrwResult<ScrapeData> {
-    // Reject unsupported `actions` parameter early with a clear error.
-    if req.actions.is_some() {
-        return Err(crw_core::error::CrwError::InvalidRequest(
-            "The 'actions' parameter is not yet supported. Use cssSelector or xpath for element targeting.".into()
-        ));
-    }
+    validate_scrape_template(req)?;
 
     // Determine whether stealth headers should be injected for this request.
     let inject_stealth = req.stealth.unwrap_or(default_stealth);
@@ -142,17 +158,10 @@ async fn scrape_url_inner(
     // render_js_default=true and a per-request proxy still reaches the JS renderer.
     let effective_render_js = resolve_render_js(effective_render_js_request, render_js_default);
 
-    // A screenshot is captured via CDP and cannot be produced on the HTTP-only
-    // path. An explicit `renderJs:false` + `screenshot` is contradictory — reject
-    // it rather than silently return a null screenshot. For the default/auto case
-    // the renderer forces the CDP path (see FallbackRenderer::fetch), and the
-    // temp HTTP fetcher below is skipped so the screenshot is never dropped.
+    // For the default/auto case the renderer forces the CDP path for a
+    // screenshot (see FallbackRenderer::fetch), and the temp HTTP fetcher below
+    // is skipped so the screenshot is never dropped.
     let wants_screenshot = req.formats.contains(&OutputFormat::Screenshot);
-    if wants_screenshot && req.render_js == Some(false) {
-        return Err(crw_core::error::CrwError::InvalidRequest(
-            "screenshot format requires JS rendering; remove renderJs:false (or omit it)".into(),
-        ));
-    }
 
     // Validate pinned renderer is available — fail fast with a 400 instead of
     // letting the request reach the dispatcher with a hard-pin to a missing pool.

@@ -102,6 +102,10 @@ pub async fn start_batch(
     // Reject an unavailable pinned renderer up front (as /v1/scrape and /v1/crawl
     // do) instead of failing every URL individually deep in the pipeline.
     crate::state::validate_renderer_pin(template.renderer, template.render_js, &state)?;
+    // Same rejections `/v1/scrape` applies at the top of the scrape. Left to
+    // the per-URL path they would come back as N placeholder documents each
+    // labelled as an anti-bot block, for a fault in the caller's own request.
+    crw_crawl::single::validate_scrape_template(&template)?;
     template.url = String::new();
 
     // Partition URLs into valid / invalid (SSRF-checked, same guard as
@@ -217,6 +221,38 @@ mod tests {
             CrwError::InvalidRequest(msg) => msg.clone(),
             other => panic!("expected InvalidRequest, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn start_batch_rejects_actions_before_any_url_work() {
+        let state = default_state();
+        let err = call(
+            &state,
+            json!({ "urls": ["https://example.com/"], "actions": [] }),
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            invalid_request_message(&err).contains("'actions'"),
+            "got: {}",
+            invalid_request_message(&err)
+        );
+    }
+
+    #[tokio::test]
+    async fn start_batch_rejects_screenshot_without_js_before_any_url_work() {
+        let state = default_state();
+        let err = call(
+            &state,
+            json!({ "urls": ["https://example.com/"], "formats": ["screenshot"], "renderJs": false }),
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            invalid_request_message(&err).contains("screenshot"),
+            "got: {}",
+            invalid_request_message(&err)
+        );
     }
 
     #[tokio::test]
