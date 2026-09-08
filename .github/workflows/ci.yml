@@ -107,12 +107,14 @@ jobs:
       - name: Test crw-server without the cdp feature
         run: cargo test -p crw-server
 
-      # `camoufox` is default-off in every crate, so `cargo test --workspace`
-      # never compiles the tier or its tests. Without this step the whole
-      # camoufox module, including its wall/challenge classification, is
-      # invisible to the gate.
-      - name: Test the camoufox tier
-        run: cargo test -p crw-renderer --features camoufox
+      # `camoufox` and `cloak` are default-off in every crate, so
+      # `cargo test --workspace` never compiles those tiers or their tests.
+      # Without this step the whole camoufox module, including its
+      # wall/challenge classification, is invisible to the gate. `cdp` is
+      # included because the tests that cover how these tiers interact with
+      # the ladder are gated on it too.
+      - name: Test the camoufox and cloak tiers
+        run: cargo test -p crw-renderer --features cdp,camoufox,cloak
 
   sdk-ts:
     runs-on: ubuntu-latest
