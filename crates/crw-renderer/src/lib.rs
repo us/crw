@@ -54,6 +54,7 @@ pub mod egress;
 pub mod health_telemetry;
 pub mod host_limiter;
 pub mod http_only;
+pub mod locale;
 pub mod preference;
 pub mod traits;
 
