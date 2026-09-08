@@ -60,11 +60,19 @@ async fn post(
             .json(body),
     )
     .await
-    .map_err(|e| CrwError::ExtractionError(format!("Responses API request failed: {e}")))?;
+    .map_err(|e| {
+        CrwError::ExtractionError(format!(
+            "Responses API request failed: {}",
+            crw_core::error::reqwest_message(e)
+        ))
+    })?;
 
     let status = resp.status();
     let text = resp.text().await.map_err(|e| {
-        CrwError::ExtractionError(format!("Failed to read Responses API response: {e}"))
+        CrwError::ExtractionError(format!(
+            "Failed to read Responses API response: {}",
+            crw_core::error::reqwest_message(e)
+        ))
     })?;
     if !status.is_success() {
         // The HTTP status code is enough — do not leak the body. A gateway that

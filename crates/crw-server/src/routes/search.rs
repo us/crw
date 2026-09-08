@@ -1303,24 +1303,33 @@ fn validate_request(req: &SearchRequest, max_limit: u32) -> Result<(), CrwError>
 }
 
 /// Map a transport/timeout/upstream `SearchError` onto the HTTP `CrwError`.
-/// `base_url` is the configured SearXNG URL; the transport (`target_unreachable`)
-/// arm names its **origin** (issue #90) so the operator sees *which* host failed
-/// — sanitized, so a credentialed URL never reaches the response. Timeouts keep
-/// `error_code: "timeout"`; the host is correlated via the startup log instead.
-fn map_search_error(err: SearchError, timeout_ms: u64, base_url: &str) -> CrwError {
+/// `base_url` is the configured search backend URL. The operator still learns
+/// which host failed (issue #90), but through the log: the response names no
+/// host, and an upstream error page is reduced to its status, because both are
+/// internal infrastructure a caller may not see. Timeouts keep
+/// `error_code: "timeout"`.
+pub(crate) fn map_search_error(err: SearchError, timeout_ms: u64, base_url: &str) -> CrwError {
     match err {
         SearchError::Timeout => CrwError::Timeout(timeout_ms),
-        SearchError::Upstream { status, body } => CrwError::HttpError(format!(
-            "Search backend returned HTTP {status}: {}",
-            body.chars().take(200).collect::<String>()
-        )),
+        SearchError::Upstream { status, body } => {
+            tracing::warn!(
+                search_backend = %crate::diagnostics::sanitize_url_origin(base_url),
+                status,
+                body = %body.chars().take(200).collect::<String>(),
+                "search backend returned an error"
+            );
+            CrwError::HttpError(format!("Search backend returned HTTP {status}"))
+        }
         SearchError::InvalidResponse(msg) => {
             CrwError::HttpError(format!("Search backend returned invalid JSON: {msg}"))
         }
-        SearchError::Transport(msg) => CrwError::TargetUnreachable(format!(
-            "Search backend ({}): {msg}",
-            crate::diagnostics::sanitize_url_origin(base_url)
-        )),
+        SearchError::Transport(msg) => {
+            tracing::warn!(
+                search_backend = %crate::diagnostics::sanitize_url_origin(base_url),
+                "search backend unreachable: {msg}"
+            );
+            CrwError::TargetUnreachable(format!("Search backend unreachable: {msg}"))
+        }
     }
 }
 
@@ -1892,14 +1901,17 @@ mod tests {
     }
 
     #[test]
-    fn map_search_error_transport_names_sanitized_host() {
-        // issue #90: the unreachable error must name the configured host so the
-        // operator knows *what* failed — but origin-only, never the raw URL.
+    fn map_search_error_transport_names_no_host() {
+        // The unreachable error keeps the transport reason for the caller and
+        // nothing about the backend: no host, no userinfo, no path token. The
+        // operator gets the sanitized origin from the log line instead.
         let err = SearchError::Transport("dns error: failed to lookup address".into());
         let mapped = map_search_error(err, 5000, "https://user:pass@searxng:8080/tok?k=v");
         match mapped {
             CrwError::TargetUnreachable(msg) => {
-                assert!(msg.contains("https://searxng:8080"), "{msg}");
+                assert!(msg.contains("dns error"), "{msg}");
+                assert!(!msg.contains("searxng"), "must not name the backend: {msg}");
+                assert!(!msg.contains("8080"), "must not leak the port: {msg}");
                 assert!(!msg.contains("user"), "must not leak userinfo: {msg}");
                 assert!(!msg.contains("pass"), "must not leak credentials: {msg}");
                 assert!(!msg.contains("tok"), "must not leak path token: {msg}");
@@ -2216,28 +2228,28 @@ mod tests {
     }
 
     #[test]
-    fn map_search_error_upstream_body_truncated_to_200_chars() {
-        let long_body = "x".repeat(500);
+    fn map_search_error_upstream_body_never_reaches_the_caller() {
+        // An upstream error page is internal infrastructure output (an nginx
+        // or uwsgi page naming the upstream address); the caller gets the
+        // status alone.
         let err = SearchError::Upstream {
-            status: 500,
-            body: long_body,
+            status: 502,
+            body: "<html>502 Bad Gateway upstream 10.0.0.7:8080</html>".into(),
         };
         match map_search_error(err, 5000, "http://searxng:8080") {
             CrwError::HttpError(msg) => {
-                // 200 chars of body plus the "HTTP {status}: " prefix.
-                let x_count = msg.chars().filter(|c| *c == 'x').count();
-                assert_eq!(x_count, 200, "expected body truncated to 200 chars: {msg}");
+                assert_eq!(msg, "Search backend returned HTTP 502");
             }
             other => panic!("expected HttpError, got {other:?}"),
         }
     }
 
     #[test]
-    fn map_search_error_transport_plain_host_no_credentials() {
+    fn map_search_error_transport_plain_host_not_named() {
         let err = SearchError::Transport("connection refused".into());
         match map_search_error(err, 5000, "http://searxng-internal:8080") {
             CrwError::TargetUnreachable(msg) => {
-                assert!(msg.contains("http://searxng-internal:8080"), "{msg}");
+                assert!(!msg.contains("searxng-internal"), "{msg}");
                 assert!(msg.contains("connection refused"), "{msg}");
             }
             other => panic!("expected TargetUnreachable, got {other:?}"),

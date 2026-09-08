@@ -197,7 +197,12 @@ pub(crate) async fn proxy_call_tool(
                 .json(&args)
                 .send()
                 .await
-                .map_err(|e| format!("HTTP request failed: {e}"))?;
+                .map_err(|e| {
+                    format!(
+                        "HTTP request failed: {}",
+                        crw_core::error::reqwest_message(e)
+                    )
+                })?;
             parse_response(resp).await
         }
         "crw_crawl" => {
@@ -208,7 +213,12 @@ pub(crate) async fn proxy_call_tool(
                 .json(&args)
                 .send()
                 .await
-                .map_err(|e| format!("HTTP request failed: {e}"))?;
+                .map_err(|e| {
+                    format!(
+                        "HTTP request failed: {}",
+                        crw_core::error::reqwest_message(e)
+                    )
+                })?;
             parse_response(resp).await
         }
         "crw_check_crawl_status" => {
@@ -222,7 +232,12 @@ pub(crate) async fn proxy_call_tool(
                 .timeout(TIMEOUT_CRAWL_STATUS)
                 .send()
                 .await
-                .map_err(|e| format!("HTTP request failed: {e}"))?;
+                .map_err(|e| {
+                    format!(
+                        "HTTP request failed: {}",
+                        crw_core::error::reqwest_message(e)
+                    )
+                })?;
             parse_response(resp).await
         }
         "crw_map" => {
@@ -233,7 +248,12 @@ pub(crate) async fn proxy_call_tool(
                 .json(&args)
                 .send()
                 .await
-                .map_err(|e| format!("HTTP request failed: {e}"))?;
+                .map_err(|e| {
+                    format!(
+                        "HTTP request failed: {}",
+                        crw_core::error::reqwest_message(e)
+                    )
+                })?;
             parse_response(resp).await
         }
         "crw_search" => {
@@ -244,7 +264,12 @@ pub(crate) async fn proxy_call_tool(
                 .json(&args)
                 .send()
                 .await
-                .map_err(|e| format!("HTTP request failed: {e}"))?;
+                .map_err(|e| {
+                    format!(
+                        "HTTP request failed: {}",
+                        crw_core::error::reqwest_message(e)
+                    )
+                })?;
             parse_response(resp).await
         }
         "crw_extract" => {
@@ -255,7 +280,12 @@ pub(crate) async fn proxy_call_tool(
                 .json(&args)
                 .send()
                 .await
-                .map_err(|e| format!("HTTP request failed: {e}"))?;
+                .map_err(|e| {
+                    format!(
+                        "HTTP request failed: {}",
+                        crw_core::error::reqwest_message(e)
+                    )
+                })?;
             parse_response(resp).await
         }
         "crw_check_extract_status" => {
@@ -269,7 +299,12 @@ pub(crate) async fn proxy_call_tool(
                 .timeout(TIMEOUT_CRAWL_STATUS)
                 .send()
                 .await
-                .map_err(|e| format!("HTTP request failed: {e}"))?;
+                .map_err(|e| {
+                    format!(
+                        "HTTP request failed: {}",
+                        crw_core::error::reqwest_message(e)
+                    )
+                })?;
             parse_response(resp).await
         }
         "crw_cancel_extract" => {
@@ -283,7 +318,12 @@ pub(crate) async fn proxy_call_tool(
                 .timeout(TIMEOUT_CRAWL_STATUS)
                 .send()
                 .await
-                .map_err(|e| format!("HTTP request failed: {e}"))?;
+                .map_err(|e| {
+                    format!(
+                        "HTTP request failed: {}",
+                        crw_core::error::reqwest_message(e)
+                    )
+                })?;
             parse_response(resp).await
         }
         "crw_parse_file" => {
@@ -331,7 +371,12 @@ pub(crate) async fn proxy_call_tool(
                 .multipart(form)
                 .send()
                 .await
-                .map_err(|e| format!("HTTP request failed: {e}"))?;
+                .map_err(|e| {
+                    format!(
+                        "HTTP request failed: {}",
+                        crw_core::error::reqwest_message(e)
+                    )
+                })?;
             parse_response(resp).await
         }
         _ => Err(format!("unknown tool: {tool_name}")),
@@ -340,10 +385,12 @@ pub(crate) async fn proxy_call_tool(
 
 async fn parse_response(resp: reqwest::Response) -> Result<Value, String> {
     let status = resp.status();
-    let body = resp
-        .text()
-        .await
-        .map_err(|e| format!("failed to read response: {e}"))?;
+    let body = resp.text().await.map_err(|e| {
+        format!(
+            "failed to read response: {}",
+            crw_core::error::reqwest_message(e)
+        )
+    })?;
 
     if !status.is_success() {
         return Err(format!("API error ({}): {}", status, truncate(&body, 500)));

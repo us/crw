@@ -244,7 +244,10 @@ fn ratelimit_proxy_url() -> Option<String> {
 /// fallback should react to. Detected by message (rustls/openssl surface these
 /// as opaque connect errors, so there is no typed predicate to match on).
 fn is_cert_error(e: &reqwest::Error) -> bool {
-    let mut src: Option<&(dyn std::error::Error + 'static)> = Some(e);
+    // Start at the source: the reqwest error's own Display is the kind string
+    // plus the request URL, so matching it could only ever false-positive on a
+    // target path that happens to mention certificates.
+    let mut src: Option<&(dyn std::error::Error + 'static)> = std::error::Error::source(e);
     while let Some(s) = src {
         let m = s.to_string().to_ascii_lowercase();
         if m.contains("certificate")
@@ -301,14 +304,23 @@ fn build_client(
     }
 
     if let Some(proxy_url) = proxy {
-        let p = reqwest::Proxy::all(proxy_url)
-            .map_err(|e| CrwError::ConfigError(format!("invalid proxy URL '{proxy_url}': {e}")))?;
+        let p = reqwest::Proxy::all(proxy_url).map_err(|e| {
+            // NEVER interpolate `proxy_url` itself: it carries `user:pass@`.
+            let redacted = crw_core::redact_proxy_url(proxy_url);
+            CrwError::ConfigError(format!(
+                "invalid proxy URL '{redacted}': {}",
+                crw_core::error::reqwest_message(e)
+            ))
+        })?;
         builder = builder.proxy(p);
     }
 
-    builder
-        .build()
-        .map_err(|e| CrwError::ConfigError(format!("failed to build HTTP client: {e}")))
+    builder.build().map_err(|e| {
+        CrwError::ConfigError(format!(
+            "failed to build HTTP client: {}",
+            crw_core::error::reqwest_message(e)
+        ))
+    })
 }
 
 /// Simple HTTP fetcher using reqwest. No JS rendering.
@@ -889,10 +901,16 @@ impl PageFetcher for HttpFetcher {
                              reporting target_unreachable (was: http_error)"
                         );
                     }
-                    return Err(if e.is_connect() && (!use_proxy || direct_connect_failed) {
-                        CrwError::TargetUnreachable(format!("Could not reach {url}: {e}"))
+                    let unreachable = e.is_connect() && (!use_proxy || direct_connect_failed);
+                    // reqwest's " for url (...)" tail carries the request target, not
+                    // the proxy, so dropping it here is for uniformity with every other
+                    // site. `url` is the caller's own target and safe to echo, so both
+                    // arms name it themselves.
+                    let msg = crw_core::error::reqwest_message(e);
+                    return Err(if unreachable {
+                        CrwError::TargetUnreachable(format!("Could not reach {url}: {msg}"))
                     } else {
-                        CrwError::HttpError(e.to_string())
+                        CrwError::HttpError(format!("{url}: {msg}"))
                     });
                 }
             }
@@ -953,7 +971,7 @@ impl PageFetcher for HttpFetcher {
         )
         .await
         {
-            Ok(r) => r.map_err(|e| CrwError::HttpError(e.to_string()))?,
+            Ok(r) => r.map_err(|e| CrwError::HttpError(crw_core::error::reqwest_message(e)))?,
             Err(_) => {
                 return Err(CrwError::Timeout(
                     (start.elapsed().as_millis().max(1)) as u64,

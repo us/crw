@@ -288,10 +288,9 @@ pub async fn github(
         // Curated-engine leg; a paid general-web tier cannot honour it.
         paid_rescue: false,
     };
-    let resp = client
-        .fetch(&params)
-        .await
-        .map_err(|e| CrwError::HttpError(format!("github search failed: {e}")))?;
+    let resp = client.fetch(&params).await.map_err(|e| {
+        super::search::map_search_error(e, state.config.search.timeout_ms, client.base_url())
+    })?;
     let results: Vec<ResearchGithubItem> = resp
         .results
         .into_iter()

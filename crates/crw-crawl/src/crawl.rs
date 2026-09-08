@@ -260,7 +260,11 @@ async fn run_crawl_inner(opts: CrawlOptions<'_>) {
                 send_failed(
                     id,
                     &state_tx,
-                    format!("invalid crawl proxy URL '{proxy_url}': {e}"),
+                    format!(
+                        "invalid crawl proxy URL '{}': {}",
+                        crw_core::redact_proxy_url(proxy_url),
+                        crw_core::error::reqwest_message(e)
+                    ),
                 );
                 return;
             }
@@ -841,15 +845,21 @@ pub async fn discover_urls(opts: DiscoverOptions<'_>) -> CrwResult<DiscoverResul
         .redirect(crw_core::url_safety::safe_redirect_policy());
     if let Some(ref proxy_url) = discover_proxy {
         let p = reqwest::Proxy::all(proxy_url).map_err(|e| {
+            // NEVER interpolate `proxy_url` itself: it carries `user:pass@`.
+            let redacted = crw_core::redact_proxy_url(proxy_url);
             crw_core::error::CrwError::InvalidRequest(format!(
-                "invalid proxy URL '{proxy_url}': {e}"
+                "invalid proxy URL '{redacted}': {}",
+                crw_core::error::reqwest_message(e)
             ))
         })?;
         discover_client_builder = discover_client_builder.proxy(p);
     }
-    let client = discover_client_builder
-        .build()
-        .map_err(|e| crw_core::error::CrwError::Internal(format!("http client build: {e}")))?;
+    let client = discover_client_builder.build().map_err(|e| {
+        crw_core::error::CrwError::Internal(format!(
+            "http client build: {}",
+            crw_core::error::reqwest_message(e)
+        ))
+    })?;
 
     // The base URL is always part of the result, so seed it up front and let it
     // count against `max_urls`. Appending it at the very end instead would push the

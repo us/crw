@@ -459,10 +459,9 @@ fn proxy_parse_check(config: &AppConfig) -> CheckResult {
         ),
         Ok(None) => CheckResult::pass("proxy.parse", "no proxy configured (direct egress)"),
         Err(_e) => {
-            // `crw_core::ProxyEntry::parse`'s error string interpolates the
-            // raw configured value (it can carry userinfo), so it must never
-            // reach a report meant to be pasted into a support thread. Report
-            // the shape of the problem, not the value.
+            // `crw_core::ProxyEntry::parse` redacts userinfo, but this report
+            // gets pasted into support threads: withhold the value entirely and
+            // report the shape of the problem instead.
             let count = if config.crawler.proxy_list.is_empty() {
                 1
             } else {

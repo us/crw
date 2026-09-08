@@ -81,3 +81,45 @@ impl CrwError {
 }
 
 pub type CrwResult<T> = Result<T, CrwError>;
+
+/// Display string for a `reqwest::Error` with the request URL stripped.
+///
+/// `reqwest::Error`'s `Display` appends `" for url (<url>)"`, and these strings
+/// reach API callers verbatim in the scrape `error` field, a crawl document's
+/// `block.reason`, and the `/v2` error envelopes. That URL is frequently
+/// internal infrastructure (a CDP endpoint, a sidecar host, the managed LLM
+/// provider) or carries credentials, none of which a caller may see. Log the
+/// full error with `tracing` at the call site when the operator needs the URL.
+pub fn reqwest_message(e: reqwest::Error) -> String {
+    e.without_url().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn reqwest_message_drops_the_request_url() {
+        // Loopback port 1 is privileged, so no test process can be listening
+        // on it: the connect is refused at once, nothing leaves the machine,
+        // no proxy is consulted, and the resulting error still carries the
+        // request URL.
+        let err = reqwest::Client::builder()
+            .no_proxy()
+            .build()
+            .unwrap()
+            .get("http://127.0.0.1:1/internal-secret-path")
+            .timeout(std::time::Duration::from_secs(5))
+            .send()
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("for url"),
+            "precondition: reqwest still appends the URL, got {err}"
+        );
+
+        let msg = reqwest_message(err);
+        assert!(!msg.contains("for url"), "URL not stripped: {msg}");
+        assert!(!msg.contains("internal-secret-path"), "URL leaked: {msg}");
+    }
+}
