@@ -763,11 +763,16 @@ done</code></pre>
 <pre data-lang="json"><code class="language-json">{ &quot;success&quot;: true, &quot;crawls&quot;: [&quot;550e8400-...&quot;, &quot;6ba7b810-...&quot;] }</code></pre>
 <hr>
 <h2 id="get-firecrawlv2crawliderrors"><code>GET /firecrawl/v2/crawl/{id}/errors</code></h2>
-<p>Return per-URL errors accumulated during a crawl.</p>
+<p>Return the job-level failure, if any, followed by one entry per URL the job
+could not turn into a document. Job-level entries carry the job id; per-URL
+entries carry the job id with the document&#39;s position appended (stable across
+polls) and the <code>url</code>. Crawl entries appear once the crawl has finished; batch
+entries appear as each URL settles.</p>
 <pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;errors&quot;: [
-    { &quot;id&quot;: &quot;550e8400-...&quot;, &quot;error&quot;: &quot;fetch timeout for https://example.com/slow-page&quot; }
+    { &quot;id&quot;: &quot;550e8400-...&quot;, &quot;error&quot;: &quot;Server is overloaded, try again later&quot; },
+    { &quot;id&quot;: &quot;550e8400-...-3&quot;, &quot;url&quot;: &quot;https://example.com/slow-page&quot;, &quot;error&quot;: &quot;Target unreachable: Could not reach https://example.com/slow-page&quot; }
   ],
   &quot;robotsBlocked&quot;: []
 }</code></pre>

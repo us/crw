@@ -616,7 +616,8 @@ invalidURLs  — URLs that were skipped</code></pre>
 <p><strong>Status response</strong> (<code>GET /firecrawl/v2/batch/scrape/{id}</code>):</p>
 <pre><code>status        — &quot;scraping&quot; | &quot;completed&quot; | &quot;failed&quot;
 total         — total URLs in the job
-completed     — URLs finished so far
+completed     : URLs finished so far, including the ones that failed
+blocked       : URLs that came back a block or an origin error page; never billed
 creditsUsed   — credits consumed so far
 expiresAt     — RFC3339 UTC expiry of this job in server memory
 next          — pagination cursor URL (null when done)
@@ -636,10 +637,16 @@ data[]        — Document objects for this page
 <p>Returns <code>{ &quot;success&quot;: true, &quot;status&quot;: &quot;cancelled&quot;, &quot;message&quot;: &quot;...&quot; }</code>.</p>
 <hr>
 <h2 id="checking-errors">Checking Errors</h2>
-<p>URLs that fail mid-job are recorded but don&#39;t fail the entire batch. Retrieve them after the job completes:</p>
+<p>URLs that fail mid-job are recorded but don&#39;t fail the entire batch. Retrieve them at any point during, or after, the job:</p>
 <pre data-lang="bash"><code class="language-bash">curl -s &quot;https://api.fastcrw.com/firecrawl/v2/batch/scrape/$JOB_ID/errors&quot; \
   -H &quot;Authorization: Bearer $CRW_API_KEY&quot;</code></pre>
-<p>Returns <code>{ &quot;success&quot;: true, &quot;errors&quot;: [...], &quot;robotsBlocked&quot;: [] }</code>.</p>
+<p>Returns <code>{ &quot;success&quot;: true, &quot;errors&quot;: [...], &quot;robotsBlocked&quot;: [] }</code>, with one
+entry per failed URL:</p>
+<pre data-lang="json"><code class="language-json">{ &quot;id&quot;: &quot;550e8400-...-3&quot;, &quot;url&quot;: &quot;https://example.com/slow-page&quot;, &quot;error&quot;: &quot;Target unreachable: Could not reach https://example.com/slow-page&quot; }</code></pre>
+<p>A per-URL entry&#39;s <code>id</code> is the job id with the document&#39;s position appended, so
+it is stable across polls. The failed URL is also kept in <code>data</code> as a document with no content and the
+same reason in <code>warning</code>, so the documents across all pages always number
+<code>completed</code>.</p>
 </article>
     </main>
 
