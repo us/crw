@@ -783,6 +783,54 @@ fn split_caller_headers(
     (ua, extra)
 }
 
+/// The exact `navigator.languages` array literal inside [`STEALTH_JS`]. When a
+/// request pins an exit country we swap this for the country's language list,
+/// so the spoofed navigator agrees with the `Accept-Language` we send. A unit
+/// test asserts the literal is still present, so editing the stealth script
+/// cannot silently turn the swap into a no-op.
+const STEALTH_DEFAULT_LANGUAGES: &str = "['en-US', 'en']";
+
+/// The `Accept-Language` to advertise on the CDP path for the pinned exit
+/// country, or `None` to leave the browser default alone.
+///
+/// A caller-supplied `Accept-Language` wins: it already reaches the page
+/// through `Network.setExtraHTTPHeaders`, so adding a derived value on top
+/// would only contradict it.
+fn language_locale(
+    geo_locale: Option<crate::locale::Locale>,
+    extra_headers: &serde_json::Map<String, serde_json::Value>,
+) -> Option<crate::locale::Locale> {
+    let locale = geo_locale?;
+    if extra_headers
+        .keys()
+        .any(|k| k.eq_ignore_ascii_case("accept-language"))
+    {
+        return None;
+    }
+    Some(locale)
+}
+
+/// The `acceptLanguage` for `Network.setUserAgentOverride`, in the plain tag
+/// form Chromium expects (it adds the quality weights itself).
+#[cfg(test)]
+fn geo_accept_language(
+    geo_locale: Option<crate::locale::Locale>,
+    extra_headers: &serde_json::Map<String, serde_json::Value>,
+) -> Option<String> {
+    language_locale(geo_locale, extra_headers).map(|l| l.cdp_accept_language())
+}
+
+/// Payload for `Network.setUserAgentOverride`. Without a country-derived
+/// language the payload is exactly what it has always been, so the default
+/// render sends byte-identical CDP traffic.
+fn ua_override_params(user_agent: &str, accept_language: Option<&str>) -> serde_json::Value {
+    let mut params = serde_json::json!({ "userAgent": user_agent });
+    if let Some(al) = accept_language {
+        params["acceptLanguage"] = serde_json::Value::String(al.to_string());
+    }
+    params
+}
+
 async fn connect_chrome_with_retry_inner(
     name: &str,
     configured_ws_url: &str,
@@ -2806,10 +2854,48 @@ impl CdpRenderer {
             .await?;
         }
 
-        // Inject stealth scripts before navigation so they run on every new document.
+        // Locale for the pinned proxy exit country. `None` (the default path,
+        // and any request without a `country`) leaves every CDP call below
+        // exactly as it was.
+        //
+        // Only the tier whose egress actually leaves from the pinned country
+        // composes a country-suffixed proxy login (`proxy_auth_base`), and that
+        // is the only tier where a country-derived locale is coherent with the
+        // IP. On the direct chrome tier it would pair a foreign locale with the
+        // box's own IP, and `Emulation.setLocaleOverride` is browser-wide in
+        // Chromium, so issuing it in the shared direct browser could leak into
+        // renders that never asked for a country. This also keeps lightpanda
+        // out, whose partial CDP surface may not answer `Emulation.*` at all.
+        // A scoped `REQUEST_PROXY` takes the egress away from the country
+        // credential (it wins in `fetch_inner`), so it also takes the locale
+        // away: the same rule `should_retry_with_default_country` applies.
+        let byop_active = crate::REQUEST_PROXY
+            .try_with(|p| p.is_some())
+            .unwrap_or(false);
+        let geo_locale = if self.proxy_auth_base.is_some() && !byop_active {
+            crate::locale::request_locale()
+        } else {
+            None
+        };
+        let (caller_ua, extra_headers) = split_caller_headers(headers);
+        // A caller-supplied `Accept-Language` wins over every language signal
+        // (header, `navigator.languages`, locale override); the clock still
+        // follows the exit country.
+        let lang_locale = language_locale(geo_locale, &extra_headers);
+
+        // Inject stealth scripts before navigation so they run on every new
+        // document. With a pinned country the spoofed `navigator.languages`
+        // follows that country instead of announcing a US browser from a
+        // foreign exit IP; without one the source is the untouched constant.
+        let stealth_source: std::borrow::Cow<'_, str> = match lang_locale {
+            Some(locale) => std::borrow::Cow::Owned(
+                STEALTH_JS.replace(STEALTH_DEFAULT_LANGUAGES, &locale.js_languages()),
+            ),
+            None => std::borrow::Cow::Borrowed(STEALTH_JS),
+        };
         conn.send_recv(
             "Page.addScriptToEvaluateOnNewDocument",
-            serde_json::json!({ "source": STEALTH_JS }),
+            serde_json::json!({ "source": stealth_source }),
             Some(&session_id),
             self.page_timeout,
         )
@@ -2820,8 +2906,6 @@ impl CdpRenderer {
         // A caller-supplied `User-Agent` wins over the tier default, the same
         // precedence the HTTP fetcher gives it (http_only.rs applies caller
         // headers last).
-        let (caller_ua, extra_headers) = split_caller_headers(headers);
-
         // Present a modern UA on the CDP path too (the HTTP fetcher already does,
         // but renderers otherwise send the browser's own — often stale — UA, which
         // trips "your browser is outdated" gates). Session-scoped (so pooled
@@ -2830,7 +2914,12 @@ impl CdpRenderer {
         // lightpanda rejects "Mozilla" UAs (→ `lightpanda_safe_ua`); it routes
         // Network.* → Emulation.* internally, so the method name is fine. Skip if empty.
         let effective_ua = caller_ua.as_deref().unwrap_or(&self.user_agent);
-        if !effective_ua.is_empty() {
+        // With an empty UA the override is still sent when a country-derived
+        // language exists: Chromium treats an empty `userAgent` as "keep the
+        // browser's own", so the language lands without touching the UA, and
+        // the header stays in step with the script and the locale override.
+        let accept_language = lang_locale.map(|l| l.cdp_accept_language());
+        if !effective_ua.is_empty() || accept_language.is_some() {
             let ua: &str = if self.name == "lightpanda" {
                 lightpanda_safe_ua(effective_ua)
             } else {
@@ -2838,12 +2927,46 @@ impl CdpRenderer {
             };
             conn.send_recv(
                 "Network.setUserAgentOverride",
-                serde_json::json!({ "userAgent": ua }),
+                ua_override_params(ua, accept_language.as_deref()),
                 Some(&session_id),
                 self.page_timeout,
             )
             .await
             .ok();
+        }
+
+        // Match the clock and the JS locale to the exit country as well. An
+        // IP/locale mismatch is a stronger bot signal than a flagged IP, so a
+        // German exit reporting a UTC clock and `navigator.language = en-US`
+        // was working against the reason the country was pinned in the first
+        // place. Best-effort like the two calls above: a tier that does not
+        // implement `Emulation.*` (lightpanda) must not fail an otherwise-fine
+        // render.
+        let overrides = geo_locale
+            .map(|l| {
+                (
+                    "Emulation.setTimezoneOverride",
+                    serde_json::json!({ "timezoneId": l.timezone }),
+                )
+            })
+            .into_iter()
+            .chain(lang_locale.map(|l| {
+                (
+                    "Emulation.setLocaleOverride",
+                    serde_json::json!({ "locale": l.primary_tag() }),
+                )
+            }));
+        for (method, params) in overrides {
+            // Best-effort, but not silent: Blink backs both overrides with
+            // process-wide controllers and refuses a second one in the same
+            // renderer process, so a refusal here is the signal that two
+            // country-pinned renders shared a process.
+            if let Err(e) = conn
+                .send_recv(method, params, Some(&session_id), self.page_timeout)
+                .await
+            {
+                tracing::debug!(renderer = %self.name, method, "locale override refused: {e}");
+            }
         }
 
         // Forward the caller's custom request headers. These were dropped on the
@@ -3642,8 +3765,10 @@ fn is_spa_text_ready(text_len: i64) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        CdpRenderer, CrwError, build_auth_response, is_content_stable, is_proxy_tunnel_error,
+        CdpRenderer, CrwError, STEALTH_DEFAULT_LANGUAGES, STEALTH_JS, build_auth_response,
+        geo_accept_language, is_content_stable, is_proxy_tunnel_error, language_locale,
         lightpanda_safe_ua, outbound_block_label, screenshot_clip, split_caller_headers,
+        ua_override_params,
     };
     use std::collections::HashMap;
     use std::time::Duration;
@@ -3929,6 +4054,84 @@ mod tests {
         assert!(safe.contains("Chrome/150"));
         // A UA without the prefix is returned unchanged (no double-strip).
         assert_eq!(lightpanda_safe_ua("Chrome/150.0.0.0"), "Chrome/150.0.0.0");
+    }
+
+    #[test]
+    fn stealth_js_carries_the_default_languages_literal() {
+        // The country path substitutes this exact substring. If a stealth-script
+        // edit changes the spacing or quoting, the substitution silently becomes
+        // a no-op, so pin it here.
+        assert_eq!(
+            STEALTH_JS.matches(STEALTH_DEFAULT_LANGUAGES).count(),
+            1,
+            "STEALTH_JS must contain exactly one {STEALTH_DEFAULT_LANGUAGES} literal"
+        );
+    }
+
+    #[test]
+    fn ua_override_params_without_locale() {
+        // No country -> the payload is byte-identical to the pre-change one.
+        let p = ua_override_params("MyAgent/1.0", None);
+        assert_eq!(p, serde_json::json!({ "userAgent": "MyAgent/1.0" }));
+        assert!(p.get("acceptLanguage").is_none());
+    }
+
+    #[test]
+    fn ua_override_params_with_locale() {
+        let p = ua_override_params("MyAgent/1.0", Some("de-DE,de,en"));
+        assert_eq!(p["userAgent"], "MyAgent/1.0");
+        assert_eq!(p["acceptLanguage"], "de-DE,de,en");
+    }
+
+    #[test]
+    fn language_locale_yields_to_caller_header() {
+        let de = crate::locale::locale_for_country("de");
+        let empty = serde_json::Map::new();
+        assert_eq!(language_locale(de, &empty), de);
+        assert_eq!(language_locale(None, &empty), None);
+        let mut caller = serde_json::Map::new();
+        caller.insert(
+            "Accept-Language".to_string(),
+            serde_json::Value::String("fr-FR".to_string()),
+        );
+        assert_eq!(language_locale(de, &caller), None);
+    }
+
+    #[test]
+    fn geo_accept_language_yields_to_caller_header() {
+        let de = crate::locale::locale_for_country("de");
+        let empty = serde_json::Map::new();
+
+        // No locale resolved (no country, or the lightpanda tier) -> nothing
+        // derived, whatever the headers are.
+        assert!(geo_accept_language(None, &empty).is_none());
+
+        assert_eq!(
+            geo_accept_language(de, &empty).as_deref(),
+            Some("de-DE,de,en"),
+            "a pinned country must drive the header, in plain tag form"
+        );
+
+        // A caller who set the header keeps it, match is case-insensitive.
+        for name in ["accept-language", "Accept-Language"] {
+            let mut caller = serde_json::Map::new();
+            caller.insert(
+                name.to_string(),
+                serde_json::Value::String("fr-FR".to_string()),
+            );
+            assert!(geo_accept_language(de, &caller).is_none(), "{name}");
+        }
+
+        // An unrelated caller header does not suppress it.
+        let mut caller = serde_json::Map::new();
+        caller.insert(
+            "X-Probe".to_string(),
+            serde_json::Value::String("v".to_string()),
+        );
+        assert_eq!(
+            geo_accept_language(de, &caller).as_deref(),
+            Some("de-DE,de,en")
+        );
     }
 
     #[test]
