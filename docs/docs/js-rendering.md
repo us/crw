@@ -40,6 +40,11 @@ Override the rendering mode per request using `renderJs`:
 | `true` | Force CDP rendering |
 | `false` | HTTP only |
 
+:::note
+500 credits to start, up to 500 more from onboarding tasks, no card.
+<a href="https://fastcrw.com/register?ref=docs-js-rendering-inline" target="_blank" rel="noopener">Get your API key</a>
+:::
+
 ## Global default
 
 To force JS rendering for every request that doesn't specify `renderJs` explicitly, set `render_js_default` in your config:

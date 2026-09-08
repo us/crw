@@ -67,6 +67,11 @@ If you only remember one rule, remember this one: local embedded mode is the eas
 claude mcp add crw -- npx -y crw-mcp
 ```
 
+:::note
+500 credits to start, up to 500 more from onboarding tasks, no card.
+<a href="https://fastcrw.com/register?ref=docs-mcp-clients-inline" target="_blank" rel="noopener">Get your API key</a>
+:::
+
 ### fastcrw.com cloud
 
 ```bash

@@ -15,8 +15,8 @@ Cloud only (fastcrw.com) -- self-hosted instances do not have credit-based billi
 | `map` | 1 credit |
 | `crawl` start | 1 credit |
 | `crawl` polling | New pages discovered since the previous poll |
-| `search` | 1 credit |
-| `search` + scrape | 1 credit + 1 per scraped result |
+| `search` | 2 credits |
+| `search` + scrape | 2 credits + 1 per scraped result |
 | `monitor` create / list / get | 0 credits |
 | `monitor` check (per run) | 1 credit per scraped page, plus 1 more credit per page judged changed |
 | `browse` | Not a billed cloud endpoint. It is a local CLI/companion capability, free either way |
@@ -43,7 +43,7 @@ Purchased top-up credits never expire and are not tied to your current billing c
 
 ## Free tier
 
-The FREE plan grants 1000 credits **once, for the lifetime of the account**, not monthly, and it never resets. No card is required to get them. Once they are spent, a FREE account either upgrades to a paid plan or stops.
+The FREE plan grants 500 credits **once, for the lifetime of the account**, not monthly, and it never resets, plus up to 500 more from onboarding tasks. No card is required to get them. Once they are spent, a FREE account either upgrades to a paid plan or stops.
 
 ## Why crawl billing looks different
 
@@ -60,9 +60,9 @@ That prevents the same already-seen pages from being charged again and again jus
 | Start one crawl job | 1 credit |
 | Poll a crawl and receive 7 new pages | 7 additional credits |
 | Poll again with no new pages | No new page credits |
-| Search for "AI tools" with 5 results | 1 credit |
-| Search + scrape 3 results | 1 + 3 = 4 credits |
-| Search + scrape, 1 scrape fails | 1 + 2 = 3 credits (failed scrape refunded) |
+| Search for "AI tools" with 5 results | 2 credits |
+| Search + scrape 3 results | 2 + 3 = 5 credits |
+| Search + scrape, 1 scrape fails | 2 + 2 = 4 credits (failed scrape refunded) |
 
 ## What Usually Does Not Consume Permanent Credits
 

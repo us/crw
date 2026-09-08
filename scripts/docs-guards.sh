@@ -27,6 +27,12 @@
 #   Derives the current flat renderer price from `credit_for` and rejects stale
 #   per-renderer prices in the two user-facing billing/reference pages.
 #
+# Guard 6: free-tier credit count
+#   Fails on a literal flat "1000 credits" / "1000 free" free-tier claim in
+#   docs/docs/*.md. The FREE plan grants 500 credits once, plus up to 500 more
+#   from onboarding tasks. Hand-maintained: this job has no checkout of
+#   crw-saas, so it cannot read `src/lib/plans-client.ts` to derive the number.
+#
 # Portable: bash + standard POSIX tools plus python3. Works on ubuntu-latest
 # and macOS without extra dependencies.
 
@@ -325,6 +331,35 @@ print(f"ok: renderer credit docs match runtime flat price ({expected})")
 PY
 then
   FAIL=1
+fi
+
+# ---------------------------------------------------------------------------
+# Guard 6: free-tier credit count
+# ---------------------------------------------------------------------------
+#
+# The FREE plan grants 500 credits once, plus up to 500 more from onboarding
+# tasks, never a flat 1000. This mirrors crw-saas `src/lib/plans-client.ts`
+# BY HAND: this guard runs in the crw-opencore CI job, which does not have the
+# crw-saas repo checked out, so it cannot import or read that file at check
+# time. If the FREE grant changes there, update the literal below in the same
+# commit that fixes the docs; nothing here derives it automatically.
+
+echo "==> Guard 6: free-tier credit count"
+
+free_tier_hits=$(
+  grep -rniE --include="*.md" '1,?000 (credits|free)' docs/docs \
+    | grep -viE 'top-up|\$9' \
+    || true
+)
+
+if [ -n "$free_tier_hits" ]; then
+  echo "FAIL: a doc claims a flat 1000-credit free tier. The FREE plan grants" >&2
+  echo "      500 credits once, plus up to 500 more from onboarding tasks." >&2
+  echo >&2
+  echo "$free_tier_hits" | sed 's/^/  /' >&2
+  FAIL=1
+else
+  echo "ok: no flat 1000-credit free-tier claim"
 fi
 
 # ---------------------------------------------------------------------------

@@ -59,14 +59,14 @@ export default {
     {
       title: "Get Started",
       children: [
-        { title: "Introduction", slug: "introduction", icon: "rocket" },
+        { title: "Introduction", slug: "introduction", icon: "rocket", seoTitle: "Web Scraping, Search & Crawl API" },
         { title: "Quick Start", slug: "quick-start", icon: "play" },
         { title: "Migrate from Firecrawl", slug: "migrate-from-firecrawl", icon: "git-branch" },
         { title: "Choose Your Endpoint", slug: "choose-endpoint", icon: "git-branch" },
         { title: "Authentication", slug: "authentication", icon: "key" },
         { title: "API Playground", slug: "playground", icon: "play" },
         { title: "API Overview", slug: "rest-api", icon: "server" },
-        { title: "Installation", slug: "installation", icon: "box" },
+        { title: "Installation", slug: "installation", icon: "box", seoTitle: "Install: CLI, Docker, or Self-Host" },
       ],
     },
     {

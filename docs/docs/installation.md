@@ -2,7 +2,9 @@
 
 ## Cloud (no installation needed)
 
-Sign up at [fastcrw.com](https://fastcrw.com) and start using the API immediately.
+Skip installation and get a free API key for fastCRW Cloud, or install the self-hosted engine as a single binary, Docker container, or Homebrew formula.
+
+Sign up at [fastcrw.com/register](https://fastcrw.com/register?ref=docs-installation-inline) and start using the API immediately.
 Native `/v1` endpoints for new CRW integrations, with `/firecrawl/v2` compatibility available for Firecrawl migrations.
 
 ```bash
@@ -11,6 +13,11 @@ curl -X POST https://api.fastcrw.com/v1/scrape \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com"}'
 ```
+
+:::note
+500 credits to start, up to 500 more from onboarding tasks, no card.
+<a href="https://fastcrw.com/register?ref=docs-installation-inline" target="_blank" rel="noopener">Get your API key</a>
+:::
 
 ## One-Line Install (Recommended)
 

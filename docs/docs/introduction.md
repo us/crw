@@ -3,7 +3,7 @@
 <div class="page-intro">
   <div class="page-kicker">Get Started</div>
   <h1>CRW Docs</h1>
-  <p class="page-subtitle">Turn websites into usable data with one API. Start with a single <code>scrape</code> request, then move into <code>search</code>, <code>map</code>, <code>crawl</code>, <code>extract</code>, or MCP only when your workflow actually needs them. Interactive browser automation is handled by the companion <code>crw-browse</code> service.</p>
+  <p class="page-subtitle">Open-source web scraping API for agents and RAG. Scrape, crawl, search, map, and extract data from any site with one Rust binary, self-hosted or on fastCRW Cloud.</p>
   <div class="page-capabilities">
     <div class="page-capability"><strong>Fastest first win:</strong> one URL, one markdown response</div>
     <div class="page-capability"><strong>Works for:</strong> agents, ETL, RAG, structured extraction</div>
@@ -15,6 +15,27 @@
   </div>
 </div>
 
+## Setting up an AI coding agent?
+
+Paste this into Claude Code, Cursor, Codex, Windsurf, or any other coding agent's chat:
+
+:::note
+Install fastCRW for web access: run <code>npx crw-mcp@latest install</code> to add the MCP server and skill, then use the <code>crw_scrape</code>, <code>crw_search</code>, <code>crw_map</code>, and <code>crw_crawl</code> tools (or the native <code>/v1</code> REST API) to fetch, search, and crawl the web with the <code>CRW_API_KEY</code> in my environment.
+:::
+
+Full reference written for autonomous agents: [Agent Onboarding Guide](/agent-onboarding).
+
+## Pick your endpoint
+
+:::cards
+::card{icon="code" title="Scrape" href="#scraping" description="One known URL in, clean markdown or JSON out."}
+::card{icon="search" title="Search" href="#search" description="No URL yet? Search the web and get ranked results with content."}
+::card{icon="map" title="Map" href="#map" description="Discover every URL under a domain before you scrape or crawl."}
+::card{icon="layers" title="Crawl" href="#crawling" description="Scrape every page under a URL in one background job."}
+::card{icon="key" title="Extract" href="#extract" description="Pull structured JSON fields from a page with an LLM."}
+::card{icon="plug" title="MCP" href="#mcp" description="Give Claude, Cursor, Codex, and other agents live web access."}
+:::
+
 > **New to CRW? Use `/v1`.** The `/v1` routes are the native fastCRW API for new integrations. Use `/firecrawl/v2` when migrating existing Firecrawl v2 SDK code or when you need compatibility-only routes such as batch scrape or PDF parse.
 
 <div class="playground-panel">
@@ -22,6 +43,8 @@
   <div class="playground-title">The shortest path to a successful response</div>
   <div class="playground-copy">If this request works, you already understand the core CRW model: known URL in, clean content out. Everything else in the docs builds on that.</div>
 </div>
+
+**Try it without a key:** run this exact request in the <a href="https://fastcrw.com/playground?url=https%3A%2F%2Fexample.com&mode=scrape" target="_blank" rel="noopener">playground</a> (rate-limited preview, no signup).
 
 ## Does this work for me?
 

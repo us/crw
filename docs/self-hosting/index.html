@@ -291,7 +291,8 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
 <pre data-lang="bash"><code class="language-bash">curl -X POST http://localhost:3000/v1/scrape \
   -H &quot;Content-Type: application/json&quot; \
   -d '{&quot;url&quot;:&quot;https://example.com&quot;,&quot;formats&quot;:[&quot;markdown&quot;]}'</code></pre>
-<h2 id="what-you-get">What You Get</h2>
+<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">500 credits to start, up to 500 more from onboarding tasks, no card.
+<a href="https://fastcrw.com/register?ref=docs-self-hosting-inline" target="_blank" rel="noopener">Get your API key</a></div></div><h2 id="what-you-get">What You Get</h2>
 <ul>
 <li>the same core self-hosted routes: <code>scrape</code>, <code>crawl</code>, <code>map</code>, <code>mcp</code>, <code>health</code></li>
 <li><code>search</code> too, when you run the Docker stack — it boots a search sidecar so <code>/v1/search</code> and the <code>crw_search</code> MCP tool work out of the box (see <a href="/docker">Docker → Search backend</a>)</li>

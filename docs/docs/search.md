@@ -24,6 +24,8 @@
   </div>
 </div>
 
+**Try it without a key:** run this exact request in the <a href="https://fastcrw.com/playground?query=web+scraping+tools&mode=search" target="_blank" rel="noopener">playground</a> (rate-limited preview, no signup).
+
 :::note
 **Self-hosted users**: `docker compose up` boots the search sidecar automatically (reachable inside the Compose network as `searxng:8080`). `/v1/search` is live on `http://localhost:3000` with no extra setup. To point at a search backend you already run instead, set `CRW_SEARCH__SEARCH_BACKEND_URL=http://your-host:8080` and remove the `searxng` service from your compose file. To disable search entirely, set `[search].enabled = false` — the route returns a clear `search_disabled` error (HTTP 503). See the [Docker → Search backend](/docker) section for the full setup, the `SEARXNG_BASE_URL` vs `search_backend_url` distinction, and cold-start timing.
 :::
@@ -114,6 +116,11 @@ curl -X POST https://api.fastcrw.com/v1/search \
   -H "Content-Type: application/json" \
   -d '{"query": "web scraping tools", "limit": 5}'
 ```
+:::
+
+:::note
+500 credits to start, up to 500 more from onboarding tasks, no card.
+<a href="https://fastcrw.com/register?ref=docs-search-inline" target="_blank" rel="noopener">Get your API key</a>
 :::
 
 ### Response

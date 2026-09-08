@@ -31,6 +31,9 @@ const slugMeta = config.sidebar.flatMap((section) =>
   section.children.map((child) => ({
     slug: child.slug,
     title: child.title,
+    // Optional: a decision-intent title for search-result/OG tags, distinct
+    // from the short sidebar label (`title`). Falls back to `title` below.
+    seoTitle: child.seoTitle,
     sectionTitle: section.title,
   }))
 );
@@ -316,7 +319,7 @@ function renderMarkdown(md) {
 let generated = 0;
 const errors = [];
 
-for (const { slug, title } of slugMeta) {
+for (const { slug, title, seoTitle } of slugMeta) {
   const mdPath = path.join(CONTENT_DIR, `${slug}.md`);
 
   if (!existsSync(mdPath)) {
@@ -334,7 +337,7 @@ for (const { slug, title } of slugMeta) {
   // Add per-heading id anchors, then rewrite #slug → /slug cross-references
   const content = rewriteInternalLinks(addHeadingIds(rawHtml));
 
-  const pageHtml = buildPage(slug, title, description, content);
+  const pageHtml = buildPage(slug, seoTitle || title, description, content);
 
   // Write to docs/{slug}/index.html
   const outDir = path.join(DOCS_DIR, slug);
