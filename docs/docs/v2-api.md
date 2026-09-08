@@ -274,13 +274,18 @@ List the IDs of all currently in-progress crawl jobs on this engine instance.
 
 ## `GET /firecrawl/v2/crawl/{id}/errors`
 
-Return per-URL errors accumulated during a crawl.
+Return the job-level failure, if any, followed by one entry per URL the job
+could not turn into a document. Job-level entries carry the job id; per-URL
+entries carry the job id with the document's position appended (stable across
+polls) and the `url`. Crawl entries appear once the crawl has finished; batch
+entries appear as each URL settles.
 
 ```json
 {
   "success": true,
   "errors": [
-    { "id": "550e8400-...", "error": "fetch timeout for https://example.com/slow-page" }
+    { "id": "550e8400-...", "error": "Server is overloaded, try again later" },
+    { "id": "550e8400-...-3", "url": "https://example.com/slow-page", "error": "Target unreachable: Could not reach https://example.com/slow-page" }
   ],
   "robotsBlocked": []
 }

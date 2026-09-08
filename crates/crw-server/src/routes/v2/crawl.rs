@@ -262,25 +262,39 @@ pub async fn get_errors(
         .ok_or_else(|| CrwError::NotFound(format!("Crawl job {id} not found")))?;
     // Job-level failure first (the whole job died), then the per-URL ones. A URL
     // the engine could not turn into a document is retained as a placeholder
-    // carrying `block`, and `V2Document` has no field to show that, so without
-    // this it would reach the caller as an empty document with nothing to
-    // explain it while this route, the one documented to carry these, said there
-    // were no errors at all.
+    // carrying `block` and no body, and `V2Document` has no field to show the
+    // block, so without this it would reach the caller as an empty document
+    // with nothing to explain it while this route, the one documented to carry
+    // these, said there were no errors at all. An origin error page that was
+    // kept readable is a delivered document, not an error: listing it here too
+    // would make a caller retry a URL it already holds.
+    //
+    // Each entry gets its own id, the way Firecrawl keys errors per scrape
+    // rather than per job, so a caller keying them into a map keeps them all.
+    // The id is the job id plus the document's position, so it is stable
+    // across polls and a caller deduplicating by id sees each failure once.
     let guard = job.rx.borrow();
     let mut errors: Vec<Value> = guard
         .error
         .iter()
         .map(|e| serde_json::json!({ "id": id.to_string(), "error": e }))
         .collect();
-    errors.extend(guard.data.iter().filter_map(|d| {
-        d.block.as_ref().map(|b| {
-            serde_json::json!({
-                "id": id.to_string(),
-                "url": d.metadata.source_url,
-                "error": b.reason,
-            })
-        })
-    }));
+    errors.extend(
+        guard
+            .data
+            .iter()
+            .enumerate()
+            .filter(|(_, d)| !d.has_body())
+            .filter_map(|(index, d)| {
+                d.block.as_ref().map(|b| {
+                    serde_json::json!({
+                        "id": format!("{id}-{index}"),
+                        "url": d.metadata.source_url,
+                        "error": b.reason,
+                    })
+                })
+            }),
+    );
     drop(guard);
     Ok(Json(
         serde_json::json!({ "success": true, "errors": errors, "robotsBlocked": [] }),

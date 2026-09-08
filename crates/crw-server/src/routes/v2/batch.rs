@@ -90,6 +90,10 @@ pub async fn start_batch(
         .map_err(|e| CrwError::InvalidRequest(format!("invalid batch scrape options: {e}")))?;
     let (mut template, _decomposed, _tier) = to_internal(template_v2)?;
     template.url = String::new();
+    // Same upfront rejections as /v1/batch/scrape: a fault in the caller's
+    // own template is one 400 here, not one placeholder document per URL.
+    crate::state::validate_renderer_pin(template.renderer, template.render_js, &state)?;
+    crw_crawl::single::validate_scrape_template(&template)?;
 
     // Partition URLs into valid / invalid (SSRF-checked, same as v1 scrape).
     // Validation resolves DNS per URL — run it with bounded concurrency,
@@ -173,4 +177,37 @@ pub async fn cancel_batch(state: State<AppState>, id: Path<Uuid>) -> Result<Json
 
 pub async fn get_errors(state: State<AppState>, id: Path<Uuid>) -> Result<Json<Value>, AppError> {
     super::crawl::get_errors(state, id).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::AppState;
+    use crw_core::config::AppConfig;
+    use serde_json::json;
+
+    async fn call(body: Value) -> Result<V2BatchStartResponse, AppError> {
+        let config: AppConfig = toml::from_str("").unwrap();
+        let state = AppState::new(config).unwrap();
+        start_batch(State(state), HeaderMap::new(), Ok(Json(body)))
+            .await
+            .map(|Json(r)| r)
+    }
+
+    /// A template fault is rejected before any URL work on the Firecrawl
+    /// surface too, instead of surfacing as one placeholder per URL.
+    #[tokio::test]
+    async fn v2_start_batch_rejects_screenshot_without_js_before_any_url_work() {
+        let err = call(json!({
+            "urls": ["https://example.com/"],
+            "formats": ["screenshot"],
+            "renderJs": false
+        }))
+        .await
+        .unwrap_err();
+        match &err.0 {
+            CrwError::InvalidRequest(msg) => assert!(msg.contains("screenshot"), "got: {msg}"),
+            other => panic!("expected InvalidRequest, got {other:?}"),
+        }
+    }
 }

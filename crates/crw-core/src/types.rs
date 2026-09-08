@@ -963,6 +963,25 @@ impl ScrapeData {
         self.summary = None;
         self.chunks = None;
     }
+
+    /// Whether any page-content field survived. A document without a body is a
+    /// placeholder for a URL that produced no page (a cleared wall, or a scrape
+    /// error), as opposed to an origin error page that was kept readable.
+    /// `source_hash` and `basis` are excluded on purpose: both derive from the
+    /// fields below and never stand on their own. `screenshot` is not counted
+    /// either, so a wall captured with a screenshot still reads as no page
+    /// while the caller keeps the image.
+    pub fn has_body(&self) -> bool {
+        self.markdown.is_some()
+            || self.html.is_some()
+            || self.raw_html.is_some()
+            || self.plain_text.is_some()
+            || self.links.is_some()
+            || self.images.is_some()
+            || self.json.is_some()
+            || self.summary.is_some()
+            || self.chunks.is_some()
+    }
 }
 
 /// Typed anti-bot block verdict. `vendor` is the antibot `class_name`
@@ -1450,6 +1469,20 @@ mod tests {
         let mut d = page(404, 250);
         d.raw_html = Some("<html>".repeat(10_000));
         assert!(d.http_error().is_some());
+    }
+
+    #[test]
+    fn has_body_separates_a_placeholder_from_a_readable_error_page() {
+        let mut d = ScrapeData::default();
+        assert!(!d.has_body(), "a failed_page or cleared wall has no body");
+        d.markdown = Some("404 Not Found".into());
+        assert!(
+            d.has_body(),
+            "an origin error page kept readable has a body"
+        );
+        d.markdown = None;
+        d.links = Some(vec!["https://example.com/a".into()]);
+        assert!(d.has_body(), "a links-only format still delivered a page");
     }
 
     #[test]

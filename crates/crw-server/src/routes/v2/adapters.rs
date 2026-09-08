@@ -123,7 +123,13 @@ pub fn to_v2_document(data: ScrapeData, proxy_used: &str, scrape_id: String) -> 
         summary: data.summary,
         change_tracking: data.change_tracking,
         screenshot: data.screenshot,
-        warning: data.warning,
+        // `V2Document` has no `block`, so a URL retained only as a placeholder
+        // would otherwise reach a /v2 caller as an empty document with nothing
+        // to explain it. `warning` is part of the frozen shape and is exactly
+        // where Firecrawl surfaces a per-document problem.
+        warning: data
+            .warning
+            .or_else(|| data.block.as_ref().map(|b| b.reason.clone())),
         metadata,
     }
 }
@@ -221,11 +227,12 @@ pub fn build_crawl_status(
         None
     };
 
-    // A blocked page is not billed, so it must not be counted here either. This
-    // is the exact charge on both paths: a batch URL whose scrape returns `Err`
-    // now pushes a placeholder carrying `block` and bumps `blocked`, so it is
-    // excluded here for the same reason a wall is, and `completed - blocked`
-    // agrees with this sum instead of over-counting it.
+    // A blocked page is not billed, so it must not be counted here either. A
+    // batch URL whose scrape returns `Err` now pushes a placeholder carrying
+    // `block` and bumps `blocked`, so it is excluded here for the same reason a
+    // wall is, and `completed - blocked` no longer over-counts it. The two are
+    // still not identical: this sum prices a multi-page PDF per page, while
+    // `completed - blocked` counts documents.
     let credits_used: u32 = state
         .data
         .iter()

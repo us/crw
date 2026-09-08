@@ -333,7 +333,8 @@ invalidURLs  — URLs that were skipped
 ```
 status        — "scraping" | "completed" | "failed"
 total         — total URLs in the job
-completed     — URLs finished so far
+completed     : URLs finished so far, including the ones that failed
+blocked       : URLs that came back a block or an origin error page; never billed
 creditsUsed   — credits consumed so far
 expiresAt     — RFC3339 UTC expiry of this job in server memory
 next          — pagination cursor URL (null when done)
@@ -363,11 +364,21 @@ Returns `{ "success": true, "status": "cancelled", "message": "..." }`.
 
 ## Checking Errors
 
-URLs that fail mid-job are recorded but don't fail the entire batch. Retrieve them after the job completes:
+URLs that fail mid-job are recorded but don't fail the entire batch. Retrieve them at any point during, or after, the job:
 
 ```bash
 curl -s "https://api.fastcrw.com/firecrawl/v2/batch/scrape/$JOB_ID/errors" \
   -H "Authorization: Bearer $CRW_API_KEY"
 ```
 
-Returns `{ "success": true, "errors": [...], "robotsBlocked": [] }`.
+Returns `{ "success": true, "errors": [...], "robotsBlocked": [] }`, with one
+entry per failed URL:
+
+```json
+{ "id": "550e8400-...-3", "url": "https://example.com/slow-page", "error": "Target unreachable: Could not reach https://example.com/slow-page" }
+```
+
+A per-URL entry's `id` is the job id with the document's position appended, so
+it is stable across polls. The failed URL is also kept in `data` as a document with no content and the
+same reason in `warning`, so the documents across all pages always number
+`completed`.
