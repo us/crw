@@ -48,15 +48,17 @@ The pipeline is idempotent — re-run is safe.
 
 ### Temporarily disabling npm publishing
 
-If the npm token can't publish (npm now rejects classic automation tokens with
-`403 ... two-factor authentication ... required`), set the repo variable
-`SKIP_NPM=true` (`gh variable set SKIP_NPM --body true`). `publish-npm` is then
-cleanly **skipped** (gray, not failed) and `verify-publish` records npm as
-`skipped` — the release goes green on every other registry. **Re-enable** by
-clearing it (`gh variable delete SKIP_NPM`) once `NPM_TOKEN` is a *granular*
-access token with publish permission (these bypass 2FA), or after configuring
-npm OIDC trusted publishing for each package (the workflow already grants
-`id-token: write`).
+npm publishing uses **trusted publishing** (OIDC): no token secret, nothing to
+rotate. Each package on npmjs.com lists this repository and `release.yml` as its
+trusted publisher (package page > Settings > Trusted Publisher > GitHub Actions:
+user `us`, repository `crw`, workflow filename `release.yml`, no environment).
+The packages are `crw-mcp`, `crw-mcp-darwin-arm64`, `crw-mcp-darwin-x64`,
+`crw-mcp-linux-arm64`, `crw-mcp-linux-x64` and `crw-sdk`. A new platform
+package needs that entry once before its first release. If npm publishing has
+to be paused, set the repo variable `SKIP_NPM=true`
+(`gh variable set SKIP_NPM --body true`): `publish-npm` and `publish-npm-sdk` are
+then cleanly **skipped** (gray, not failed) and `verify-publish` records npm as
+`skipped`. Re-enable with `gh variable delete SKIP_NPM`.
 
 ### A version was published with broken metadata (e.g. wrong npm optionalDeps)
 
@@ -77,7 +79,7 @@ These tags were cut while the release pipeline silently failed (cargo publish ou
 | -------------------- | -------------------------------- | -------------------------------------------- |
 | `CARGO_REGISTRY_TOKEN` | `publish-crates`               | crates.io account → API tokens → revoke + create new with `publish-update` scope |
 | `PYPI_TOKEN`         | `publish-pypi`                   | pypi.org account → API tokens → scoped to project `crw` |
-| `NPM_TOKEN`          | `publish-npm`                    | npmjs.com → access tokens → automation token |
+| npm (no secret)      | `publish-npm`, `publish-npm-sdk` | trusted publishing, configured per package on npmjs.com; nothing to rotate |
 | `GH_DISPATCH_PAT`    | `dispatch-release`, `update-apt`, `update-homebrew` | GitHub fine-grained PAT with `actions:write` on this repo + `us/apt-crw` + `us/homebrew-crw` |
 
 `GITHUB_TOKEN` is auto-provisioned and does not need rotation.

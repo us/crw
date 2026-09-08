@@ -315,14 +315,15 @@ jobs:
 
   publish-npm:
     needs: [release-context, asset-gate]
-    # Temporarily disable npm publishing by setting repo variable SKIP_NPM=true
-    # (e.g. while the npm token can't publish — 2FA-bypass granular token not yet
-    # configured). The job is cleanly SKIPPED (gray), not failed/masked. Clear
-    # the SKIP_NPM repo variable to re-enable. See RELEASE.md.
+    # Temporarily disable npm publishing by setting repo variable SKIP_NPM=true.
+    # The job is cleanly SKIPPED (gray), not failed/masked. Clear the SKIP_NPM
+    # repo variable to re-enable. Publishing authenticates through npm trusted
+    # publishing (OIDC), configured per package on npmjs.com. See RELEASE.md.
     if: ${{ vars.SKIP_NPM != 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write # npm trusted publishing (OIDC), no token secret
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -332,6 +333,11 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm 11.5.1 or later; the npm bundled with
+      # Node 22 is older.
+      - name: Update npm for trusted publishing
+        run: npm install -g npm@latest
 
       - name: Download and verify platform release assets
         shell: bash
@@ -352,7 +358,6 @@ jobs:
       - name: Idempotent publish (platform packages)
         shell: bash
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           VERSION: ${{ needs.release-context.outputs.version }}
         run: |
           set -euo pipefail
@@ -405,7 +410,6 @@ jobs:
       - name: Idempotent publish (main package)
         shell: bash
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           VERSION: ${{ needs.release-context.outputs.version }}
         run: |
           set -euo pipefail
@@ -576,6 +580,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write # npm trusted publishing (OIDC), no token secret
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -585,6 +590,11 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm 11.5.1 or later; the npm bundled with
+      # Node 22 is older.
+      - name: Update npm for trusted publishing
+        run: npm install -g npm@latest
 
       - name: Build + test
         shell: bash
@@ -598,7 +608,6 @@ jobs:
       - name: Idempotent publish
         shell: bash
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           VERSION: ${{ needs.release-context.outputs.version }}
         run: |
           set -euo pipefail
