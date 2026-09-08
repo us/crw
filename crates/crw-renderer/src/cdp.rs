@@ -689,12 +689,21 @@ async fn resolve_ws_url_with_cache(
             .timeout(Duration::from_secs(5))
             .send()
             .await
-            .map_err(|e| CrwError::RendererError(format!("CDP discovery failed: {e}")))?;
+            .map_err(|e| {
+                // The endpoint is already in the `Discovering browser WS URL` line
+                // above; it is internal infrastructure and must not reach the caller.
+                CrwError::RendererError(format!(
+                    "CDP discovery failed: {}",
+                    crw_core::error::reqwest_message(e)
+                ))
+            })?;
 
-        let body: serde_json::Value = resp
-            .json()
-            .await
-            .map_err(|e| CrwError::RendererError(format!("CDP discovery parse error: {e}")))?;
+        let body: serde_json::Value = resp.json().await.map_err(|e| {
+            CrwError::RendererError(format!(
+                "CDP discovery parse error: {}",
+                crw_core::error::reqwest_message(e)
+            ))
+        })?;
 
         let ws_url = body
             .get("webSocketDebuggerUrl")

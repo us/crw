@@ -22,7 +22,7 @@ impl RobotsTxt {
             .get(&url)
             .send()
             .await
-            .map_err(|e| CrwError::HttpError(e.to_string()))?;
+            .map_err(|e| CrwError::HttpError(crw_core::error::reqwest_message(e)))?;
 
         if !resp.status().is_success() {
             return Ok(Self {
@@ -34,7 +34,7 @@ impl RobotsTxt {
         let text = resp
             .text()
             .await
-            .map_err(|e| CrwError::HttpError(e.to_string()))?;
+            .map_err(|e| CrwError::HttpError(crw_core::error::reqwest_message(e)))?;
 
         Ok(Self::parse(&text))
     }

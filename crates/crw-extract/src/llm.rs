@@ -100,10 +100,17 @@ pub(crate) async fn send_provider_post(
         Ok(resp) => return Ok(resp),
         Err(e) => e,
     };
-    match retry {
+    let out = match retry {
         Some(retry) if request_never_reached_provider(&err) => retry.send().await,
         _ => Err(err),
+    };
+    if let Err(ref e) = out {
+        // The endpoint names the managed provider, so callers get a stripped
+        // message (`crw_core::error::reqwest_message`). Operators need the URL,
+        // and this is the one place every provider POST passes through.
+        tracing::warn!("provider request failed: {e}");
     }
+    out
 }
 
 /// True only when the request provably never got to the provider, so replaying
@@ -445,13 +452,20 @@ async fn call_anthropic(
             .json(&body),
     )
     .await
-    .map_err(|e| CrwError::Internal(format!("LLM request failed: {e}")))?;
+    .map_err(|e| {
+        CrwError::Internal(format!(
+            "LLM request failed: {}",
+            crw_core::error::reqwest_message(e)
+        ))
+    })?;
 
     let status = resp.status();
-    let text = resp
-        .text()
-        .await
-        .map_err(|e| CrwError::Internal(format!("LLM response read failed: {e}")))?;
+    let text = resp.text().await.map_err(|e| {
+        CrwError::Internal(format!(
+            "LLM response read failed: {}",
+            crw_core::error::reqwest_message(e)
+        ))
+    })?;
     if !status.is_success() {
         // NOTE: body may contain the request echoed back by some gateways.
         // The HTTP status code is enough — do not leak the body.
@@ -544,7 +558,12 @@ async fn call_openai(
                 .json(&body),
         )
         .await
-        .map_err(|e| CrwError::Internal(format!("LLM request failed: {e}")))?;
+        .map_err(|e| {
+            CrwError::Internal(format!(
+                "LLM request failed: {}",
+                crw_core::error::reqwest_message(e)
+            ))
+        })?;
 
         let status = resp.status();
         let is_retryable = status == reqwest::StatusCode::TOO_MANY_REQUESTS
@@ -558,10 +577,12 @@ async fn call_openai(
             continue;
         }
 
-        let text = resp
-            .text()
-            .await
-            .map_err(|e| CrwError::Internal(format!("LLM response read failed: {e}")))?;
+        let text = resp.text().await.map_err(|e| {
+            CrwError::Internal(format!(
+                "LLM response read failed: {}",
+                crw_core::error::reqwest_message(e)
+            ))
+        })?;
         break (status, text);
     };
     if !status.is_success() {
@@ -622,13 +643,20 @@ async fn call_azure(
             .json(&body),
     )
     .await
-    .map_err(|e| CrwError::Internal(format!("LLM request failed: {e}")))?;
+    .map_err(|e| {
+        CrwError::Internal(format!(
+            "LLM request failed: {}",
+            crw_core::error::reqwest_message(e)
+        ))
+    })?;
 
     let status = resp.status();
-    let text = resp
-        .text()
-        .await
-        .map_err(|e| CrwError::Internal(format!("LLM response read failed: {e}")))?;
+    let text = resp.text().await.map_err(|e| {
+        CrwError::Internal(format!(
+            "LLM response read failed: {}",
+            crw_core::error::reqwest_message(e)
+        ))
+    })?;
     if !status.is_success() {
         return Err(CrwError::Internal(format!("LLM HTTP {status} from azure")));
     }

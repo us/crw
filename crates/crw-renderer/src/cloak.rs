@@ -168,10 +168,21 @@ impl CloakRenderer {
         let resp = tokio::time::timeout(budget, rb.send())
             .await
             .map_err(|_| CrwError::Timeout(budget.as_millis() as u64))?
-            .map_err(|e| CrwError::RendererError(format!("cloak GET {path_and_query}: {e}")))?;
+            .map_err(|e| {
+                // Same rule as camoufox: the mirror base URL is ours, not the
+                // caller's. Log it, do not return it.
+                tracing::warn!(base_url = %self.base_url, "cloak request failed: {e}");
+                CrwError::RendererError(format!(
+                    "cloak GET {path_and_query}: {}",
+                    crw_core::error::reqwest_message(e)
+                ))
+            })?;
         let status = resp.status().as_u16();
         let body = resp.text().await.map_err(|e| {
-            CrwError::RendererError(format!("cloak GET {path_and_query} body: {e}"))
+            CrwError::RendererError(format!(
+                "cloak GET {path_and_query} body: {}",
+                crw_core::error::reqwest_message(e)
+            ))
         })?;
         Ok((status, body))
     }

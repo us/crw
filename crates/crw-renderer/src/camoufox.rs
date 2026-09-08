@@ -104,12 +104,22 @@ impl CamoufoxRenderer {
         let resp = tokio::time::timeout(budget, fut)
             .await
             .map_err(|_| CrwError::Timeout(budget.as_millis() as u64))?
-            .map_err(|e| CrwError::RendererError(format!("camoufox POST {path}: {e}")))?;
+            .map_err(|e| {
+                // The sidecar base URL is internal infrastructure: operators get it
+                // from the log, callers only get the failure shape.
+                tracing::warn!(base_url = %self.base_url, path, "camoufox request failed: {e}");
+                CrwError::RendererError(format!(
+                    "camoufox POST {path}: {}",
+                    crw_core::error::reqwest_message(e)
+                ))
+            })?;
         let status = resp.status();
-        let value: serde_json::Value = resp
-            .json()
-            .await
-            .map_err(|e| CrwError::RendererError(format!("camoufox POST {path} body: {e}")))?;
+        let value: serde_json::Value = resp.json().await.map_err(|e| {
+            CrwError::RendererError(format!(
+                "camoufox POST {path} body: {}",
+                crw_core::error::reqwest_message(e)
+            ))
+        })?;
         if !status.is_success() {
             let msg = value
                 .get("error")

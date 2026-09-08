@@ -44,7 +44,11 @@ async fn read_capped(response: reqwest::Response, cap: usize) -> Result<Vec<u8>,
     let mut buf: Vec<u8> = Vec::with_capacity(64 * 1024);
     let mut stream = response.bytes_stream();
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e: reqwest::Error| SearchError::Transport(e.to_string()))?;
+        let chunk = chunk.map_err(|e: reqwest::Error| {
+            // Same reason as the `send()` arm below (issue #90): the embedded
+            // request URL can carry the backend host and its credentials.
+            SearchError::Transport(crw_core::error::reqwest_message(e))
+        })?;
         if buf.len() + chunk.len() > cap {
             return Err(SearchError::InvalidResponse(format!(
                 "response too large: exceeded {cap}-byte cap"
@@ -226,8 +230,8 @@ impl SearxngClient {
             } else {
                 // `without_url()` strips reqwest's embedded request URL from
                 // the Display string — that URL can carry credentials/tokens
-                // (issue #90). The route layer re-attaches a sanitized origin.
-                SearchError::Transport(e.without_url().to_string())
+                // (issue #90). The route layer logs the sanitized origin instead.
+                SearchError::Transport(crw_core::error::reqwest_message(e))
             }
         })?;
 
