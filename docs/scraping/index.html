@@ -303,7 +303,8 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
     <a class="page-btn primary" href="https://fastcrw.com/playground" target="_blank" rel="noopener">Open Playground</a>
     <a class="page-btn secondary" href="/extract">Jump to Extract</a>
   </div>
-</div><h2 id="scraping-a-url-with-crw">Scraping a URL with CRW</h2>
+</div><p><strong>Try it without a key:</strong> run this exact request in the <a href="https://fastcrw.com/playground?url=https%3A%2F%2Fexample.com&mode=scrape" target="_blank" rel="noopener">playground</a> (rate-limited preview, no signup).</p>
+<h2 id="scraping-a-url-with-crw">Scraping a URL with CRW</h2>
 <h3 id="v1scrape">/v1/scrape</h3>
 <pre data-lang="http"><code class="language-http">POST /v1/scrape</code></pre>
 <p>Authentication:</p>
@@ -360,7 +361,8 @@ console.log(body.data.markdown);</code></pre></div><div class="code-tab-panel" d
     &quot;formats&quot;: [&quot;markdown&quot;],
     &quot;onlyMainContent&quot;: true
   }'</code></pre></div>
-    </div><h3 id="response">Response</h3>
+    </div><div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">500 credits to start, up to 500 more from onboarding tasks, no card.
+<a href="https://fastcrw.com/register?ref=docs-scraping-inline" target="_blank" rel="noopener">Get your API key</a></div></div><h3 id="response">Response</h3>
 <pre data-lang="json"><code class="language-json">{
   &quot;success&quot;: true,
   &quot;data&quot;: {

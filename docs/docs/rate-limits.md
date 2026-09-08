@@ -69,7 +69,7 @@ You already have as many requests in flight as your plan allows. The response in
 
 ### Cause 3: Credits exhausted
 
-Once your available balance reaches zero, the API returns `429`. This covers a FREE account that has spent its lifetime 1000 credits, and a paid account that is out of credits without an active auto-recharge attempt in progress. The response includes `X-FASTCRW-Credits-Available`, `X-FASTCRW-Included-Remaining`, `X-FASTCRW-Purchased-Remaining`, and `X-FASTCRW-Upgrade-Url` headers. There is no reset header: a FREE account's 1000 credits are a one-time lifetime grant, not a monthly allowance, so there is nothing to reset.
+Once your available balance reaches zero, the API returns `429`. This covers a FREE account that has spent its lifetime 500 credits (plus up to 500 more from onboarding tasks), and a paid account that is out of credits without an active auto-recharge attempt in progress. The response includes `X-FASTCRW-Credits-Available`, `X-FASTCRW-Included-Remaining`, `X-FASTCRW-Purchased-Remaining`, and `X-FASTCRW-Upgrade-Url` headers. There is no reset header: a FREE account's credits are a one-time lifetime grant, not a monthly allowance, so there is nothing to reset.
 
 **Action:** do NOT retry. Retrying burns no credits (the request is rejected before processing) but creates noise in your logs and may hide the real cause. Alert or pause your pipeline and top up your balance or upgrade your plan.
 

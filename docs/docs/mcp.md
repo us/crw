@@ -64,6 +64,11 @@ That's it. The agent starts `crw-mcp`, which contains the full scraping engine. 
 
 If you want host-by-host config files instead of one-liners, jump to [MCP Client Setup](#mcp-clients).
 
+:::note
+500 credits to start, up to 500 more from onboarding tasks, no card.
+<a href="https://fastcrw.com/register?ref=docs-mcp-inline" target="_blank" rel="noopener">Get your API key</a>
+:::
+
 ### With CDP rendering (LightPanda/Chrome)
 
 If you have a CDP-compatible browser, pass it via env vars:

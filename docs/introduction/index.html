@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Introduction — CRW Docs</title>
-  <meta name="description" content="Turn websites into usable data with one API. Start with a single scrape request, then move into search , map , crawl , extract , or MCP only when your workflow actually needs them. Interactive browser">
+  <title>Web Scraping, Search &amp; Crawl API — CRW Docs</title>
+  <meta name="description" content="Open-source web scraping API for agents and RAG. Scrape, crawl, search, map, and extract data from any site with one Rust binary, self-hosted or on fastCRW Cloud.">
   <meta name="keywords" content="web scraper, web crawler, firecrawl alternative, crawl4ai alternative, self-hosted scraper, rust web scraper, mcp server, ai web scraping, rag pipeline, llm extraction, open source crawler, headless browser scraper">
   <link rel="canonical" href="https://docs.fastcrw.com/introduction">
   <link rel="icon" href="/favicon.png?v=2" type="image/png">
@@ -14,14 +14,14 @@
   <!-- Open Graph -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://docs.fastcrw.com/introduction">
-  <meta property="og:title" content="Introduction — CRW | Web Scraper in Rust">
-  <meta property="og:description" content="Turn websites into usable data with one API. Start with a single scrape request, then move into search , map , crawl , extract , or MCP only when your workflow actually needs them. Interactive browser">
+  <meta property="og:title" content="Web Scraping, Search &amp; Crawl API — CRW | Web Scraper in Rust">
+  <meta property="og:description" content="Open-source web scraping API for agents and RAG. Scrape, crawl, search, map, and extract data from any site with one Rust binary, self-hosted or on fastCRW Cloud.">
   <meta property="og:site_name" content="CRW">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="Introduction — CRW Docs">
-  <meta name="twitter:description" content="Turn websites into usable data with one API. Start with a single scrape request, then move into search , map , crawl , extract , or MCP only when your workflow actually needs them. Interactive browser">
+  <meta name="twitter:title" content="Web Scraping, Search &amp; Crawl API — CRW Docs">
+  <meta name="twitter:description" content="Open-source web scraping API for agents and RAG. Scrape, crawl, search, map, and extract data from any site with one Rust binary, self-hosted or on fastCRW Cloud.">
 
   <!-- Structured Data (JSON-LD) -->
   <script type="application/ld+json">
@@ -285,7 +285,7 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
       <article id="article" role="main"><p align="right"><a href="https://github.com/us/crw/blob/main/README.zh-CN.md">中文文档 (README.zh-CN.md)</a></p><div class="page-intro">
   <div class="page-kicker">Get Started</div>
   <h1 id="crw-docs">CRW Docs</h1>
-  <p class="page-subtitle">Turn websites into usable data with one API. Start with a single <code>scrape</code> request, then move into <code>search</code>, <code>map</code>, <code>crawl</code>, <code>extract</code>, or MCP only when your workflow actually needs them. Interactive browser automation is handled by the companion <code>crw-browse</code> service.</p>
+  <p class="page-subtitle">Open-source web scraping API for agents and RAG. Scrape, crawl, search, map, and extract data from any site with one Rust binary, self-hosted or on fastCRW Cloud.</p>
   <div class="page-capabilities">
     <div class="page-capability"><strong>Fastest first win:</strong> one URL, one markdown response</div>
     <div class="page-capability"><strong>Works for:</strong> agents, ETL, RAG, structured extraction</div>
@@ -295,14 +295,43 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
     <a class="page-btn primary" href="/quick-start">Make your first request</a>
     <a class="page-btn secondary" href="/self-hosting">Self-host CRW</a>
   </div>
-</div><blockquote>
+</div><h2 id="setting-up-an-ai-coding-agent">Setting up an AI coding agent?</h2>
+<p>Paste this into Claude Code, Cursor, Codex, Windsurf, or any other coding agent&#39;s chat:</p>
+<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">Install fastCRW for web access: run <code>npx crw-mcp@latest install</code> to add the MCP server and skill, then use the <code>crw_scrape</code>, <code>crw_search</code>, <code>crw_map</code>, and <code>crw_crawl</code> tools (or the native <code>/v1</code> REST API) to fetch, search, and crawl the web with the <code>CRW_API_KEY</code> in my environment.</div></div><p>Full reference written for autonomous agents: <a href="/agent-onboarding">Agent Onboarding Guide</a>.</p>
+<h2 id="pick-your-endpoint">Pick your endpoint</h2>
+<div class="card-grid"><a href="/scraping" class="doc-card">
+        <div class="doc-card-icon"></div>
+        <div class="doc-card-title">Scrape</div>
+        <div class="doc-card-desc">One known URL in, clean markdown or JSON out.</div>
+      </a><a href="/search" class="doc-card">
+        <div class="doc-card-icon"></div>
+        <div class="doc-card-title">Search</div>
+        <div class="doc-card-desc">No URL yet? Search the web and get ranked results with content.</div>
+      </a><a href="/map" class="doc-card">
+        <div class="doc-card-icon"></div>
+        <div class="doc-card-title">Map</div>
+        <div class="doc-card-desc">Discover every URL under a domain before you scrape or crawl.</div>
+      </a><a href="/crawling" class="doc-card">
+        <div class="doc-card-icon"></div>
+        <div class="doc-card-title">Crawl</div>
+        <div class="doc-card-desc">Scrape every page under a URL in one background job.</div>
+      </a><a href="/extract" class="doc-card">
+        <div class="doc-card-icon"></div>
+        <div class="doc-card-title">Extract</div>
+        <div class="doc-card-desc">Pull structured JSON fields from a page with an LLM.</div>
+      </a><a href="/mcp" class="doc-card">
+        <div class="doc-card-icon"></div>
+        <div class="doc-card-title">MCP</div>
+        <div class="doc-card-desc">Give Claude, Cursor, Codex, and other agents live web access.</div>
+      </a></div><blockquote>
 <p><strong>New to CRW? Use <code>/v1</code>.</strong> The <code>/v1</code> routes are the native fastCRW API for new integrations. Use <code>/firecrawl/v2</code> when migrating existing Firecrawl v2 SDK code or when you need compatibility-only routes such as batch scrape or PDF parse.</p>
 </blockquote>
 <div class="playground-panel">
   <div class="playground-kicker">30-second example</div>
   <div class="playground-title">The shortest path to a successful response</div>
   <div class="playground-copy">If this request works, you already understand the core CRW model: known URL in, clean content out. Everything else in the docs builds on that.</div>
-</div><h2 id="does-this-work-for-me">Does this work for me?</h2>
+</div><p><strong>Try it without a key:</strong> run this exact request in the <a href="https://fastcrw.com/playground?url=https%3A%2F%2Fexample.com&mode=scrape" target="_blank" rel="noopener">playground</a> (rate-limited preview, no signup).</p>
+<h2 id="does-this-work-for-me">Does this work for me?</h2>
 <table>
 <thead>
 <tr>

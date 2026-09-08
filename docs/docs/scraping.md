@@ -23,6 +23,8 @@
   </div>
 </div>
 
+**Try it without a key:** run this exact request in the <a href="https://fastcrw.com/playground?url=https%3A%2F%2Fexample.com&mode=scrape" target="_blank" rel="noopener">playground</a> (rate-limited preview, no signup).
+
 ## Scraping a URL with CRW
 
 ### /v1/scrape
@@ -102,6 +104,11 @@ curl -X POST https://api.fastcrw.com/v1/scrape \
     "onlyMainContent": true
   }'
 ```
+:::
+
+:::note
+500 credits to start, up to 500 more from onboarding tasks, no card.
+<a href="https://fastcrw.com/register?ref=docs-scraping-inline" target="_blank" rel="noopener">Get your API key</a>
 :::
 
 ### Response

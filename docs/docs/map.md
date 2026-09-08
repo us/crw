@@ -23,6 +23,8 @@
   </div>
 </div>
 
+**Try it without a key:** run this exact request in the <a href="https://fastcrw.com/playground?url=https%3A%2F%2Fexample.com&mode=map" target="_blank" rel="noopener">playground</a> (rate-limited preview, no signup).
+
 ## Mapping a site with CRW
 
 ### /v1/map

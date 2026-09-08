@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Installation — CRW Docs</title>
-  <meta name="description" content="Sign up at [fastcrw.com](https://fastcrw.com) and start using the API immediately.">
+  <title>Install: CLI, Docker, or Self-Host — CRW Docs</title>
+  <meta name="description" content="Skip installation and get a free API key for fastCRW Cloud, or install the self-hosted engine as a single binary, Docker container, or Homebrew formula.">
   <meta name="keywords" content="web scraper, web crawler, firecrawl alternative, crawl4ai alternative, self-hosted scraper, rust web scraper, mcp server, ai web scraping, rag pipeline, llm extraction, open source crawler, headless browser scraper">
   <link rel="canonical" href="https://docs.fastcrw.com/installation">
   <link rel="icon" href="/favicon.png?v=2" type="image/png">
@@ -14,14 +14,14 @@
   <!-- Open Graph -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://docs.fastcrw.com/installation">
-  <meta property="og:title" content="Installation — CRW | Web Scraper in Rust">
-  <meta property="og:description" content="Sign up at [fastcrw.com](https://fastcrw.com) and start using the API immediately.">
+  <meta property="og:title" content="Install: CLI, Docker, or Self-Host — CRW | Web Scraper in Rust">
+  <meta property="og:description" content="Skip installation and get a free API key for fastCRW Cloud, or install the self-hosted engine as a single binary, Docker container, or Homebrew formula.">
   <meta property="og:site_name" content="CRW">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="Installation — CRW Docs">
-  <meta name="twitter:description" content="Sign up at [fastcrw.com](https://fastcrw.com) and start using the API immediately.">
+  <meta name="twitter:title" content="Install: CLI, Docker, or Self-Host — CRW Docs">
+  <meta name="twitter:description" content="Skip installation and get a free API key for fastCRW Cloud, or install the self-hosted engine as a single binary, Docker container, or Homebrew formula.">
 
   <!-- Structured Data (JSON-LD) -->
   <script type="application/ld+json">
@@ -284,13 +284,15 @@ crw search "renewable energy trends 2024" --json --fields title,url,snippet --li
     <main class="content" id="content">
       <article id="article" role="main"><h1 id="installation-self-hosted-web-scraper">Installation — Self-Hosted Web Scraper</h1>
 <h2 id="cloud-no-installation-needed">Cloud (no installation needed)</h2>
-<p>Sign up at <a href="https://fastcrw.com">fastcrw.com</a> and start using the API immediately.
+<p>Skip installation and get a free API key for fastCRW Cloud, or install the self-hosted engine as a single binary, Docker container, or Homebrew formula.</p>
+<p>Sign up at <a href="https://fastcrw.com/register?ref=docs-installation-inline">fastcrw.com/register</a> and start using the API immediately.
 Native <code>/v1</code> endpoints for new CRW integrations, with <code>/firecrawl/v2</code> compatibility available for Firecrawl migrations.</p>
 <pre data-lang="bash"><code class="language-bash">curl -X POST https://api.fastcrw.com/v1/scrape \
   -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
   -H &quot;Content-Type: application/json&quot; \
   -d '{&quot;url&quot;: &quot;https://example.com&quot;}'</code></pre>
-<h2 id="one-line-install-recommended">One-Line Install (Recommended)</h2>
+<div class="callout callout-note"><div class="callout-icon"></div><div class="callout-content">500 credits to start, up to 500 more from onboarding tasks, no card.
+<a href="https://fastcrw.com/register?ref=docs-installation-inline" target="_blank" rel="noopener">Get your API key</a></div></div><h2 id="one-line-install-recommended">One-Line Install (Recommended)</h2>
 <p>The install script auto-detects your OS and architecture, downloads the latest binary, and installs it:</p>
 <pre data-lang="bash"><code class="language-bash">curl -fsSL https://fastcrw.com/install | sh</code></pre>
 <p>Or with <code>wget</code>:</p>
