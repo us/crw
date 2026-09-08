@@ -554,11 +554,20 @@ pub const MIN_TIER_BUDGET: Duration = Duration::from_millis(500);
 /// hard-blocked scrapes (which would otherwise fail) pay the extra time, and the
 /// SaaS→engine fetch tolerates up to 120s (`crw-client.ts TIMEOUT_MS`).
 ///
-/// ponytail: the EFFECTIVE render budget is `min(this, chrome_nav_budget_ms)`
-/// (cdp.rs `nav_budget = self.nav_budget.min(deadline.remaining())`), and
-/// `chrome_nav_budget_ms` defaults to 12_000 — keep the two equal; raising this
-/// above `chrome_nav_budget_ms` does nothing until that also moves.
-pub(crate) const CHROME_PROXY_ARM_BUDGET_MS: u64 = 12_000;
+/// Sized from a live measurement (2026-09-08, `www.carfax.ca` behind Azure Front
+/// Door): a residential Chrome render of the page takes 12.3 to 16.3 s end to
+/// end, so the previous 12_000 ms let the arm finish on 2 of 11 attempts while a
+/// pinned `chrome_proxy` with a larger budget cleared the wall 6 of 6 times.
+/// 20 s covers the measured worst case with headroom. Only the hard-blocked
+/// tail pays for it: the arm never runs on a scrape the ladder already served.
+///
+/// ponytail: the EFFECTIVE render budget is `min(this, nav_budget)` (cdp.rs
+/// `nav_budget = self.nav_budget.min(deadline.remaining())`), which is why the
+/// chrome_proxy tier is built with `chrome_nav_budget_ms.max(this)` below.
+/// Raising this alone does nothing; raising `chrome_nav_budget_ms` would also
+/// slow the direct chrome tier on the hot path, so the max is applied to the
+/// proxy tier only.
+pub(crate) const CHROME_PROXY_ARM_BUDGET_MS: u64 = 20_000;
 
 // Concurrency permits for the chrome_proxy auto-egress recovery arm are sized to
 // `config.chrome_proxy_pool_size()` at construction (see `chrome_proxy_arm_sem`) —
@@ -958,7 +967,7 @@ impl FallbackRenderer {
                         config.chrome_proxy_pool_size(),
                     )
                     .with_user_agent(&effective_ua)
-                    .with_nav_budget(config.chrome_nav_budget_ms)
+                    .with_nav_budget(config.chrome_nav_budget_ms.max(CHROME_PROXY_ARM_BUDGET_MS))
                     .with_challenge_retries(
                         config
                             .chrome_challenge_max_retries
