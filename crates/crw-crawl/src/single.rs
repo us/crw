@@ -439,12 +439,60 @@ async fn scrape_url_inner(
         // and hide the real outcome behind a fabricated timeout.
         let escalation_budget = deadline.remaining();
         let has_escalation_budget = escalation_budget >= crw_renderer::MIN_TIER_BUDGET;
+        // If the prior tier was lightpanda (returned 200 with thin/no content that
+        // fooled the renderer-level thinness check), escalate to chrome, and when
+        // this deployment runs no Chrome sidecar, to whatever stronger tier it does
+        // have. Pinning the bare literal made the second case a dead end: the pool
+        // rejects a name it does not hold outright, so the escalation failed on the
+        // pin rather than on the page and a configured, healthy tier was never
+        // reached. Chrome stays the first choice so a pool that holds it behaves
+        // exactly as before, including for a host the preference learner has already
+        // promoted to chrome; `auto_ladder_names` supplies the fallback and drops
+        // the tiers the auto chain would not have entered by itself.
+        // `None` means there is nothing above lightpanda, so the escalation is
+        // skipped rather than dispatched: "auto" would re-render the same tier for
+        // the same thin result, and a pin the pool cannot satisfy only produces a
+        // misleading failure.
+        // Otherwise (http tier), pass the caller's pin through, or `None` so
+        // the chain decides and chrome is reached through the existing
+        // failover path.
+        let escalation_target: Option<&str> = if prior_renderer == Some("lightpanda") {
+            renderer.lightpanda_escalation_target()
+        } else {
+            pinned
+        };
+        let has_escalation_target =
+            escalation_target.is_some() || prior_renderer != Some("lightpanda");
         let should_escalate = (md_is_byte_thin || escalate_for_quality)
             && used_low_tier
             && !js_ladder_exhausted
             && should_escalate_status
             && escalation_eligible
-            && has_escalation_budget;
+            && has_escalation_budget
+            && has_escalation_target;
+        if (md_is_byte_thin || escalate_for_quality)
+            && used_low_tier
+            && should_escalate_status
+            && escalation_eligible
+            && has_escalation_budget
+            && !has_escalation_target
+        {
+            tracing::debug!(
+                url = %req.url,
+                pool = ?renderer.auto_ladder_names(),
+                "skipping JS escalation: no tier above lightpanda in this pool"
+            );
+            // Say so on the response as well. The thin body ships as a
+            // success, and without this line nothing tells the operator that
+            // the deployment has no browser tier to render the page with.
+            let skip_warning = "JS escalation skipped: no chrome tier is configured above \
+                                lightpanda; add one for full SPA rendering"
+                .to_string();
+            effective_warning = Some(match effective_warning {
+                Some(w) => format!("{w}; {skip_warning}"),
+                None => skip_warning,
+            });
+        }
         if (md_is_byte_thin || escalate_for_quality)
             && used_low_tier
             && should_escalate_status
@@ -459,16 +507,6 @@ async fn scrape_url_inner(
             );
         }
         if should_escalate {
-            // If the prior tier was lightpanda (returned 200 with thin/no content
-            // that fooled the renderer-level thinness check), force chrome on the
-            // escalation. Falling back to "auto" would just hit lightpanda again.
-            // Otherwise (http tier), let the chain decide so chrome can be reached
-            // through the existing failover path.
-            let escalation_target: Option<&str> = if prior_renderer == Some("lightpanda") {
-                Some("chrome")
-            } else {
-                pinned
-            };
             let quality_score_before = md_quality.as_ref().map(|q| q.score);
             tracing::info!(
                 url = %req.url,

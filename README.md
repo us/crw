@@ -220,7 +220,6 @@ Embedding license: hello@fastcrw.com.
   <a href="https://github.com/paoloantinori" title="paoloantinori"><img src="https://github.com/paoloantinori.png?size=96" width="48" height="48" alt="paoloantinori"/></a>
   <a href="https://github.com/VIVAAN-DHAWAN" title="VIVAAN-DHAWAN"><img src="https://github.com/VIVAAN-DHAWAN.png?size=96" width="48" height="48" alt="VIVAAN-DHAWAN"/></a>
   <a href="https://github.com/mj520" title="mj520"><img src="https://github.com/mj520.png?size=96" width="48" height="48" alt="mj520"/></a>
-  <a href="https://github.com/rqi14" title="rqi14"><img src="https://github.com/rqi14.png?size=96" width="48" height="48" alt="rqi14"/></a>
 </p>
 <!-- contributors:end -->
 
