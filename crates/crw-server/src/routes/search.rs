@@ -1910,7 +1910,10 @@ mod tests {
         match mapped {
             CrwError::TargetUnreachable(msg) => {
                 assert!(msg.contains("dns error"), "{msg}");
-                assert!(!msg.contains("searxng"), "must not name the backend: {msg}");
+                assert!(
+                    !msg.contains("://"),
+                    "must not name the backend origin: {msg}"
+                );
                 assert!(!msg.contains("8080"), "must not leak the port: {msg}");
                 assert!(!msg.contains("user"), "must not leak userinfo: {msg}");
                 assert!(!msg.contains("pass"), "must not leak credentials: {msg}");
