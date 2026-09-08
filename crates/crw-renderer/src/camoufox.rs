@@ -46,6 +46,17 @@ const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 /// because the `camoufox` feature does not imply `cdp`, so that module is not
 /// compiled in a camoufox-only build.
 const CHALLENGE_POLL_INTERVAL: Duration = Duration::from_secs(3);
+/// Smallest request-deadline remainder worth spending on one more poll
+/// evaluate. Below it the call can only time out, which would replace the
+/// informative wall error with a bare "timed out".
+const MIN_POLL_EVALUATE_BUDGET: Duration = Duration::from_millis(250);
+/// What the poll can still spend after its ceiling before the caller sees the
+/// result: one last evaluate at its floor plus the awaited session teardown.
+/// A reserve handed to [`CamoufoxRenderer::with_challenge_reserve`] on behalf
+/// of something that runs after this tier has to include it.
+#[cfg(feature = "cloak")]
+pub(crate) const POLL_HANDOFF_MS: u64 =
+    MIN_POLL_EVALUATE_BUDGET.as_millis() as u64 + CLEANUP_TIMEOUT.as_millis() as u64;
 
 /// Opt-in Camoufox stealth renderer. Construct via [`CamoufoxRenderer::new`].
 pub struct CamoufoxRenderer {
@@ -59,6 +70,11 @@ pub struct CamoufoxRenderer {
     /// Ceiling for polling a tab while a bot challenge clears
     /// (`config.camoufox_challenge_wait()`). `ZERO` disables the poll.
     challenge_wait: Duration,
+    /// Request-deadline time the poll must leave untouched, so a recovery arm
+    /// that runs after the ladder (the cloak arm, gated on
+    /// `CLOAK_ARM_FLOOR_MS`) still finds its floor. Zero when nothing runs
+    /// after this tier.
+    challenge_reserve: Duration,
     client: reqwest::Client,
 }
 
@@ -70,6 +86,7 @@ impl CamoufoxRenderer {
             api_key: api_key.to_string(),
             timeout: Duration::from_millis(timeout_ms),
             challenge_wait: Duration::from_millis(CAMOUFOX_DEFAULT_CHALLENGE_WAIT_MS),
+            challenge_reserve: Duration::ZERO,
             client: reqwest::Client::new(),
         }
     }
@@ -79,6 +96,14 @@ impl CamoufoxRenderer {
     /// same way the CDP tiers are. `0` disables the poll.
     pub fn with_challenge_wait(mut self, challenge_wait_ms: u64) -> Self {
         self.challenge_wait = Duration::from_millis(challenge_wait_ms);
+        self
+    }
+
+    /// Keep `reserve_ms` of the request deadline out of the challenge poll.
+    /// The ladder sets this when a recovery arm runs after camoufox, so the
+    /// poll cannot spend the floor that arm needs to fire.
+    pub fn with_challenge_reserve(mut self, reserve_ms: u64) -> Self {
+        self.challenge_reserve = Duration::from_millis(reserve_ms);
         self
     }
 
@@ -254,19 +279,30 @@ impl CamoufoxRenderer {
         // pages it would have gotten had it looked again. Poll until the
         // challenge clears or the budget runs out.
         //
-        // Only `"challenge"` is polled, never `"wall"`. The wall markers
-        // ("attention required! | cloudflare", "enable javascript and cookies
-        // to continue") are terminal refusals rather than work in progress —
-        // waiting on those would spend the whole budget to arrive at the same
-        // error.
+        // Only `"challenge"` is polled, never `"wall"`. A wall is a terminal
+        // refusal rather than work in progress: waiting on it would spend the
+        // whole budget to arrive at the same error.
         //
-        // The ceiling is clamped by the deadline's own remaining time, so a
-        // challenge that never clears cannot outlive the request. A clean page
-        // never enters the loop: `looks_like_wall` is `None` on the first
+        // The ceiling is clamped by the deadline's own remaining time, minus
+        // whatever a recovery arm after this tier needs, so a challenge that
+        // never clears cannot outlive the request or starve that arm. A clean
+        // page never enters the loop: `looks_like_wall` is `None` on the first
         // evaluate, and a deployment that sets the ceiling to 0 keeps exactly
         // today's single-shot behaviour.
-        let challenge_budget = self.challenge_wait.min(deadline.remaining());
+        // The reserve only applies while there is more deadline left than the
+        // reserve itself. Below that the poll is deliberately preferred over
+        // the arm it would protect: holding the whole remainder back would
+        // leave this tier a single look, and the arm may not be reachable at
+        // all on this request.
+        let remaining_now = deadline.remaining();
+        let remaining_for_poll = if remaining_now > self.challenge_reserve {
+            remaining_now - self.challenge_reserve
+        } else {
+            remaining_now
+        };
+        let challenge_budget = self.challenge_wait.min(remaining_for_poll);
         let poll_start = Instant::now();
+        let mut missed_poll = false;
         while looks_like_wall(&html) == Some("challenge") {
             let remaining = challenge_budget.saturating_sub(poll_start.elapsed());
             if remaining.is_zero() {
@@ -274,14 +310,49 @@ impl CamoufoxRenderer {
             }
             tokio::time::sleep(CHALLENGE_POLL_INTERVAL.min(remaining)).await;
             // The sleep can consume what was left of the shared deadline. Stop
-            // here rather than dispatching an evaluate with no budget: that call
-            // would return `Timeout`, replacing this tier's informative wall
-            // error (and the antibot attribution that rides on it) with a bare
-            // "timed out".
-            if deadline.remaining().is_zero() {
+            // here rather than dispatching an evaluate that cannot finish: that
+            // call would return `Timeout`, replacing this tier's informative
+            // wall error (and the antibot attribution that rides on it) with a
+            // bare "timed out".
+            if deadline.remaining() < MIN_POLL_EVALUATE_BUDGET {
                 break;
             }
-            html = self.evaluate_outer_html(&tab_id, user_id, deadline).await?;
+            // The challenge clears by reloading the tab, and an evaluate that
+            // lands in that window fails ("execution context destroyed",
+            // surfaced as ok:false or a non-2xx). One such miss is part of the
+            // poll, not a failure of the tier; two in a row means the sidecar
+            // itself is broken and the error is the honest answer. The flag
+            // resets on every good evaluate, so it tolerates one miss per
+            // streak, bounded by the ceiling. A `Timeout` counts as a miss too:
+            // the loop then ends on the budget and reports the challenge it
+            // saw rather than a bare "timed out".
+            // Bound the evaluate by what is left of the ceiling (with a small
+            // floor so the final look can still complete), not by the whole
+            // request deadline: otherwise one slow evaluate could spend the
+            // reserve the ceiling was clamped to keep.
+            let poll_left = challenge_budget.saturating_sub(poll_start.elapsed());
+            let evaluate_deadline = Deadline::now_plus(
+                poll_left
+                    .max(MIN_POLL_EVALUATE_BUDGET)
+                    .min(deadline.remaining()),
+            );
+            match self
+                .evaluate_outer_html(&tab_id, user_id, &evaluate_deadline)
+                .await
+            {
+                Ok(next) => {
+                    html = next;
+                    missed_poll = false;
+                }
+                Err(e) if !missed_poll => {
+                    tracing::debug!(
+                        renderer = %self.name,
+                        "camoufox: challenge poll evaluate failed, retrying once: {e}"
+                    );
+                    missed_poll = true;
+                }
+                Err(e) => return Err(e),
+            }
         }
 
         // A bot wall or an empty body is a failure for THIS tier — surface it as
@@ -308,15 +379,15 @@ impl CamoufoxRenderer {
 /// report a retryable failure instead of returning a useless challenge page.
 fn looks_like_wall(html: &str) -> Option<&'static str> {
     let h = html.to_ascii_lowercase();
-    // Terminal refusals are checked FIRST. A page routinely carries both kinds
-    // of marker, and matching in list order would classify such a page as a
-    // clearing challenge and poll it for the whole ceiling to arrive at the same
-    // refusal. A wall is not work in progress, so it wins.
-    const WALLS: &[&str] = &[
-        "attention required! | cloudflare",
-        "enable javascript and cookies to continue",
-    ];
-    if WALLS.iter().any(|needle| h.contains(needle)) {
+    // The one terminal refusal is checked FIRST: the "Attention Required"
+    // title fronts the 1020 access-denied, the 1009 country ban and the
+    // interactive captcha, none of which clears by waiting, and it can share a
+    // page with a challenge marker (the legacy interstitial paired it with
+    // "checking your browser"). Matching in list order would poll such a page
+    // for the whole ceiling to arrive at the same refusal. The CDP tier's
+    // `is_challenge_page` does poll this title; the divergence is deliberate,
+    // since this tier is normally the last one and its poll is far longer.
+    if h.contains("attention required! | cloudflare") {
         return Some("wall");
     }
     // `challenge-platform/h/`, not the bare `/cdn-cgi/challenge-platform`
@@ -337,7 +408,35 @@ fn looks_like_wall(html: &str) -> Option<&'static str> {
     if CHALLENGES.iter().any(|needle| h.contains(needle)) {
         return Some("challenge");
     }
+    // The noscript line ships ON the managed-challenge interstitial itself
+    // (`crates/crw-renderer/tests/egress_latch_no_latch_on_cf.rs` carries the
+    // canonical capture), so it must never outrank a challenge marker. Alone,
+    // with no challenge around it, it is a plain refusal, unless it only sits
+    // inside `<noscript>`: a rendered page keeps that hidden fallback text in
+    // its outerHTML, and a page that rendered is not a refusal.
+    if without_noscript(&h).contains("enable javascript and cookies to continue") {
+        return Some("wall");
+    }
     None
+}
+
+/// The document with every `<noscript>...</noscript>` block removed. Input is
+/// already lowercased. An unterminated block is dropped to the end.
+fn without_noscript(h: &str) -> std::borrow::Cow<'_, str> {
+    if !h.contains("<noscript") {
+        return std::borrow::Cow::Borrowed(h);
+    }
+    let mut out = String::with_capacity(h.len());
+    let mut rest = h;
+    while let Some(start) = rest.find("<noscript") {
+        out.push_str(&rest[..start]);
+        rest = match rest[start..].find("</noscript>") {
+            Some(end) => &rest[start + end + "</noscript>".len()..],
+            None => "",
+        };
+    }
+    out.push_str(rest);
+    std::borrow::Cow::Owned(out)
 }
 
 #[async_trait]
@@ -701,6 +800,157 @@ mod tests {
         assert!(res.html.contains("real page"), "got: {}", res.html);
     }
 
+    /// A challenge clears by reloading the tab, so an evaluate that lands in
+    /// that window fails. One such miss must not end the tier: the next poll
+    /// picks up the cleared page.
+    #[tokio::test]
+    async fn evaluate_failure_mid_poll_is_a_miss_not_a_failure() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/tabs"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"tabId": "t1"})),
+            )
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/tabs/t1/evaluate"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "ok": true,
+                "result": "<html><head><title>Just a moment...</title></head></html>"
+            })))
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+        // Second evaluate: the context was destroyed by the reload.
+        Mock::given(method("POST"))
+            .and(path("/tabs/t1/evaluate"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": false})),
+            )
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/tabs/t1/evaluate"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "ok": true,
+                "result": "<html><body><h1>real page</h1></body></html>"
+            })))
+            .mount(&server)
+            .await;
+        mount_delete_session(&server).await;
+
+        // One full poll interval for the failed look, then the remainder for
+        // the look that finds the cleared page, with slack for a loaded runner.
+        let r = renderer(&server.uri()).with_challenge_wait(4_500);
+        let res = r
+            .fetch("https://example.com", &HashMap::new(), None, deadline())
+            .await
+            .expect("one failed poll must not fail the tier");
+        assert!(res.html.contains("real page"), "got: {}", res.html);
+    }
+
+    /// Two failed polls in a row mean the sidecar is broken, and that error is
+    /// the honest answer rather than a wall the page never showed.
+    #[tokio::test]
+    async fn two_consecutive_evaluate_failures_surface_the_error() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/tabs"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"tabId": "t1"})),
+            )
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/tabs/t1/evaluate"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "ok": true,
+                "result": "<html><head><title>Just a moment...</title></head></html>"
+            })))
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/tabs/t1/evaluate"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": false})),
+            )
+            .mount(&server)
+            .await;
+        mount_delete_session(&server).await;
+
+        let r = renderer(&server.uri()).with_challenge_wait(30_000);
+        let err = r
+            .fetch("https://example.com", &HashMap::new(), None, deadline())
+            .await
+            .expect_err("a broken sidecar is an error");
+        match err {
+            CrwError::RendererError(m) => assert!(m.contains("ok=false"), "got: {m}"),
+            other => panic!("expected RendererError, got {other:?}"),
+        }
+        let evaluates = server
+            .received_requests()
+            .await
+            .expect("recorded requests")
+            .iter()
+            .filter(|r| r.url.path() == "/tabs/t1/evaluate")
+            .count();
+        assert_eq!(
+            evaluates, 3,
+            "interstitial, one tolerated miss, then the error"
+        );
+    }
+
+    /// The reserve keeps the poll from spending the deadline a recovery arm
+    /// after this tier needs: with almost all of it reserved, the poll stops
+    /// after a single look instead of running out the 30s ceiling.
+    #[tokio::test]
+    async fn challenge_reserve_bounds_the_poll() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/tabs"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"tabId": "t1"})),
+            )
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/tabs/t1/evaluate"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "ok": true,
+                "result": "<html><head><title>Just a moment...</title></head></html>"
+            })))
+            .mount(&server)
+            .await;
+        mount_delete_session(&server).await;
+
+        // 30s deadline, 30s ceiling, 29.9s reserved: 100ms of poll budget.
+        let r = renderer(&server.uri())
+            .with_challenge_wait(30_000)
+            .with_challenge_reserve(29_900);
+        let err = r
+            .fetch("https://example.com", &HashMap::new(), None, deadline())
+            .await
+            .expect_err("the challenge never clears");
+        match err {
+            CrwError::RendererError(m) => assert!(m.contains("challenge"), "got: {m}"),
+            other => panic!("expected RendererError, got {other:?}"),
+        }
+        let evaluates = server
+            .received_requests()
+            .await
+            .expect("recorded requests")
+            .iter()
+            .filter(|r| r.url.path() == "/tabs/t1/evaluate")
+            .count();
+        assert!(
+            evaluates <= 2,
+            "a 100ms budget allows at most one poll, got {evaluates}"
+        );
+    }
+
     /// `looks_like_wall` separates a clearing "challenge" from a terminal
     /// "wall". Only the former is worth polling; a wall must fail immediately
     /// rather than burn the whole ceiling to reach the same error.
@@ -808,12 +1058,43 @@ mod tests {
             ),
             None
         );
-        // A page carrying both kinds of marker is a refusal, not work in
-        // progress, so it must classify as a wall and fail immediately.
+        // The noscript line is part of the managed-challenge interstitial, so
+        // a page carrying it next to a challenge marker is work in progress,
+        // not a refusal. This is the repo's canonical Cloudflare capture, kept
+        // verbatim from tests/egress_latch_no_latch_on_cf.rs.
+        assert_eq!(
+            looks_like_wall(concat!(
+                "<html><body><h1>Just a moment...</h1>",
+                "<script src=\"/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1\"></script>",
+                "<div id=\"cf-please-wait\">Enable JavaScript and cookies to continue</div></body></html>"
+            )),
+            Some("challenge")
+        );
         assert_eq!(
             looks_like_wall(
                 "<html><body><h1>Verifying you are human</h1>\
                  <p>Enable JavaScript and cookies to continue</p></body></html>"
+            ),
+            Some("challenge")
+        );
+        // Alone it is a plain refusal.
+        assert_eq!(
+            looks_like_wall("<p>Please enable JavaScript and cookies to continue</p>"),
+            Some("wall")
+        );
+        // Only inside noscript on an otherwise rendered page: not a refusal.
+        assert_eq!(
+            looks_like_wall(
+                "<html><body><noscript>Enable JavaScript and cookies to continue</noscript>\
+                 <article>Real content that rendered fine.</article></body></html>"
+            ),
+            None
+        );
+        // The terminal title outranks a challenge marker on the same page.
+        assert_eq!(
+            looks_like_wall(
+                "<title>Attention Required! | Cloudflare</title>\
+                 <script src=/cdn-cgi/challenge-platform/h/b/orchestrate/captcha/v1></script>"
             ),
             Some("wall")
         );

@@ -697,6 +697,41 @@ impl std::fmt::Debug for FallbackRenderer {
     }
 }
 
+/// How much of the request deadline the camoufox challenge poll must leave for
+/// the cloak recovery arm, or `None` when that arm cannot fire after it.
+///
+/// The arm exists whenever a cloak endpoint is configured (it is a recovery
+/// arm, not a ladder tier, so its own `include_in_auto` does not decide this),
+/// and it is gated on `CLOAK_ARM_FLOOR_MS` of remaining deadline only while
+/// `cloak_recover_on_cf` is off. With that flag on it fires on its own fresh
+/// budget, so reserving for it would only shorten the poll for nothing.
+///
+/// It also only fires when an earlier tier left a Cloudflare challenge body
+/// behind, and camoufox reports a challenge as an error, never as a body. So
+/// the reserve pays off in exactly one shape: `mode = "auto"` with camoufox in
+/// the ladder, where chrome ran first. A camoufox pin or `mode = "camoufox"`
+/// runs nothing before it, the arm is unreachable, and holding time back would
+/// only cut the poll short. A pin issued on a deployment that also has
+/// camoufox in auto still carries the reserve; that is a per-instance ceiling
+/// worth knowing, not worth plumbing.
+///
+/// The floor is what the arm checks AFTER this tier has returned, so the
+/// reserve also covers the last poll evaluate and the awaited session
+/// teardown that sit between the end of the poll and that check. The tier
+/// honours the reserve only while more than the reserve remains; with less,
+/// it prefers its own poll to an arm that may not fire.
+#[cfg(all(feature = "camoufox", feature = "cloak"))]
+fn camoufox_challenge_reserve_ms(config: &RendererConfig) -> Option<u64> {
+    let cloak_configured = config
+        .cloak
+        .as_ref()
+        .is_some_and(|c| !c.base_url.trim().is_empty());
+    let camoufox_after_a_ladder =
+        matches!(config.mode, RendererMode::Auto) && config.camoufox_in_ladder();
+    (camoufox_after_a_ladder && cloak_configured && !config.cloak_recover_on_cf)
+        .then_some(crw_core::config::CLOAK_ARM_FLOOR_MS + camoufox::POLL_HANDOFF_MS)
+}
+
 impl FallbackRenderer {
     pub fn new(
         config: &RendererConfig,
@@ -986,15 +1021,19 @@ impl FallbackRenderer {
                 .as_ref()
                 .filter(|c| !c.base_url.trim().is_empty())
             {
-                js_renderers.push(Arc::new(
-                    camoufox::CamoufoxRenderer::new(
-                        "camoufox",
-                        &cf.base_url,
-                        &cf.api_key,
-                        config.camoufox_timeout(),
-                    )
-                    .with_challenge_wait(config.camoufox_challenge_wait()),
-                ) as Arc<dyn PageFetcher>);
+                let camoufox_tier = camoufox::CamoufoxRenderer::new(
+                    "camoufox",
+                    &cf.base_url,
+                    &cf.api_key,
+                    config.camoufox_timeout(),
+                )
+                .with_challenge_wait(config.camoufox_challenge_wait());
+                #[cfg(feature = "cloak")]
+                let camoufox_tier = match camoufox_challenge_reserve_ms(config) {
+                    Some(reserve) => camoufox_tier.with_challenge_reserve(reserve),
+                    None => camoufox_tier,
+                };
+                js_renderers.push(Arc::new(camoufox_tier) as Arc<dyn PageFetcher>);
                 tracing::info!(
                     base_url = %cf.base_url,
                     include_in_auto = cf.include_in_auto,
@@ -7780,5 +7819,60 @@ mod tests {
         let health = r.check_health().await;
         assert_eq!(health.len(), 1);
         assert_eq!(health.get("http"), Some(&true));
+    }
+}
+
+#[cfg(all(test, feature = "camoufox", feature = "cloak"))]
+mod camoufox_reserve_tests {
+    use super::camoufox_challenge_reserve_ms;
+    use crw_core::config::{
+        CLOAK_ARM_FLOOR_MS, CamoufoxEndpoint, CloakEndpoint, RendererConfig, RendererMode,
+    };
+
+    fn cfg(
+        mode: RendererMode,
+        camoufox_in_auto: bool,
+        cloak_base_url: &str,
+        recover_on_cf: bool,
+    ) -> RendererConfig {
+        RendererConfig {
+            mode,
+            camoufox: Some(CamoufoxEndpoint {
+                base_url: "http://camoufox:9377".to_string(),
+                include_in_auto: camoufox_in_auto,
+                ..Default::default()
+            }),
+            cloak: Some(CloakEndpoint {
+                base_url: cloak_base_url.to_string(),
+                ..Default::default()
+            }),
+            cloak_recover_on_cf: recover_on_cf,
+            ..Default::default()
+        }
+    }
+
+    /// The reserve exists only where the arm can fire after camoufox: auto
+    /// mode with camoufox in the ladder, a cloak endpoint held as the floor
+    /// gated recovery arm. A camoufox held out of auto, a camoufox mode, an
+    /// arm that fires on its own budget, or no cloak at all: no reserve.
+    #[test]
+    fn reserve_tracks_the_cloak_arm_floor_gate() {
+        let auto_in_ladder = cfg(RendererMode::Auto, true, "http://cloak:8000", false);
+        assert_eq!(
+            camoufox_challenge_reserve_ms(&auto_in_ladder),
+            Some(CLOAK_ARM_FLOOR_MS + crate::camoufox::POLL_HANDOFF_MS)
+        );
+        let recover_on_cf = cfg(RendererMode::Auto, true, "http://cloak:8000", true);
+        assert_eq!(camoufox_challenge_reserve_ms(&recover_on_cf), None);
+        let held_out_of_auto = cfg(RendererMode::Auto, false, "http://cloak:8000", false);
+        assert_eq!(camoufox_challenge_reserve_ms(&held_out_of_auto), None);
+        let camoufox_mode = cfg(RendererMode::Camoufox, true, "http://cloak:8000", false);
+        assert_eq!(camoufox_challenge_reserve_ms(&camoufox_mode), None);
+        let no_cloak = cfg(RendererMode::Auto, true, "  ", false);
+        assert_eq!(camoufox_challenge_reserve_ms(&no_cloak), None);
+        assert_eq!(
+            camoufox_challenge_reserve_ms(&RendererConfig::default()),
+            None
+        );
     }
 }

@@ -234,6 +234,16 @@ configured endpoint stays out of the `auto` failover chain until you ask for it.
    # api_key = "..."             # sent as `Authorization: Bearer` — only needed
    #                             # if you front the sidecar with an auth proxy
    # include_in_auto = false     # default: stay OUT of the auto ladder
+   ```
+
+   The two camoufox budgets go in your existing `[renderer]` table (the one
+   that holds `mode`), not in `[renderer.camoufox]` and not in a second
+   `[renderer]` header. Under `[renderer.camoufox]` they are silently ignored
+   and the defaults stay in force.
+
+   ```toml
+   [renderer]
+   mode = "auto"
    # camoufox_timeout_ms = 60000 # per-request REST budget (default 60s)
    # camoufox_challenge_wait_ms = 20000
    #                             # ceiling for polling a tab while a Cloudflare-style

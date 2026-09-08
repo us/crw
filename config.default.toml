@@ -28,6 +28,10 @@ rate_limit_rps = 10              # Max requests/second (global). 0 = unlimited.
 mode = "auto"                     # auto | lightpanda | playwright | chrome | camoufox | none
 page_timeout_ms = 30000
 pool_size = 4
+# camoufox_timeout_ms = 60000     # camoufox per-request REST budget override
+# camoufox_challenge_wait_ms = 20000
+#                                 # ceiling for polling out a Cloudflare-style JS
+#                                 # challenge on the camoufox tier (0 disables)
 # render_js_default = true        # alias: force_js = true
                                   # Forces JS rendering when a request omits `renderJs`.
                                   # Per-request `renderJs` always wins over this default.
@@ -65,8 +69,10 @@ ws_url = "ws://127.0.0.1:9222/"
 # base_url = "http://127.0.0.1:9377"
 # api_key = ""                 # optional bearer token if the sidecar is protected
 # include_in_auto = false      # default: stay out of the auto ladder
-# camoufox_timeout_ms = 60000  # optional per-request REST budget override
-# camoufox_challenge_wait_ms = 20000  # ceiling for polling out a CF-style JS challenge (0 disables)
+#
+# The two camoufox budgets (camoufox_timeout_ms, camoufox_challenge_wait_ms)
+# are top-level [renderer] keys, shown in that section above. Placed under
+# [renderer.camoufox] they are silently ignored.
 
 [crawler]
 max_concurrency = 10
