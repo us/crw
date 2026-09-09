@@ -36,7 +36,7 @@ serde_json = { workspace = true }
 async-trait = "0.1"
 rand = { workspace = true }
 dashmap = { workspace = true }
-dirs = { version = "6", optional = true }
+dirs = { version = "7", optional = true }
 moka = { workspace = true }
 publicsuffix = { workspace = true }
 regex = { workspace = true }
