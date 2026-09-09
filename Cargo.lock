@@ -15,8 +15,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b169f7a6d4742236a0a00c541b845991d0ac43e546831af1249753ab4c3aa3a0"
 dependencies = [
  "cfg-if",
- "cipher",
+ "cipher 0.4.4",
  "cpufeatures 0.2.17",
+]
+
+[[package]]
+name = "aes"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35f0f96ce78e38c3dc6d8948aa8163d06385be74000f3c7a95bf1eef35d3ea32"
+dependencies = [
+ "cipher 0.5.2",
+ "cpubits",
+ "cpufeatures 0.3.0",
 ]
 
 [[package]]
@@ -398,6 +409,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "block-padding"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "710f1dd022ef4e93f8a438b4ba958de7f64308434fa6a87104481645cc30068b"
+dependencies = [
+ "hybrid-array",
+]
+
+[[package]]
 name = "borrow-or-share"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -465,7 +485,16 @@ version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26b52a9543ae338f279b96b0b9fed9c8093744685043739079ce85cd58f289a6"
 dependencies = [
- "cipher",
+ "cipher 0.4.4",
+]
+
+[[package]]
+name = "cbc"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce2dc9ee5f88d11e0beb842c88b33c8a5cf0d1329c4b19494af42b07dbfe8896"
+dependencies = [
+ "cipher 0.5.2",
 ]
 
 [[package]]
@@ -524,7 +553,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773f3b9af64447d2ce9850330c473515014aa235e6a783b02db81ff39e4a3dad"
 dependencies = [
  "crypto-common 0.1.7",
- "inout",
+ "inout 0.1.4",
+]
+
+[[package]]
+name = "cipher"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8cf2a2c93cd704877c0858356ed03480ff301ee950b43f1cbe4573b088bfa6c"
+dependencies = [
+ "crypto-common 0.2.2",
+ "inout 0.2.2",
 ]
 
 [[package]]
@@ -732,6 +771,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
+name = "cpubits"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15b85f9c39137c3a891689859392b1bd49812121d0d61c9caf00d46ed5ce06ae"
+
+[[package]]
 name = "cpufeatures"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -800,7 +845,7 @@ checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
 name = "crw-browse"
-version = "0.32.0"
+version = "0.34.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -830,7 +875,7 @@ dependencies = [
 
 [[package]]
 name = "crw-cli"
-version = "0.32.0"
+version = "0.34.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -869,7 +914,7 @@ dependencies = [
 
 [[package]]
 name = "crw-core"
-version = "0.32.0"
+version = "0.34.0"
 dependencies = [
  "config",
  "crw-mcp-proto",
@@ -888,7 +933,7 @@ dependencies = [
 
 [[package]]
 name = "crw-crawl"
-version = "0.32.0"
+version = "0.34.0"
 dependencies = [
  "crw-core",
  "crw-diff",
@@ -915,7 +960,7 @@ dependencies = [
 
 [[package]]
 name = "crw-diff"
-version = "0.32.0"
+version = "0.34.0"
 dependencies = [
  "crw-core",
  "hex",
@@ -930,7 +975,7 @@ dependencies = [
 
 [[package]]
 name = "crw-extract"
-version = "0.32.0"
+version = "0.34.0"
 dependencies = [
  "crw-core",
  "ego-tree",
@@ -940,7 +985,7 @@ dependencies = [
  "htmd",
  "jsonschema",
  "lol_html",
- "lopdf",
+ "lopdf 0.44.0",
  "once_cell",
  "pdf-inspector",
  "phf 0.14.0",
@@ -964,7 +1009,7 @@ dependencies = [
 
 [[package]]
 name = "crw-mcp"
-version = "0.32.0"
+version = "0.34.0"
 dependencies = [
  "base64 0.23.1",
  "clap",
@@ -980,7 +1025,7 @@ dependencies = [
 
 [[package]]
 name = "crw-mcp-proto"
-version = "0.32.0"
+version = "0.34.0"
 dependencies = [
  "jsonschema",
  "serde",
@@ -990,7 +1035,7 @@ dependencies = [
 
 [[package]]
 name = "crw-renderer"
-version = "0.32.0"
+version = "0.34.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -1019,7 +1064,7 @@ dependencies = [
 
 [[package]]
 name = "crw-search"
-version = "0.32.0"
+version = "0.34.0"
 dependencies = [
  "crw-core",
  "futures",
@@ -1037,7 +1082,7 @@ dependencies = [
 
 [[package]]
 name = "crw-server"
-version = "0.32.0"
+version = "0.34.0"
 dependencies = [
  "axum",
  "axum-test",
@@ -1393,7 +1438,16 @@ version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a8bfa975b1aec2145850fcaa1c6fe269a16578c44705a532ae3edc92b8881c7"
 dependencies = [
- "cipher",
+ "cipher 0.4.4",
+]
+
+[[package]]
+name = "ecb"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26f2a8b3e564eba0877223dc343703ad0385794e882e6d13f3a4dd5c6b1f41ac"
+dependencies = [
+ "cipher 0.5.2",
 ]
 
 [[package]]
@@ -2236,8 +2290,18 @@ version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "879f10e63c20629ecabbb64a8010319738c66a5cd0c29b02d63d272b03751d01"
 dependencies = [
- "block-padding",
+ "block-padding 0.3.3",
  "generic-array",
+]
+
+[[package]]
+name = "inout"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4250ce6452e92010fdf7268ccc5d14faa80bb12fc741938534c58f16804e03c7"
+dependencies = [
+ "block-padding 0.4.2",
+ "hybrid-array",
 ]
 
 [[package]]
@@ -2536,11 +2600,11 @@ version = "0.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25aab26d99567469098e64a02f42679f8965c6401263eefa31d8f2dcc37a221c"
 dependencies = [
- "aes",
+ "aes 0.8.4",
  "bitflags 2.13.0",
- "cbc",
+ "cbc 0.1.2",
  "chrono",
- "ecb",
+ "ecb 0.1.2",
  "encoding_rs",
  "flate2",
  "getrandom 0.4.3",
@@ -2548,7 +2612,7 @@ dependencies = [
  "itoa",
  "jiff",
  "log",
- "md-5",
+ "md-5 0.10.6",
  "nom",
  "rand 0.10.2",
  "rangemap",
@@ -2558,7 +2622,37 @@ dependencies = [
  "thiserror 2.0.20",
  "time",
  "ttf-parser",
- "weezl",
+ "weezl 0.1.12",
+]
+
+[[package]]
+name = "lopdf"
+version = "0.44.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e2ec995d822e05cabc3f06d196ee43650af3fe4fe38012cacb35e0c3d113b68"
+dependencies = [
+ "aes 0.9.3",
+ "bitflags 2.13.0",
+ "cbc 0.2.1",
+ "chrono",
+ "ecb 0.2.1",
+ "encoding_rs",
+ "flate2",
+ "getrandom 0.4.3",
+ "indexmap",
+ "itoa",
+ "jiff",
+ "log",
+ "md-5 0.11.0",
+ "nom",
+ "rand 0.10.2",
+ "rangemap",
+ "rayon",
+ "sha2 0.11.0",
+ "stringprep",
+ "thiserror 2.0.20",
+ "time",
+ "weezl 0.2.1",
 ]
 
 [[package]]
@@ -2644,6 +2738,16 @@ checksum = "d89e7ee0cfbedfc4da3340218492196241d89eefb6dab27de5df917a6d2e78cf"
 dependencies = [
  "cfg-if",
  "digest 0.10.7",
+]
+
+[[package]]
+name = "md-5"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69b6441f590336821bb897fb28fc622898ccceb1d6cea3fde5ea86b090c4de98"
+dependencies = [
+ "cfg-if",
+ "digest 0.11.3",
 ]
 
 [[package]]
@@ -2946,7 +3050,7 @@ dependencies = [
  "env_logger",
  "include_dir",
  "log",
- "lopdf",
+ "lopdf 0.42.0",
  "once_cell",
  "rayon",
  "regex",
@@ -5194,6 +5298,12 @@ name = "weezl"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
+
+[[package]]
+name = "weezl"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4ca08e5ef825b65b056d9efbd95c8750683f0a6d0466d02e96dc2e4e360f3d2"
 
 [[package]]
 name = "winapi-util"
