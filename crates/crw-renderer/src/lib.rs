@@ -508,6 +508,55 @@ fn is_origin_navigation_failure(e: &CrwError) -> bool {
     }
 }
 
+/// Is this failure the ORIGIN's fault, for breaker-scoping purposes only?
+///
+/// Deliberately narrower than [`is_origin_navigation_failure`], which exists to
+/// decide error ATTRIBUTION and is generous about `net::ERR_*` on purpose. The
+/// breaker asks a different question: does this failure say anything about the
+/// TIER's own health? Chromium reports a proxy tunnel that will not open, and a
+/// box that lost its network, with the same `net::ERR_` shape as a dead origin,
+/// but those are ours and must keep reaching the global window or nothing ever
+/// concludes the tier is sick. `cdp.rs::is_proxy_tunnel_error` already draws
+/// this exact line for its country-retry, with the same reasoning.
+///
+/// `ERR_NAME_NOT_RESOLVED` stays on the origin side. A resolver brown-out would
+/// produce it on every host, but so does a dead domain on one host, and the
+/// customer workloads that drive this code are full of the latter. The HTTP
+/// tier sees the same failure independently and reports `TargetUnreachable`, so
+/// a genuine resolver fault is not invisible.
+/// Did the cloak tier reject a body on CONTENT grounds rather than fail?
+///
+/// `cloak.rs` answers `Err` for two different things. A transport failure
+/// reaching the sidecar is a genuine tier fault and must keep tripping the
+/// global breaker. But a body it read and rejected, a still-challenged page or
+/// the sidecar's empty fail-open, is a verdict about the page, and a customer
+/// batch of dead origins produces a stream of them.
+///
+/// Without this split, the length floor added to `cloak.rs`'s accept arm would
+/// have MOVED the dead-origin case off the `Ok`-but-thin path, which is
+/// host-scoped, onto the `Err` path, which was not, and roughly 50 dead hosts
+/// would take the cloak tier out globally. That is the exact class this change
+/// exists to remove, so it would have been self-defeating.
+fn is_cloak_content_verdict(e: &CrwError) -> bool {
+    matches!(e, CrwError::RendererError(m)
+        if m.starts_with("cloak: still challenged")
+            || m.starts_with("cloak: empty or unusably thin body"))
+}
+
+fn is_origin_fault_for_breaker(e: &CrwError) -> bool {
+    if let CrwError::RendererError(m) = e {
+        let u = m.to_ascii_uppercase();
+        if u.contains("ERR_TUNNEL_CONNECTION_FAILED")
+            || u.contains("ERR_PROXY_CONNECTION_FAILED")
+            || u.contains("ERR_NETWORK_CHANGED")
+            || u.contains("ERR_INTERNET_DISCONNECTED")
+        {
+            return false;
+        }
+    }
+    is_origin_navigation_failure(e)
+}
+
 /// Prefix of the `warning` set when a JS escalation failed and the HTTP body was
 /// returned in its place. Public because it is BOTH the caller-facing
 /// explanation and the signal `crw_crawl::single` reads to skip a second
@@ -1614,12 +1663,34 @@ impl FallbackRenderer {
                                 // through to chrome (RED-2).
                                 let ship_ok = arm_ok && !detector::looks_like_thin_html(&r.html);
                                 if !host.is_empty() {
-                                    let outcome = if arm_ok {
-                                        BreakerOutcome::Success
+                                    // A tier that returned an HTTP response we
+                                    // could inspect is not broken; the judgement
+                                    // below is about the PAGE, so it belongs to
+                                    // the page's host. `record_scoped_outcome`
+                                    // exists for exactly this and its doc says so,
+                                    // but only the leak-through arm used it: the
+                                    // other call sites wrote content verdicts into
+                                    // the global window, where `min_calls: 50` is
+                                    // reachable by one busy domain. Measured: after
+                                    // the correct SiteBlocked suppression only ~214
+                                    // lightpanda outcomes reached any window in 6h,
+                                    // and github.com alone contributed 38 of them,
+                                    // all failures. Success still records globally,
+                                    // so the ratio keeps an honest denominator.
+                                    if arm_ok {
+                                        self.breakers
+                                            .record_outcome(&host, kind, BreakerOutcome::Success)
+                                            .await;
                                     } else {
-                                        BreakerOutcome::RenderError
-                                    };
-                                    self.breakers.record_outcome(&host, kind, outcome).await;
+                                        self.breakers
+                                            .record_scoped_outcome(
+                                                &host,
+                                                kind,
+                                                None,
+                                                Some(BreakerOutcome::RenderError),
+                                            )
+                                            .await;
+                                    }
                                 }
                                 if self.latency_breakdown {
                                     tracing::info!(
@@ -1643,11 +1714,16 @@ impl FallbackRenderer {
                             }
                             Err(_e) => {
                                 if !host.is_empty() {
+                                    // A body the sidecar returned and we rejected
+                                    // is a page verdict, not a dead tier.
+                                    let global = (!is_cloak_content_verdict(&_e))
+                                        .then_some(BreakerOutcome::ConnectionError);
                                     self.breakers
-                                        .record_outcome(
+                                        .record_scoped_outcome(
                                             &host,
                                             kind,
-                                            BreakerOutcome::ConnectionError,
+                                            global,
+                                            Some(BreakerOutcome::ConnectionError),
                                         )
                                         .await;
                                 }
@@ -2300,6 +2376,31 @@ impl FallbackRenderer {
                 .await;
         }
 
+        // Log the errored legs on the path where NEITHER leg was accepted. Both
+        // accept branches above return before reaching here, so a leg that
+        // errored while the other won is still not logged; that case is covered
+        // by neither this nor the serial loop, and is left alone deliberately
+        // because it does not affect the request's outcome.
+        //
+        // This function emitted no tracing at all, which is why a hedge that
+        // lost both legs was invisible: 12h of production held 190 budget-skip
+        // errors against only 104 `JS renderer failed` lines, so most failures
+        // had no tier logged anywhere. The serial loop cannot cover for it. By
+        // the time control returns, the hedge has spent the shared deadline and
+        // every serial tier is skipped on the budget floor.
+        for (kind, res) in [
+            (RendererKind::Lightpanda, &lp_res),
+            (RendererKind::Chrome, &ch_res),
+        ] {
+            if let Some(Err(e)) = res {
+                // WARN to match the serial loop's `JS renderer failed`, which is
+                // the identical event. At INFO an operator filtering on WARN
+                // would see serial tier failures and not hedge ones, which is
+                // the same blind spot one level up.
+                tracing::warn!(renderer = kind.as_str(), "hedge leg failed: {e}");
+            }
+        }
+
         // Rule B: best-thin = richest HTML among completed Ok results.
         let thin = [lp_res, ch_res]
             .into_iter()
@@ -2312,8 +2413,10 @@ impl FallbackRenderer {
                 saw_hard_block,
                 saw_unrecoverable_wall,
             ))),
-            // Both tiers errored — let the caller fall back to serial for its
-            // richer error handling rather than inventing an error here.
+            // Both tiers errored. The caller falls back to the serial loop,
+            // which will skip every tier on the spent budget and report
+            // `Timeout(requested_ms)`. That status is preserved deliberately;
+            // the legs' real causes are on the `warn!` lines above.
             None => Ok(None),
         }
     }
@@ -2357,7 +2460,13 @@ impl FallbackRenderer {
             } else {
                 BreakerOutcome::RenderError
             };
-            self.breakers.record_outcome(host, k, outcome).await;
+            // Host-scoped: this whole function is the thin/blocked verdict, i.e.
+            // a judgement about the page rather than about the tier. Same rule
+            // the serial thin arm now applies, which is what keeps the hedge
+            // provably equivalent to serial.
+            self.breakers
+                .record_scoped_outcome(host, k, None, Some(outcome))
+                .await;
             if k == RendererKind::Lightpanda {
                 let err_kind = if cls.is_status_blocked || cls.is_bot_wall || cls.antibot_blocked {
                     FailoverErrorKind::AntibotBlock
@@ -2367,7 +2476,12 @@ impl FallbackRenderer {
                 let _ = self.preferences.record_failure(host, &err_kind).await;
             }
         }
-        // Thin attempt → leave the probe guard armed (drops as a no-op).
+        // Thin attempt: leave the probe guard armed. Its Drop calls
+        // `cancel_probe`, and `record_scoped_outcome` above already cancelled the
+        // global probe for the tier it was handed `None` for, so the global side
+        // is cancelled twice. Safe (`saturating_sub`, and `lazy_evaluate` clamps
+        // `admitted` to `max_probes`) but not the no-op this comment used to
+        // claim: the worst case is a half-open tier admitting one extra probe.
         let _ = guard;
     }
 
@@ -2609,7 +2723,7 @@ impl FallbackRenderer {
             // were actually invoked.
             let remaining = deadline.remaining();
             if remaining < MIN_TIER_BUDGET {
-                tracing::debug!(
+                tracing::info!(
                     renderer = renderer.name(),
                     remaining_ms = remaining.as_millis() as u64,
                     "budget below minimum tier budget, skipping renderer"
@@ -2629,11 +2743,16 @@ impl FallbackRenderer {
                 // unconditionally for the same reason: `get_or_insert_with` would let an
                 // earlier tier's `RendererError` survive and map to 500 instead of 504.
                 //
-                // Report the budget the tier would have had, matching what the CDP tier
-                // reports when invoked and clamped (`Timeout after 5ms`). `overrun()` is
-                // 0 whenever the deadline has not actually expired — the common case
-                // here (1-499ms left).
-                last_error = Some(CrwError::Timeout(remaining.as_millis().max(1) as u64));
+                // Report the REQUESTED budget, not `remaining`. `remaining` is by
+                // definition below MIN_TIER_BUDGET on this branch, and in production it
+                // is ~0, so it rendered as the literal `Timeout after 1ms`: 190 times
+                // in 12h against 104 tiers that actually ran. That number described no
+                // real event, because the preceding CDP tier clamps to `deadline.remaining()`
+                // with no reserve, so it had already spent the budget (observed clamps:
+                // 19239ms, 23348ms, 27932ms, 29335ms). A caller given 30s was told its
+                // request timed out after 1ms, which is what `Deadline::requested_ms`
+                // exists to prevent.
+                last_error = Some(CrwError::Timeout(deadline.requested_ms()));
                 continue;
             }
 
@@ -2665,7 +2784,7 @@ impl FallbackRenderer {
             // (see `ProbeGuard::drop`), so the breaker is left as we found it.
             let remaining = deadline.remaining();
             if remaining < MIN_TIER_BUDGET {
-                tracing::debug!(
+                tracing::info!(
                     renderer = renderer.name(),
                     remaining_ms = remaining.as_millis() as u64,
                     "budget drained while acquiring breaker permit, skipping renderer"
@@ -2676,7 +2795,9 @@ impl FallbackRenderer {
                         .with_label_values(&[k.as_str(), "budgetSkipped"])
                         .inc();
                 }
-                last_error = Some(CrwError::Timeout(remaining.as_millis().max(1) as u64));
+                // Same reasoning as the floor above: report the requested budget,
+                // never the sub-minimum remainder.
+                last_error = Some(CrwError::Timeout(deadline.requested_ms()));
                 continue;
             }
 
@@ -2892,7 +3013,13 @@ impl FallbackRenderer {
                             site_blocked && self.has_recovery_tier,
                             &attempt_ctx,
                         );
-                        self.breakers.record_outcome(&host, k, outcome).await;
+                        // Host-scoped: the tier answered, and this is a verdict on
+                        // the body it returned. `SiteBlocked` was already ignored
+                        // globally; a thin body that is NOT blocked was not, and
+                        // that gap is what a single hard domain filled.
+                        self.breakers
+                            .record_scoped_outcome(&host, k, None, Some(outcome))
+                            .await;
                         if k == RendererKind::Lightpanda
                             && let Some(target) =
                                 self.preferences.record_failure(&host, &err_kind).await
@@ -3074,12 +3201,33 @@ impl FallbackRenderer {
                     last_failover_reason = Some(err_kind.clone());
                     if let Some(k) = trackable {
                         let was_timeout = matches!(e, CrwError::Timeout(_));
-                        // No `site_blocked`: reaching this arm means the renderer
-                        // itself errored (no response to inspect), which is a
-                        // genuine tier signal the breaker should keep learning from.
+                        // Reaching this arm means the renderer errored with no
+                        // response to inspect. That used to be read as proof the
+                        // TIER is sick, and the outcome went to the global window
+                        // as well as the host one. It is not proof: a dead origin
+                        // produces exactly the same shape. Six hours of production
+                        // held 24 net::ERR_ABORTED, 10 PeerFailedVerification,
+                        // 5 ERR_CERT_DATE_INVALID, 3 ERR_CONNECTION_RESET,
+                        // 2 ERR_CONNECTION_REFUSED and 2 CouldntConnect, every one
+                        // of them the target's fault and every one advancing the
+                        // global window. Two of the four observed global trips came
+                        // from here, with the cause logged 0.6ms and 0.2ms earlier.
+                        //
+                        // An origin failure says nothing about this tier, because
+                        // every tier egressing from this box sees the same thing.
+                        // That is the same reasoning `SiteBlocked` already rests
+                        // on, and `record_scoped_outcome` exists for exactly it.
+                        //
+                        // The Timeout arm is excluded deliberately: a hung CDP pool
+                        // also times out, and that IS a tier signal. It is what
+                        // still catches a renderer that is genuinely down.
                         let outcome =
                             classify_outcome(false, false, was_timeout, false, &attempt_ctx);
-                        self.breakers.record_outcome(&host, k, outcome).await;
+                        let global =
+                            (!(is_origin_fault_for_breaker(&e) && !was_timeout)).then_some(outcome);
+                        self.breakers
+                            .record_scoped_outcome(&host, k, global, Some(outcome))
+                            .await;
                         if k == RendererKind::Lightpanda {
                             let _ = self.preferences.record_failure(&host, &err_kind).await;
                         }
@@ -3369,12 +3517,24 @@ impl FallbackRenderer {
                             && detector::looks_like_vendor_block(&r.html).is_none()
                             && !detector::looks_like_cloudflare_challenge(&r.html);
                         if !host.is_empty() {
-                            let outcome = if r_ok {
-                                BreakerOutcome::Success
+                            // Same split as the other content verdicts: success
+                            // globally, the page judgement host-only. This arm had
+                            // no SiteBlocked path at all, so a wall it could not
+                            // clear was booked as a renderer fault unconditionally.
+                            if r_ok {
+                                self.breakers
+                                    .record_outcome(&host, kind, BreakerOutcome::Success)
+                                    .await;
                             } else {
-                                BreakerOutcome::RenderError
-                            };
-                            self.breakers.record_outcome(&host, kind, outcome).await;
+                                self.breakers
+                                    .record_scoped_outcome(
+                                        &host,
+                                        kind,
+                                        None,
+                                        Some(BreakerOutcome::RenderError),
+                                    )
+                                    .await;
+                            }
                         }
                         // best-result-wins vs the ladder's thin_result: ONLY take
                         // the proxy result if it is content-OK (red line: a thin/
@@ -3401,8 +3561,21 @@ impl FallbackRenderer {
                     }
                     Err(e) => {
                         if !host.is_empty() {
+                            // Same split as the cloak-first arm: a body the tier
+                            // returned and we rejected is the page's verdict, an
+                            // unreachable sidecar or proxy is ours. The predicate
+                            // matches only cloak's own content messages, so this
+                            // arm keeps recording a real transport failure
+                            // globally.
+                            let global = (!is_cloak_content_verdict(&e))
+                                .then_some(BreakerOutcome::ConnectionError);
                             self.breakers
-                                .record_outcome(&host, kind, BreakerOutcome::ConnectionError)
+                                .record_scoped_outcome(
+                                    &host,
+                                    kind,
+                                    global,
+                                    Some(BreakerOutcome::ConnectionError),
+                                )
                                 .await;
                         }
                         if self.latency_breakdown {
@@ -3486,12 +3659,24 @@ impl FallbackRenderer {
                             && !detector::looks_like_generic_bot_wall(&r.html, r.truncated)
                             && detector::looks_like_vendor_block(&r.html).is_none();
                         if !host.is_empty() {
-                            let outcome = if r_ok {
-                                BreakerOutcome::Success
+                            // Same split as the other content verdicts: success
+                            // globally, the page judgement host-only. This arm had
+                            // no SiteBlocked path at all, so a wall it could not
+                            // clear was booked as a renderer fault unconditionally.
+                            if r_ok {
+                                self.breakers
+                                    .record_outcome(&host, kind, BreakerOutcome::Success)
+                                    .await;
                             } else {
-                                BreakerOutcome::RenderError
-                            };
-                            self.breakers.record_outcome(&host, kind, outcome).await;
+                                self.breakers
+                                    .record_scoped_outcome(
+                                        &host,
+                                        kind,
+                                        None,
+                                        Some(BreakerOutcome::RenderError),
+                                    )
+                                    .await;
+                            }
                         }
                         if r_ok {
                             metrics()
@@ -3518,8 +3703,21 @@ impl FallbackRenderer {
                     }
                     Err(e) => {
                         if !host.is_empty() {
+                            // Same split as the cloak-first arm: a body the tier
+                            // returned and we rejected is the page's verdict, an
+                            // unreachable sidecar or proxy is ours. The predicate
+                            // matches only cloak's own content messages, so this
+                            // arm keeps recording a real transport failure
+                            // globally.
+                            let global = (!is_cloak_content_verdict(&e))
+                                .then_some(BreakerOutcome::ConnectionError);
                             self.breakers
-                                .record_outcome(&host, kind, BreakerOutcome::ConnectionError)
+                                .record_scoped_outcome(
+                                    &host,
+                                    kind,
+                                    global,
+                                    Some(BreakerOutcome::ConnectionError),
+                                )
                                 .await;
                         }
                         if self.latency_breakdown {
@@ -4310,6 +4508,272 @@ mod tests {
             "a budget skip must overwrite the earlier RendererError so the server \
              still maps this to 504; got {err:?}"
         );
+    }
+
+    /// The cloak tier's own `Err` messages must split into page verdicts and tier
+    /// faults, or the length floor on its accept arm quietly relocates the
+    /// dead-origin case from a host-scoped path onto a global one.
+    ///
+    /// Chained with `empty_fail_open_body_is_an_error_not_a_thin_ok` in
+    /// `cloak.rs`, which pins that the fail-open error actually carries this
+    /// wording: together they cover the whole path from sidecar to breaker.
+    #[test]
+    fn cloak_content_verdicts_are_not_tier_faults() {
+        assert!(is_cloak_content_verdict(&CrwError::RendererError(
+            "cloak: empty or unusably thin body (sidecar fail-open) (HTTP 200) for a.example"
+                .into()
+        )));
+        assert!(is_cloak_content_verdict(&CrwError::RendererError(
+            "cloak: still challenged (HTTP 403) for a.example".into()
+        )));
+        // A sidecar we could not reach at all IS a tier fault and must keep
+        // reaching the global window, or a dead sidecar is never concluded dead.
+        assert!(!is_cloak_content_verdict(&CrwError::RendererError(
+            "error sending request for url (http://cloak-sidecar:8000/)".into()
+        )));
+        assert!(!is_cloak_content_verdict(&CrwError::Timeout(40_000)));
+        // Not anchored loosely: a message that merely mentions cloak is not a
+        // verdict.
+        assert!(!is_cloak_content_verdict(&CrwError::RendererError(
+            "chrome failed while cloak: still challenged was logged".into()
+        )));
+    }
+
+    /// A tier that keeps returning THIN content must not be disabled for every
+    /// host, and this pins it at the call site rather than at the registry.
+    ///
+    /// The registry-level tests only prove `record_scoped_outcome` behaves; they
+    /// pass whether or not the ladder actually calls it. A mutation reverting the
+    /// serial thin arm to `record_outcome` left all 995 other tests green, which
+    /// is the gap this closes. A thin body is a verdict about the PAGE, so it
+    /// belongs to the host tier: the 1000-URL bench traced roughly 12% of
+    /// failures to false global trips from exactly this.
+    #[tokio::test]
+    async fn thin_content_does_not_open_the_global_tier() {
+        // Under MIN_RENDERED_TEXT_LEN (50), so every attempt classifies as thin
+        // rather than acceptable, and nothing here is a wall or a hard block.
+        let thin = "<html><body>tiny</body></html>";
+        let lp = Arc::new(MockFetcher {
+            name: "lightpanda",
+            behavior: MockBehavior::Ok(thin.to_string()),
+        }) as Arc<dyn PageFetcher>;
+        let chrome = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Ok(thin.to_string()),
+        }) as Arc<dyn PageFetcher>;
+        let mut r = make_renderer_with_mocks(vec![lp, chrome]);
+        r.breakers = Arc::new(BreakerRegistry::new(BreakerConfig {
+            base_cooldown: Duration::from_secs(300),
+            max_cooldown: Duration::from_secs(300),
+            ..BreakerConfig::default()
+        }));
+
+        for _ in 0..80 {
+            let _ = r
+                .fetch(
+                    "https://thin-host.example/page",
+                    &HashMap::new(),
+                    Some(true),
+                    None,
+                    None,
+                    tdl(),
+                )
+                .await;
+        }
+
+        assert_eq!(
+            r.breakers
+                .global_for(RendererKind::Lightpanda)
+                .snapshot()
+                .state,
+            "closed",
+            "a thin body is a judgement about the page, so it must not disable \
+             the tier for every other host"
+        );
+        assert_eq!(
+            r.breakers
+                .host_for("thin-host.example", RendererKind::Lightpanda)
+                .await
+                .snapshot()
+                .state,
+            "open",
+            "the host tier must still learn this host renders thin"
+        );
+    }
+
+    /// The other half of the origin carve-out, and the one a mutation test showed
+    /// nothing was guarding.
+    ///
+    /// `is_origin_fault_for_breaker` returns true for `CrwError::Timeout(_)`,
+    /// because it is shared with the error-attribution path where that arm is
+    /// correct. The breaker path must undo it with `&& !was_timeout`, or a hung
+    /// CDP pool, which times out on every host, would stop reaching the global
+    /// window and nothing would ever conclude the tier is sick. Dropping that
+    /// clause is a one-token mutation that left all 995 other tests green, which
+    /// is exactly why this test exists.
+    #[tokio::test]
+    async fn tier_timeouts_still_open_the_global_tier() {
+        let lp = Arc::new(MockFetcher {
+            name: "lightpanda",
+            behavior: MockBehavior::Timeout,
+        }) as Arc<dyn PageFetcher>;
+        let chrome = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Timeout,
+        }) as Arc<dyn PageFetcher>;
+        let mut r = make_renderer_with_mocks(vec![lp, chrome]);
+        r.breakers = Arc::new(BreakerRegistry::new(BreakerConfig {
+            base_cooldown: Duration::from_secs(300),
+            max_cooldown: Duration::from_secs(300),
+            ..BreakerConfig::default()
+        }));
+
+        // Spread across distinct hosts, which is what a genuinely sick tier looks
+        // like and what a single dead origin does not.
+        for i in 0..80 {
+            let _ = r
+                .fetch(
+                    &format!("https://host{i}.example/page"),
+                    &HashMap::new(),
+                    Some(true),
+                    None,
+                    None,
+                    tdl(),
+                )
+                .await;
+        }
+
+        assert_eq!(
+            r.breakers
+                .global_for(RendererKind::Lightpanda)
+                .snapshot()
+                .state,
+            "open",
+            "a tier timing out on every host must still trip globally, or a hung \
+             pool is never caught"
+        );
+    }
+
+    /// A dead ORIGIN must not disable a renderer tier for every other host.
+    ///
+    /// The serial error arm used to write its outcome to the global window as
+    /// well as the host one, on the stated premise that "the renderer itself
+    /// errored (no response to inspect), which is a genuine tier signal". A dead
+    /// origin produces exactly that shape: six hours of production held 24
+    /// net::ERR_ABORTED, 10 PeerFailedVerification, 5 ERR_CERT_DATE_INVALID and
+    /// more, every one the target's fault and every one advancing the global
+    /// window. Two of the four observed global trips came from here.
+    ///
+    /// Eighty such failures across eighty DISTINCT hosts is far past
+    /// `min_calls: 50` at `failure_rate_threshold: 0.80`, so this test fails
+    /// against the old code and passes only once the outcome is host-scoped.
+    #[tokio::test]
+    async fn origin_navigation_failures_do_not_open_the_global_tier() {
+        let lp = Arc::new(MockFetcher {
+            name: "lightpanda",
+            behavior: MockBehavior::Err(
+                "Renderer error: Navigation failed: net::ERR_CONNECTION_REFUSED".into(),
+            ),
+        }) as Arc<dyn PageFetcher>;
+        let chrome = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Ok(rich_html("CHROME-OK")),
+        }) as Arc<dyn PageFetcher>;
+        let mut r = make_renderer_with_mocks(vec![lp, chrome]);
+        // Long cooldown so a half-open transition cannot mask the verdict under
+        // parallel test load, matching the sibling breaker test above.
+        r.breakers = Arc::new(BreakerRegistry::new(BreakerConfig {
+            base_cooldown: Duration::from_secs(300),
+            max_cooldown: Duration::from_secs(300),
+            ..BreakerConfig::default()
+        }));
+
+        // One dead origin, hammered. 80 failures is past `min_calls: 50` at
+        // `failure_rate_threshold: 0.80`, so this is exactly the shape that used
+        // to take the tier out for everyone: in production one domain
+        // contributed 38 of the ~214 lightpanda outcomes that reached any window
+        // in six hours.
+        for _ in 0..80 {
+            let _ = r
+                .fetch(
+                    "https://dead-origin.example/page",
+                    &HashMap::new(),
+                    Some(true),
+                    None,
+                    None,
+                    tdl(),
+                )
+                .await;
+        }
+
+        assert_eq!(
+            r.breakers
+                .global_for(RendererKind::Lightpanda)
+                .snapshot()
+                .state,
+            "closed",
+            "one dead origin must not disable lightpanda for every other host"
+        );
+        assert_eq!(
+            r.breakers
+                .host_for("dead-origin.example", RendererKind::Lightpanda)
+                .await
+                .snapshot()
+                .state,
+            "open",
+            "the host tier must still learn that this origin is unreachable"
+        );
+    }
+
+    /// A skipped tier must report the budget the CALLER was given, never the
+    /// sub-minimum remainder that is left when the skip fires.
+    ///
+    /// Regression guard for the production bug this pairs with: `remaining` is by
+    /// definition below MIN_TIER_BUDGET on that branch and in production is ~0, so
+    /// it rendered as the literal `Timeout after 1ms` on requests that had been
+    /// granted 30s and had spent ~25s of it walking the ladder. The sibling test
+    /// above only asserts the Timeout *variant*, so without this the exact bug can
+    /// come back without failing anything.
+    #[tokio::test]
+    async fn budget_skip_reports_the_requested_budget_not_the_remainder() {
+        let slow_calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let slow = Arc::new(SlowFailingFetcher {
+            name: "lightpanda",
+            burn: Duration::from_millis(1_200),
+            calls: slow_calls.clone(),
+        });
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let chrome = Arc::new(CountingFetcher {
+            name: "chrome",
+            calls: calls.clone(),
+        });
+        let r = make_renderer_with_mocks(vec![slow, chrome]);
+
+        let err = r
+            .fetch_with_js(
+                "https://example.com",
+                &HashMap::new(),
+                None,
+                None,
+                false,
+                crw_core::Deadline::from_request_ms(1_500),
+            )
+            .await
+            .expect_err("both tiers must fail");
+
+        assert_eq!(
+            calls.load(std::sync::atomic::Ordering::SeqCst),
+            0,
+            "chrome must be skipped for lack of budget, or this test proves nothing"
+        );
+        match err {
+            CrwError::Timeout(ms) => assert_eq!(
+                ms, 1_500,
+                "a budget skip must report the requested budget (1500ms), not the \
+                 sub-minimum remainder; got {ms}ms"
+            ),
+            other => panic!("expected Timeout, got {other:?}"),
+        }
     }
 
     /// An HTTP tier that cannot reach the origin at all, for the two attribution tests

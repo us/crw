@@ -249,13 +249,37 @@ impl PageFetcher for CloakRenderer {
                 .mirror_once(&host, &path_and_query, &sessid, bypass, &deadline)
                 .await
             {
-                // Accept any body that is NOT itself a CF challenge — the ONLY
-                // reject criterion (matches the module contract). Do NOT gate on
-                // 2xx: after the sidecar clears the challenge, the real upstream
-                // may legitimately return 403/451 (paywall/geo) with usable
-                // content, which the caller's own `r_ok` (content-quality, not
-                // status) accepts. The status is preserved in `status_code`.
-                Ok((status, body)) if !crate::detector::looks_like_cloudflare_challenge(&body) => {
+                // Accept a body that is NOT itself a CF challenge and carries
+                // enough text to be a page. Do NOT gate on 2xx: after the sidecar
+                // clears the challenge, the real upstream may legitimately return
+                // 403/451 (paywall/geo) with usable content, which the caller's
+                // own `r_ok` (content-quality, not status) accepts. The status is
+                // preserved in `status_code`.
+                //
+                // The length floor is the second criterion because the sidecar
+                // FAILS OPEN with an empty 200 on load-shed, on timeout and on any
+                // internal error, and an empty body is not a CF challenge. Without
+                // this floor that fail-open was ACCEPTED here, with three
+                // consequences: the `for attempt in 0..MAX_ATTEMPTS` loop returned
+                // on the first pass so the fresh-sessid retry below was dead code
+                // exactly when it was needed; the sessid bank a few lines down
+                // recorded an exit that had proven nothing as good for SESSID_TTL
+                // (29 min); and the caller then measured 0 bytes, scored `r_ok`
+                // false and booked a RenderError with no way to tell the
+                // sidecar's own fault apart from the site's. Rejecting here
+                // routes it to `last_err` instead, which is what the retry needs,
+                // and the arms then book it as ConnectionError. That still trips
+                // the global cloak breaker, deliberately: a sidecar that is
+                // failing IS a tier fault, and the point of the change is that it
+                // is now recorded as one rather than as an innocent host's.
+                //
+                // The same floor the caller applies, so nothing that would have
+                // been accepted downstream is rejected here.
+                Ok((status, body))
+                    if !crate::detector::looks_like_cloudflare_challenge(&body)
+                        && crate::html_body_text_len(&body)
+                            >= crate::FallbackRenderer::MIN_RENDERED_TEXT_LEN =>
+                {
                     // Success: remember the winning sessid so future requests to
                     // this host reuse the working exit IP (warm the cache).
                     {
@@ -282,9 +306,16 @@ impl PageFetcher for CloakRenderer {
                         screenshot: None,
                     });
                 }
-                Ok((status, _)) => {
+                Ok((status, body)) => {
+                    let reason = if crate::html_body_text_len(&body)
+                        < crate::FallbackRenderer::MIN_RENDERED_TEXT_LEN
+                    {
+                        "empty or unusably thin body (sidecar fail-open)"
+                    } else {
+                        "still challenged"
+                    };
                     last_err = Some(CrwError::RendererError(format!(
-                        "cloak: still challenged (HTTP {status}) for {host}"
+                        "cloak: {reason} (HTTP {status}) for {host}"
                     )));
                 }
                 Err(e) => last_err = Some(e),
@@ -426,6 +457,41 @@ mod tests {
             .await
             .expect_err("a persistent challenge must surface as an error, never fake success");
         assert!(matches!(err, CrwError::RendererError(_)));
+    }
+
+    #[tokio::test]
+    async fn empty_fail_open_body_is_an_error_not_a_thin_ok() {
+        let server = MockServer::start().await;
+        // The sidecar fails open with an EMPTY 200 on load-shed, on timeout and
+        // on any internal error of its own. That body is not a CF challenge, so
+        // it used to be accepted here: the retry loop returned on the first
+        // pass, the sessid was banked as proven-good for 29 minutes, and the
+        // caller scored it `r_ok = false` and booked a RenderError, which tripped
+        // the GLOBAL cloak breaker and disabled the tier for every host because
+        // of the sidecar's own fault.
+        Mock::given(method("GET"))
+            .and(path("/page"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(""))
+            .expect(2) // rejecting it is what revives the second attempt
+            .mount(&server)
+            .await;
+        let err = renderer(&server.uri())
+            .fetch(
+                &format!("{}/page", server.uri()),
+                &HashMap::new(),
+                None,
+                Deadline::from_request_ms(30_000),
+            )
+            .await
+            .expect_err("an empty fail-open body must never be returned as a page");
+        match err {
+            CrwError::RendererError(m) => assert!(
+                m.contains("fail-open"),
+                "the error must name the sidecar's fail-open so an operator can \
+                 tell it apart from a site that is still challenged; got {m}"
+            ),
+            other => panic!("expected RendererError, got {other:?}"),
+        }
     }
 
     #[tokio::test]
