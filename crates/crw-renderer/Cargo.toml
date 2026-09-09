@@ -49,5 +49,5 @@ libc = { workspace = true }
 axum = { workspace = true }
 tokio = { workspace = true }
 flate2 = "1"
-brotli = "8"
+brotli = "9"
 wiremock = { workspace = true }
