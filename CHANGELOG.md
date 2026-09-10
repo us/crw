@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.34.1](https://github.com/us/crw/compare/v0.34.0...v0.34.1) (2026-09-10)
+
+
+### Bug Fixes
+
+* **renderer:** report failures truthfully, scope breaker verdicts ([36f4a0a](https://github.com/us/crw/commit/36f4a0a7483ac78e9fd16beafcbd0ad25765618c))
+
 ## [0.34.0](https://github.com/us/crw/compare/v0.33.0...v0.34.0) (2026-09-08)
 
 
