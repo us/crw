@@ -22,12 +22,12 @@
 ARG DEPS_STAGE=cacher
 
 # Which workspace binaries to cook + build. Default = all three (the public
-# open-core image ships crw + crw-server + crw-mcp). Prod overrides it to just
-# `-p crw-server --features cdp`: the engine container only runs crw-server
+# open-core image ships crw + crw-server + crw-mcp). Prod overrides the ARG with
+# its own package/feature set: the engine container only runs crw-server
 # (CMD), so building crw-cli + crw-mcp there is wasted work — dropping them
 # removes two of three thin-LTO links (faster + far less CPU contention with the
 # live engine). MUST be identical in the cook and the build (fingerprint match).
-ARG CARGO_PKGS="-p crw-server --features cdp -p crw-mcp -p crw-cli"
+ARG CARGO_PKGS="-p crw-server --features cdp,impersonated -p crw-mcp -p crw-cli"
 
 # Cap on compile parallelism. cargo reads CARGO_BUILD_JOBS natively (BuildKit
 # injects a declared ARG into the RUN env), so no -j flag is needed. "default" =
@@ -43,19 +43,30 @@ FROM --platform=$BUILDPLATFORM rust:1.98-bookworm@sha256:82150a52ec202c1b14d7817
 ARG TARGETARCH
 WORKDIR /app
 
-# Rust target + (arm64) cross linker toolchain; record the target triple.
+# Native build deps + Rust target + (arm64) cross linker toolchain; record the
+# target triple.
+#
+# cmake + libclang are for btls-sys, the vendored BoringSSL behind wreq (the
+# `impersonated` feature this image builds with). It compiles BoringSSL through
+# CMake and generates its bindings with bindgen, which dlopens libclang at build
+# time. rust:bookworm derives from buildpack-deps, which ships gcc/g++/make and
+# autotools but NEITHER cmake NOR clang, so without this line the cook fails with
+# "is `cmake` not installed?". Both arches need it: the aarch64 leg cross-compiles
+# BoringSSL and cross-generates the bindings from the same host clang.
 RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends cmake clang libclang-dev; \
     case "$TARGETARCH" in \
       amd64) RUST_TARGET=x86_64-unknown-linux-gnu ;; \
       arm64) RUST_TARGET=aarch64-unknown-linux-gnu; \
-             apt-get update; \
              # crossbuild-essential-arm64 = the aarch64 gcc/g++ AND the target
              # libc dev headers (libc6-dev-arm64-cross). The bare cross gcc
-             # alone lacks sys/types.h etc., which broke aws-lc-sys's C build.
-             apt-get install -y --no-install-recommends crossbuild-essential-arm64; \
-             rm -rf /var/lib/apt/lists/* ;; \
+             # alone lacks sys/types.h etc., which broke aws-lc-sys's C build,
+             # and btls-sys's cross build needs the same headers.
+             apt-get install -y --no-install-recommends crossbuild-essential-arm64 ;; \
       *) echo "unsupported TARGETARCH=$TARGETARCH" >&2; exit 1 ;; \
     esac; \
+    rm -rf /var/lib/apt/lists/*; \
     rustup target add "$RUST_TARGET"; \
     echo "$RUST_TARGET" > /rust_target
 

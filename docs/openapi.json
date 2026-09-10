@@ -630,7 +630,7 @@
                           "items": {
                             "type": "string"
                           },
-                          "description": "JS renderer tiers this instance constructed, in fallback order — reflects both the build features and the config. These are the values the per-request `renderer` pin accepts.",
+                          "description": "Renderer tiers this instance constructed, in fallback order, reflecting both the build features and the config. These are the values the per-request `renderer` pin accepts. Mostly JS tiers, plus the JS-less impersonated-http tier when that feature is built in.",
                           "example": [
                             "lightpanda",
                             "chrome"
@@ -1428,9 +1428,10 @@
               "chrome",
               "chrome_proxy",
               "playwright",
-              "camoufox"
+              "camoufox",
+              "impersonated-http"
             ],
-            "description": "Pin this request to a specific renderer. Non-auto implies renderJs:true unless renderJs:false is set."
+            "description": "Pin this request to a specific renderer. A non-auto browser tier implies renderJs:true unless renderJs:false is set. impersonated-http is a JS-less tier that presents a real Chrome TLS fingerprint; it never implies renderJs, and combining it with renderJs:true is rejected."
           },
           "deadlineMs": {
             "type": "integer",
@@ -1749,7 +1750,8 @@
               "chrome",
               "chrome_proxy",
               "playwright",
-              "camoufox"
+              "camoufox",
+              "impersonated-http"
             ]
           },
           "country": {

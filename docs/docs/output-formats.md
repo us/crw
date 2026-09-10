@@ -229,7 +229,7 @@ The exact shape of `data` depends on what you requested. Do not assume every fie
 | `sourceURL` | `string` | Final URL after redirects |
 | `language` | `string / null` | `<html lang>` value |
 | `statusCode` | `number` | Target HTTP status code |
-| `renderedWith` | `string / null` | One of `"http"`, `"lightpanda"`, `"chrome"`, `"chrome_proxy"`, `"playwright"`, `"pdf"`, `"http_only_fallback"` |
+| `renderedWith` | `string / null` | One of `"http"`, `"impersonated-http"`, `"lightpanda"`, `"chrome"`, `"chrome_proxy"`, `"playwright"`, `"pdf"`, `"http_only_fallback"` |
 | `elapsedMs` | `number` | Total processing time in ms |
 
 ### `llmUsage` object

@@ -84,10 +84,13 @@ When `mode = "auto"` and you have multiple renderers configured (e.g., LightPand
 | `chrome_proxy` | Hard-pin to residential-proxy Chrome tier — no fallback |
 | `playwright` | Hard-pin to Playwright — no fallback |
 | `camoufox` | Hard-pin to the opt-in Camoufox stealth tier (REST) — no fallback. Requires a build with `--features camoufox` and a configured `[renderer.camoufox]` endpoint |
+| `impersonated-http` | Hard-pin to the Chrome-impersonating HTTP tier (real Chrome TLS/JA3/HTTP2 fingerprint via wreq, no JS engine), no fallback. Requires a build with `--features impersonated` (`GET /v1/capabilities` lists it when present); a wall-shaped result surfaces as an error rather than a billed success, while ordinary non-wall answers (a 404, a PDF, a thin page) come back as results |
 
 ### Pinned implies JS
 
-A non-`auto` `renderer` value implies `renderJs:true`. If you set `renderJs:false` explicitly, the request stays HTTP-only and the pin is silently ignored — `renderJs:false` always wins. This means the availability check is also skipped when `renderJs:false` is set, so combinations like `{"mode":"none","renderJs":false,"renderer":"chrome"}` are accepted.
+A non-`auto` browser `renderer` value implies `renderJs:true`. The one exception is `impersonated-http`: it never executes JS, so it implies nothing, and an explicit `renderJs:true` alongside it is rejected as contradictory.
+
+For browser pins, if you set `renderJs:false` explicitly, the request stays HTTP-only and the pin is silently ignored; `renderJs:false` always wins. This means the availability check is also skipped when `renderJs:false` is set with a browser pin, so combinations like `{"mode":"none","renderJs":false,"renderer":"chrome"}` are accepted. An `impersonated-http` pin is validated regardless of `renderJs`, because it selects a transport rather than a rendering mode.
 
 ### Errors and validation
 

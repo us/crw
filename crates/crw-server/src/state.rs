@@ -35,12 +35,18 @@ pub(crate) fn validate_renderer_pin(
         return Ok(());
     };
 
-    // Mirror the fetch-path resolution at `crw-crawl/src/single.rs:41-50` so
+    // Mirror the fetch-path resolution at `crw-crawl/src/single.rs` so
     // validation is consistent with what the actual request does. "Pinned
-    // implies JS" — when a renderer is pinned and the request omits
+    // implies JS": when a BROWSER renderer is pinned and the request omits
     // `renderJs`, force the request to JS=true so a `render_js_default=false`
     // server config doesn't silently send the request through HTTP-only.
-    let effective_request = if render_js.is_none() {
+    // The impersonated-http tier never executes JS
+    // (`RequestedRenderer::implies_js`), so it takes neither the coercion nor
+    // the HTTP-only skip below: it is validated regardless of the resolved
+    // renderJs, against `available_renderer_names()` which lists it when the
+    // tier is present.
+    let pin_implies_js = renderer.is_some_and(|r| r.implies_js());
+    let effective_request = if render_js.is_none() && pin_implies_js {
         Some(true)
     } else {
         render_js
@@ -48,11 +54,11 @@ pub(crate) fn validate_renderer_pin(
     let effective_render_js =
         resolve_render_js(effective_request, state.config.renderer.render_js_default);
 
-    if effective_render_js == Some(false) {
+    if effective_render_js == Some(false) && pin_implies_js {
         return Ok(());
     }
 
-    let available = state.renderer.js_renderer_names();
+    let available = state.renderer.available_renderer_names();
     if !available.contains(&name) {
         return Err(CrwError::InvalidRequest(format!(
             "renderer '{}' not available; configured renderers: [{}]. \
@@ -64,8 +70,18 @@ pub(crate) fn validate_renderer_pin(
     Ok(())
 }
 
-/// Crawl-specific wrapper around [`validate_renderer_pin`].
+/// Crawl-specific wrapper around [`validate_renderer_pin`]. Also mirrors the
+/// scrape surface's `validate_scrape_template` contradiction the crawl path
+/// has no equivalent of: an impersonated-http pin never executes JS, so an
+/// explicit `renderJs: true` on a crawl is rejected exactly like the same
+/// body on `/v1/scrape` instead of being silently coerced away.
 pub(crate) fn validate_crawl_renderer(req: &CrawlRequest, state: &AppState) -> CrwResult<()> {
+    if req.renderer == Some(RequestedRenderer::ImpersonatedHttp) && req.render_js == Some(true) {
+        return Err(CrwError::InvalidRequest(
+            "renderer 'impersonated-http' never executes JS; remove renderJs:true (or omit it)"
+                .into(),
+        ));
+    }
     validate_renderer_pin(req.renderer, req.render_js, state)
 }
 
@@ -1203,6 +1219,15 @@ mod tests {
                     msg.contains("renderer 'chrome' not available"),
                     "message was: {msg}"
                 );
+                // A feature-on build's default config constructs the
+                // impersonated tier, so it appears in the advertised list; a
+                // lean build has an empty vocabulary.
+                #[cfg(feature = "impersonated")]
+                assert!(
+                    msg.contains("configured renderers: [impersonated-http]"),
+                    "message was: {msg}"
+                );
+                #[cfg(not(feature = "impersonated"))]
                 assert!(
                     msg.contains("configured renderers: []"),
                     "message was: {msg}"

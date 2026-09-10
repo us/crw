@@ -130,6 +130,11 @@ pub enum RequestedRenderer {
     /// `"camoufox"`, matching the internal renderer name and
     /// `RendererKind::Camoufox`.
     Camoufox,
+    /// Chrome-impersonating HTTP tier (wreq): real Chrome TLS/JA3/HTTP2
+    /// fingerprint, no JS execution. `rename_all = "lowercase"` would yield
+    /// `"impersonatedhttp"`, so renamed explicitly like `chrome_proxy`.
+    #[serde(rename = "impersonated-http")]
+    ImpersonatedHttp,
     // NOTE: there is deliberately NO `Cloak` variant here. The cloak tier is an
     // internal CF-challenge recovery arm (RendererKind::Cloak), fired
     // automatically — never a user-pinnable per-request `renderer`.
@@ -146,7 +151,23 @@ impl RequestedRenderer {
             RequestedRenderer::ChromeProxy => Some("chrome_proxy"),
             RequestedRenderer::Playwright => Some("playwright"),
             RequestedRenderer::Camoufox => Some("camoufox"),
+            RequestedRenderer::ImpersonatedHttp => Some("impersonated-http"),
         }
+    }
+
+    /// Whether hard-pinning this tier implies a JS render when the request
+    /// omits `renderJs`. True for every browser tier; false for wire-level
+    /// tiers that never execute JS, and false for `Auto` because `Auto` is not
+    /// a pin at all (`pinned_name()` returns `None`; an explicit
+    /// `renderer: "auto"` must stay equivalent to omitting the field). The
+    /// single rule behind the pin choke points (single.rs/crawl.rs implies-JS
+    /// coercion, state.rs/single.rs pin validation, fetch_inner dispatch), so
+    /// they cannot drift.
+    pub fn implies_js(self) -> bool {
+        !matches!(
+            self,
+            RequestedRenderer::ImpersonatedHttp | RequestedRenderer::Auto
+        )
     }
 }
 
@@ -1690,6 +1711,38 @@ mod tests {
             resolve_pinned_renderer(Some(RequestedRenderer::ChromeProxy)),
             Some("chrome_proxy")
         );
+    }
+
+    #[test]
+    fn requested_renderer_impersonated_http_round_trip() {
+        let parsed: RequestedRenderer = serde_json::from_str("\"impersonated-http\"").unwrap();
+        assert_eq!(parsed, RequestedRenderer::ImpersonatedHttp);
+        let json = serde_json::to_string(&RequestedRenderer::ImpersonatedHttp).unwrap();
+        assert_eq!(json, "\"impersonated-http\"");
+        assert_eq!(
+            resolve_pinned_renderer(Some(RequestedRenderer::ImpersonatedHttp)),
+            Some("impersonated-http")
+        );
+        assert_eq!(RendererKind::ImpersonatedHttp.as_str(), "impersonated-http");
+        let k: RendererKind = serde_json::from_str("\"impersonated-http\"").unwrap();
+        assert_eq!(k, RendererKind::ImpersonatedHttp);
+        let back = serde_json::to_string(&RendererKind::ImpersonatedHttp).unwrap();
+        assert_eq!(back, "\"impersonated-http\"");
+    }
+
+    #[test]
+    fn requested_renderer_impersonated_http_does_not_imply_js() {
+        // Every browser tier implies a JS render when the request omits
+        // renderJs; the wire-level impersonated tier never executes JS, and
+        // Auto is not a pin so it implies nothing (an explicit "auto" stays
+        // equivalent to omitting the field).
+        assert!(!RequestedRenderer::ImpersonatedHttp.implies_js());
+        assert!(!RequestedRenderer::Auto.implies_js());
+        assert!(RequestedRenderer::Lightpanda.implies_js());
+        assert!(RequestedRenderer::Chrome.implies_js());
+        assert!(RequestedRenderer::ChromeProxy.implies_js());
+        assert!(RequestedRenderer::Playwright.implies_js());
+        assert!(RequestedRenderer::Camoufox.implies_js());
     }
 
     #[test]
@@ -4784,6 +4837,12 @@ pub enum RendererKind {
     /// "lowercase"` yields `"cloak"`. Unconditional like every other kind; inert
     /// in lean builds since no cloak renderer is ever constructed there.
     Cloak,
+    /// Chrome-impersonating HTTP tier (wreq). `rename_all = "lowercase"`
+    /// would yield `"impersonatedhttp"`, so renamed explicitly. Unconditional
+    /// like every other kind; inert in lean builds since no impersonated
+    /// renderer is ever constructed there.
+    #[serde(rename = "impersonated-http")]
+    ImpersonatedHttp,
 }
 
 impl RendererKind {
@@ -4795,6 +4854,7 @@ impl RendererKind {
             RendererKind::ChromeProxy => "chrome_proxy",
             RendererKind::Camoufox => "camoufox",
             RendererKind::Cloak => "cloak",
+            RendererKind::ImpersonatedHttp => "impersonated-http",
         }
     }
 }

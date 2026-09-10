@@ -32,6 +32,12 @@ browse = ["dep:crw-browse", "dep:rmcp", "dep:anyhow"]
 camoufox = ["crw-renderer/camoufox", "crw-server?/camoufox"]
 cloak = ["crw-renderer/cloak", "crw-server?/cloak"]
 
+# Opt-in Chrome-impersonation HTTP tier (wreq). Default OFF like camoufox and
+# cloak. Present so the build command the docs give self-hosters
+# (`--features impersonated`) resolves against this package, which is the one
+# that produces the shipped `crw` binary.
+impersonated = ["crw-renderer/impersonated", "crw-server?/impersonated"]
+
 [dependencies]
 # Core crates
 crw-core = { workspace = true }

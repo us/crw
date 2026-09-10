@@ -17,6 +17,10 @@ description = "Core types, config, and error handling for the CRW web scraper"
 # CDP-less builds keep their strict `deadline_ms_default`. The workspace
 # binary enables this transitively via `crw-renderer/cdp`.
 cdp = []
+# Forwarding target only: config predicates (`impersonated_in_chain`) read
+# `cfg!(feature = "impersonated")`. crw-core never links the wreq TLS stack;
+# the dependency itself is optional in crw-renderer behind the same feature.
+impersonated = []
 # Opt-in Camoufox stealth renderer tier (REST, not CDP). When the downstream
 # binary is built without this feature the tier is never constructable and the
 # config-level `camoufox_in_ladder()` predicate always returns false, so the

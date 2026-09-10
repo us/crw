@@ -201,8 +201,8 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
                     },
                     "renderer": {
                         "type": "string",
-                        "enum": ["auto", "lightpanda", "chrome", "playwright", "camoufox"],
-                        "description": "Pin renderer; non-auto hard-pins and implies renderJs:true (default auto). 'camoufox' requires the server's opt-in camoufox tier to be configured."
+                        "enum": ["auto", "lightpanda", "chrome", "playwright", "camoufox", "impersonated-http"],
+                        "description": "Pin renderer; browser tiers imply renderJs:true (default auto). 'camoufox' needs the opt-in tier configured. 'impersonated-http' is JS-less Chrome-TLS impersonation, never renderJs."
                     }
                 },
                 "required": ["url"]
@@ -250,8 +250,8 @@ pub fn tool_definitions(proxy_mode: bool) -> Value {
                     },
                     "renderer": {
                         "type": "string",
-                        "enum": ["auto", "lightpanda", "chrome", "playwright", "camoufox"],
-                        "description": "Pin renderer; non-auto hard-pins and implies renderJs:true (default auto). 'camoufox' requires the server's opt-in camoufox tier to be configured."
+                        "enum": ["auto", "lightpanda", "chrome", "playwright", "camoufox", "impersonated-http"],
+                        "description": "Pin renderer; browser tiers imply renderJs:true (default auto). 'camoufox' needs the opt-in tier configured. 'impersonated-http' is JS-less Chrome-TLS impersonation, never renderJs."
                     }
                 },
                 "required": ["url"]
@@ -1050,7 +1050,13 @@ mod tests {
     /// after closing lifecycle statuses and typing every per-URL result field,
     /// the 9-tool list is ~10705 bytes (~3569 est-tok). The ceiling keeps ~2%
     /// headroom so further growth still fails.
-    const TOOLS_LIST_TOKEN_CEILING: usize = 3650;
+    ///
+    /// Raised 3650 -> 3700 for the sixth `renderer` enum value
+    /// ("impersonated-http", both scrape and crawl schemas) plus the one-line
+    /// description note that it is JS-less; the wording itself was trimmed in
+    /// the same change (the naive description growth alone would have been
+    /// ~3726 est-tok).
+    const TOOLS_LIST_TOKEN_CEILING: usize = 3700;
 
     #[test]
     fn tools_list_token_budget() {
@@ -1132,6 +1138,7 @@ mod tests {
                 json!("chrome"),
                 json!("playwright"),
                 json!("camoufox"),
+                json!("impersonated-http"),
             ]
         );
     }
@@ -1155,12 +1162,13 @@ mod tests {
         let enum_vals = props["renderer"]["enum"]
             .as_array()
             .expect("renderer.enum must be an array");
-        assert_eq!(enum_vals.len(), 5);
+        assert_eq!(enum_vals.len(), 6);
         assert!(enum_vals.iter().any(|v| v == "chrome"));
         assert!(enum_vals.iter().any(|v| v == "lightpanda"));
         assert!(enum_vals.iter().any(|v| v == "auto"));
         assert!(enum_vals.iter().any(|v| v == "playwright"));
         assert!(enum_vals.iter().any(|v| v == "camoufox"));
+        assert!(enum_vals.iter().any(|v| v == "impersonated-http"));
     }
 
     #[test]

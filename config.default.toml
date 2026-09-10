@@ -50,6 +50,18 @@ pool_size = 4
 [renderer.lightpanda]
 ws_url = "ws://127.0.0.1:9222/"
 
+# Chrome-impersonation HTTP tier (wreq). No endpoint to configure: the tier is
+# in-process. Requires a build with `--features impersonated` (the published
+# Docker image ships it ON). Sits between the plain HTTP tier and the browser
+# ladder in auto mode, fires only when the plain tier hit an anti-bot wall (e.g.
+# the Amazon.it interstitial), and is pinnable per request with
+# renderer = "impersonated-http". When a browser ladder is configured the hop is
+# capped at half the remaining request deadline so it can never starve it.
+# ON by default; disable with enabled = false.
+# [renderer.impersonated]
+# enabled = true               # runtime kill switch (default true)
+# timeout_ms = 15000           # falls back to http_timeout_ms when unset
+
 # [renderer.chrome]
 # ws_url = "ws://127.0.0.1:9223/"
 

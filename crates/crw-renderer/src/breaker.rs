@@ -573,8 +573,16 @@ impl BreakerRegistry {
                 return Arc::clone(breaker);
             }
         }
+        // ImpersonatedHttp is a RendererKind but deliberately NOT in this
+        // registry: it changes the TLS fingerprint, not the egress IP or the
+        // browser, so a global breaker on it would trip the wrong thing. It
+        // never reaches here today (it is absent from `js_renderers`, the only
+        // source this registry is keyed from). Reaching this arm therefore
+        // means a caller started recording breaker outcomes for a tier that
+        // has no breaker, which is a design violation worth failing loudly on.
         unreachable!(
-            "RendererKind is closed: Http | Lightpanda | Chrome | ChromeProxy | Camoufox | Cloak"
+            "no global breaker for {renderer:?}: this registry covers the ladder tiers \
+             (Http | Lightpanda | Chrome | ChromeProxy | Camoufox | Cloak) only"
         )
     }
 

@@ -837,6 +837,13 @@ pub struct RendererConfig {
     /// behavior) — so an unset value is byte-identical.
     #[serde(default)]
     pub cloak_proxy_host: Option<String>,
+    /// In-process Chrome-impersonation HTTP tier (wreq). See
+    /// [`ImpersonatedConfig`]. Unlike every other tier there is no endpoint;
+    /// `enabled` is the runtime kill switch and defaults to true, so an
+    /// absent section means "on with defaults" in any build compiled with the
+    /// `impersonated` feature.
+    #[serde(default)]
+    pub impersonated: ImpersonatedConfig,
     /// Enable Chrome *resource* interception (blocking of media, fonts,
     /// trackers). Default `false`.
     ///
@@ -1101,6 +1108,7 @@ impl Default for RendererConfig {
             cloak: None,
             cloak_timeout_ms: None,
             cloak_proxy_host: None,
+            impersonated: ImpersonatedConfig::default(),
             chrome_intercept_resources: false,
             chrome_intercept_stylesheets: false,
             chrome_host_intercept_disable: Vec::new(),
@@ -1245,6 +1253,26 @@ impl RendererConfig {
         }
     }
 
+    /// True when the Chrome-impersonation HTTP tier (wreq) participates in the
+    /// fetch chain. Deliberately NOT gated on mode: the tier is an HTTP tier,
+    /// and `mode = "none"` means "no JS", not "no fetching strategies", so a
+    /// `none` deployment keeps it. Always false in a build without the
+    /// `impersonated` feature, keeping lean builds byte-identical. Do not
+    /// remove the leading `cfg!` short-circuit; it is what keeps the
+    /// default-on runtime flag inert without the feature.
+    pub fn impersonated_in_chain(&self) -> bool {
+        cfg!(feature = "impersonated") && self.impersonated.enabled
+    }
+
+    /// Per-request budget (ms) for the impersonated tier. Falls back to the
+    /// HTTP tier timeout: the tier is shaped like the HTTP tier and its
+    /// failures are bounded the same way.
+    pub fn impersonated_timeout(&self) -> u64 {
+        self.impersonated
+            .timeout_ms
+            .unwrap_or_else(|| self.http_timeout())
+    }
+
     /// Compose the DataImpulse-style proxy credentials for a single request.
     ///
     /// Resolution order for the country suffix:
@@ -1312,6 +1340,14 @@ impl RendererConfig {
         // when mode is `None` (no fetching at all).
         if !matches!(self.mode, RendererMode::None) {
             sum = sum.saturating_add(self.http_timeout());
+        }
+
+        // Chrome-impersonation HTTP tier contribution. A bounded single HTTP
+        // request (no CDP overhead), fired between the plain HTTP fetch and the
+        // browser ladder. `impersonated_in_chain()` is always `false` in the
+        // lean build, so this line is inert there.
+        if self.impersonated_in_chain() {
+            sum = sum.saturating_add(self.impersonated_timeout());
         }
 
         // Camoufox REST contribution. Added BEFORE the cdp early-return below so
@@ -1391,6 +1427,34 @@ pub struct CamoufoxEndpoint {
     /// `mode = "camoufox"`.
     #[serde(default)]
     pub include_in_auto: bool,
+}
+
+/// In-process Chrome-impersonation HTTP tier (wreq), loaded under
+/// `[renderer.impersonated]`. Unlike every other tier there is no endpoint;
+/// `enabled` is the runtime kill switch and defaults TRUE. Non-Option on
+/// purpose: an absent section means "on with defaults", which is the
+/// deployment contract. The whole section is inert in a build without the
+/// `impersonated` cargo feature (`impersonated_in_chain()` folds to false).
+#[derive(Debug, Clone, Deserialize)]
+pub struct ImpersonatedConfig {
+    /// Runtime kill switch. Default true: the tier is ON in any build
+    /// compiled with the `impersonated` feature.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Per-request timeout override (ms). Falls back to the HTTP tier
+    /// timeout: the tier is shaped like the HTTP tier and its failures are
+    /// bounded the same way.
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
+}
+
+impl Default for ImpersonatedConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_true(),
+            timeout_ms: None,
+        }
+    }
 }
 
 /// Endpoint for the "cloak" Turnstile-solver sidecar (a `cloudflarebypassforscraping`

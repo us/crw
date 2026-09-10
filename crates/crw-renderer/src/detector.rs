@@ -152,6 +152,18 @@ pub fn looks_like_generic_bot_wall(html: &str, truncated: bool) -> bool {
         // shell (no <body> tag). This canonical footer sentence is unique to
         // that page — a real article never carries it.
         "if you report this error to the wikimedia system administrators",
+        // Amazon TLS-fingerprint interstitial (verified live 2026-09, ASIN
+        // product pages served to non-browser TLS stacks). Only the FULL
+        // verified sentence is listed, and only the it-IT one: the English
+        // "click the button below to continue shopping" is ordinary retail
+        // copy (empty-cart and order-confirmation pages carry it verbatim
+        // under the 600-char cap) and was never verified against a live EN
+        // wall, so it must NOT be here; a false wall here escalates to the
+        // ladder AND latches the host to proxy egress for 10 minutes. Other
+        // marketplaces' wall texts get added only after live verification.
+        // Host strings are deliberately not matched; block detection stays
+        // host-agnostic.
+        "fai clic sul pulsante qui sotto per continuare a fare acquisti",
     ];
     phrases.iter().any(|p| body_text.contains(p))
 }
@@ -967,6 +979,57 @@ mod tests {
         // extraction returned "" here, so the phrase list never matched. The
         // no-<body> fallback must let the canonical footer phrase trip.
         assert!(looks_like_generic_bot_wall(wikimedia_block_html(), false));
+    }
+
+    /// The Amazon.it TLS-fingerprint interstitial served to non-browser TLS
+    /// stacks (verified live 2026-09): HTTP 200, a small body whose visible
+    /// text is essentially the one sentence. Only the FULL sentence is on the
+    /// phrase list; a loose "continue shopping" must NOT match on its own.
+    #[test]
+    fn generic_bot_wall_catches_amazon_interstitial_it() {
+        let html = r#"<html><body>
+            <p>Per continuare a fare acquisti sul nostro sito, fai clic sul pulsante qui sotto per continuare a fare acquisti.</p>
+            </body></html>"#;
+        assert!(looks_like_generic_bot_wall(html, false));
+    }
+
+    #[test]
+    fn english_retail_continue_shopping_copy_is_not_a_wall() {
+        // "Click the button below to continue shopping" is ordinary retail
+        // copy (empty-cart / order-confirmation pages), not an interstitial
+        // marker: only the verified it-IT sentence is on the list, so this
+        // shop page must stay clean even under the 600-char visible-text cap.
+        let html = r#"<html><body>
+            <p>Your cart is empty.</p>
+            <p>Click the button below to continue shopping.</p>
+            </body></html>"#;
+        assert!(!looks_like_generic_bot_wall(html, false));
+    }
+
+    #[test]
+    fn amazon_interstitial_loose_phrase_alone_is_not_a_wall() {
+        // Only the full sentences are listed, never the loose fragment, so a
+        // page whose visible text merely contains "continue shopping" in
+        // passing stays clean.
+        let html =
+            r#"<html><body><p>Happy days: continue shopping with us soon!</p></body></html>"#;
+        assert!(!looks_like_generic_bot_wall(html, false));
+    }
+
+    #[test]
+    fn real_article_quoting_amazon_sentence_is_not_bot_wall() {
+        // A genuine article that QUOTES the full interstitial sentence stays
+        // clean once its visible text exceeds the 600-char cap: the same
+        // safeguard that already protects CloudFront/Wikimedia quotations.
+        let html = format!(
+            "<html><body><article><h1>Why Amazon shows interstitials</h1>{}</article></body></html>",
+            "<p>Shoppers behind datacenter IP ranges increasingly report the \
+             message \"fai clic sul pulsante qui sotto per continuare a fare \
+             acquisti\" when opening product pages, which analysts attribute to \
+             TLS fingerprinting rather than IP reputation alone.</p>"
+                .repeat(6)
+        );
+        assert!(!looks_like_generic_bot_wall(&html, false));
     }
 
     #[test]

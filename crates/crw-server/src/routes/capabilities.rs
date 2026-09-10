@@ -294,7 +294,7 @@ pub async fn capabilities(State(state): State<AppState>) -> Json<Capabilities> {
         renderers: RendererCapabilities {
             available: state
                 .renderer
-                .js_renderer_names()
+                .available_renderer_names()
                 .into_iter()
                 .map(String::from)
                 .collect(),
