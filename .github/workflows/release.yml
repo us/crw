@@ -335,9 +335,11 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       # Trusted publishing needs npm 11.5.1 or later; the npm bundled with
-      # Node 22 is older.
+      # Node 22 is older. Pinned to the 11 line: npm 12 changed the JSON shape
+      # of `npm view <pkg>@<version> <field> --json` (it wraps the value in an
+      # array), which the verify scripts read.
       - name: Update npm for trusted publishing
-        run: npm install -g npm@latest
+        run: npm install -g npm@11
 
       - name: Download and verify platform release assets
         shell: bash
@@ -592,9 +594,11 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       # Trusted publishing needs npm 11.5.1 or later; the npm bundled with
-      # Node 22 is older.
+      # Node 22 is older. Pinned to the 11 line: npm 12 changed the JSON shape
+      # of `npm view <pkg>@<version> <field> --json` (it wraps the value in an
+      # array), which the verify scripts read.
       - name: Update npm for trusted publishing
-        run: npm install -g npm@latest
+        run: npm install -g npm@11
 
       - name: Build + test
         shell: bash
