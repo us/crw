@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.35.1](https://github.com/us/crw/compare/v0.35.0...v0.35.1) (2026-09-10)
+
+
+### Bug Fixes
+
+* **docker:** cross-compile BoringSSL for the arm64 image leg ([7d748e5](https://github.com/us/crw/commit/7d748e584aa0d76c83d2bc0230534bfbb055bea2))
+
 ## [0.35.0](https://github.com/us/crw/compare/v0.34.1...v0.35.0) (2026-09-10)
 
 
