@@ -43,7 +43,9 @@ for p in crw-mcp crw-mcp-darwin-x64 crw-mcp-darwin-arm64 \
 done
 
 # 2. optionalDependencies pin assertion — catches stale pin sneak-through
-deps_json=$(npm view "crw-mcp@$v" optionalDependencies --json 2>/dev/null || echo '{}')
+# npm 12 wraps a single-version `view` result in an array; accept both shapes.
+deps_json=$(npm view "crw-mcp@$v" optionalDependencies --json 2>/dev/null \
+  | jq 'if type == "array" then .[0] // {} else . end' 2>/dev/null || echo '{}')
 for p in crw-mcp-darwin-x64 crw-mcp-darwin-arm64 \
          crw-mcp-linux-x64 crw-mcp-linux-arm64; do
   pin=$(printf '%s' "$deps_json" | jq -r --arg p "$p" '.[$p] // "MISSING"')
