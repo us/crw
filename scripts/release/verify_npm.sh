@@ -20,14 +20,16 @@ source "$SCRIPT_DIR/lib.sh"
 v="${1:?version required}"
 fail=0
 
-# 1. Existence — poll, since npm registry propagation can lag several seconds
-#    after publish (same race already fixed for the SDK in verify_npm_sdk.sh).
+# 1. Existence — poll, since npm registry propagation can lag after publish
+#    (same race already fixed for the SDK in verify_npm_sdk.sh). The 0.34.0
+#    release measured more than a minute: the main package read MISSING at
+#    60 s and installed fine a few minutes later, so the poll allows five.
 #    `crw-mcp` is checked first and is the one that races; once it propagates,
 #    the optionalDeps read and install smoke below succeed too.
 for p in crw-mcp crw-mcp-darwin-x64 crw-mcp-darwin-arm64 \
          crw-mcp-linux-x64 crw-mcp-linux-arm64; do
   actual="MISSING"
-  for _ in 1 2 3 4 5 6; do
+  for _ in $(seq 1 30); do
     actual=$(npm view "$p@$v" version 2>/dev/null || echo "MISSING")
     [ "$actual" = "$v" ] && break
     sleep 10
@@ -54,11 +56,20 @@ for p in crw-mcp-darwin-x64 crw-mcp-darwin-arm64 \
   fi
 done
 
-# 3. Install smoke
+# 3. Install smoke, with the same propagation allowance: a package that
+#    `npm view` already sees can still be a few seconds from installable.
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-(cd "$tmp" && npm init -y >/dev/null && npm install --silent "crw-mcp@$v" >/dev/null 2>&1) \
-  || { err "npm install crw-mcp@$v failed"; fail=1; }
+installed=0
+for _ in $(seq 1 6); do
+  if (cd "$tmp" && rm -rf node_modules package-lock.json && npm init -y >/dev/null \
+      && npm install --silent "crw-mcp@$v" >/dev/null 2>&1); then
+    installed=1
+    break
+  fi
+  sleep 10
+done
+[ "$installed" = 1 ] || { err "npm install crw-mcp@$v failed"; fail=1; }
 # shellcheck disable=SC2015
 resolved=$(cd "$tmp" && npm ls --all 2>/dev/null | grep -E "crw-mcp-(darwin|linux)" | head -1 || true)
 if [ -n "$resolved" ] && ! printf '%s' "$resolved" | grep -q "@$v"; then
