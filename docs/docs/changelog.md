@@ -8,6 +8,18 @@ The source of truth is the repository root changelog. Do not edit this docs page
 
 All notable changes to CRW are documented here.
 
+## [0.35.0](https://github.com/us/crw/compare/v0.34.1...v0.35.0) (2026-09-10)
+
+
+### Features
+
+* **renderer:** impersonated-http tier with a real Chrome TLS fingerprint ([8a388ed](https://github.com/us/crw/commit/8a388ed83e0aca41370cc51d3ad1a179fc0d5218))
+
+
+### Bug Fixes
+
+* **release:** read the crate checksum from the sparse index ([ab43c40](https://github.com/us/crw/commit/ab43c40489f3edf446c8cbcd3c56b2c4a7fb9b23))
+
 ## [0.34.1](https://github.com/us/crw/compare/v0.34.0...v0.34.1) (2026-09-10)
 
 
