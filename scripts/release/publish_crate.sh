@@ -50,7 +50,18 @@ endgroup
 local_path="target/package/${crate}-${version}.crate"
 [ -f "$local_path" ] || die "expected $local_path after cargo package"
 local_sha=$(sha256sum "$local_path" | awk '{print $1}')
-remote_sha=$(crate_version_cksum "$crate" "$version")
+# An unreadable checksum is NOT evidence of a mismatch. Keeping the two apart
+# matters: the old code compared the local sha against whatever the lookup
+# returned, so an empty result failed the release with "content mismatch" and
+# told the maintainer to bump the version, for content that was in fact
+# identical. Say what is actually known instead.
+remote_sha=""
+if ! remote_sha=$(crate_version_cksum "$crate" "$version"); then
+  err "$crate@$version is already on crates.io but its checksum could not be read"
+  err "from the sparse index, so this run cannot confirm the upload matches."
+  err "Re-run once the index is reachable; do NOT bump the version on this alone."
+  exit 1
+fi
 if [ "$local_sha" != "$remote_sha" ]; then
   err "$crate@$version content mismatch — local=$local_sha remote=$remote_sha"
   err "crates.io is immutable; cannot republish. Bump the version."
