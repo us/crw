@@ -34,12 +34,41 @@ crate_version_present() {
     | jq -e --arg v "$version" '.version.num == $v' >/dev/null 2>&1
 }
 
-# crates.io cksum for an existing version (sha256 of .crate file).
+# Sparse-index path for a crate name, per the registry index protocol:
+# 1 char -> `1/<name>`, 2 -> `2/<name>`, 3 -> `3/<first>/<name>`,
+# 4+ -> `<first two>/<next two>/<name>`. Names are lowercased in the index.
+crate_index_path() {
+  local name
+  name=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+  case ${#name} in
+    1) printf '1/%s' "$name" ;;
+    2) printf '2/%s' "$name" ;;
+    3) printf '3/%s/%s' "${name:0:1}" "$name" ;;
+    *) printf '%s/%s/%s' "${name:0:2}" "${name:2:2}" "$name" ;;
+  esac
+}
+
+# crates.io cksum for an existing version (sha256 of the .crate file), read from
+# the sparse index rather than the v1 API.
+#
+# The v1 API's `/crates/<name>/<version>` response no longer carries
+# `version.cksum` (verified 2026-09-10: absent for every crate queried), so the
+# old lookup silently returned an empty string. Because the caller compared that
+# empty value against the local sha directly, every idempotent re-publish failed
+# as a "content mismatch" and told the maintainer to bump the version. The
+# sparse index is the registry protocol itself and is where the checksum is
+# authoritative.
+#
+# Prints the checksum and returns 0 on success; prints nothing and returns 1
+# when the index or the version cannot be read, so the caller can tell "unknown"
+# apart from "different".
 crate_version_cksum() {
-  local crate="$1" version="$2"
-  curl -fsSL -H "User-Agent: crw-release" \
-    "https://crates.io/api/v1/crates/${crate}/${version}" 2>/dev/null \
-    | jq -r '.version.cksum // empty'
+  local crate="$1" version="$2" body sum
+  body=$(curl -fsSL --retry 3 --retry-connrefused -H "User-Agent: crw-release" \
+    "https://index.crates.io/$(crate_index_path "$crate")" 2>/dev/null) || return 1
+  sum=$(printf '%s' "$body" | jq -r --arg v "$version" 'select(.vers == $v) | .cksum' 2>/dev/null | head -1)
+  [ -n "$sum" ] || return 1
+  printf '%s' "$sum"
 }
 
 # Parse a workspace member's local version from its Cargo.toml.

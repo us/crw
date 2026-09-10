@@ -248,6 +248,158 @@ def test_audit_anti_vacuity(tmp_path):
     assert run_audit(tmp_path).returncode == 1
 
 
+# ── crates.io checksum lookup ────────────────────────────────────────────
+#
+# `publish_crate.sh` treats "already uploaded" as success only when the local
+# .crate sha matches the published one. The lookup used to read
+# `version.cksum` from the crates.io v1 API, and that field is no longer in the
+# response (verified 2026-09-10: absent for every crate). The helper returned an
+# empty string with rc 0, the caller compared it straight against the local sha,
+# and the v0.34.0 release died on "content mismatch — local=8e9006f... remote="
+# for content that was in fact byte-identical, telling the maintainer to bump the
+# version. These pin the two halves of that: the lookup must fail loudly rather
+# than return empty, and the caller must not call an unreadable checksum a
+# mismatch.
+#
+# `curl` and `cargo` are stubbed on PATH, so the REAL bash runs with no network.
+
+LIB = REPO / "scripts" / "release" / "lib.sh"
+PUBLISH_CRATE = REPO / "scripts" / "release" / "publish_crate.sh"
+
+INDEX_BODY = (
+    '{"name":"crw-mcp-proto","vers":"0.33.0","cksum":"aaaa","yanked":false}\n'
+    '{"name":"crw-mcp-proto","vers":"0.34.0","cksum":"bbbb","yanked":false}\n'
+)
+
+
+def _stub_bin(dirpath: Path, name: str, body: str) -> None:
+    """Put an executable stub on PATH."""
+    f = dirpath / name
+    _write(f, "#!/usr/bin/env bash\n" + body)
+    f.chmod(0o755)
+
+
+def _curl_stub(bindir: Path, index_body: str | None, present: bool = True) -> str:
+    """A curl that answers the index URL and the v1 API URL, and nothing else.
+
+    `index_body is None` simulates an unreachable index (curl -f exit 22). The
+    body is written to a file rather than inlined, so the stub stays free of
+    heredocs whose terminator would have to survive shell quoting.
+    """
+    if index_body is None:
+        serve_index = "exit 22"
+    else:
+        body_file = bindir / "index_body.txt"
+        _write(body_file, index_body)
+        serve_index = f'cat "{body_file}"'
+    num = '{"version":{"num":"0.34.0"}}' if present else '{"errors":[]}'
+    return f"""
+url="${{@: -1}}"
+case "$url" in
+  *index.crates.io*) {serve_index} ;;
+  *api/v1/crates*)   printf '%s' '{num}' ;;
+  *) exit 22 ;;
+esac
+"""
+
+
+def _cksum(tmp_path: Path, crate: str, version: str, index_body, present=True):
+    """Call the real `crate_version_cksum` with a stubbed curl."""
+    bindir = tmp_path / "bin"
+    bindir.mkdir(parents=True, exist_ok=True)
+    _stub_bin(bindir, "curl", _curl_stub(bindir, index_body, present))
+    env = dict(os.environ, PATH=f"{bindir}:{os.environ['PATH']}")
+    return subprocess.run(
+        ["bash", "-c", f'set -euo pipefail; source "{LIB}"; crate_version_cksum "{crate}" "{version}"'],
+        capture_output=True, text=True, env=env,
+    )
+
+
+def test_crate_index_path_follows_the_registry_protocol(tmp_path):
+    out = subprocess.run(
+        ["bash", "-c", f'source "{LIB}"; for n in a ab abc crw-core CRW-Core; do crate_index_path "$n"; echo; done'],
+        capture_output=True, text=True,
+    ).stdout.split()
+    assert out == ["1/a", "2/ab", "3/a/abc", "cr/w-/crw-core", "cr/w-/crw-core"], out
+
+
+def test_crate_cksum_reads_the_requested_version_from_the_index(tmp_path):
+    r = _cksum(tmp_path, "crw-mcp-proto", "0.34.0", INDEX_BODY)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout == "bbbb", f"got {r.stdout!r} (must not pick another version)"
+
+
+def test_crate_cksum_fails_when_the_version_is_absent(tmp_path):
+    r = _cksum(tmp_path, "crw-mcp-proto", "9.9.9", INDEX_BODY)
+    assert r.returncode != 0, "an absent version must fail, not return empty-success"
+    assert r.stdout == "", r.stdout
+
+
+def test_crate_cksum_fails_when_the_index_is_unreachable(tmp_path):
+    r = _cksum(tmp_path, "crw-mcp-proto", "0.34.0", None)
+    assert r.returncode != 0, "an unreachable index must fail, not return empty-success"
+    assert r.stdout == "", r.stdout
+
+
+def test_unreadable_cksum_is_not_reported_as_a_content_mismatch(tmp_path):
+    """The v0.34.0 failure, pinned end to end through the real script."""
+    bindir = tmp_path / "bin"
+    bindir.mkdir(parents=True, exist_ok=True)
+    work = tmp_path / "work"
+    (work / "target" / "package").mkdir(parents=True, exist_ok=True)
+    _write(work / "target" / "package" / "crw-mcp-proto-0.34.0.crate", "payload")
+
+    _stub_bin(bindir, "curl", _curl_stub(bindir, None))  # index unreachable
+    _stub_bin(bindir, "cargo", """
+case "${1:-}" in
+  publish) echo "error: crate crw-mcp-proto@0.34.0 already exists on crates.io index" >&2; exit 101 ;;
+  package) exit 0 ;;
+  *) exit 0 ;;
+esac
+""")
+    env = dict(os.environ, PATH=f"{bindir}:{os.environ['PATH']}")
+    r = subprocess.run(
+        ["bash", str(PUBLISH_CRATE), "crw-mcp-proto", "0.34.0", "--source-dir", str(work)],
+        capture_output=True, text=True, env=env,
+    )
+    combined = r.stdout + r.stderr
+    assert r.returncode != 0, "an unverifiable upload must still fail the release"
+    assert "checksum could not be read" in combined, combined
+    assert "content mismatch" not in combined, "an unknown checksum is not a mismatch"
+    assert "Bump the version" not in combined, "must not advise bumping on an unreadable checksum"
+
+
+def test_matching_cksum_is_an_idempotent_skip(tmp_path):
+    """The happy path the v0.34.0 run should have taken."""
+    bindir = tmp_path / "bin"
+    bindir.mkdir(parents=True, exist_ok=True)
+    work = tmp_path / "work"
+    (work / "target" / "package").mkdir(parents=True, exist_ok=True)
+    crate_file = work / "target" / "package" / "crw-mcp-proto-0.34.0.crate"
+    _write(crate_file, "payload")
+    import hashlib
+
+    real = hashlib.sha256(crate_file.read_bytes()).hexdigest()
+    body = f'{{"name":"crw-mcp-proto","vers":"0.34.0","cksum":"{real}","yanked":false}}\n'
+
+    _stub_bin(bindir, "curl", _curl_stub(bindir, body))
+    _stub_bin(bindir, "cargo", """
+case "${1:-}" in
+  publish) echo "error: crate crw-mcp-proto@0.34.0 already exists on crates.io index" >&2; exit 101 ;;
+  package) exit 0 ;;
+  *) exit 0 ;;
+esac
+""")
+    env = dict(os.environ, PATH=f"{bindir}:{os.environ['PATH']}")
+    r = subprocess.run(
+        ["bash", str(PUBLISH_CRATE), "crw-mcp-proto", "0.34.0", "--source-dir", str(work)],
+        capture_output=True, text=True, env=env,
+    )
+    combined = r.stdout + r.stderr
+    assert r.returncode == 0, combined
+    assert "cksum matches" in combined, combined
+
+
 def _run_standalone() -> int:
     """Minimal runner so the suite works without pytest installed.
 
