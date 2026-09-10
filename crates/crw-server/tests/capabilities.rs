@@ -159,9 +159,19 @@ ws_url = "ws://127.0.0.1:9222"
 
     let available: Vec<String> =
         serde_json::from_value(body["renderers"]["available"].clone()).unwrap();
+    // No JS renderer exists without `cdp`; the impersonated-http tier is a
+    // feature-gated HTTP tier, so a cdp-less build may still advertise exactly
+    // that one pinnable tier.
+    #[cfg(feature = "impersonated")]
+    assert_eq!(
+        available,
+        vec!["impersonated-http"],
+        "cdp-less feature-on build: only the impersonated HTTP tier is pinnable"
+    );
+    #[cfg(not(feature = "impersonated"))]
     assert!(
         available.is_empty(),
-        "a build without the `cdp` feature constructs no JS renderer, got {available:?}"
+        "a build without `cdp` or `impersonated` constructs no renderer, got {available:?}"
     );
     assert_eq!(body["screenshot"]["supported"], json!(false));
     assert_eq!(body["screenshot"]["fullPage"], json!(false));
@@ -204,6 +214,16 @@ mode = "none"
     .await;
     let available: Vec<String> =
         serde_json::from_value(no_renderer["renderers"]["available"].clone()).unwrap();
+    // Same split as the cdp-less case above: mode=none means "no JS", not "no
+    // fetching strategies", so a feature-on build keeps the impersonated HTTP
+    // tier and advertises exactly that one.
+    #[cfg(feature = "impersonated")]
+    assert_eq!(
+        available,
+        vec!["impersonated-http"],
+        "mode=none keeps the impersonated HTTP tier; it runs no JS"
+    );
+    #[cfg(not(feature = "impersonated"))]
     assert!(
         available.is_empty(),
         "mode=none constructs no renderer, got {available:?}"
@@ -233,6 +253,14 @@ ws_url = "ws://127.0.0.1:9223"
 
     let available: Vec<String> =
         serde_json::from_value(body["renderers"]["available"].clone()).unwrap();
+    // The impersonated HTTP tier is prepended when the feature is built in; it
+    // is not a JS tier, so it does not change the screenshot verdict below.
+    #[cfg(feature = "impersonated")]
+    assert_eq!(
+        available,
+        vec!["impersonated-http".to_string(), "lightpanda".to_string()]
+    );
+    #[cfg(not(feature = "impersonated"))]
     assert_eq!(available, vec!["lightpanda".to_string()]);
     assert_eq!(
         body["screenshot"]["supported"],
@@ -551,6 +579,16 @@ async fn renderer_mode_serializes_as_a_lowercase_string() {
     );
     let body = caps(&app_from("[renderer]\nmode = \"none\"\n")).await;
     assert_eq!(body["renderers"]["mode"], json!("none"));
+    // mode=none constructs no JS tier. The impersonated-http tier is an HTTP
+    // tier and deliberately survives mode=none ("no JS", not "no fetching"),
+    // so a feature-on build still advertises it.
+    #[cfg(feature = "impersonated")]
+    assert_eq!(
+        body["renderers"]["available"],
+        json!(["impersonated-http"]),
+        "mode=none keeps the impersonated HTTP tier; it runs no JS"
+    );
+    #[cfg(not(feature = "impersonated"))]
     assert_eq!(
         body["renderers"]["available"],
         json!([]),

@@ -130,7 +130,7 @@ Bring-your-own-key is always accepted and cannot be turned off. So on a BYOK-onl
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `available` | `string[]` | The JS renderer tiers this instance actually constructed, in fallback order. Reflects both the build (a binary without the `cdp` feature constructs none) and the config (a tier with no endpoint set is never built). These are exactly the values the per-request `renderer` pin accepts. |
+| `available` | `string[]` | The renderer tiers this instance actually constructed, in fallback order. Reflects both the build (a binary without the `cdp` feature constructs no JS tier) and the config (a tier with no endpoint set is never built). These are exactly the values the per-request `renderer` pin accepts. A build with the `impersonated` feature also lists `impersonated-http`, which is a transport tier rather than a JS one, so this list can be non-empty on a browser-less binary. |
 | `mode` | `string` | Effective `[renderer] mode` — e.g. `auto`, `none`, or a pinned tier. |
 | `renderJsDefault` | `boolean?` | Effective `[renderer] render_js_default`. Omitted when unset (auto-detect). |
 

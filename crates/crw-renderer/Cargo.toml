@@ -21,11 +21,21 @@ camoufox = ["crw-core/camoufox"]
 # Opt-in cloak Turnstile-solver recovery tier (REST). Feature-gated + config-gated;
 # absent from all defaults, so the lean build is byte-identical.
 cloak = ["crw-core/cloak"]
+# Opt-in Chrome-impersonation HTTP tier (wreq). Gates the `impersonated`
+# module and its construction in `FallbackRenderer`. Default off so the lean
+# build never links the wreq/btls TLS stack. Forwards to `crw-core/impersonated`
+# for the config-level predicate and deadline math.
+impersonated = ["crw-core/impersonated", "dep:wreq", "dep:wreq-util"]
 
 [dependencies]
 crw-core = { workspace = true }
 crw-extract = { workspace = true }
 reqwest = { workspace = true }
+# Chrome TLS/JA3/HTTP2 impersonation client (impersonated feature only).
+# Decompression features because the Chrome emulation preset advertises
+# br/gzip/zstd Accept-Encoding; defaults (chromium-roots + tokio-rt) stay on.
+wreq = { workspace = true, optional = true }
+wreq-util = { workspace = true, optional = true }
 tokio = { workspace = true }
 tokio-tungstenite = { version = "0.30", features = ["rustls-tls-native-roots"], optional = true }
 futures = { workspace = true }

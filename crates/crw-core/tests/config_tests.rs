@@ -17,6 +17,35 @@ fn renderer_config_default_values() {
     assert!(config.lightpanda.is_none());
     assert!(config.playwright.is_none());
     assert!(config.chrome.is_none());
+    // The impersonated section is default-ON: an absent section means "on
+    // with defaults" in any build compiled with the feature.
+    assert!(config.impersonated.enabled);
+    assert_eq!(config.impersonated.timeout_ms, None);
+}
+
+#[test]
+fn renderer_config_impersonated_disable() {
+    let config: RendererConfig = toml::from_str("[impersonated]\nenabled = false\n").unwrap();
+    assert!(!config.impersonated.enabled);
+    // This test binary has no `impersonated` feature, so the cfg!-folded
+    // predicate is false either way; the runtime kill switch is the feature-on
+    // half, exercised in crw-renderer's feature-on test run.
+    assert!(!config.impersonated_in_chain());
+}
+
+#[test]
+fn renderer_config_impersonated_deadline_math() {
+    // Timeout falls back to the HTTP tier timeout, then page_timeout_ms.
+    let config = RendererConfig::default();
+    assert_eq!(config.impersonated_timeout(), config.http_timeout());
+    assert_eq!(config.impersonated_timeout(), 30_000);
+    let config: RendererConfig =
+        toml::from_str("\nhttp_timeout_ms = 12000\n[impersonated]\ntimeout_ms = 7000\n").unwrap();
+    assert_eq!(config.impersonated_timeout(), 7_000);
+    // In a feature-less build the tier never contributes to the ladder
+    // deadline sum (cfg!-folded like camoufox/cloak): HTTP contribution only,
+    // the 7s impersonated timeout is NOT added.
+    assert_eq!(config.min_deadline_for_full_ladder_ms(), 12_000);
 }
 
 #[test]

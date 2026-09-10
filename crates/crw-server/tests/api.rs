@@ -119,6 +119,42 @@ async fn scrape_with_renderer_unavailable_returns_400() {
 }
 
 #[tokio::test]
+async fn scrape_with_impersonated_pin_400s_on_absent_tier_or_contradiction() {
+    // The impersonated-http pin has two possible 400s here, and which one
+    // fires proves a different thing:
+    //   * feature-off (or config-disabled) build: the tier is not in the pin
+    //     vocabulary, so validate_renderer_pin 400s with "not available";
+    //   * feature-on build (the CI `--features impersonated` run): the pin
+    //     VALIDATES (the tier is constructed by the default config), and the
+    //     contradictory renderJs:true is then rejected by
+    //     validate_scrape_template BEFORE any fetch. Both branches are
+    //     network-free.
+    let server = test_app();
+    let resp = server
+        .post("/v1/scrape")
+        .json(&json!({
+            "url": "https://example.com",
+            "renderer": "impersonated-http",
+            "renderJs": true
+        }))
+        .await;
+    resp.assert_status(axum::http::StatusCode::BAD_REQUEST);
+    let json: serde_json::Value = resp.json();
+    assert_eq!(json["success"], false);
+    let error = json["error"].as_str().unwrap();
+    #[cfg(not(feature = "impersonated"))]
+    assert!(
+        error.contains("renderer 'impersonated-http' not available"),
+        "expected the absent-tier 400, got: {error}"
+    );
+    #[cfg(feature = "impersonated")]
+    assert!(
+        error.contains("never executes JS"),
+        "expected the pin to validate and the renderJs contradiction to 400, got: {error}"
+    );
+}
+
+#[tokio::test]
 async fn crawl_with_renderer_unavailable_returns_400() {
     // Crawl validates the pinned renderer before accepting the job — the
     // user gets HTTP 400 immediately rather than a queued-then-failed job.

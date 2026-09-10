@@ -2,8 +2,8 @@ use crw_core::Deadline;
 use crw_core::config::{BUILTIN_UA_POOL, ExtractionConfig, LlmConfig};
 use crw_core::error::CrwResult;
 use crw_core::types::{
-    BlockOutcome, ChangeTrackingMode, FetchResult, OutputFormat, ScrapeData, ScrapeRequest,
-    resolve_pinned_renderer, resolve_render_js,
+    BlockOutcome, ChangeTrackingMode, FetchResult, OutputFormat, RequestedRenderer, ScrapeData,
+    ScrapeRequest, resolve_pinned_renderer, resolve_render_js,
 };
 use crw_renderer::FallbackRenderer;
 use crw_renderer::http_only::HttpFetcher;
@@ -124,6 +124,23 @@ pub fn validate_scrape_template(req: &ScrapeRequest) -> CrwResult<()> {
             "screenshot format requires JS rendering; remove renderJs:false (or omit it)".into(),
         ));
     }
+    // The impersonated tier executes no JS and has no DOM to capture, so an
+    // explicit pin on it is contradictory with both JS-rendering requests.
+    // Mirrors the renderJs:false + screenshot rejection just above.
+    if req.renderer == Some(RequestedRenderer::ImpersonatedHttp) {
+        if req.render_js == Some(true) {
+            return Err(crw_core::error::CrwError::InvalidRequest(
+                "renderer 'impersonated-http' never executes JS; remove renderJs:true (or omit it)"
+                    .into(),
+            ));
+        }
+        if req.formats.contains(&OutputFormat::Screenshot) {
+            return Err(crw_core::error::CrwError::InvalidRequest(
+                "renderer 'impersonated-http' has no DOM to capture; remove the screenshot format"
+                    .into(),
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -145,9 +162,14 @@ async fn scrape_url_inner(
 
     let pinned = resolve_pinned_renderer(req.renderer);
 
-    // "Pinned implies JS" — if user named a non-auto renderer but didn't set
-    // renderJs, force JS so auto-gating doesn't silently bypass the pin.
-    let effective_render_js_request = if pinned.is_some() && req.render_js.is_none() {
+    // "Pinned implies JS": if the user named a non-auto BROWSER renderer but
+    // didn't set renderJs, force JS so auto-gating doesn't silently bypass
+    // the pin. The impersonated-http tier is the one wire-level pin that
+    // never executes JS (`RequestedRenderer::implies_js`), so it is exempt:
+    // the pin chooses a transport, and a renderJs coercion would divert it
+    // into the forced-JS arm it cannot serve.
+    let pin_implies_js = req.renderer.is_some_and(|r| r.implies_js());
+    let effective_render_js_request = if pin_implies_js && req.render_js.is_none() {
         Some(true)
     } else {
         req.render_js
@@ -163,13 +185,16 @@ async fn scrape_url_inner(
     // is skipped so the screenshot is never dropped.
     let wants_screenshot = req.formats.contains(&OutputFormat::Screenshot);
 
-    // Validate pinned renderer is available — fail fast with a 400 instead of
-    // letting the request reach the dispatcher with a hard-pin to a missing pool.
-    // Skip validation when renderJs:false is honored (HTTP-only ignores the pin).
+    // Validate pinned renderer is available: fail fast with a 400 instead of
+    // letting the request reach the dispatcher with a hard-pin to a missing
+    // pool. Skip validation when renderJs:false is honored for a BROWSER pin
+    // (HTTP-only ignores that pin). An impersonated-http pin is validated
+    // regardless of the resolved renderJs: it is a transport choice, and a
+    // global render_js_default=false must not silently drop it to plain HTTP.
     if let Some(name) = pinned
-        && effective_render_js != Some(false)
+        && (effective_render_js != Some(false) || !pin_implies_js)
     {
-        let available = renderer.js_renderer_names();
+        let available = renderer.available_renderer_names();
         if !available.contains(&name) {
             return Err(crw_core::error::CrwError::InvalidRequest(format!(
                 "renderer '{}' not available; configured renderers: [{}]. \
@@ -196,7 +221,11 @@ async fn scrape_url_inner(
             user_agent.to_string()
         };
 
-        if effective_render_js == Some(false) && !wants_screenshot {
+        // The impersonated pin never coerces renderJs (see above) and is served
+        // by the shared renderer's early pin arm, so it must not be diverted
+        // into this plain-HTTP temp fetcher either.
+        let is_impersonated_pin = !pin_implies_js && pinned.is_some();
+        if effective_render_js == Some(false) && !wants_screenshot && !is_impersonated_pin {
             // HTTP-only temp fetcher with per-request stealth. Honor REQUEST_PROXY
             // so a stealth-override request still egresses through the resolved
             // proxy — fail-closed, a set proxy is never bypassed.
@@ -393,9 +422,18 @@ async fn scrape_url_inner(
         let md_is_low_quality = md_quality
             .as_ref()
             .is_some_and(crw_extract::quality::is_low_quality);
+        // `impersonated-http` belongs here for the same reason `http` does: it
+        // executes no JS, so a 2xx whose markdown comes out empty is exactly
+        // the gap this second-chance escalation exists to close. Leaving it out
+        // would mean a page the auto hop cleared at the TLS layer, but whose
+        // content is client-rendered, never reaches a browser from this layer
+        // either.
         let used_low_tier = matches!(
             prior_renderer,
-            Some("http") | Some("http_only_fallback") | Some("lightpanda")
+            Some("http")
+                | Some("http_only_fallback")
+                | Some("lightpanda")
+                | Some("impersonated-http")
         );
         // Only escalate on 2xx here. Renderer-level (lib.rs) already handles
         // soft-block status codes (401/403/405/406/410/412/429/451/503) via its

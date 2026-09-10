@@ -107,14 +107,25 @@ jobs:
       - name: Test crw-server without the cdp feature
         run: cargo test -p crw-server
 
-      # `camoufox` and `cloak` are default-off in every crate, so
-      # `cargo test --workspace` never compiles those tiers or their tests.
-      # Without this step the whole camoufox module, including its
-      # wall/challenge classification, is invisible to the gate. `cdp` is
-      # included because the tests that cover how these tiers interact with
-      # the ladder are gated on it too.
-      - name: Test the camoufox and cloak tiers
-        run: cargo test -p crw-renderer --features cdp,camoufox,cloak
+      # `camoufox`, `cloak` and `impersonated` are default-off in every
+      # crate, so `cargo test --workspace` never compiles those tiers or
+      # their tests. Without this step the whole camoufox module, including
+      # its wall/challenge classification, is invisible to the gate. `cdp`
+      # is included because the tests that cover how these tiers interact
+      # with the ladder are gated on it too. `impersonated` rides the same
+      # line so the wreq tier and its hop/pin tests are exercised too.
+      - name: Test the camoufox, cloak and impersonated tiers
+        run: cargo test -p crw-renderer --features cdp,camoufox,cloak,impersonated
+
+      # The impersonated pin surface (crw-server validate_renderer_pin, the
+      # MCP renderer enum acceptance) only exists when crw-server is built
+      # with the feature; the workspace run above never enables it. `cdp` rides
+      # along because `cdp,impersonated` is the exact combination the Dockerfile
+      # ships (CARGO_PKGS), and no other job in this workflow compiles it. A
+      # break there would otherwise surface first at release time, in
+      # docker-build.yml, which only runs on tags.
+      - name: Test crw-server with the shipped cdp + impersonated feature set
+        run: cargo test -p crw-server --features cdp,impersonated
 
   sdk-ts:
     runs-on: ubuntu-latest

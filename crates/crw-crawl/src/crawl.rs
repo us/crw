@@ -1,8 +1,6 @@
 use crw_core::config::LlmConfig;
 use crw_core::error::CrwResult;
-use crw_core::types::{
-    CrawlRequest, CrawlState, CrawlStatus, RequestedRenderer, ScrapeData, resolve_pinned_renderer,
-};
+use crw_core::types::{CrawlRequest, CrawlState, CrawlStatus, ScrapeData, resolve_pinned_renderer};
 use crw_extract::readability::extract_links;
 use crw_renderer::FallbackRenderer;
 use futures::StreamExt;
@@ -203,16 +201,17 @@ async fn run_crawl_inner(opts: CrawlOptions<'_>) {
         }
     };
 
-    // Apply "pinned implies JS" once per crawl, mirroring single.rs.
+    // Apply "pinned implies JS" once per crawl, mirroring single.rs. The rule
+    // lives in `RequestedRenderer::implies_js` (the single source both entry
+    // points consume): browser pins coerce a JS render, the wire-level
+    // impersonated pin and an explicit Auto do not.
     let pinned_renderer = resolve_pinned_renderer(req.renderer);
-    let effective_render_js = if req.renderer.is_some()
-        && req.renderer != Some(RequestedRenderer::Auto)
-        && req.render_js.is_none()
-    {
-        Some(true)
-    } else {
-        req.render_js
-    };
+    let effective_render_js =
+        if req.renderer.is_some_and(|r| r.implies_js()) && req.render_js.is_none() {
+            Some(true)
+        } else {
+            req.render_js
+        };
 
     let base_url = match url::Url::parse(&req.url) {
         Ok(u) => {
