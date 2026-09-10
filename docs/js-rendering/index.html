@@ -398,9 +398,14 @@ CRW_RENDERER__FORCE_JS=true</code></pre>
 <td><code>camoufox</code></td>
 <td>Hard-pin to the opt-in Camoufox stealth tier (REST) — no fallback. Requires a build with <code>--features camoufox</code> and a configured <code>[renderer.camoufox]</code> endpoint</td>
 </tr>
+<tr>
+<td><code>impersonated-http</code></td>
+<td>Hard-pin to the Chrome-impersonating HTTP tier (real Chrome TLS/JA3/HTTP2 fingerprint via wreq, no JS engine), no fallback. Requires a build with <code>--features impersonated</code> (<code>GET /v1/capabilities</code> lists it when present); a wall-shaped result surfaces as an error rather than a billed success, while ordinary non-wall answers (a 404, a PDF, a thin page) come back as results</td>
+</tr>
 </tbody></table>
 <h3 id="pinned-implies-js">Pinned implies JS</h3>
-<p>A non-<code>auto</code> <code>renderer</code> value implies <code>renderJs:true</code>. If you set <code>renderJs:false</code> explicitly, the request stays HTTP-only and the pin is silently ignored — <code>renderJs:false</code> always wins. This means the availability check is also skipped when <code>renderJs:false</code> is set, so combinations like <code>{&quot;mode&quot;:&quot;none&quot;,&quot;renderJs&quot;:false,&quot;renderer&quot;:&quot;chrome&quot;}</code> are accepted.</p>
+<p>A non-<code>auto</code> browser <code>renderer</code> value implies <code>renderJs:true</code>. The one exception is <code>impersonated-http</code>: it never executes JS, so it implies nothing, and an explicit <code>renderJs:true</code> alongside it is rejected as contradictory.</p>
+<p>For browser pins, if you set <code>renderJs:false</code> explicitly, the request stays HTTP-only and the pin is silently ignored; <code>renderJs:false</code> always wins. This means the availability check is also skipped when <code>renderJs:false</code> is set with a browser pin, so combinations like <code>{&quot;mode&quot;:&quot;none&quot;,&quot;renderJs&quot;:false,&quot;renderer&quot;:&quot;chrome&quot;}</code> are accepted. An <code>impersonated-http</code> pin is validated regardless of <code>renderJs</code>, because it selects a transport rather than a rendering mode.</p>
 <h3 id="errors-and-validation">Errors and validation</h3>
 <p>If the named renderer isn&#39;t available in the server&#39;s pool, the request returns HTTP 400 immediately with <code>error_code: &quot;invalid_request&quot;</code> and a message listing the configured renderers:</p>
 <pre data-lang="json"><code class="language-json">{

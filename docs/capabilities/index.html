@@ -476,7 +476,7 @@ Authorization: Bearer YOUR_API_KEY</code></pre>
 <tbody><tr>
 <td><code>available</code></td>
 <td><code>string[]</code></td>
-<td>The JS renderer tiers this instance actually constructed, in fallback order. Reflects both the build (a binary without the <code>cdp</code> feature constructs none) and the config (a tier with no endpoint set is never built). These are exactly the values the per-request <code>renderer</code> pin accepts.</td>
+<td>The renderer tiers this instance actually constructed, in fallback order. Reflects both the build (a binary without the <code>cdp</code> feature constructs no JS tier) and the config (a tier with no endpoint set is never built). These are exactly the values the per-request <code>renderer</code> pin accepts. A build with the <code>impersonated</code> feature also lists <code>impersonated-http</code>, which is a transport tier rather than a JS one, so this list can be non-empty on a browser-less binary.</td>
 </tr>
 <tr>
 <td><code>mode</code></td>

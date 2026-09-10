@@ -471,7 +471,7 @@ console.log((await status.json()).status);</code></pre></div><div class="code-ta
 <td><code>renderer</code></td>
 <td>string</td>
 <td><code>auto</code></td>
-<td>Pin every crawled page to a specific renderer: <code>auto</code>, <code>lightpanda</code>, <code>chrome</code>, <code>chrome_proxy</code>, or <code>camoufox</code> (self-hosted instances can also configure <code>playwright</code>; the managed cloud does not run it). Non-<code>auto</code> values hard-pin (no fallback) and imply <code>renderJs:true</code> unless <code>renderJs:false</code> is set. Validation runs once at crawl start — invalid combinations return HTTP 400 before the job is queued. Per-page failures of a pinned renderer are logged and skipped, so failed pages may be missing from results — see <a href="/js-rendering">JS rendering</a> for the resilience tradeoff</td>
+<td>Pin every crawled page to a specific renderer: <code>auto</code>, <code>lightpanda</code>, <code>chrome</code>, <code>chrome_proxy</code>, <code>camoufox</code>, or <code>impersonated-http</code> (self-hosted instances can also configure <code>playwright</code>; the managed cloud does not run it). Non-<code>auto</code> browser values hard-pin (no fallback) and imply <code>renderJs:true</code> unless <code>renderJs:false</code> is set; <code>impersonated-http</code> executes no JS, so it never implies <code>renderJs</code> and <code>renderJs:true</code> alongside it is rejected. Validation runs once at crawl start — invalid combinations return HTTP 400 before the job is queued. Per-page failures of a pinned renderer are logged and skipped, so failed pages may be missing from results — see <a href="/js-rendering">JS rendering</a> for the resilience tradeoff</td>
 </tr>
 <tr>
 <td><code>headers</code></td>
