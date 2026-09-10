@@ -84,7 +84,19 @@ RUN cargo install cargo-chef --locked --version 0.1.77
 #     of crw-server (aws-lc-sys + full graph) needs several GB and OOM-killed
 #     the build (#90). thin LTO + 16 CGUs: far lower peak memory, faster link,
 #     negligible runtime difference.
+#   - C/C++ cross compilers for the aarch64 target. btls-sys (the vendored
+#     BoringSSL behind wreq) applies its own CMAKE_TOOLCHAIN_FILE for aarch64,
+#     and that file sets only CMAKE_SYSTEM_NAME/PROCESSOR: "Rely on environment
+#     variables to set the compiler and include paths." Because a toolchain file
+#     is present, the cmake crate does not inject CMAKE_C_COMPILER either, so
+#     CMake fell back to the HOST cc and produced x86-64 objects. The aarch64
+#     link then died with "Relocations in generic ELF (EM: 62)" on
+#     libbtls_sys.rlib. These two are what the cc crate reads for the target,
+#     and they reach CMake through it. They are per-target names, so the amd64
+#     leg ignores them.
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
+    CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc \
+    CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++ \
     CARGO_PROFILE_RELEASE_LTO=thin \
     CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
 
