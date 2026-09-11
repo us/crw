@@ -400,7 +400,7 @@ CRW_RENDERER__FORCE_JS=true</code></pre>
 </tr>
 <tr>
 <td><code>impersonated-http</code></td>
-<td>Hard-pin to the Chrome-impersonating HTTP tier (real Chrome TLS/JA3/HTTP2 fingerprint via wreq, no JS engine), no fallback. Requires a build with <code>--features impersonated</code> (<code>GET /v1/capabilities</code> lists it when present); a wall-shaped result surfaces as an error rather than a billed success, while ordinary non-wall answers (a 404, a PDF, a thin page) come back as results</td>
+<td>Hard-pin to the Chrome-impersonating HTTP tier (real Chrome TLS/JA3/HTTP2 fingerprint via wreq, no JS engine), no fallback. Requires a build with <code>--features impersonated</code> (<code>GET /v1/capabilities</code> lists it when present); a wall-shaped result surfaces as an error rather than a billed success, while ordinary non-wall answers (a 404, a PDF, a thin page) come back as results. See <a href="/docs/tls-fingerprint-walls">TLS-fingerprint walls</a> for which site classes this helps with and how to tell a fingerprint wall from a JS gate or an IP-rate block</td>
 </tr>
 </tbody></table>
 <h3 id="pinned-implies-js">Pinned implies JS</h3>
