@@ -120,6 +120,7 @@ export default {
         { title: "Configuration", slug: "configuration", icon: "settings" },
         { title: "Hardening", slug: "self-hosting-hardening", icon: "alert" },
         { title: "JS Rendering", slug: "js-rendering", icon: "zap" },
+        { title: "TLS-fingerprint walls", slug: "tls-fingerprint-walls", icon: "shield" },
         { title: "Proxies", slug: "proxies", icon: "shield" },
       ],
     },

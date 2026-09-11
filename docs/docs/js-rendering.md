@@ -84,7 +84,7 @@ When `mode = "auto"` and you have multiple renderers configured (e.g., LightPand
 | `chrome_proxy` | Hard-pin to residential-proxy Chrome tier — no fallback |
 | `playwright` | Hard-pin to Playwright — no fallback |
 | `camoufox` | Hard-pin to the opt-in Camoufox stealth tier (REST) — no fallback. Requires a build with `--features camoufox` and a configured `[renderer.camoufox]` endpoint |
-| `impersonated-http` | Hard-pin to the Chrome-impersonating HTTP tier (real Chrome TLS/JA3/HTTP2 fingerprint via wreq, no JS engine), no fallback. Requires a build with `--features impersonated` (`GET /v1/capabilities` lists it when present); a wall-shaped result surfaces as an error rather than a billed success, while ordinary non-wall answers (a 404, a PDF, a thin page) come back as results |
+| `impersonated-http` | Hard-pin to the Chrome-impersonating HTTP tier (real Chrome TLS/JA3/HTTP2 fingerprint via wreq, no JS engine), no fallback. Requires a build with `--features impersonated` (`GET /v1/capabilities` lists it when present); a wall-shaped result surfaces as an error rather than a billed success, while ordinary non-wall answers (a 404, a PDF, a thin page) come back as results. See [TLS-fingerprint walls](/docs/tls-fingerprint-walls) for which site classes this helps with and how to tell a fingerprint wall from a JS gate or an IP-rate block |
 
 ### Pinned implies JS
 
