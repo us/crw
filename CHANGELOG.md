@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.35.2](https://github.com/us/crw/compare/v0.35.1...v0.35.2) (2026-09-12)
+
+
+### Bug Fixes
+
+* **extract:** stop corrupting markdown for non-HTML sources ([0ae7c40](https://github.com/us/crw/commit/0ae7c40251f042c1664d64a5c377dd306f56ffc1))
+
 ## [0.35.1](https://github.com/us/crw/compare/v0.35.0...v0.35.1) (2026-09-10)
 
 
