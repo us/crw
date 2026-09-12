@@ -1203,6 +1203,27 @@ pub fn resolve_pinned_renderer(req: Option<RequestedRenderer>) -> Option<&'stati
     req.and_then(|r| r.pinned_name())
 }
 
+/// Is this declared content type actually HTML (or HTML-like markup)?
+///
+/// Shared by the renderer (deciding whether a browser render can add
+/// anything to a body) and the extractor (deciding whether it is safe to run
+/// an HTML parser / HTML-to-markdown converter over the body at all). Absent
+/// or unrecognised types stay eligible: a server that omits `Content-Type`
+/// is still overwhelmingly likely to be serving HTML.
+pub fn is_html_like_content_type(content_type: Option<&str>) -> bool {
+    match content_type {
+        None => true,
+        Some(ct) => {
+            let ct = ct.trim().to_ascii_lowercase();
+            ct.is_empty()
+                || ct == "text/html"
+                || ct == "application/xhtml+xml"
+                || ct == "application/xml"
+                || ct == "text/xml"
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

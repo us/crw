@@ -99,6 +99,11 @@ pub mod summary;
 /// Options for the high-level extraction pipeline.
 pub struct ExtractOptions<'a> {
     pub raw_html: &'a str,
+    /// Declared response content type, e.g. `Some("text/plain")`. `None` when
+    /// unknown. Used to decide whether `raw_html` is safe to run through an
+    /// HTML parser / HTML-to-markdown converter at all — see
+    /// `crw_core::is_html_like_content_type`.
+    pub content_type: Option<&'a str>,
     pub source_url: &'a str,
     pub status_code: u16,
     pub rendered_with: Option<String>,
@@ -158,6 +163,7 @@ pub struct ExtractOptions<'a> {
 /// existing borrow-caller keeps compiling; this is purely additive.
 pub struct OwnedExtractInput {
     pub raw_html: String,
+    pub content_type: Option<String>,
     pub source_url: String,
     pub status_code: u16,
     pub rendered_with: Option<String>,
@@ -194,6 +200,7 @@ impl OwnedExtractInput {
     pub fn as_opts(&self) -> ExtractOptions<'_> {
         ExtractOptions {
             raw_html: &self.raw_html,
+            content_type: self.content_type.as_deref(),
             source_url: &self.source_url,
             status_code: self.status_code,
             rendered_with: self.rendered_with.clone(),
@@ -393,6 +400,7 @@ static TRAILING_LIST_ITEM: once_cell::sync::Lazy<regex::Regex> = once_cell::sync
 pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
     let ExtractOptions {
         raw_html,
+        content_type,
         source_url,
         status_code,
         rendered_with,
@@ -432,70 +440,95 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
         };
     let css_selector = css_selector.or(domain_selector_owned.as_deref());
 
+    // A declared non-HTML content type (text/plain, application/json, ...)
+    // means `raw_html` is NOT markup — it is the literal response body. The
+    // HTTP tier decodes every non-PDF response through this same pipeline
+    // regardless of its declared type, so running html5ever + the HTML-to-
+    // markdown converter over it corrupts the body: htmd escapes any
+    // markdown-metacharacter byte (backticks, `#`, `*`, ...) it finds in a
+    // "text node" and HTML's whitespace-collapse rules merge newlines into
+    // spaces, destroying fenced code blocks and paragraph structure in a way
+    // no response-side repair can undo (crw#530). Skip the HTML pipeline
+    // entirely and treat the body as already-final text for every format.
+    let treat_as_plain = !crw_core::is_html_like_content_type(content_type);
+
     // Step 1: Extract metadata from raw HTML.
     let meta = readability::extract_metadata(raw_html);
 
-    // Step 2: Clean HTML (remove boilerplate, nav, ads, etc.).
-    // `include_tags` narrowing happens inside clean_html; when it matches
-    // nothing, clean_html empties the output and pushes `selector_no_match`.
-    // Capture that here (via the warning delta this call produced) so the rest
-    // of the pipeline can treat it exactly like an unmatched css/xpath selector.
-    let warns_before = warnings.len();
-    let cleaned = clean::clean_html_with_warnings(
-        raw_html,
-        only_main_content,
-        include_tags,
-        exclude_tags,
-        &mut warnings,
-    )
-    .unwrap_or_else(|_| raw_html.to_string());
-    let include_tags_no_match = warnings[warns_before..]
-        .iter()
-        .any(|w| w == "selector_no_match");
-
-    // Step 3: Apply CSS/XPath selector if provided (narrows to a specific element).
-    let selected_html = apply_selector(&cleaned, css_selector, xpath)?;
-    // A user-requested narrowing that matched nothing must NOT fall back to the
-    // whole page (a silent context-bloat footgun: an unmatched `--css`/`--xpath`
-    // or `includeTags` previously returned the entire document). Treat it as an
-    // intentional narrow extraction that yielded empty output. `Some("")` also
-    // short-circuits the alternates ladder below, so the whole page can't sneak
-    // back in via the basic_clean fallback.
-    // Domain-configured default selectors are excluded: a host default that
-    // doesn't apply should still show the page (its no-match sets neither flag).
-    let selected_html = if include_tags_no_match {
-        // include_tags matched nothing, so `cleaned` is already empty. This
-        // takes precedence over any css/xpath applied afterwards: an xpath
-        // scalar like `count(//x)` would otherwise evaluate to "0" against the
-        // empty document and leak a bogus value. clean_html already pushed the
-        // `selector_no_match` warning, so don't push it again.
-        Some(String::new())
-    } else if user_selected && selected_html.is_none() {
-        warnings.push("selector_no_match".to_string());
-        Some(String::new())
+    // Steps 2-4 (clean / selector / readability narrowing) only make sense on
+    // real markup. For a non-HTML body, `raw_html` already IS the content —
+    // none of the markup-aware selection below has anything to select against.
+    let (content_html, cleaned_ref, had_selection, include_tags_no_match) = if treat_as_plain {
+        (raw_html.to_string(), None, false, false)
     } else {
-        selected_html
-    };
-    let after_selection = selected_html.as_deref().unwrap_or(&cleaned);
+        // Step 2: Clean HTML (remove boilerplate, nav, ads, etc.).
+        // `include_tags` narrowing happens inside clean_html; when it matches
+        // nothing, clean_html empties the output and pushes `selector_no_match`.
+        // Capture that here (via the warning delta this call produced) so the rest
+        // of the pipeline can treat it exactly like an unmatched css/xpath selector.
+        let warns_before = warnings.len();
+        let cleaned = clean::clean_html_with_warnings(
+            raw_html,
+            only_main_content,
+            include_tags,
+            exclude_tags,
+            &mut warnings,
+        )
+        .unwrap_or_else(|_| raw_html.to_string());
+        let include_tags_no_match = warnings[warns_before..]
+            .iter()
+            .any(|w| w == "selector_no_match");
 
-    // Step 4: If only_main_content, try to narrow further with readability scoring.
-    let (content_html, cleaned_ref) = if only_main_content && selected_html.is_none() {
-        match readability::extract_main_content_with_provenance(after_selection) {
-            readability::ReadabilityOutcome::Selected { html: main, .. } => {
-                // Re-clean: readability may have selected a broad container
-                // (e.g. <article>) that still contains noise elements
-                // (infobox, navbox, catlinks, etc.).
-                let re_cleaned = clean::clean_html(&main, true, &[], &[]).unwrap_or(main);
-                (re_cleaned, Some(cleaned))
+        // Step 3: Apply CSS/XPath selector if provided (narrows to a specific element).
+        let selected_html = apply_selector(&cleaned, css_selector, xpath)?;
+        // A user-requested narrowing that matched nothing must NOT fall back to the
+        // whole page (a silent context-bloat footgun: an unmatched `--css`/`--xpath`
+        // or `includeTags` previously returned the entire document). Treat it as an
+        // intentional narrow extraction that yielded empty output. `Some("")` also
+        // short-circuits the alternates ladder below, so the whole page can't sneak
+        // back in via the basic_clean fallback.
+        // Domain-configured default selectors are excluded: a host default that
+        // doesn't apply should still show the page (its no-match sets neither flag).
+        let selected_html = if include_tags_no_match {
+            // include_tags matched nothing, so `cleaned` is already empty. This
+            // takes precedence over any css/xpath applied afterwards: an xpath
+            // scalar like `count(//x)` would otherwise evaluate to "0" against the
+            // empty document and leak a bogus value. clean_html already pushed the
+            // `selector_no_match` warning, so don't push it again.
+            Some(String::new())
+        } else if user_selected && selected_html.is_none() {
+            warnings.push("selector_no_match".to_string());
+            Some(String::new())
+        } else {
+            selected_html
+        };
+        let after_selection = selected_html.as_deref().unwrap_or(&cleaned);
+
+        // Step 4: If only_main_content, try to narrow further with readability scoring.
+        let (content_html, cleaned_ref) = if only_main_content && selected_html.is_none() {
+            match readability::extract_main_content_with_provenance(after_selection) {
+                readability::ReadabilityOutcome::Selected { html: main, .. } => {
+                    // Re-clean: readability may have selected a broad container
+                    // (e.g. <article>) that still contains noise elements
+                    // (infobox, navbox, catlinks, etc.).
+                    let re_cleaned = clean::clean_html(&main, true, &[], &[]).unwrap_or(main);
+                    (re_cleaned, Some(cleaned))
+                }
+                readability::ReadabilityOutcome::Rejected { .. } => {
+                    // Listing root or empty body — skip readability and let the
+                    // alternates ladder pick from cleaned / basic-clean.
+                    (cleaned.clone(), Some(cleaned))
+                }
             }
-            readability::ReadabilityOutcome::Rejected { .. } => {
-                // Listing root or empty body — skip readability and let the
-                // alternates ladder pick from cleaned / basic-clean.
-                (cleaned.clone(), Some(cleaned))
-            }
-        }
-    } else {
-        (after_selection.to_string(), None)
+        } else {
+            (after_selection.to_string(), None)
+        };
+        (
+            content_html,
+            cleaned_ref,
+            selected_html.is_some(),
+            include_tags_no_match,
+        )
     };
 
     // Step 5: Produce requested formats. `Summary` also needs markdown
@@ -505,111 +538,117 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
         || formats.contains(&OutputFormat::Json)
         || formats.contains(&OutputFormat::Summary)
     {
-        let primary_md = markdown::html_to_markdown_with(&content_html, normalize_tables);
-        let primary_quality = quality::analyze_md_only(&primary_md);
-
-        // Skip alternates when a selector was explicitly used (short output is
-        // intentional) or when the primary extraction is healthy.
-        // Threshold 0.4 (not 0.6) — readability output that scores 0.4+ is
-        // good enough; running alternates on it tends to swap in basic_clean
-        // (whole-body) which boosts word count but reintroduces nav noise.
-        if selected_html.is_some() || primary_quality.score > 0.4 {
-            Some(primary_md)
+        if treat_as_plain {
+            // Not HTML — `content_html` (== raw_html) is already the final
+            // body. Do not run it through an HTML-to-markdown converter.
+            Some(content_html.clone())
         } else {
-            let mut candidates: Vec<(&'static str, String, quality::Quality)> = Vec::new();
+            let primary_md = markdown::html_to_markdown_with(&content_html, normalize_tables);
+            let primary_quality = quality::analyze_md_only(&primary_md);
 
-            // Alt 1: cleaned HTML (only_main_content path bypasses readability).
-            if only_main_content && let Some(c) = cleaned_ref.as_ref() {
-                let m = markdown::html_to_markdown_with(c, normalize_tables);
-                let q = quality::analyze_md_only(&m);
-                candidates.push(("cleaned", m, q));
-            }
+            // Skip alternates when a selector was explicitly used (short output is
+            // intentional) or when the primary extraction is healthy.
+            // Threshold 0.4 (not 0.6) — readability output that scores 0.4+ is
+            // good enough; running alternates on it tends to swap in basic_clean
+            // (whole-body) which boosts word count but reintroduces nav noise.
+            if had_selection || primary_quality.score > 0.4 {
+                Some(primary_md)
+            } else {
+                let mut candidates: Vec<(&'static str, String, quality::Quality)> = Vec::new();
 
-            // Alt 2: whole-page clean without only_main_content, i.e. the page
-            // with its nav/footer intact. It is the rescue candidate for pages
-            // where readability narrows onto the wrong container.
-            //
-            // Known wart: because the quality score rewards word count, that
-            // boilerplate bulk is also what lets this candidate win on
-            // page-builder sites, which is how a mega menu reaches the markdown
-            // even for onlyMainContent requests. Making it honour
-            // only_main_content fixes those pages but costs recall on the
-            // frozen 1000-URL set (0.3828 -> 0.3651), so it is left alone here.
-            let basic_cleaned = clean::clean_html_with_warnings(
-                raw_html,
-                false,
-                include_tags,
-                exclude_tags,
-                &mut warnings,
-            )
-            .unwrap_or_else(|_| raw_html.to_string());
-            let basic_md = markdown::html_to_markdown_with(&basic_cleaned, normalize_tables);
-            let basic_q = quality::analyze_md_only(&basic_md);
-            candidates.push(("basic_clean", basic_md, basic_q));
-
-            // No structural table/list alternate. It harvested <ul>/<table>
-            // straight out of raw_html, and its only guard was an ancestor tag
-            // check for nav/footer/header — which page builders sail past,
-            // since Elementor and friends render menus as plain <div><ul>. On
-            // an Elementor product page it was the winning candidate and put
-            // 118 nav links into the markdown. Measured contribution across a
-            // labelled corpus: none (identical recall with and without).
-            // Alt 4: XHR/fetch JSON capture — recursively walk every captured
-            // JSON body and gather long text fields. Useful when the article
-            // body lives in an API response loaded after `loadEventFired`
-            // (newsroom feeds, infinite-scroll, paywall-shielded prose).
-            if let Some(xhr_md) = extract_xhr_text(captured_responses) {
-                let q = quality::analyze_md_only(&xhr_md);
-                candidates.push(("xhr_json", xhr_md, q));
-            }
-
-            // Alt 5: plaintext fallback.
-            let plain_md = {
-                let text = plaintext::html_to_plaintext(&content_html);
-                if text.trim().is_empty() {
-                    plaintext::html_to_plaintext(&basic_cleaned)
-                } else {
-                    text
+                // Alt 1: cleaned HTML (only_main_content path bypasses readability).
+                if only_main_content && let Some(c) = cleaned_ref.as_ref() {
+                    let m = markdown::html_to_markdown_with(c, normalize_tables);
+                    let q = quality::analyze_md_only(&m);
+                    candidates.push(("cleaned", m, q));
                 }
-            };
-            let plain_q = quality::analyze_md_only(&plain_md);
-            candidates.push(("plaintext", plain_md, plain_q));
 
-            // Include the primary at the head of the candidate list.
-            candidates.insert(0, ("primary", primary_md, primary_quality));
+                // Alt 2: whole-page clean without only_main_content, i.e. the page
+                // with its nav/footer intact. It is the rescue candidate for pages
+                // where readability narrows onto the wrong container.
+                //
+                // Known wart: because the quality score rewards word count, that
+                // boilerplate bulk is also what lets this candidate win on
+                // page-builder sites, which is how a mega menu reaches the markdown
+                // even for onlyMainContent requests. Making it honour
+                // only_main_content fixes those pages but costs recall on the
+                // frozen 1000-URL set (0.3828 -> 0.3651), so it is left alone here.
+                let basic_cleaned = clean::clean_html_with_warnings(
+                    raw_html,
+                    false,
+                    include_tags,
+                    exclude_tags,
+                    &mut warnings,
+                )
+                .unwrap_or_else(|_| raw_html.to_string());
+                let basic_md = markdown::html_to_markdown_with(&basic_cleaned, normalize_tables);
+                let basic_q = quality::analyze_md_only(&basic_md);
+                candidates.push(("basic_clean", basic_md, basic_q));
 
-            // Primary-biased pick: keep primary unless an alternate beats it by
-            // a clear margin (0.15). Without this margin, basic_clean tends to
-            // win simply by including more nav/footer words, which boosts its
-            // word count but reintroduces noise the readability primary had
-            // correctly excluded.
-            const PRIMARY_MARGIN: f32 = 0.15;
-            let primary_score = candidates[0].2.score;
-            let chosen_idx = candidates
-                .iter()
-                .enumerate()
-                .skip(1)
-                .filter(|(_, c)| c.2.score >= primary_score + PRIMARY_MARGIN)
-                .max_by(|(_, a), (_, b)| {
-                    a.2.score
-                        .partial_cmp(&b.2.score)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                        .then(a.2.bytes.cmp(&b.2.bytes))
-                })
-                .map(|(i, _)| i)
-                .unwrap_or(0);
+                // No structural table/list alternate. It harvested <ul>/<table>
+                // straight out of raw_html, and its only guard was an ancestor tag
+                // check for nav/footer/header — which page builders sail past,
+                // since Elementor and friends render menus as plain <div><ul>. On
+                // an Elementor product page it was the winning candidate and put
+                // 118 nav links into the markdown. Measured contribution across a
+                // labelled corpus: none (identical recall with and without).
+                // Alt 4: XHR/fetch JSON capture — recursively walk every captured
+                // JSON body and gather long text fields. Useful when the article
+                // body lives in an API response loaded after `loadEventFired`
+                // (newsroom feeds, infinite-scroll, paywall-shielded prose).
+                if let Some(xhr_md) = extract_xhr_text(captured_responses) {
+                    let q = quality::analyze_md_only(&xhr_md);
+                    candidates.push(("xhr_json", xhr_md, q));
+                }
 
-            let names: Vec<&'static str> = candidates.iter().map(|c| c.0).collect();
-            let scores: Vec<f32> = candidates.iter().map(|c| c.2.score).collect();
-            let chosen_name = candidates[chosen_idx].0;
-            tracing::debug!(
-                strategies = ?names,
-                scores = ?scores,
-                chosen = %chosen_name,
-                "quality-selected markdown extraction"
-            );
+                // Alt 5: plaintext fallback.
+                let plain_md = {
+                    let text = plaintext::html_to_plaintext(&content_html);
+                    if text.trim().is_empty() {
+                        plaintext::html_to_plaintext(&basic_cleaned)
+                    } else {
+                        text
+                    }
+                };
+                let plain_q = quality::analyze_md_only(&plain_md);
+                candidates.push(("plaintext", plain_md, plain_q));
 
-            Some(candidates.swap_remove(chosen_idx).1)
+                // Include the primary at the head of the candidate list.
+                candidates.insert(0, ("primary", primary_md, primary_quality));
+
+                // Primary-biased pick: keep primary unless an alternate beats it by
+                // a clear margin (0.15). Without this margin, basic_clean tends to
+                // win simply by including more nav/footer words, which boosts its
+                // word count but reintroduces noise the readability primary had
+                // correctly excluded.
+                const PRIMARY_MARGIN: f32 = 0.15;
+                let primary_score = candidates[0].2.score;
+                let chosen_idx = candidates
+                    .iter()
+                    .enumerate()
+                    .skip(1)
+                    .filter(|(_, c)| c.2.score >= primary_score + PRIMARY_MARGIN)
+                    .max_by(|(_, a), (_, b)| {
+                        a.2.score
+                            .partial_cmp(&b.2.score)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                            .then(a.2.bytes.cmp(&b.2.bytes))
+                    })
+                    .map(|(i, _)| i)
+                    .unwrap_or(0);
+
+                let names: Vec<&'static str> = candidates.iter().map(|c| c.0).collect();
+                let scores: Vec<f32> = candidates.iter().map(|c| c.2.score).collect();
+                let chosen_name = candidates[chosen_idx].0;
+                tracing::debug!(
+                    strategies = ?names,
+                    scores = ?scores,
+                    chosen = %chosen_name,
+                    "quality-selected markdown extraction"
+                );
+
+                Some(candidates.swap_remove(chosen_idx).1)
+            }
         }
     } else {
         None
@@ -621,6 +660,11 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
     // Skipped without `onlyMainContent`: there the caller asked for the
     // document as it is.
     let md = md.map(|m| {
+        // Not HTML: there is no nav/menu structure to dedupe, and any
+        // heuristic text match here would mutate the caller's exact bytes.
+        if treat_as_plain {
+            return m;
+        }
         if only_main_content {
             let m = markdown::drop_repeated_nav_lines(&m);
             // `drop_repeated_nav_lines` only catches a menu that a responsive
@@ -651,6 +695,12 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
     // present in the markdown — otherwise downstream recall scoring loses the
     // most important phrase on the page (the title itself).
     let md = md.map(|m| {
+        // Not HTML: there is no real `<title>`/`og:title` to prepend — any
+        // match `extract_metadata` found is a false positive off a stray
+        // HTML-looking snippet inside the plain-text body itself.
+        if treat_as_plain {
+            return m;
+        }
         // A narrowing that matched nothing is intentionally empty; padding it
         // with the page title would re-leak content the caller narrowed away.
         if user_selected || include_tags_no_match {
@@ -711,6 +761,11 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
     // is already substantial, the description is short or already present,
     // or it duplicates the page title.
     let md = md.map(|m| {
+        // Not HTML: same false-positive-metadata reasoning as the title
+        // prepend above.
+        if treat_as_plain {
+            return m;
+        }
         if user_selected || include_tags_no_match {
             return m;
         }
@@ -786,10 +841,20 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
     // Two passes: 1) NBSP → space (lossless: markdown has no NBSP semantics),
     // 2) collapse a blank line that sits between `, : )` punctuation and the
     // next inline link or comma-continuation paragraph.
-    let md = md.map(reflow_inline_lists);
+    let md = md.map(|m| {
+        if treat_as_plain {
+            m
+        } else {
+            reflow_inline_lists(m)
+        }
+    });
 
     let plain = if formats.contains(&OutputFormat::PlainText) {
-        Some(plaintext::html_to_plaintext(&content_html))
+        Some(if treat_as_plain {
+            content_html.clone()
+        } else {
+            plaintext::html_to_plaintext(&content_html)
+        })
     } else {
         None
     };

@@ -451,6 +451,7 @@ async fn run_crawl_inner(opts: CrawlOptions<'_>) {
             // async fan-out.
             match crate::extract_pool::extract_offloaded(crw_extract::OwnedExtractInput {
                 raw_html: fetch_result.html.clone(),
+                content_type: fetch_result.content_type.clone(),
                 source_url: fetch_result.url.clone(),
                 status_code: fetch_result.status_code,
                 rendered_with: fetch_result.rendered_with.clone(),

@@ -11,6 +11,7 @@ fn main() {
     </body></html>"##;
     let data = crw_extract::extract(ExtractOptions {
         raw_html: html,
+        content_type: None,
         source_url: "https://www.raspberrypi.com/news/x/",
         status_code: 200,
         rendered_with: Some("http".into()),
