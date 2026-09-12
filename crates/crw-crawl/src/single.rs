@@ -304,6 +304,7 @@ async fn scrape_url_inner(
     ) -> crw_extract::OwnedExtractInput {
         crw_extract::OwnedExtractInput {
             raw_html: fr.html.clone(),
+            content_type: fr.content_type.clone(),
             source_url: fr.url.clone(),
             status_code: fr.status_code,
             rendered_with: fr.rendered_with.clone(),

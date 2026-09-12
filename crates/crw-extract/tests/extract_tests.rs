@@ -6,6 +6,7 @@ fn extract_markdown_format() {
     let html = "<html><head><title>Test</title></head><body><article><h1>Hello</h1><p>World</p></article></body></html>";
     let data = crw_extract::extract(ExtractOptions {
         raw_html: html,
+        content_type: None,
         source_url: "https://example.com",
         status_code: 200,
         rendered_with: None,
@@ -50,6 +51,7 @@ fn extract_images_format_populates_from_raw_html() {
         <body><article><img src=\"/pic.png\" alt=\"Pic\"></article></body></html>";
     let data = crw_extract::extract(ExtractOptions {
         raw_html: html,
+        content_type: None,
         source_url: "https://example.com",
         status_code: 200,
         rendered_with: None,
@@ -98,6 +100,7 @@ fn extract_all_formats() {
 
     let data = crw_extract::extract(ExtractOptions {
         raw_html: html,
+        content_type: None,
         source_url: "https://example.com",
         status_code: 200,
         rendered_with: Some("http".into()),
@@ -145,6 +148,7 @@ fn extract_metadata_populated() {
 
     let data = crw_extract::extract(ExtractOptions {
         raw_html: html,
+        content_type: None,
         source_url: "https://example.com",
         status_code: 200,
         rendered_with: None,
@@ -180,6 +184,7 @@ fn extract_metadata_populated() {
 fn extract_empty_html() {
     let data = crw_extract::extract(ExtractOptions {
         raw_html: "",
+        content_type: None,
         source_url: "https://example.com",
         status_code: 200,
         rendered_with: None,
@@ -217,6 +222,7 @@ fn extract_with_include_exclude_tags() {
         r#"<html><body><div class="ad">Ad</div><article><p>Content</p></article></body></html>"#;
     let data = crw_extract::extract(ExtractOptions {
         raw_html: html,
+        content_type: None,
         source_url: "https://example.com",
         status_code: 200,
         rendered_with: None,
@@ -261,6 +267,7 @@ fn prepends_metadata_title_when_missing_from_markdown() {
     </body></html>"#;
     let data = crw_extract::extract(ExtractOptions {
         raw_html: html,
+        content_type: None,
         source_url: "https://example.com",
         status_code: 200,
         rendered_with: None,
@@ -303,6 +310,7 @@ fn does_not_duplicate_title_already_in_markdown() {
     </body></html>"#;
     let data = crw_extract::extract(ExtractOptions {
         raw_html: html,
+        content_type: None,
         source_url: "https://example.com",
         status_code: 200,
         rendered_with: None,
@@ -347,6 +355,7 @@ fn strips_site_name_suffix_from_title_when_prepending() {
     </body></html>"#;
     let data = crw_extract::extract(ExtractOptions {
         raw_html: html,
+        content_type: None,
         source_url: "https://example.com",
         status_code: 200,
         rendered_with: None,
@@ -399,6 +408,7 @@ fn preserves_en_dash_inside_title_parentheses() {
     </body></html>"#;
     let data = crw_extract::extract(ExtractOptions {
         raw_html: html,
+        content_type: None,
         source_url: "https://example.com",
         status_code: 200,
         rendered_with: None,
@@ -447,6 +457,7 @@ fn does_not_prepend_title_when_css_selector_provided() {
     </body></html>"#;
     let data = crw_extract::extract(ExtractOptions {
         raw_html: html,
+        content_type: None,
         source_url: "https://example.com",
         status_code: 200,
         rendered_with: None,
@@ -497,6 +508,7 @@ fn prepends_title_when_only_domain_selector_applies() {
     domain_map.insert("www.raspberrypi.com".to_string(), "main".to_string());
     let data = crw_extract::extract(ExtractOptions {
         raw_html: html,
+        content_type: None,
         source_url: "https://www.raspberrypi.com/news/x/",
         status_code: 200,
         rendered_with: None,
@@ -548,6 +560,7 @@ fn extract_markdown(
 ) -> crw_core::types::ScrapeData {
     crw_extract::extract(ExtractOptions {
         raw_html: NO_MATCH_PAGE,
+        content_type: None,
         source_url: "https://example.com",
         status_code: 200,
         rendered_with: None,
@@ -698,6 +711,7 @@ fn elementor_page_with_duplicated_nav_extracts_cleanly() {
 
     let data = crw_extract::extract(ExtractOptions {
         raw_html: &html,
+        content_type: None,
         source_url: "https://example.com/product/30-rk-panora/",
         status_code: 200,
         rendered_with: None,
@@ -760,5 +774,64 @@ fn elementor_page_with_duplicated_nav_extracts_cleanly() {
     assert!(
         md.contains("[Awards and certifications page]"),
         "nested list link lost: {md}"
+    );
+}
+
+// crw#530: a `text/plain` source (raw.githubusercontent.com and friends) is
+// not HTML. Running it through the HTML-to-markdown converter anyway escaped
+// every backtick (destroying fenced code blocks) and collapsed newlines into
+// spaces (HTML's whitespace-collapse rule, merging paragraphs and code lines
+// together) — corruption no response-side repair could undo. `content_type:
+// Some("text/plain")` must return the body byte-for-byte.
+#[test]
+fn text_plain_source_markdown_is_byte_for_byte_passthrough() {
+    let body = "## One-command install\n\n```bash\ncurl -fsSL https://fastcrw.com/install | sh\n```\n\nRuns local and free, no account needed.\n";
+    let data = crw_extract::extract(ExtractOptions {
+        raw_html: body,
+        content_type: Some("text/plain"),
+        source_url: "https://raw.githubusercontent.com/us/crw/main/README.md",
+        status_code: 200,
+        rendered_with: None,
+        elapsed_ms: 0,
+        render_decision: None,
+        credit_cost: 0,
+        warnings: Vec::new(),
+        formats: &[
+            OutputFormat::Markdown,
+            OutputFormat::PlainText,
+            OutputFormat::Html,
+        ],
+        only_main_content: true,
+        include_tags: &[],
+        exclude_tags: &[],
+        css_selector: None,
+        xpath: None,
+        chunk_strategy: None,
+        query: None,
+        filter_mode: None,
+        top_k: None,
+        domain_selectors: None,
+        captured_responses: &[],
+        llm_fallback: None,
+        debug: false,
+        debug_sink: None,
+        normalize_tables: false,
+    })
+    .unwrap();
+
+    assert_eq!(
+        data.markdown.as_deref(),
+        Some(body),
+        "markdown must be byte-for-byte"
+    );
+    assert_eq!(
+        data.plain_text.as_deref(),
+        Some(body),
+        "plain text must be byte-for-byte"
+    );
+    assert_eq!(
+        data.html.as_deref(),
+        Some(body),
+        "html must be byte-for-byte"
     );
 }

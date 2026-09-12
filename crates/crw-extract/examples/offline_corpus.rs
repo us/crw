@@ -35,6 +35,7 @@ fn main() {
         } else {
             crw_extract::extract(ExtractOptions {
                 raw_html: html,
+                content_type: None,
                 source_url: url,
                 status_code: 200,
                 rendered_with: Some("http".into()),

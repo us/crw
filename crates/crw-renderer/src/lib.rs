@@ -407,30 +407,14 @@ fn has_recovery_tier(
 
 /// Is this response an HTML document, or an unknown type we must assume is one?
 ///
-/// Two callers, one question. A browser render can only add to an HTML document,
-/// and the HTML structural heuristics in `antibot::classify` are only meaningful
-/// on one (`crw_crawl::single::classify_block`).
-///
-/// The HTTP tier decodes every non-PDF response as HTML regardless of its
-/// declared type, so an empty `application/json` / `text/plain` / `image/*` /
-/// archive response is indistinguishable from an empty HTML shell by body shape
-/// alone. A browser cannot add content to any of those, so escalating them buys
-/// nothing but latency. Absent or unrecognised types stay eligible: a server
-/// that omits `Content-Type` on a bot-wall shell is exactly the case worth
-/// escalating.
-pub fn is_html_like_content_type(content_type: Option<&str>) -> bool {
-    match content_type {
-        None => true,
-        Some(ct) => {
-            let ct = ct.trim().to_ascii_lowercase();
-            ct.is_empty()
-                || ct == "text/html"
-                || ct == "application/xhtml+xml"
-                || ct == "application/xml"
-                || ct == "text/xml"
-        }
-    }
-}
+/// Three callers now, one question. A browser render can only add to an HTML
+/// document, the HTML structural heuristics in `antibot::classify` are only
+/// meaningful on one (`crw_crawl::single::classify_block`), and `crw_extract`
+/// uses it to decide whether running an HTML parser / HTML-to-markdown
+/// converter over the body is even meaningful. Defined in `crw-core` (shared
+/// by extract and renderer, which cannot depend on each other) and
+/// re-exported here for existing callers.
+pub use crw_core::is_html_like_content_type;
 
 fn is_fingerprint_vendor_wall(
     cf_challenge: bool,

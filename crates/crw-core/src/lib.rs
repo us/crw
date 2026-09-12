@@ -35,3 +35,4 @@ pub use error::{CrwError, CrwResult};
 pub use proxy::{ProxyEntry, ProxyRotation, ProxyRotator, redact_proxy_url};
 pub use reserved_sem::{BatchGate, LanePermit, ReservedSemaphore};
 pub use scrape_class::{REQUEST_CLASS, ScrapeClass, current_scrape_class};
+pub use types::is_html_like_content_type;
