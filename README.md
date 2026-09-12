@@ -195,6 +195,24 @@ make check-fast
 
 [Read the contributor guide →](CONTRIBUTING.md)
 
+### Contributors
+
+crw is better because of these people. Thank you, all of you:
+
+<!-- contributors:start -->
+<p align="center">
+  <a href="https://github.com/us" title="us"><img src="https://github.com/us.png?size=96" width="48" height="48" alt="us"/></a>
+  <a href="https://github.com/paoloantinori" title="paoloantinori"><img src="https://github.com/paoloantinori.png?size=96" width="48" height="48" alt="paoloantinori"/></a>
+  <a href="https://github.com/rqi14" title="rqi14"><img src="https://github.com/rqi14.png?size=96" width="48" height="48" alt="rqi14"/></a>
+  <a href="https://github.com/santhreal" title="santhreal"><img src="https://github.com/santhreal.png?size=96" width="48" height="48" alt="santhreal"/></a>
+  <a href="https://github.com/AsheTheWings" title="AsheTheWings"><img src="https://github.com/AsheTheWings.png?size=96" width="48" height="48" alt="AsheTheWings"/></a>
+  <a href="https://github.com/adambenhassen" title="adambenhassen"><img src="https://github.com/adambenhassen.png?size=96" width="48" height="48" alt="adambenhassen"/></a>
+  <a href="https://github.com/atirna" title="atirna"><img src="https://github.com/atirna.png?size=96" width="48" height="48" alt="atirna"/></a>
+  <a href="https://github.com/VIVAAN-DHAWAN" title="VIVAAN-DHAWAN"><img src="https://github.com/VIVAAN-DHAWAN.png?size=96" width="48" height="48" alt="VIVAAN-DHAWAN"/></a>
+  <a href="https://github.com/mj520" title="mj520"><img src="https://github.com/mj520.png?size=96" width="48" height="48" alt="mj520"/></a>
+</p>
+<!-- contributors:end -->
+
 Engine and MCP server: [AGPL-3.0](LICENSE). Python and TypeScript SDKs: MIT.
 Embedding license: hello@fastcrw.com.
 
@@ -207,22 +225,5 @@ Embedding license: hello@fastcrw.com.
    <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=us/crw&type=date&legend=top-left&sealed_token=Pe6pRWL7lqTM-St9eo-Cmpk5kYNyuyun0krw9eVZQFIrm3g_R2h46IW6wfNalPXquMsWSNCgKqiar1YVo9MGy2IZmN5Lz6rjZcjBCw6bCcRHORKORFRi9A" />
  </picture>
 </a>
-
-<details>
-<summary>Contributors</summary>
-
-<!-- contributors:start -->
-<p align="center">
-  <a href="https://github.com/us" title="us"><img src="https://github.com/us.png?size=96" width="48" height="48" alt="us"/></a>
-  <a href="https://github.com/santhreal" title="santhreal"><img src="https://github.com/santhreal.png?size=96" width="48" height="48" alt="santhreal"/></a>
-  <a href="https://github.com/AsheTheWings" title="AsheTheWings"><img src="https://github.com/AsheTheWings.png?size=96" width="48" height="48" alt="AsheTheWings"/></a>
-  <a href="https://github.com/adambenhassen" title="adambenhassen"><img src="https://github.com/adambenhassen.png?size=96" width="48" height="48" alt="adambenhassen"/></a>
-  <a href="https://github.com/paoloantinori" title="paoloantinori"><img src="https://github.com/paoloantinori.png?size=96" width="48" height="48" alt="paoloantinori"/></a>
-  <a href="https://github.com/VIVAAN-DHAWAN" title="VIVAAN-DHAWAN"><img src="https://github.com/VIVAAN-DHAWAN.png?size=96" width="48" height="48" alt="VIVAAN-DHAWAN"/></a>
-  <a href="https://github.com/mj520" title="mj520"><img src="https://github.com/mj520.png?size=96" width="48" height="48" alt="mj520"/></a>
-</p>
-<!-- contributors:end -->
-
-</details>
 
 <sub>Please respect website policies. Crawl and map follow `robots.txt` by default.</sub>
