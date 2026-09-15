@@ -2,6 +2,19 @@
 
 All notable changes to CRW are documented here.
 
+## [0.35.2](https://github.com/us/crw/compare/v0.35.1...v0.35.2) (2026-09-15)
+
+
+### Bug Fixes
+
+* **crawl:** do not fail a job because robots.txt could not be read ([e8eea02](https://github.com/us/crw/commit/e8eea02a0339b52a19f8a0d04f252003f5408974))
+* **crawl:** keep the last robots rule of a file that lands on the size cap ([1e41fb0](https://github.com/us/crw/commit/1e41fb081ab2ee8ddad530ad694b025854e2669e))
+* **extract:** accumulate usage across legs, and report it on /v2/search ([6623dce](https://github.com/us/crw/commit/6623dce395bd72db53d9bf3f0592dfe16ee6eca0))
+* **extract:** stop corrupting markdown for non-HTML sources ([0ae7c40](https://github.com/us/crw/commit/0ae7c40251f042c1664d64a5c377dd306f56ffc1))
+* harden consolidated crawl reliability changes ([5691492](https://github.com/us/crw/commit/5691492669ec2e3a9fa7c35611b0b3a1b0efe23b))
+* preserve crawl and renderer reliability invariants ([65f385a](https://github.com/us/crw/commit/65f385a669aaa21605e0e043c6bb426f65b17d10))
+* **v2:** carry llmUsage through to_v2_document ([85fe020](https://github.com/us/crw/commit/85fe020a478e7d256ced89a79bd523d43ee20e5f))
+
 ## [0.35.1](https://github.com/us/crw/compare/v0.35.0...v0.35.1) (2026-09-10)
 
 
