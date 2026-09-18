@@ -59,7 +59,7 @@ Two consequences that drove the fix:
 | 2 | `metadata.url` aliased to `sourceURL` — the post-redirect URL was invisible | `metadata.url` = final URL (`PageMetadata.final_url`, stamped from the `FetchResult.final_url` that already existed) |
 | 3 | no `metadata.error` | present on any status ≥ 400, Firecrawl's exact bare reason phrase |
 | 4 | error envelope used `errorCode` only; both SDKs read `code` | emits **both** — `code` in Firecrawl's taxonomy, `errorCode` kept so the SaaS `RequestLog` still resolves |
-| 5 | DNS failure 422, timeout 504, binary 422 | 200 / 408 / 500, per `controllers/v2/scrape.ts` |
+| 5 | timeout 504, binary 422 | 408 / 500, per `controllers/v2/scrape.ts` |
 | 6 | 200-with-empty-body → 200 `{success:false}` | 500 `SCRAPE_ALL_ENGINES_FAILED` |
 
 Implementation is `routes/v2/error.rs` (new) plus `v2_verdict` in
@@ -113,6 +113,31 @@ captured cleanly and both confirm the status-code rule, so nothing here is
 load-bearing.
 
 ---
+
+## 4b. Unreachable targets — we cannot say what Firecrawl says
+
+Firecrawl splits a case we merge. Both captured live:
+
+| Target | Firecrawl |
+|---|---|
+| a hostname that does not resolve | **HTTP 200** `SCRAPE_DNS_RESOLUTION_ERROR` |
+| a port that refuses the connection | **HTTP 500** `SCRAPE_SITE_ERROR` (`ERR_TUNNEL_CONNECTION_FAILED`) |
+
+`CrwError::TargetUnreachable` is raised from `reqwest::Error::is_connect()`
+(`http_only.rs:909`), which is true for **both**, and the message is
+`"error sending request"` either way. There is nothing to branch on.
+
+So this surface answers neither: it keeps its existing **422** and reports
+`code: SCRAPE_SITE_ERROR`, the "URL failed to load" family, which is true in
+both cases. Claiming the DNS code would be wrong whenever the real cause was a
+refused connection, and answering HTTP 200 for a dead port tells the caller
+"fine" about a request that failed — the one outcome that actively misleads.
+
+Closing it means distinguishing resolver failures in the renderer's error chain
+(`reqwest` exposes no `is_dns()`; it needs a walk of `Error::source()`). That is
+a fetch-path change touching `/v1` too, so it is deliberately not in this PR.
+Pinned meanwhile by `unreachable_target_does_not_claim_firecrawls_dns_answer`,
+which asserts we never answer 200 here.
 
 ## 5. Still open
 

@@ -58,8 +58,24 @@ impl From<JsonRejection> for V2Error {
 /// `{success:false, error:"Job not found"}`.
 fn firecrawl_code(e: &CrwError) -> Option<&'static str> {
     match e {
-        // scrapeURL/error.ts: DNSResolutionError.
-        CrwError::TargetUnreachable(_) => Some("SCRAPE_DNS_RESOLUTION_ERROR"),
+        // NOT `SCRAPE_DNS_RESOLUTION_ERROR`, even though that is the obvious
+        // pairing. Firecrawl splits what we merge — both captured live:
+        //
+        //   a name that does not resolve  -> HTTP 200, SCRAPE_DNS_RESOLUTION_ERROR
+        //   a port that refuses           -> HTTP 500, SCRAPE_SITE_ERROR
+        //                                    ("ERR_TUNNEL_CONNECTION_FAILED")
+        //
+        // `TargetUnreachable` is raised from `reqwest`'s `is_connect()`
+        // (`http_only.rs:909`), which is true for both, and the message is
+        // "error sending request" either way — there is nothing here to branch
+        // on. Claiming the DNS code would be wrong every time the real cause was
+        // a refused connection, and claiming HTTP 200 for a dead port tells the
+        // caller "fine" about a request that failed. `SCRAPE_SITE_ERROR` is the
+        // "URL failed to load" family and is true in both cases.
+        //
+        // Closing this properly means distinguishing resolver failures in the
+        // renderer's error chain; tracked in conformance/FIRECRAWL-DIFF.md.
+        CrwError::TargetUnreachable(_) => Some("SCRAPE_SITE_ERROR"),
         // lib/error.ts: ScrapeJobTimeoutError.
         CrwError::Timeout(_) => Some("SCRAPE_TIMEOUT"),
         // scrapeURL/error.ts: NoEnginesLeftError — "every engine we tried came
@@ -103,7 +119,11 @@ fn firecrawl_code(e: &CrwError) -> Option<&'static str> {
 /// ```
 fn firecrawl_status(e: &CrwError) -> StatusCode {
     match e {
-        CrwError::TargetUnreachable(_) => StatusCode::OK,
+        // Left at 422, the status this surface already answered. See
+        // `firecrawl_code` — we cannot tell a DNS failure (their 200) from a
+        // refused connection (their 500), so neither of their answers is safe,
+        // and 422 at least does not claim success.
+        CrwError::TargetUnreachable(_) => StatusCode::UNPROCESSABLE_ENTITY,
         CrwError::Timeout(_) => StatusCode::REQUEST_TIMEOUT,
         CrwError::InvalidRequest(_) | CrwError::UrlParseError(_) => StatusCode::BAD_REQUEST,
         CrwError::NotFound(_) => StatusCode::NOT_FOUND,
@@ -152,15 +172,21 @@ mod tests {
         serde_json::to_value(&body).unwrap()
     }
 
+    /// Firecrawl answers a DNS failure with HTTP 200 and a refused connection
+    /// with HTTP 500 (both captured live). `TargetUnreachable` is raised from
+    /// `reqwest::Error::is_connect()`, which is true for both and carries the
+    /// same "error sending request" message, so this surface must not claim
+    /// either one. Guarding the 200 specifically: answering HTTP 200 for a
+    /// request that failed is the one outcome that actively misleads a caller,
+    /// and `v2_render_js::…_not_rejected_upfront` pins the 422.
     #[test]
-    fn dns_failure_is_http_200_like_firecrawl() {
-        // controllers/v2/scrape.ts returns 200 for SCRAPE_DNS_RESOLUTION_ERROR
-        // on purpose. AppError reports the same condition as 422.
+    fn unreachable_target_does_not_claim_firecrawls_dns_answer() {
         let st = status(CrwError::TargetUnreachable("nx.example".into()));
-        assert_eq!(st, StatusCode::OK);
+        assert_ne!(st, StatusCode::OK, "a failed fetch must not answer 200");
+        assert_eq!(st, StatusCode::UNPROCESSABLE_ENTITY);
         let body = envelope(CrwError::TargetUnreachable("nx.example".into()));
         assert_eq!(body["success"], false);
-        assert_eq!(body["code"], "SCRAPE_DNS_RESOLUTION_ERROR");
+        assert_eq!(body["code"], "SCRAPE_SITE_ERROR");
     }
 
     #[test]
