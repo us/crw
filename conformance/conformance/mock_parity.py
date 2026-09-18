@@ -66,6 +66,9 @@ _STATUS = ("captured: HTTP 200, success:true, metadata.statusCode=<code>, "
            "status via `!isGoodStatusCode` and the controller never reads it")
 _REDIR = ("captured: metadata.sourceURL = requested url, metadata.url = the url "
           "after redirects (scrapeURL/index.ts:1174-1175)")
+_THIN = ("captured: success:true with the sentinel present. We 500 - chrome "
+         "renders it, then structural_failure discards it as minimal_text. "
+         "Firecrawl's bar is any non-empty text.")
 _ENGINES = ("captured: HTTP 500 SCRAPE_ALL_ENGINES_FAILED. Nothing extractable, "
             "so every engine in the waterfall reports unsuccessful and "
             "NoEnginesLeftError falls to the controller's catch-all 500")
@@ -136,12 +139,32 @@ EXPECTATIONS: dict[str, Expect] = {
         "same as we do.",
         http=200, success=True, status_code=200),
 
+    # ── JS / CSR ────────────────────────────────────────────────────────
+    # A parity gap we are NOT closing here, recorded so it is not lost.
+    # Captured live: all three come back success:true with the fixture's
+    # sentinel in the markdown (43, 23 and 17 chars respectively). We answer 500
+    # SCRAPE_ALL_ENGINES_FAILED — chrome renders them fine and our
+    # `structural_failure` classifier then discards the render as
+    # "minimal_text on small page".
+    #
+    # Firecrawl's bar is `checkMarkdown.trim().length > 0`. Ours is a heuristic
+    # that exists to catch JS shells and challenge pages, and loosening it is
+    # exactly how a Cloudflare interstitial gets billed as content (see
+    # `v2_verdict`). So this is a deliberate trade, not an oversight — but it
+    # does mean a legitimately short page fails here and succeeds there.
+    "mock_js_csr": Expect(_THIN, report_only=True),
+    "mock_js_hydrate": Expect(_THIN, report_only=True),
+    "mock_js_fetch": Expect(_THIN, report_only=True),
+
     # ── HTML shapes ─────────────────────────────────────────────────────
     "mock_html_article": Expect("control", http=200, success=True, status_code=200),
     "mock_html_empty": Expect(
         _ENGINES + ". Precedence check: `isLongEnough || !isGoodStatusCode` "
         "means an empty body only fails when the status was GOOD, so 200+empty "
-        "fails and 404+empty succeeds.",
+        "fails and 404+empty succeeds. NOTE: with browser tiers configured we "
+        "answer 408 SCRAPE_TIMEOUT instead - an empty page escalates through "
+        "chrome AND lightpanda and burns the deadline before anything can "
+        "conclude. Same end state, reached expensively; see FIRECRAWL-DIFF.md.",
         http=500, success=False, code="SCRAPE_ALL_ENGINES_FAILED"),
     "mock_html_malformed": Expect(
         "captured: HTTP 500 SCRAPE_ALL_ENGINES_FAILED. The fixture is valid "

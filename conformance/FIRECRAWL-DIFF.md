@@ -139,6 +139,27 @@ a fetch-path change touching `/v1` too, so it is deliberately not in this PR.
 Pinned meanwhile by `unreachable_target_does_not_claim_firecrawls_dns_answer`,
 which asserts we never answer 200 here.
 
+## 5b. `/v2/scrape` and `/v2/crawl` disagree about the same URL
+
+This change did not touch `state.rs`, the shared crawl/batch path, which still
+converts `http_error()` into a `block` and counts it in `blocked`. Measured
+against a local stack, same URL, same surface:
+
+```text
+/v2/scrape  /status/404  ->  success:true,  1 credit,  HTTP tier only
+/v2/crawl   /status/404  ->  blocked:1,     0 credits, escalated chrome + lightpanda
+```
+
+The crawl document's own warning: `chrome returned HTTP 404 (treated as
+blocked); lightpanda returned an anti-bot block (structural_failure: ...)`.
+
+That is the split the engine's own comment warns about — *"a URL is not billed on
+one surface and refunded on the other"* — one level down. The SaaS reads it via
+`page-billing.ts` (`billableCompleted(completed, blocked)`), so it is real money.
+
+`state.rs` is shared with `/v1/crawl`, which is why it was left out of a
+v2-scoped change. It should be the next thing fixed.
+
 ## 5. Still open
 
 - **`/v2/crawl` + `/v2/batch/scrape` status envelope.** We omit `createdAt`,
@@ -151,8 +172,23 @@ which asserts we never answer 200 here.
   which no SDK can parse.
 - **`/v2/map`, `/v2/search`, `/v2/extract` error paths** — undiffed on both
   sides. Happy paths match.
-- **Browser-tier fixtures.** The parity run uses `renderer.mode = "none"`, so the
-  `/js/*` CSR group (7 fixtures) is unexercised. The envelope logic under test is
-  tier-independent, but the escalation behaviour is not — a plain origin 500 was
-  measured escalating through chrome *and* lightpanda before this change.
+- **Thin pages: a live parity gap.** Captured against a local stack WITH
+  browsers: `/js/csr`, `/js/hydrate` and `/js/fetch` all come back from Firecrawl
+  as `success:true` with the fixture sentinel in the markdown (43, 23 and 17
+  characters). We answer **500 `SCRAPE_ALL_ENGINES_FAILED`** — chrome renders
+  them correctly and our `structural_failure` classifier then discards the render
+  as `minimal_text on small page`.
+
+  Firecrawl's bar is `checkMarkdown.trim().length > 0`; ours is a heuristic built
+  to catch JS shells and challenge pages. Loosening it is exactly how a
+  Cloudflare interstitial gets billed as content, so this is a trade rather than
+  an oversight — but a legitimately short page fails here and succeeds there, and
+  the whole `/js/*` group is affected. Recorded as `[note]` rows.
+
+- **The escalation ladder burns the deadline on empty pages.** With browsers
+  configured, `/html/empty` answers `408 SCRAPE_TIMEOUT` rather than
+  `500 SCRAPE_ALL_ENGINES_FAILED`: a 200 with no body escalates through chrome
+  (12s nav budget) and lightpanda before anything concludes. Same end state as
+  Firecrawl, reached far more expensively. The same shape shows on
+  `/status/404` inside a crawl — see §5b.
 - **The `/lie/*` group** (3 fixtures) has no expectation on either side.

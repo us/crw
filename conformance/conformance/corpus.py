@@ -175,6 +175,13 @@ MOCK_CASES: list[Case] = [
     # header, so it is a header-honesty case, not an unsupported-body case.
     _scrape("mock_binary", "/bytes/1024"),
     _scrape("mock_content_type_lie", "/content-type?type=application/octet-stream"),
+    # JS / CSR. Both engines render these correctly; what differs is the bar
+    # for "did we get content". Firecrawl accepts any non-empty text
+    # (`isLongEnough` is `trim().length > 0`); our structural_failure classifier
+    # rejects a small page as minimal_text. /js/hydrate renders to 23 chars.
+    _scrape("mock_js_csr", "/js/csr?delay=500"),
+    _scrape("mock_js_hydrate", "/js/hydrate"),
+    _scrape("mock_js_fetch", "/js/fetch"),
     # HTML shapes.
     _scrape("mock_html_article", "/html/article"),
     _scrape("mock_html_empty", "/html/empty"),

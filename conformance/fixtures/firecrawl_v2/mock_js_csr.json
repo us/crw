@@ -1,0 +1,24 @@
+{
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": {
+      "markdown": "# Rendered client side\n\nMOCKSRV::js-csr::OK",
+      "metadata": {
+        "title": "csr",
+        "viewport": "width=device-width,initial-scale=1",
+        "language": "en",
+        "scrapeId": "01a0b4c6-1eab-736d-b1da-3a5f864ffca4",
+        "sourceURL": "https://mock.fastcrw.com/js/csr?delay=500",
+        "url": "https://mock.fastcrw.com/js/csr?delay=500",
+        "statusCode": 200,
+        "contentType": "text/html; charset=utf-8",
+        "proxyUsed": "basic",
+        "cacheState": "hit",
+        "cachedAt": "2026-09-17T22:33:07.619Z",
+        "creditsUsed": 1,
+        "concurrencyLimited": false
+      }
+    }
+  }
+}
