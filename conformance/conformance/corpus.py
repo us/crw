@@ -7,6 +7,7 @@ drive the SAME requests so the responses are diffable. Async endpoints
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -117,3 +118,65 @@ ALL_CASES: list[Case] = (
     + BATCH_CASES
     + EXTRACT_CASES
 )
+
+
+# ── Error / edge corpus, driven against the mock fixture server ──
+#
+# Every case above targets a live third-party page that returns 200. That is why
+# the golden corpus cannot see a single error-path divergence, and why
+# `metadata.url` being aliased to `sourceURL` went unnoticed: no fixture target
+# redirects, so `sourceURL == url` holds in all of them by accident.
+#
+# `mock.fastcrw.com` is a public host on purpose. These cases are diffable both
+# ways: `compare` drives them against a local crw, and `capture` (with a
+# FIRECRAWL_API_KEY) drives the SAME urls through the real Firecrawl API, which
+# can reach the mock exactly as it reaches any other site. Until someone runs
+# capture, `mock_parity.py` asserts against expectations read out of Firecrawl's
+# source instead.
+#
+# MOCK_URL points at the deployed host by default; set it to
+# http://127.0.0.1:9372 to run fully offline (the engine then needs
+# CRW_ALLOW_LOOPBACK_FOR_TESTS=1, which is how the local parity run works).
+MOCK = os.environ.get("MOCK_URL", "https://mock.fastcrw.com").rstrip("/")
+
+
+def _scrape(name: str, path: str, **body: Any) -> Case:
+    return Case(name, "POST", "/v2/scrape", {"url": MOCK + path, **body})
+
+
+MOCK_CASES: list[Case] = [
+    # Status codes. Firecrawl returns the page with metadata.statusCode set;
+    # the status never drives `success`.
+    _scrape("mock_status_200", "/status/200"),
+    _scrape("mock_status_401", "/status/401"),
+    _scrape("mock_status_403", "/status/403"),
+    _scrape("mock_status_404", "/status/404"),
+    _scrape("mock_status_429", "/status/429"),
+    _scrape("mock_status_500", "/status/500"),
+    _scrape("mock_status_503", "/status/503"),
+    # Redirects. The whole point is metadata.url != metadata.sourceURL.
+    _scrape("mock_redirect_chain", "/redirect/3"),
+    _scrape("mock_redirect_to", "/redirect-to?url=/json"),
+    _scrape("mock_redirect_relative", "/redirect/relative"),
+    _scrape("mock_redirect_307", "/redirect/preserve-307"),
+    _scrape("mock_redirect_308", "/redirect/preserve-308"),
+    _scrape("mock_redirect_loop", "/redirect/loop"),
+    # Walls: a status code plus a body that looks like a block.
+    _scrape("mock_wall_captcha", "/wall/captcha"),
+    _scrape("mock_wall_login", "/wall/login"),
+    _scrape("mock_rate_limit", "/rate-limit"),
+    # Content types.
+    _scrape("mock_json", "/json"),
+    _scrape("mock_xml", "/xml"),
+    _scrape("mock_csv", "/csv"),
+    _scrape("mock_text", "/text"),
+    # Genuinely binary: Buffer.alloc(1024) of NULs under application/octet-stream.
+    # NOT /content-type?type=... — that one serves an HTML body under a lying
+    # header, so it is a header-honesty case, not an unsupported-body case.
+    _scrape("mock_binary", "/bytes/1024"),
+    _scrape("mock_content_type_lie", "/content-type?type=application/octet-stream"),
+    # HTML shapes.
+    _scrape("mock_html_article", "/html/article"),
+    _scrape("mock_html_empty", "/html/empty"),
+    _scrape("mock_html_malformed", "/html/malformed"),
+]

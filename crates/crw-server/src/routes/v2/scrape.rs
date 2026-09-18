@@ -10,10 +10,13 @@ use uuid::Uuid;
 
 use crw_core::Deadline;
 use crw_core::error::CrwError;
-use crw_core::types::{OutputFormat, RequestedRenderer, ScrapeRequest};
+use crw_core::types::{
+    OutputFormat, PARKED_DOMAIN_VENDOR, RequestedRenderer, STRUCTURAL_FAILURE_VENDOR, ScrapeRequest,
+};
 use crw_crawl::single::scrape_url;
 
 use super::adapters::{V2Document, to_v2_document};
+use super::error::V2Error;
 use super::formats::{self, FormatSpec, decompose};
 use crate::error::AppError;
 use crate::state::{AppState, validate_renderer_pin};
@@ -134,6 +137,86 @@ pub(crate) fn accept_language_from(languages: &[String]) -> Option<String> {
         .collect::<Vec<_>>()
         .join(", ");
     (!joined.is_empty()).then_some(joined)
+}
+
+/// What `/v2/scrape` should do with a finished `ScrapeData`.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum V2Verdict {
+    /// Return the document with `success: true`. Includes every 4xx/5xx page.
+    Document,
+    /// No engine produced anything usable → a 500 `SCRAPE_ALL_ENGINES_FAILED`.
+    NothingUsable,
+    /// A real anti-bot wall on an otherwise-fine response → `success: false`.
+    Blocked,
+}
+
+/// Firecrawl v2's success rule, as one function.
+///
+/// **The origin's status code never decides success.** Firecrawl's
+/// `scrapeURL/index.ts` ("Success factors"):
+///
+/// ```js
+/// const isGoodStatusCode = (s >= 200 && s < 300) || s === 304;
+/// const hasRequiredOutput = isParsedImage || isLongEnough || !isGoodStatusCode;
+/// ```
+///
+/// `!isGoodStatusCode` is an OR term, so a bad status is *sufficient* to accept
+/// the result — even with an empty body — and `controllers/v2/scrape.ts` then
+/// never reads `metadata.statusCode` at all. Captured from the live API against
+/// `mock.fastcrw.com`, 401/403/404/429/500/503 each answer:
+///
+/// ```text
+/// HTTP 200  {"success":true,"data":{"metadata":{"statusCode":404,
+///            "error":"Not Found", ...}}}
+/// ```
+///
+/// Two things follow, and both are the point of this function:
+///
+/// 1. The old gate (`ScrapeData::http_error`) was **size-dependent** — it only
+///    fires under `ERROR_PAGE_MAX_TEXT` (200 bytes) — so a terse 404 failed and
+///    a chatty 404 succeeded. Nothing here is size-dependent.
+/// 2. An empty body is only a failure when the status was *good*, because
+///    `isLongEnough` and `!isGoodStatusCode` are alternatives. A 404 with an
+///    empty body is a success; a 200 with an empty body is not.
+///
+/// `/v1` is untouched: `http_error()` is still what the native surface, crawl
+/// and batch consult. Only this Firecrawl-compat surface stops asking.
+pub(crate) fn v2_verdict(
+    status_code: u16,
+    block: Option<&crw_core::types::BlockOutcome>,
+    has_no_content: bool,
+) -> V2Verdict {
+    // A 4xx/5xx page is a document, full stop. The status explains it.
+    if status_code >= 400 {
+        return V2Verdict::Document;
+    }
+    match block {
+        // `BlockOutcome` carries two different kinds of verdict and v2 has to
+        // split them — `BlockOutcome::message` already words them differently
+        // for exactly this reason.
+        //
+        // `structural_failure` / `parked_domain` mean "we got a page and there
+        // is nothing usable in it". Not a wall. That is precisely Firecrawl's
+        // `EngineUnsuccessfulError`, which its waterfall turns into
+        // `NoEnginesLeftError` → `SCRAPE_ALL_ENGINES_FAILED`.
+        Some(b) if b.vendor == STRUCTURAL_FAILURE_VENDOR || b.vendor == PARKED_DOMAIN_VENDOR => {
+            V2Verdict::NothingUsable
+        }
+        // A real vendor verdict on a 2xx. Deliberately NOT relaxed to match
+        // Firecrawl: a challenge shell served with HTTP 200 (Cloudflare "Just a
+        // moment...") has text, so `isLongEnough` is true and Firecrawl returns
+        // the interstitial AS the page's content. We have already paid for that
+        // behaviour — see `is_cdn_origin_error` in crw-crawl, where a dead
+        // origin behind Cloudflare shipped as `success:true` with the CDN's
+        // error text as its markdown, billed, for one customer on the same
+        // source for months. Copying it back would re-open a closed,
+        // customer-visible bug. This is the one place the two surfaces are
+        // allowed to disagree, and `conformance/mock_parity.py` records the
+        // disagreement rather than hiding it.
+        Some(_) => V2Verdict::Blocked,
+        None if has_no_content => V2Verdict::NothingUsable,
+        None => V2Verdict::Document,
+    }
 }
 
 /// Resolved proxy tier reported in `metadata.proxyUsed`.
@@ -260,7 +343,7 @@ pub(crate) fn to_internal(
 pub async fn scrape(
     State(state): State<AppState>,
     body: Result<Json<V2ScrapeRequest>, JsonRejection>,
-) -> Result<Json<V2ScrapeResponse>, AppError> {
+) -> Result<Json<V2ScrapeResponse>, V2Error> {
     let Json(v2) = body.map_err(AppError::from)?;
 
     let parsed_url = url::Url::parse(&v2.url)
@@ -277,7 +360,7 @@ pub async fn scrape(
         && llm_config.is_none()
         && req.llm_api_key.is_none()
     {
-        return Err(AppError::from(CrwError::InvalidRequest(
+        return Err(V2Error::from(CrwError::InvalidRequest(
             "summary format requires LLM config: set CRW_EXTRACTION__LLM__API_KEY \
              in server config or pass llm_api_key in the request body"
                 .into(),
@@ -306,38 +389,42 @@ pub async fn scrape(
     .await?;
 
     let warning = formats::unsupported_warning(&decomposed.unsupported);
-    // HTTP-error-first gate (mirrors v1 scrape.rs): a genuine tiny 4xx/5xx page
-    // is a plain HTTP error, not an anti-bot block. It must short-circuit before
-    // the block check so classify()'s StructuralFailure can't mislabel it, and
-    // so both API surfaces label the identical page the same way.
-    let http_error = data.http_error();
-    // Anti-bot verdict from the choke: a blocked page is `success:false` with an
-    // error string, matching v1's behaviour. Read before `to_v2_document`
-    // consumes `data`.
-    // Mirror v1: the anti-bot block path is reached only when the http_error
-    // gate did not fire. Drop the challenge shell there so the caller gets a
-    // clean block instead of the interstitial text as content.
-    let is_anti_bot_block = http_error.is_none() && data.block.is_some();
-    // Nothing the caller asked for came back. Same gate as v1, and it has to be
-    // here too: the invariant this whole path is built on is that a URL is not
-    // billed on one surface and refunded on the other, and the SaaS decides that
-    // from `success` alone. Runs last, so a wall or an origin error keeps its own
-    // more specific classification.
-    let no_content =
-        http_error.is_none() && data.block.is_none() && data.has_no_content(&req.formats);
-    let (success, error) = match (http_error, data.block.as_ref()) {
-        (Some(msg), _) => (false, Some(msg)),
-        (None, Some(b)) => (false, Some(b.message())),
-        (None, None) if no_content => (
-            false,
-            Some(
-                data.warning
-                    .clone()
-                    .or_else(|| data.warnings.first().cloned())
-                    .unwrap_or_else(|| "No content could be extracted from the page".to_string()),
-            ),
-        ),
-        (None, None) => (true, None),
+
+    // See `v2_verdict` for the whole rule and where it comes from.
+    let verdict = v2_verdict(
+        data.metadata.status_code,
+        data.block.as_ref(),
+        data.has_no_content(&req.formats),
+    );
+
+    // Nothing usable at all is an ERROR RESPONSE on this surface, not a 200
+    // carrying `success:false`. Captured from the live API against
+    // `mock.fastcrw.com/html/empty` (a 200 with an empty body):
+    //
+    //   HTTP 500  {"success":false,"code":"SCRAPE_ALL_ENGINES_FAILED",
+    //              "error":"All scraping engines failed to retrieve content
+    //              from this URL. Engines tried: [index, fire-engine;chrome-cdp,
+    //              ...]"}
+    //
+    // `RendererError` is the arm that carries `SCRAPE_ALL_ENGINES_FAILED` and a
+    // 500 (see `super::error`), and it is honest: every tier we were willing to
+    // run returned nothing. Billing is unaffected — the SaaS refunds an engine
+    // 5xx and an envelope `success:false` alike.
+    if matches!(verdict, V2Verdict::NothingUsable) {
+        return Err(V2Error(CrwError::RendererError(
+            data.block
+                .as_ref()
+                .map(|b| b.reason.clone())
+                .or_else(|| data.warning.clone())
+                .or_else(|| data.warnings.first().cloned())
+                .unwrap_or_else(|| "no engine returned usable content for this URL".to_string()),
+        )));
+    }
+
+    let is_anti_bot_block = matches!(verdict, V2Verdict::Blocked);
+    let (success, error) = match is_anti_bot_block {
+        true => (false, data.block.as_ref().map(|b| b.message())),
+        false => (true, None),
     };
     let mut data = data;
     if is_anti_bot_block {
@@ -356,10 +443,8 @@ pub async fn scrape(
 /// "job" never exists to poll — the SDK only hits this when it used an async
 /// scrape path we don't expose. Return a clear 404 so the SDK surfaces a
 /// meaningful error rather than hanging.
-pub async fn get_scrape_job(
-    Path(job_id): Path<String>,
-) -> Result<Json<V2ScrapeResponse>, AppError> {
-    Err(AppError::from(CrwError::NotFound(format!(
+pub async fn get_scrape_job(Path(job_id): Path<String>) -> Result<Json<V2ScrapeResponse>, V2Error> {
+    Err(V2Error::from(CrwError::NotFound(format!(
         "scrape job {job_id} not found — this engine performs scrapes synchronously; \
          use POST /v2/scrape and read the response directly"
     ))))
@@ -513,6 +598,7 @@ mod tests {
                 og_image: None,
                 canonical_url: None,
                 source_url: "https://example.com".into(),
+                final_url: None,
                 language: None,
                 status_code: 200,
                 rendered_with: None,
@@ -571,5 +657,85 @@ mod tests {
         assert_eq!(v2.proxy, "stealth");
         let (req, _, _) = to_internal(v2).unwrap();
         assert_eq!(req.proxy_list.len(), 1);
+    }
+}
+
+#[cfg(test)]
+mod verdict_tests {
+    use super::*;
+    use crw_core::types::BlockOutcome;
+
+    fn block(vendor: &str) -> BlockOutcome {
+        BlockOutcome {
+            vendor: vendor.to_string(),
+            reason: "reason".to_string(),
+        }
+    }
+
+    /// Captured from api.firecrawl.dev against mock.fastcrw.com/status/<code>:
+    /// every one answers `HTTP 200 {"success":true,...,"statusCode":<code>}`.
+    /// Before this, a 4xx/5xx under 200 bytes was `success:false`.
+    #[test]
+    fn origin_error_statuses_are_documents_not_failures() {
+        for code in [400, 401, 403, 404, 410, 429, 500, 502, 503] {
+            assert_eq!(
+                v2_verdict(code, None, false),
+                V2Verdict::Document,
+                "HTTP {code} must be returned as a document"
+            );
+        }
+    }
+
+    /// The precedence check. `isLongEnough || !isGoodStatusCode` are
+    /// alternatives, so an empty body only fails on a GOOD status.
+    #[test]
+    fn empty_body_fails_on_200_but_not_on_404() {
+        assert_eq!(v2_verdict(200, None, true), V2Verdict::NothingUsable);
+        assert_eq!(v2_verdict(404, None, true), V2Verdict::Document);
+    }
+
+    /// The old gate fired only under ERROR_PAGE_MAX_TEXT (200 bytes), so the
+    /// same site returned success:false for a terse 404 and success:true for a
+    /// chatty one. Nothing reaches this function that could reintroduce that:
+    /// there is no length input at all.
+    #[test]
+    fn verdict_does_not_depend_on_body_size() {
+        assert_eq!(v2_verdict(404, None, true), v2_verdict(404, None, false));
+    }
+
+    /// `structural_failure` is "we got a page with nothing in it", which is
+    /// Firecrawl's EngineUnsuccessfulError, not a wall. Captured:
+    /// mock.fastcrw.com/html/empty answers 500 SCRAPE_ALL_ENGINES_FAILED.
+    #[test]
+    fn thin_and_parked_pages_are_engine_failures_not_walls() {
+        assert_eq!(
+            v2_verdict(200, Some(&block(STRUCTURAL_FAILURE_VENDOR)), false),
+            V2Verdict::NothingUsable
+        );
+        assert_eq!(
+            v2_verdict(200, Some(&block(PARKED_DOMAIN_VENDOR)), false),
+            V2Verdict::NothingUsable
+        );
+    }
+
+    /// The one deliberate deviation from Firecrawl: a vendor wall served with
+    /// HTTP 200 still fails. Firecrawl would return the challenge shell as the
+    /// page's content — see `v2_verdict`'s doc comment for what that cost.
+    #[test]
+    fn vendor_wall_on_a_200_still_fails() {
+        assert_eq!(
+            v2_verdict(200, Some(&block("cloudflare")), false),
+            V2Verdict::Blocked
+        );
+    }
+
+    /// ...but the same wall on a 4xx does not: the status already explains the
+    /// page, and that is the case this whole change is about.
+    #[test]
+    fn vendor_wall_on_a_403_is_a_document() {
+        assert_eq!(
+            v2_verdict(403, Some(&block("cloudflare")), false),
+            V2Verdict::Document
+        );
     }
 }

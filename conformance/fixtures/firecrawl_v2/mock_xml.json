@@ -1,0 +1,22 @@
+{
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": {
+      "markdown": "MOCKSRV::xml::OK",
+      "metadata": {
+        "scrapeId": "01a0b430-1349-706d-bb62-ee2da8f3b83b",
+        "sourceURL": "https://mock.fastcrw.com/xml",
+        "url": "https://mock.fastcrw.com/xml",
+        "statusCode": 200,
+        "contentType": "application/xml; charset=utf-8",
+        "timezone": "America/New_York",
+        "proxyUsed": "basic",
+        "cacheState": "miss",
+        "indexId": "b175f750-48d7-43cc-a11b-150501636c01",
+        "creditsUsed": 1,
+        "concurrencyLimited": false
+      }
+    }
+  }
+}

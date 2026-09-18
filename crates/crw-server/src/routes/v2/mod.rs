@@ -9,6 +9,7 @@
 pub mod adapters;
 pub mod batch;
 pub mod crawl;
+pub mod error;
 pub mod extract;
 pub mod formats;
 pub mod map;

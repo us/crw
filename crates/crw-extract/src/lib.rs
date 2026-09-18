@@ -1032,6 +1032,10 @@ pub fn extract(opts: ExtractOptions<'_>) -> CrwResult<ScrapeData> {
             og_image: meta.og_image,
             canonical_url: meta.canonical_url,
             source_url: source_url.to_string(),
+            // Extraction sees only the body, never the transport, so it cannot
+            // know whether a redirect happened. `scrape_url` stamps this from
+            // `FetchResult.final_url` once the fetch is back.
+            final_url: None,
             language: meta.language,
             status_code,
             rendered_with,

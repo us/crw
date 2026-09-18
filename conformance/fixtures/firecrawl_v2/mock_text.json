@@ -1,0 +1,22 @@
+{
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": {
+      "markdown": "MOCKSRV::text::OK",
+      "metadata": {
+        "scrapeId": "01a0b430-5022-7451-b3fc-cac59179aa27",
+        "sourceURL": "https://mock.fastcrw.com/text",
+        "url": "https://mock.fastcrw.com/text",
+        "statusCode": 200,
+        "contentType": "text/plain; charset=utf-8",
+        "timezone": "America/New_York",
+        "proxyUsed": "basic",
+        "cacheState": "miss",
+        "indexId": "e960fe06-35c2-4978-8690-ed12d85db8a6",
+        "creditsUsed": 1,
+        "concurrencyLimited": false
+      }
+    }
+  }
+}

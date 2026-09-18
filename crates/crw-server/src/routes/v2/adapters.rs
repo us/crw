@@ -76,8 +76,26 @@ pub struct V2Metadata {
     pub language: Option<String>,
     #[serde(rename = "sourceURL")]
     pub source_url: String,
+    /// The URL actually read, after redirects — Firecrawl's `metadata.url`,
+    /// which is NOT the same field as `sourceURL`. Verified against a live
+    /// capture of `api.firecrawl.dev/v2/scrape`:
+    ///
+    /// ```text
+    /// sourceURL = https://mock.fastcrw.com/redirect/3
+    /// url       = https://mock.fastcrw.com/html/article
+    /// ```
+    ///
+    /// This used to be `m.source_url.clone()` — the same string as `sourceURL`
+    /// — so a v2 caller had no way to learn where a redirect landed. It went
+    /// unnoticed because every golden fixture targets a page that does not
+    /// redirect, which makes the two fields equal by accident in all of them.
     pub url: String,
     pub status_code: u16,
+    /// The origin's error, when it returned one. Firecrawl puts the reason
+    /// phrase here (`"Not Found"`, `"Forbidden"`) and leaves the envelope's
+    /// `success` at `true` — captured, not inferred. Omitted on a clean fetch.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content_type: Option<String>,
     /// Resolved proxy tier ("basic" | "stealth"). v2 always reports one.
@@ -108,8 +126,19 @@ pub fn to_v2_document(data: ScrapeData, proxy_used: &str, scrape_id: String) -> 
         description: m.description.clone(),
         language: m.language.clone(),
         source_url: m.source_url.clone(),
-        url: m.source_url.clone(),
+        url: m.final_url.clone().unwrap_or_else(|| m.source_url.clone()),
         status_code: m.status_code,
+        // Firecrawl's exact spelling: the canonical reason phrase and nothing
+        // else. `http`'s table is the same table, so this is a lookup rather
+        // than a hand-maintained match that would drift from it.
+        error: (m.status_code >= 400)
+            .then(|| {
+                axum::http::StatusCode::from_u16(m.status_code)
+                    .ok()
+                    .and_then(|s| s.canonical_reason())
+                    .map(str::to_string)
+            })
+            .flatten(),
         content_type: data.content_type.clone(),
         proxy_used: proxy_used.to_string(),
         cache_state: if data.cached { "hit" } else { "miss" }.to_string(),
@@ -423,6 +452,7 @@ mod tests {
                 og_image: None,
                 canonical_url: None,
                 source_url: url.to_string(),
+                final_url: None,
                 language: None,
                 status_code: 200,
                 rendered_with: None,

@@ -15,6 +15,7 @@ use crw_core::error::CrwError;
 use crw_core::types::{ExtractOptions, OutputFormat, ScrapeRequest};
 
 use super::adapters::system_time_rfc3339;
+use super::error::V2Error;
 use crate::error::AppError;
 use crate::state::{AppState, ExtractStatus, PreparedUrl};
 
@@ -63,10 +64,10 @@ pub(crate) fn extract_template(prompt: Option<String>, schema: Option<Value>) ->
 pub async fn start_extract(
     State(state): State<AppState>,
     body: Result<Json<V2ExtractRequest>, JsonRejection>,
-) -> Result<Json<V2ExtractStartResponse>, AppError> {
+) -> Result<Json<V2ExtractStartResponse>, V2Error> {
     let Json(req) = body.map_err(AppError::from)?;
     if req.urls.is_empty() {
-        return Err(AppError::from(CrwError::InvalidRequest(
+        return Err(V2Error::from(CrwError::InvalidRequest(
             "`urls` is required for extract on this engine (prompt-only extraction \
              without URLs is not supported)"
                 .into(),
@@ -81,7 +82,7 @@ pub async fn start_extract(
         .as_deref()
         .is_some_and(|s| !s.trim().is_empty())
     {
-        return Err(AppError::from(CrwError::InvalidRequest(
+        return Err(V2Error::from(CrwError::InvalidRequest(
             "systemPrompt is not yet supported on this engine; fold your \
              instruction into `prompt`."
                 .into(),
@@ -139,7 +140,7 @@ pub struct V2ExtractStatusResponse {
 pub async fn get_extract(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
-) -> Result<Json<V2ExtractStatusResponse>, AppError> {
+) -> Result<Json<V2ExtractStatusResponse>, V2Error> {
     let rec = state.get_extract_job(id).await?;
     let expires_at = system_time_rfc3339(rec.expires_at);
     Ok(Json(V2ExtractStatusResponse {

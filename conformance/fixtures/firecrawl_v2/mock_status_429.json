@@ -1,0 +1,23 @@
+{
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": {
+      "markdown": "<html><head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"><meta name=\"color-scheme\" content=\"light dark\"></head><body><pre style=\"word-wrap: break-word; white-space: pre-wrap;\">status 429 MOCKSRV::status::OK</pre></body></html>",
+      "metadata": {
+        "color-scheme": "light dark",
+        "scrapeId": "01a0b421-d7e2-74ca-b69b-e5addba04401",
+        "sourceURL": "https://mock.fastcrw.com/status/429",
+        "url": "https://mock.fastcrw.com/status/429",
+        "statusCode": 429,
+        "error": "Too Many Requests",
+        "contentType": "text/plain; charset=utf-8",
+        "proxyUsed": "stealth",
+        "cacheState": "hit",
+        "cachedAt": "2026-09-18T10:47:32.833Z",
+        "creditsUsed": 1,
+        "concurrencyLimited": false
+      }
+    }
+  }
+}

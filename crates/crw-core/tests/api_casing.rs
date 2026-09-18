@@ -82,6 +82,7 @@ fn sample_scrape_data() -> ScrapeData {
             og_image: Some("oi".into()),
             canonical_url: Some("https://example.com".into()),
             source_url: "https://example.com".into(),
+            final_url: None,
             language: Some("en".into()),
             status_code: 200,
             rendered_with: Some("http".into()),
@@ -107,6 +108,7 @@ fn api_response_error_shape_is_camel_case() {
         data: None,
         error: Some("boom".into()),
         error_code: Some("timeout".into()),
+        code: None,
         warning: None,
     };
     let v = serde_json::to_value(&resp).unwrap();
@@ -127,6 +129,7 @@ fn scrape_response_is_camel_case() {
         data: Some(sample_scrape_data()),
         error: None,
         error_code: None,
+        code: None,
         warning: None,
     };
     let v = serde_json::to_value(&resp).unwrap();

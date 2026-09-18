@@ -1,0 +1,133 @@
+# fastCRW `/v2` ↔ Firecrawl v2 — behaviour diff
+
+**Scope:** the `/v2/*` Firecrawl-compat surface. Our native `/v1` is unchanged.
+**Closes the action item in `COMPATIBILITY-firecrawl.md` §3** ("add concrete
+field-by-field diff for `metadata` and error envelope before any page claims
+drop-in").
+
+Everything below marked **captured** was observed by driving
+`api.firecrawl.dev/v2/scrape` at `mock.fastcrw.com` — the same fixture URLs the
+parity suite drives crw at. Run `./run.sh capture mock` to refresh; the
+fixtures live in `fixtures/firecrawl_v2/mock_*.json`.
+
+---
+
+## 1. The rule
+
+Firecrawl decides success in `scrapeURL/index.ts`:
+
+```js
+const isGoodStatusCode = (statusCode >= 200 && statusCode < 300) || statusCode === 304;
+const hasRequiredOutput = isParsedImage || isLongEnough || !isGoodStatusCode;
+if (hasRequiredOutput) return engineResult;
+throw new EngineUnsuccessfulError(engine);
+```
+
+`!isGoodStatusCode` is an **OR term**, so a bad status is *sufficient* to accept
+the result — even with an empty body. `controllers/v2/scrape.ts` then never reads
+`metadata.statusCode` at all; it falls through to
+`res.status(200).json({success: true, data: doc})`.
+
+> **In Firecrawl, `success:false` means _its own infrastructure_ failed — DNS,
+> timeout, every engine dead, a policy block. It never means "the target said
+> 404."** The status lives in `data.metadata.statusCode` and the reason phrase in
+> `data.metadata.error`.
+
+Captured, for every one of 401/403/404/429/500/503:
+
+```text
+HTTP 200  {"success":true,"data":{"metadata":{
+            "statusCode":404,"error":"Not Found", ...}}}
+```
+
+Two consequences that drove the fix:
+
+1. Our old gate (`ScrapeData::http_error`) was **size-dependent** — it only fires
+   under `ERROR_PAGE_MAX_TEXT` (200 bytes) — so the same site returned
+   `success:false` for a terse 404 and `success:true` for a chatty one.
+2. An empty body is only a failure when the status was *good*, because
+   `isLongEnough` and `!isGoodStatusCode` are alternatives. **404 + empty body =
+   success. 200 + empty body = failure.**
+
+---
+
+## 2. What changed
+
+| # | Divergence | Now |
+|---|---|---|
+| 1 | 4xx/5xx target → `success:false` | `success:true`, `metadata.statusCode`, `metadata.error` = reason phrase |
+| 2 | `metadata.url` aliased to `sourceURL` — the post-redirect URL was invisible | `metadata.url` = final URL (`PageMetadata.final_url`, stamped from the `FetchResult.final_url` that already existed) |
+| 3 | no `metadata.error` | present on any status ≥ 400, Firecrawl's exact bare reason phrase |
+| 4 | error envelope used `errorCode` only; both SDKs read `code` | emits **both** — `code` in Firecrawl's taxonomy, `errorCode` kept so the SaaS `RequestLog` still resolves |
+| 5 | DNS failure 422, timeout 504, binary 422 | 200 / 408 / 500, per `controllers/v2/scrape.ts` |
+| 6 | 200-with-empty-body → 200 `{success:false}` | 500 `SCRAPE_ALL_ENGINES_FAILED` |
+
+Implementation is `routes/v2/error.rs` (new) plus `v2_verdict` in
+`routes/v2/scrape.rs`. `/v1` is untouched: `http_error()` is still what the
+native surface, crawl and batch consult — only this compat surface stopped
+asking.
+
+### Parity result
+
+```text
+before:  7/23 match Firecrawl v2
+after:  21/21 match Firecrawl v2      (4 rows recorded, not asserted — §4)
+```
+
+---
+
+## 3. The one deliberate deviation
+
+**A vendor wall served with HTTP 200 still fails for us; Firecrawl returns it.**
+
+A Cloudflare "Just a moment..." shell has text, so `isLongEnough` is true and
+Firecrawl hands the interstitial back as the page's content. We have already paid
+for that behaviour — see `is_cdn_origin_error` in `crw-crawl`:
+
+> `sacg.me` behind a dead origin was returned as `success: true` with "The
+> initial connection between Cloudflare's network and the origin web server timed
+> out" as its markdown, billed, and counted as a completed crawl page — for one
+> customer, on the same source, since June.
+
+Copying it back would re-open a closed, customer-visible bug. On a 4xx/5xx the
+wall does *not* fail — the status already explains the page, which is the case
+this whole change is about. Pinned by
+`v2_verdict::vendor_wall_on_a_200_still_fails` and its `_on_a_403_` sibling.
+
+---
+
+## 4. Rows recorded but not matched
+
+`mock_parity.py` prints these as `[note]`; `CAPABILITY_GAP` names the first two.
+Matching Firecrawl's *contract* does not mean copying its extraction failures.
+
+| Fixture | Firecrawl (captured) | crw |
+|---|---|---|
+| `/csv` — a 3-line valid CSV | **500** `SCRAPE_RETRY_LIMIT (document_antibot)` | parsed, 200 |
+| `/html/malformed` — real prose behind unclosed tags | **500** `SCRAPE_ALL_ENGINES_FAILED` | parsed, 200 |
+| `/redirect/loop` | never answered; held the connection past a 120s read timeout | 500 `SCRAPE_ALL_ENGINES_FAILED`, promptly |
+| `/wall/captcha` | 408 `CONCURRENCY_QUEUE_TIMEOUT` — a capacity artifact of their side, not a verdict | 200, `success:true`, statusCode 403 |
+
+The `/wall/captcha` row needs a clean re-capture. Its 401 and 429 siblings both
+captured cleanly and both confirm the status-code rule, so nothing here is
+load-bearing.
+
+---
+
+## 5. Still open
+
+- **`/v2/crawl` + `/v2/batch/scrape` status envelope.** We omit `createdAt`,
+  `completedAt`, `duration` and the robots/thin-crawl `warning` that
+  `crawl-status.ts` emits. Our capture predates them, so recapture before
+  chasing. We also carry an extra `blocked` counter — intentional, the SaaS
+  bills off it.
+- **Invalid crawl job id.** Firecrawl answers `400 {"success":false,"error":
+  "Invalid job ID"}`; we hit axum's `Path<Uuid>` rejection and return plain text,
+  which no SDK can parse.
+- **`/v2/map`, `/v2/search`, `/v2/extract` error paths** — undiffed on both
+  sides. Happy paths match.
+- **Browser-tier fixtures.** The parity run uses `renderer.mode = "none"`, so the
+  `/js/*` CSR group (7 fixtures) is unexercised. The envelope logic under test is
+  tier-independent, but the escalation behaviour is not — a plain origin 500 was
+  measured escalating through chrome *and* lightpanda before this change.
+- **The `/lie/*` group** (3 fixtures) has no expectation on either side.

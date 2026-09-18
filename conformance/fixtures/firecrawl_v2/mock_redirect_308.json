@@ -1,0 +1,22 @@
+{
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": {
+      "markdown": "```json\n{\n  \"sentinel\": \"MOCKSRV::echo::OK\",\n  \"method\": \"GET\",\n  \"headers\": {\n    \"host\": \"mock.fastcrw.com\",\n    \"user-agent\": \"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36\",\n    \"accept\": \"text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7\",\n    \"accept-encoding\": \"gzip, deflate, br, zstd\",\n    \"accept-language\": \"en-US,en;q=0.9\",\n    \"priority\": \"u=0, i\",\n    \"referer\": \"https://www.google.com/\",\n    \"sec-ch-ua\": \"\\\"Google Chrome\\\";v=\\\"153\\\", \\\"Not_A Brand\\\";v=\\\"8\\\", \\\"Chromium\\\";v=\\\"153\\\"\",\n    \"sec-ch-ua-mobile\": \"?0\",\n    \"sec-ch-ua-platform\": \"\\\"Linux\\\"\",\n    \"sec-fetch-dest\": \"document\",\n    \"sec-fetch-mode\": \"navigate\",\n    \"sec-fetch-site\": \"cross-site\",\n    \"sec-fetch-user\": \"?1\",\n    \"upgrade-insecure-requests\": \"1\",\n    \"via\": \"2.0 Caddy\",\n    \"x-forwarded-for\": \"5.183.91.103\",\n    \"x-forwarded-host\": \"mock.fastcrw.com\",\n    \"x-forwarded-proto\": \"https\"\n  },\n  \"body\": \"\"\n}\n```",
+      "metadata": {
+        "scrapeId": "01a0b422-c78c-720c-b55f-52bfd2f5c61c",
+        "sourceURL": "https://mock.fastcrw.com/redirect/preserve-308",
+        "url": "https://mock.fastcrw.com/echo",
+        "statusCode": 200,
+        "contentType": "application/json",
+        "timezone": "America/New_York",
+        "proxyUsed": "basic",
+        "cacheState": "miss",
+        "indexId": "ba92ce8f-de7c-4dff-8a9e-58b8563fc135",
+        "creditsUsed": 1,
+        "concurrencyLimited": false
+      }
+    }
+  }
+}

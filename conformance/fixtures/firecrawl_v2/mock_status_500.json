@@ -1,0 +1,23 @@
+{
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": {
+      "markdown": "<html><head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"><meta name=\"color-scheme\" content=\"light dark\"></head><body><pre style=\"word-wrap: break-word; white-space: pre-wrap;\">status 500 MOCKSRV::status::OK</pre></body></html>",
+      "metadata": {
+        "color-scheme": "light dark",
+        "scrapeId": "01a0b421-dcf8-71a6-889a-515505cad46a",
+        "sourceURL": "https://mock.fastcrw.com/status/500",
+        "url": "https://mock.fastcrw.com/status/500",
+        "statusCode": 500,
+        "error": "Internal Server Error",
+        "contentType": "text/plain; charset=utf-8",
+        "proxyUsed": "basic",
+        "cacheState": "hit",
+        "cachedAt": "2026-09-17T21:23:08.380Z",
+        "creditsUsed": 1,
+        "concurrencyLimited": false
+      }
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": {
+      "markdown": "<html><head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"><meta name=\"color-scheme\" content=\"light dark\"></head><body><pre style=\"word-wrap: break-word; white-space: pre-wrap;\">rate limited</pre></body></html>",
+      "metadata": {
+        "color-scheme": "light dark",
+        "scrapeId": "01a0b42f-d89e-722d-b539-b77524dddc66",
+        "sourceURL": "https://mock.fastcrw.com/rate-limit",
+        "url": "https://mock.fastcrw.com/rate-limit",
+        "statusCode": 429,
+        "error": "Too Many Requests",
+        "contentType": "text/plain; charset=utf-8",
+        "timezone": "America/New_York",
+        "proxyUsed": "stealth",
+        "cacheState": "miss",
+        "indexId": "e779892e-b052-461b-b753-f56d63142a71",
+        "creditsUsed": 1,
+        "concurrencyLimited": false
+      }
+    }
+  }
+}

@@ -536,6 +536,19 @@ pub struct PageMetadata {
     pub canonical_url: Option<String>,
     #[serde(rename = "sourceURL")]
     pub source_url: String,
+    /// The URL the server actually read, after following redirects. `None` when
+    /// nothing redirected.
+    ///
+    /// Internal carrier, never serialized: `/v1` already reports a material
+    /// redirect as the `redirected_to: <url>` warning and changing its metadata
+    /// shape is out of scope here. `/v2` reads this to fill Firecrawl's
+    /// `metadata.url`, which is the post-redirect URL while `metadata.sourceURL`
+    /// stays the URL the caller asked for (verified against a live capture:
+    /// `/redirect/3` returns `sourceURL=.../redirect/3`, `url=.../html/article`).
+    /// Before this existed `/v2` aliased `url` to `source_url`, so a v2 caller
+    /// could not see where a redirect landed.
+    #[serde(skip)]
+    pub final_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
     pub status_code: u16,
@@ -1167,6 +1180,12 @@ pub struct ApiResponse<T: Serialize> {
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "error_code")]
     pub error_code: Option<String>,
+    /// Firecrawl's spelling of `error_code`, emitted only by the `/v2` compat
+    /// surface (see `routes/v2/error.rs`). Both official Firecrawl SDKs read
+    /// `code`; `errorCode` is ours and is what the SaaS logs. Left `None`
+    /// everywhere else, so `/v1` responses are byte-identical to before.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub code: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub warning: Option<String>,
 }
@@ -1178,6 +1197,7 @@ impl<T: Serialize> ApiResponse<T> {
             data: Some(data),
             error: None,
             error_code: None,
+            code: None,
             warning: None,
         }
     }
@@ -1188,6 +1208,7 @@ impl<T: Serialize> ApiResponse<T> {
             data: None,
             error: Some(msg.into()),
             error_code: None,
+            code: None,
             warning: None,
         }
     }
@@ -1198,6 +1219,7 @@ impl<T: Serialize> ApiResponse<T> {
             data: None,
             error: Some(msg.into()),
             error_code: Some(code.into()),
+            code: None,
             warning: None,
         }
     }
@@ -1333,6 +1355,7 @@ mod tests {
                 og_image: None,
                 canonical_url: None,
                 source_url: "https://www.glassdoor.com/Reviews/x.htm".into(),
+                final_url: None,
                 language: None,
                 status_code: 200,
                 rendered_with: None,
@@ -1612,6 +1635,7 @@ mod tests {
                 og_image: None,
                 canonical_url: None,
                 source_url: "https://www.glassdoor.com/Reviews/x.htm".into(),
+                final_url: None,
                 language: None,
                 status_code: 200,
                 rendered_with: None,
@@ -1979,6 +2003,7 @@ mod tests {
             og_image: None,
             canonical_url: None,
             source_url: source_url.into(),
+            final_url: None,
             language: None,
             status_code: 200,
             rendered_with: None,

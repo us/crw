@@ -22,6 +22,7 @@ use crw_core::types::{OutputFormat, ParserSpec, ScrapeRequest};
 use crw_crawl::pdf::{PdfSource, apply_llm_formats, convert_pdf_bytes_strict};
 
 use super::adapters::to_v2_document;
+use super::error::V2Error;
 use super::formats::{self, FormatSpec, decompose};
 use super::scrape::V2ScrapeResponse;
 use crate::error::AppError;
@@ -74,9 +75,9 @@ struct ParseOptions {
 pub async fn parse(
     State(state): State<AppState>,
     mut multipart: Multipart,
-) -> Result<Json<V2ScrapeResponse>, AppError> {
+) -> Result<Json<V2ScrapeResponse>, V2Error> {
     if !state.config.document.enabled {
-        return Err(AppError::from(CrwError::ExtractionError(
+        return Err(V2Error::from(CrwError::ExtractionError(
             "document parsing is disabled on this server ([document] enabled = false)".into(),
         )));
     }
@@ -128,7 +129,7 @@ pub async fn parse(
     // Magic-byte sniff: pdf-inspector only does PDF, so reject anything else up
     // front with a clear 400 rather than a downstream parse error.
     if !looks_like_pdf(&bytes) {
-        return Err(AppError::from(CrwError::InvalidRequest(
+        return Err(V2Error::from(CrwError::InvalidRequest(
             "uploaded file is not a PDF (missing %PDF- header); only PDF is supported".into(),
         )));
     }
@@ -157,7 +158,7 @@ pub async fn parse(
 
     let llm_config = state.config.extraction.llm.as_ref();
     if req.formats.contains(&OutputFormat::Summary) && llm_config.is_none() {
-        return Err(AppError::from(CrwError::InvalidRequest(
+        return Err(V2Error::from(CrwError::InvalidRequest(
             "summary format requires LLM config: set [extraction.llm] in server config".into(),
         )));
     }

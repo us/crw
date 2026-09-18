@@ -15,6 +15,7 @@ use crw_core::error::CrwError;
 use crw_core::types::{CrawlRequest, CrawlStatus, OutputFormat, RequestedRenderer};
 
 use super::adapters::{DEFAULT_PAGE_LIMIT, V2CrawlStatus, build_crawl_status};
+use super::error::V2Error;
 use super::formats::{FormatSpec, decompose};
 use crate::error::AppError;
 use crate::state::{AppState, validate_crawl_renderer};
@@ -145,7 +146,7 @@ pub async fn start_crawl(
     State(state): State<AppState>,
     headers: HeaderMap,
     body: Result<Json<V2CrawlRequest>, JsonRejection>,
-) -> Result<Json<V2CrawlStartResponse>, AppError> {
+) -> Result<Json<V2CrawlStartResponse>, V2Error> {
     let Json(v2) = body.map_err(AppError::from)?;
     let parsed_url = url::Url::parse(&v2.url)
         .map_err(|e| CrwError::InvalidRequest(format!("Invalid URL: {e}")))?;
@@ -185,7 +186,7 @@ pub async fn get_crawl(
     headers: HeaderMap,
     Path(id): Path<Uuid>,
     Query(page): Query<PageQuery>,
-) -> Result<Json<V2CrawlStatus>, AppError> {
+) -> Result<Json<V2CrawlStatus>, V2Error> {
     let (snapshot, created_at) = {
         let jobs = state.crawl_jobs.read().await;
         let job = jobs
@@ -213,7 +214,7 @@ pub async fn get_crawl(
 pub async fn cancel_crawl(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<Value>, V2Error> {
     let mut jobs = state.crawl_jobs.write().await;
     let job = jobs
         .get_mut(&id)
@@ -223,7 +224,7 @@ pub async fn cancel_crawl(
         status,
         CrawlStatus::Completed | CrawlStatus::Failed | CrawlStatus::Cancelled
     ) {
-        return Err(AppError(CrwError::InvalidRequest(
+        return Err(V2Error(CrwError::InvalidRequest(
             "Crawl job already finished".into(),
         )));
     }
@@ -241,7 +242,7 @@ pub async fn cancel_crawl(
 }
 
 /// `GET /v2/crawl/active` (Tier-3) — list still-running job ids.
-pub async fn active(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
+pub async fn active(State(state): State<AppState>) -> Result<Json<Value>, V2Error> {
     let jobs = state.crawl_jobs.read().await;
     let ids: Vec<String> = jobs
         .iter()
@@ -255,7 +256,7 @@ pub async fn active(State(state): State<AppState>) -> Result<Json<Value>, AppErr
 pub async fn get_errors(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<Value>, V2Error> {
     let jobs = state.crawl_jobs.read().await;
     let job = jobs
         .get(&id)
