@@ -58,42 +58,22 @@ impl From<JsonRejection> for V2Error {
 /// `{success:false, error:"Job not found"}`.
 fn firecrawl_code(e: &CrwError) -> Option<&'static str> {
     match e {
-        // NOT `SCRAPE_DNS_RESOLUTION_ERROR`, even though that is the obvious
-        // pairing. Firecrawl splits what we merge — both captured live:
-        //
-        //   a name that does not resolve  -> HTTP 200, SCRAPE_DNS_RESOLUTION_ERROR
-        //   a port that refuses           -> HTTP 500, SCRAPE_SITE_ERROR
-        //                                    ("ERR_TUNNEL_CONNECTION_FAILED")
-        //
-        // `TargetUnreachable` is raised from `reqwest`'s `is_connect()`
-        // (`http_only.rs:909`), which is true for both, and the message is
-        // "error sending request" either way — there is nothing here to branch
-        // on. Claiming the DNS code would be wrong every time the real cause was
-        // a refused connection, and claiming HTTP 200 for a dead port tells the
-        // caller "fine" about a request that failed. `SCRAPE_SITE_ERROR` is the
-        // "URL failed to load" family and is true in both cases.
-        //
-        // Closing this properly means distinguishing resolver failures in the
-        // renderer's error chain; tracked in conformance/FIRECRAWL-DIFF.md.
+        // NOT `SCRAPE_DNS_RESOLUTION_ERROR`, the obvious-looking pairing.
+        // Firecrawl splits what we merge (a name that does not resolve -> 200
+        // DNS; a port that refuses -> 500 SITE_ERROR) and `TargetUnreachable`
+        // comes from `reqwest`'s `is_connect()`, true for both with the same
+        // message. Neither answer is safe to claim; see FIRECRAWL-DIFF.md §4b.
         CrwError::TargetUnreachable(_) => Some("SCRAPE_SITE_ERROR"),
         // lib/error.ts: ScrapeJobTimeoutError.
         CrwError::Timeout(_) => Some("SCRAPE_TIMEOUT"),
-        // scrapeURL/error.ts: NoEnginesLeftError — "every engine we tried came
-        // back unusable", which is what all three of these mean for us.
+        // scrapeURL/error.ts: NoEnginesLeftError — "every engine came back
+        // unusable", which is what all three mean for us.
         //
-        // `UnsupportedContentType` is NOT mapped to `SCRAPE_UNSUPPORTED_FILE_ERROR`,
-        // which is the obvious-looking choice and the wrong one. That code is
-        // raised only on Firecrawl's file-UPLOAD path. A *URL* that serves
-        // binary just exhausts the waterfall — captured from the live API
-        // against `mock.fastcrw.com/bytes/1024`:
-        //
-        //   HTTP 500  {"success":false,"code":"SCRAPE_ALL_ENGINES_FAILED",
-        //              "error":"All scraping engines failed ... Engines tried:
-        //              [index, fire-engine;chrome-cdp, ...]"}
-        //
-        // Our own `errorCode: unsupported_content_type` still rides along, so
-        // no diagnostic detail is lost — only the SDK-facing key is flattened
-        // to what the SDK would actually have seen.
+        // `UnsupportedContentType` is deliberately NOT
+        // `SCRAPE_UNSUPPORTED_FILE_ERROR`: that code is Firecrawl's file-UPLOAD
+        // path only. A URL serving binary just exhausts the waterfall —
+        // captured against `mock.fastcrw.com/bytes/1024`. Our own `errorCode`
+        // still rides along, so no detail is lost.
         CrwError::HttpError(_)
         | CrwError::RendererError(_)
         | CrwError::UnsupportedContentType(_) => Some("SCRAPE_ALL_ENGINES_FAILED"),
@@ -158,88 +138,68 @@ impl IntoResponse for V2Error {
 mod tests {
     use super::*;
 
-    /// The status the wire actually carries, straight off `into_response`.
-    fn status(e: CrwError) -> StatusCode {
-        V2Error(e).into_response().status()
-    }
-
-    /// The body it carries. Rebuilt rather than drained: reading the response
-    /// stream needs an async runtime, and `into_response` has no branch between
-    /// these two lines and the wire.
-    fn envelope(e: CrwError) -> serde_json::Value {
-        let mut body = ApiResponse::<()>::err_with_code(e.to_string(), e.error_code().to_string());
-        body.code = firecrawl_code(&e).map(str::to_string);
-        serde_json::to_value(&body).unwrap()
+    /// Drives the real `into_response` and reads what it actually put on the
+    /// wire. An earlier version of this rebuilt the envelope from
+    /// `firecrawl_code` instead, which meant deleting the `body.code` line from
+    /// `into_response` left every test here passing.
+    async fn wire(e: CrwError) -> (StatusCode, serde_json::Value) {
+        let res = V2Error(e).into_response();
+        let status = res.status();
+        let bytes = axum::body::to_bytes(res.into_body(), usize::MAX)
+            .await
+            .expect("error body is always small and in memory");
+        (status, serde_json::from_slice(&bytes).expect("valid JSON"))
     }
 
     /// Firecrawl answers a DNS failure with HTTP 200 and a refused connection
-    /// with HTTP 500 (both captured live). `TargetUnreachable` is raised from
-    /// `reqwest::Error::is_connect()`, which is true for both and carries the
-    /// same "error sending request" message, so this surface must not claim
-    /// either one. Guarding the 200 specifically: answering HTTP 200 for a
-    /// request that failed is the one outcome that actively misleads a caller,
-    /// and `v2_render_js::…_not_rejected_upfront` pins the 422.
-    #[test]
-    fn unreachable_target_does_not_claim_firecrawls_dns_answer() {
-        let st = status(CrwError::TargetUnreachable("nx.example".into()));
+    /// with HTTP 500 (both captured live). `TargetUnreachable` comes from
+    /// `reqwest::Error::is_connect()`, true for both, so we must claim neither.
+    /// The 200 is the one worth guarding: answering it for a failed fetch is
+    /// the outcome that actively misleads.
+    #[tokio::test]
+    async fn unreachable_target_does_not_claim_firecrawls_dns_answer() {
+        let (st, body) = wire(CrwError::TargetUnreachable("nx.example".into())).await;
         assert_ne!(st, StatusCode::OK, "a failed fetch must not answer 200");
         assert_eq!(st, StatusCode::UNPROCESSABLE_ENTITY);
-        let body = envelope(CrwError::TargetUnreachable("nx.example".into()));
         assert_eq!(body["success"], false);
         assert_eq!(body["code"], "SCRAPE_SITE_ERROR");
     }
 
-    #[test]
-    fn timeout_is_408_not_504() {
-        let st = status(CrwError::Timeout(30_000));
+    #[tokio::test]
+    async fn timeout_is_408_not_504() {
+        let (st, body) = wire(CrwError::Timeout(30_000)).await;
         assert_eq!(st, StatusCode::REQUEST_TIMEOUT);
-        assert_eq!(
-            envelope(CrwError::Timeout(30_000))["code"],
-            "SCRAPE_TIMEOUT"
-        );
+        assert_eq!(body["code"], "SCRAPE_TIMEOUT");
     }
 
-    #[test]
-    fn binary_url_is_500_all_engines_failed_not_unsupported_file() {
-        // Captured from api.firecrawl.dev against mock.fastcrw.com/bytes/1024.
-        // SCRAPE_UNSUPPORTED_FILE_ERROR is the upload path only; pinning that
-        // here is the mistake this test exists to prevent.
-        let st = status(CrwError::UnsupportedContentType("application/zip".into()));
+    /// Captured against mock.fastcrw.com/bytes/1024. SCRAPE_UNSUPPORTED_FILE_ERROR
+    /// is the upload path only; pinning that here is the mistake this prevents.
+    #[tokio::test]
+    async fn binary_url_is_500_all_engines_failed_not_unsupported_file() {
+        let (st, body) = wire(CrwError::UnsupportedContentType("application/zip".into())).await;
         assert_eq!(st, StatusCode::INTERNAL_SERVER_ERROR);
-        let body = envelope(CrwError::UnsupportedContentType("application/zip".into()));
         assert_eq!(body["code"], "SCRAPE_ALL_ENGINES_FAILED");
-        // Our own spelling survives for the request log.
         assert_eq!(body["errorCode"], "unsupported_content_type");
     }
 
-    #[test]
-    fn both_code_and_error_code_are_emitted() {
-        // `code` is what firecrawl-py / firecrawl-js read; `errorCode` is what
-        // the SaaS logs (upstreamErrorCode in api-handler.ts). Dropping either
-        // breaks one of the two consumers.
-        let body = envelope(CrwError::Timeout(1));
+    /// `code` is what firecrawl-py / firecrawl-js read; `errorCode` is what the
+    /// SaaS logs (`upstreamErrorCode`). Dropping either breaks one consumer.
+    #[tokio::test]
+    async fn both_code_and_error_code_are_emitted() {
+        let (_, body) = wire(CrwError::Timeout(1)).await;
         assert_eq!(body["code"], "SCRAPE_TIMEOUT");
         assert_eq!(body["errorCode"], "timeout");
     }
 
-    #[test]
-    fn codeless_errors_omit_the_key_entirely() {
-        // A captured Firecrawl 429 carries no `code`, and crawl-status.ts's
-        // "Job not found" carries none either. Emitting one would be inventing
-        // a field their SDKs would then see.
-        assert!(envelope(CrwError::RateLimited).get("code").is_none());
-        assert!(
-            envelope(CrwError::NotFound("crawl job x".into()))
-                .get("code")
-                .is_none()
-        );
-    }
-
-    #[test]
-    fn not_found_stays_404() {
-        assert_eq!(
-            status(CrwError::NotFound("crawl job x".into())),
-            StatusCode::NOT_FOUND
-        );
+    /// A captured Firecrawl 429 carries no `code`, and crawl-status.ts's "Job
+    /// not found" carries none either. Emitting one would invent a field their
+    /// SDKs would then see.
+    #[tokio::test]
+    async fn codeless_errors_omit_the_key_entirely() {
+        let (_, rate) = wire(CrwError::RateLimited).await;
+        assert!(rate.get("code").is_none());
+        let (st, nf) = wire(CrwError::NotFound("crawl job x".into())).await;
+        assert!(nf.get("code").is_none());
+        assert_eq!(st, StatusCode::NOT_FOUND);
     }
 }

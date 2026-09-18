@@ -70,10 +70,9 @@ _ENGINES = ("captured: HTTP 500 SCRAPE_ALL_ENGINES_FAILED. Nothing extractable, 
             "so every engine in the waterfall reports unsuccessful and "
             "NoEnginesLeftError falls to the controller's catch-all 500")
 
-# Rows where Firecrawl does WORSE than we do on content we handle correctly.
-# Recorded, never matched: "same attitude as Firecrawl" means the same API
-# contract, not deliberately failing to parse a page we can already parse.
-CAPABILITY_GAP = {"mock_html_malformed", "mock_csv"}
+# Some rows below are `report_only`: Firecrawl does WORSE than we do on content
+# we handle correctly. Recorded, never matched — matching their API contract is
+# not the same as failing to parse a page we can already parse.
 
 EXPECTATIONS: dict[str, Expect] = {
     # ── Status codes ────────────────────────────────────────────────────
@@ -123,7 +122,7 @@ EXPECTATIONS: dict[str, Expect] = {
     "mock_csv": Expect(
         "captured: HTTP 500 SCRAPE_RETRY_LIMIT (document_antibot). The live API "
         "routes text/csv down its document path and gives up on a 3-line CSV. "
-        "We parse it. Not matching this one - see CAPABILITY_GAP.",
+        "We parse it - recorded, not matched.",
         report_only=True),
     "mock_text": Expect("captured: parsed, 200", http=200, success=True, status_code=200),
     "mock_binary": Expect(
@@ -147,7 +146,7 @@ EXPECTATIONS: dict[str, Expect] = {
     "mock_html_malformed": Expect(
         "captured: HTTP 500 SCRAPE_ALL_ENGINES_FAILED. The fixture is valid "
         "prose behind unclosed tags and every live engine gave up on it; our "
-        "parser recovers the text. Not matching this one - see CAPABILITY_GAP.",
+        "parser recovers the text - recorded, not matched.",
         report_only=True),
 }
 

@@ -390,46 +390,38 @@ pub async fn scrape(
 
     let warning = formats::unsupported_warning(&decomposed.unsupported);
 
-    // See `v2_verdict` for the whole rule and where it comes from.
+    // The whole rule, and where it comes from, is on `v2_verdict`.
     let verdict = v2_verdict(
         data.metadata.status_code,
         data.block.as_ref(),
         data.has_no_content(&req.formats),
     );
-
-    // Nothing usable at all is an ERROR RESPONSE on this surface, not a 200
-    // carrying `success:false`. Captured from the live API against
-    // `mock.fastcrw.com/html/empty` (a 200 with an empty body):
-    //
-    //   HTTP 500  {"success":false,"code":"SCRAPE_ALL_ENGINES_FAILED",
-    //              "error":"All scraping engines failed to retrieve content
-    //              from this URL. Engines tried: [index, fire-engine;chrome-cdp,
-    //              ...]"}
-    //
-    // `RendererError` is the arm that carries `SCRAPE_ALL_ENGINES_FAILED` and a
-    // 500 (see `super::error`), and it is honest: every tier we were willing to
-    // run returned nothing. Billing is unaffected — the SaaS refunds an engine
-    // 5xx and an envelope `success:false` alike.
-    if matches!(verdict, V2Verdict::NothingUsable) {
-        return Err(V2Error(CrwError::RendererError(
-            data.block
-                .as_ref()
-                .map(|b| b.reason.clone())
-                .or_else(|| data.warning.clone())
-                .or_else(|| data.warnings.first().cloned())
-                .unwrap_or_else(|| "no engine returned usable content for this URL".to_string()),
-        )));
-    }
-
-    let is_anti_bot_block = matches!(verdict, V2Verdict::Blocked);
-    let (success, error) = match is_anti_bot_block {
-        true => (false, data.block.as_ref().map(|b| b.message())),
-        false => (true, None),
-    };
     let mut data = data;
-    if is_anti_bot_block {
-        data.clear_body();
-    }
+    let (success, error) = match verdict {
+        // An error RESPONSE, not a 200 carrying `success:false` — captured from
+        // the live API against `mock.fastcrw.com/html/empty`. `RendererError`
+        // is the arm that carries `SCRAPE_ALL_ENGINES_FAILED` and a 500 (see
+        // `super::error`). Billing is unaffected: the SaaS refunds an engine 5xx
+        // and an envelope `success:false` alike.
+        V2Verdict::NothingUsable => {
+            return Err(V2Error(CrwError::RendererError(
+                data.block
+                    .as_ref()
+                    .map(|b| b.reason.clone())
+                    .or_else(|| data.warning.clone())
+                    .or_else(|| data.warnings.first().cloned())
+                    .unwrap_or_else(|| "no engine returned usable content for this URL".into()),
+            )));
+        }
+        // Drop the challenge shell, so the caller gets a clean block rather than
+        // the interstitial text as the page's content.
+        V2Verdict::Blocked => {
+            let msg = data.block.as_ref().map(|b| b.message());
+            data.clear_body();
+            (false, msg)
+        }
+        V2Verdict::Document => (true, None),
+    };
     let doc = to_v2_document(data, &tier, Uuid::new_v4().to_string());
     Ok(Json(V2ScrapeResponse {
         success,

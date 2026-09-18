@@ -98,7 +98,7 @@ this whole change is about. Pinned by
 
 ## 4. Rows recorded but not matched
 
-`mock_parity.py` prints these as `[note]`; `CAPABILITY_GAP` names the first two.
+`mock_parity.py` prints these as `[note]` rather than asserting them.
 Matching Firecrawl's *contract* does not mean copying its extraction failures.
 
 | Fixture | Firecrawl (captured) | crw |

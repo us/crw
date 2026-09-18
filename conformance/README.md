@@ -36,9 +36,8 @@ Proves crw's `/v2/*` API is compatible with Firecrawl v2 along three axes:
    ```
 
    Rows where Firecrawl does *worse* than crw (it 500s on a valid CSV and on
-   recoverable malformed HTML) are recorded as `[note]`, never matched —
-   `CAPABILITY_GAP` in `mock_parity.py`. Matching Firecrawl's contract does not
-   mean copying its extraction failures.
+   recoverable malformed HTML) are recorded as `[note]`, never matched.
+   Matching Firecrawl's contract does not mean copying its extraction failures.
 
 ## Run
 
