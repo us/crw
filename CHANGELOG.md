@@ -2,6 +2,13 @@
 
 All notable changes to CRW are documented here.
 
+## [0.36.1](https://github.com/us/crw/compare/v0.36.0...v0.36.1) (2026-09-19)
+
+
+### Bug Fixes
+
+* **ci:** stop the release audit calling a healthy publish broken ([a0ac61e](https://github.com/us/crw/commit/a0ac61e43b7d620da334b0395a0e2c6002b83d8b))
+
 ## [0.36.0](https://github.com/us/crw/compare/v0.35.1...v0.36.0) (2026-09-19)
 
 
