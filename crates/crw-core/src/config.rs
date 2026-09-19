@@ -297,6 +297,11 @@ pub const CLOAK_ARM_FLOOR_MS: u64 = 24_000;
 /// `dead_code` reason as [`CLOAK_ARM_FLOOR_MS`] above.
 pub const CLOAK_ARM_RECOVER_BUDGET_MS: u64 = 40_000;
 
+/// Default cloak arm concurrency, matching the sidecar's own browser cap
+/// (`CLOAK_CONCURRENCY`, default 4). Overridable per deployment with
+/// `renderer.cloak_pool_size`; see [`RendererConfig::cloak_pool_size`].
+pub const CLOAK_DEFAULT_POOL_SIZE: usize = 4;
+
 /// Budget (ms) the cloak-FIRST hint reserves for the normal ladder when it fires
 /// before the ladder. Unlike the post-ladder recovery arm (which runs last, so
 /// eating the deadline is harmless), cloak-first runs first on the SHARED
@@ -756,6 +761,22 @@ pub struct RendererConfig {
     /// touching the main chrome/lightpanda tiers' concurrency.
     #[serde(default)]
     pub chrome_proxy_pool_size: Option<usize>,
+    /// Concurrency cap for the cloak recovery arm, i.e. how many pages this box
+    /// can have in the stealth tier at once, across every host and customer.
+    ///
+    /// `None` keeps the historical 4, which is the sidecar's own browser cap.
+    /// It is a REAL ceiling on throughput: at ~5s a warm ride that is ~0.8
+    /// pages/s box-wide, so a batch customer on a walled host is bounded by it
+    /// long before any per-plan limit. Raise it only together with the
+    /// sidecar's `CLOAK_CONCURRENCY` and its container memory: each permit can
+    /// hold one headful browser (a camoufox mint ~400 MB, a Chromium ride
+    /// ~300 MB), and a permit the sidecar cannot serve turns a fast clean
+    /// block into a queued one.
+    ///
+    /// Watch `crw_render_route_decision_total{renderer="cloak",decision="armShed"}`:
+    /// rising means requests are being shed at this ceiling.
+    #[serde(default)]
+    pub cloak_pool_size: Option<usize>,
     /// latency-qn: override the chrome post-navigate challenge-clear retry count
     /// (default 3 → 3×3s=9s). Measured at 28% of render time, mostly on shells
     /// that never clear (fail anyway); Firecrawl/Spider run no such loop. Lower
@@ -809,6 +830,25 @@ pub struct RendererConfig {
     /// `CLOAK_ARM_RECOVER_BUDGET_MS` doc).
     #[serde(default)]
     pub cloak_recover_on_cf: bool,
+    /// Let the cloak recovery arm fire on a Cloudflare challenge that the
+    /// auto-egress (chrome_proxy) arm uncovered, not only on one the ladder
+    /// itself saw.
+    ///
+    /// Some origins answer a datacenter IP with the Cloudflare WAF BLOCK page
+    /// (error 1020, "Attention Required") and only serve the managed challenge
+    /// once the request arrives from a residential exit. The block page carries
+    /// one weak marker and no strong one, so
+    /// [`crate::detector`]-equivalent challenge detection is correctly false for
+    /// it, the request takes the IP-reputation path into chrome_proxy, and the
+    /// challenge that arm then uncovers has nowhere to go: the cloak gate was
+    /// already decided. Measured on a people-search origin behind a datacenter
+    /// WAF block plus a managed challenge, where every scrape returned
+    /// `anti_bot` and the solver tier was never reached.
+    ///
+    /// Off by default. The arm it opens costs a cold interactive solve, so this
+    /// is opt-in per deployment and reverts without a redeploy of the engine.
+    #[serde(default)]
+    pub cloak_after_egress: bool,
     /// Phase 0 (latency-qn): when true, the renderer emits a structured
     /// `target: "latency_breakdown"` tracing event per fetch with total wall
     /// time and the tier that produced the accepted result. Off by default;
@@ -1128,12 +1168,14 @@ impl Default for RendererConfig {
             chrome_timeout_ms: None,
             pool_size: default_pool_size(),
             chrome_proxy_pool_size: None,
+            cloak_pool_size: None,
             chrome_challenge_max_retries: None,
             chrome_spa_selector_max_ms: None,
             chrome_fast_ready: false,
             chrome_hedge: false,
             auto_egress_escalation: false,
             cloak_recover_on_cf: false,
+            cloak_after_egress: false,
             latency_breakdown: false,
             render_js_default: None,
             lightpanda: None,
@@ -1193,6 +1235,14 @@ impl RendererConfig {
     }
     pub fn chrome_proxy_pool_size(&self) -> usize {
         self.chrome_proxy_pool_size.unwrap_or(self.pool_size).max(1)
+    }
+    /// Cloak arm concurrency. Defaults to [`CLOAK_DEFAULT_POOL_SIZE`] rather
+    /// than `pool_size`: the stealth tier is bounded by the sidecar's browsers,
+    /// not by this engine's render pool, so it must not scale with it.
+    pub fn cloak_pool_size(&self) -> usize {
+        self.cloak_pool_size
+            .unwrap_or(CLOAK_DEFAULT_POOL_SIZE)
+            .max(1)
     }
     pub fn camoufox_timeout(&self) -> u64 {
         self.camoufox_timeout_ms
@@ -1413,7 +1463,9 @@ impl RendererConfig {
             // a cloak solve mid-flight (wasting the sidecar slot + proxy egress and
             // skipping the breaker-outcome record). Only reserved when the
             // recovery flag is on, so it is inert by default.
-            sum = sum.saturating_add(CLOAK_ARM_RECOVER_BUDGET_MS);
+            // Mirrors the renderer: the fresh arm budget is the larger of the
+            // constant and the configured cloak tier timeout.
+            sum = sum.saturating_add(CLOAK_ARM_RECOVER_BUDGET_MS.max(self.cloak_timeout()));
         }
 
         // CDP tiers only contribute when the binary was built with the `cdp`
@@ -2255,6 +2307,33 @@ mod tests {
         let cfg = RendererConfig::default();
         assert_eq!(cfg.mode, RendererMode::Auto);
         assert_eq!(cfg.render_js_default, None);
+    }
+
+    #[test]
+    fn cloak_pool_size_defaults_to_the_sidecar_cap_not_the_render_pool() {
+        // Deliberately NOT `pool_size`: the stealth tier is bounded by the
+        // sidecar's browsers, so a box with a big render pool must not open
+        // more cloak permits than the sidecar can serve.
+        let cfg = RendererConfig {
+            pool_size: 160,
+            cloak_pool_size: None,
+            ..Default::default()
+        };
+        assert_eq!(cfg.cloak_pool_size(), CLOAK_DEFAULT_POOL_SIZE);
+    }
+
+    #[test]
+    fn cloak_pool_size_explicit_override_wins_and_clamps_zero() {
+        let cfg = RendererConfig {
+            cloak_pool_size: Some(12),
+            ..Default::default()
+        };
+        assert_eq!(cfg.cloak_pool_size(), 12);
+        let zero = RendererConfig {
+            cloak_pool_size: Some(0),
+            ..Default::default()
+        };
+        assert_eq!(zero.cloak_pool_size(), 1);
     }
 
     #[test]

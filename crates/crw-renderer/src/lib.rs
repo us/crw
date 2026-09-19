@@ -665,12 +665,15 @@ pub(crate) const CHROME_PROXY_ARM_BUDGET_MS: u64 = 20_000;
 // (returns the block) when none is free — best-effort recovery that never queues.
 
 /// Concurrency permits for the cloak recovery arm — sized to the sidecar's
-/// cold-solve browser cap (`CF_MAX_CONCURRENT_BROWSERS`, default 4) so the
-/// engine sheds excess with a fast clean block instead of queuing headed
-/// Turnstile solves that hold the request budget. `pub const` so it never trips
+/// cold-solve browser cap (`CLOAK_CONCURRENCY`, default 4) so the engine sheds
+/// excess with a fast clean block instead of queuing headed Turnstile solves
+/// that hold the request budget. This is the historical default; the effective
+/// value is `config.cloak_pool_size()`, so an operator can raise the tier's
+/// box-wide throughput ceiling (it is ~0.8 pages/s at 4 permits) together with
+/// the sidecar's own concurrency and memory. `pub const` so it never trips
 /// `dead_code` in a lean build (referenced only under `#[cfg(feature="cloak")]`).
 #[cfg(feature = "cloak")]
-pub const CLOAK_SEM_PERMITS: usize = 4;
+pub const CLOAK_SEM_PERMITS: usize = crw_core::config::CLOAK_DEFAULT_POOL_SIZE;
 
 /// Composite renderer that tries multiple backends in order.
 pub struct FallbackRenderer {
@@ -689,6 +692,11 @@ pub struct FallbackRenderer {
     /// `auto_egress_escalation`) — inert in a lean (no-`cloak`) build since
     /// `route_to_cloak` folds to `false` there. Default off.
     cloak_recover_on_cf: bool,
+    /// Let the cloak arm fire on a Cloudflare challenge the auto-egress arm
+    /// uncovered, not only on one the ladder itself saw. See
+    /// `RendererConfig::cloak_after_egress`. Default off; inert in a lean
+    /// (no-`cloak`) build, where the flag that reads it folds to `false`.
+    cloak_after_egress: bool,
     /// latency-qn: conditional hedge — race lightpanda+chrome concurrently.
     chrome_hedge: bool,
     /// Headroom gate for the hedge: bounds concurrent hedges to pool_size/2 so the
@@ -944,6 +952,7 @@ impl FallbackRenderer {
                 latency_breakdown: config.latency_breakdown,
                 auto_egress_escalation: config.auto_egress_escalation,
                 cloak_recover_on_cf: config.cloak_recover_on_cf,
+                cloak_after_egress: config.cloak_after_egress,
                 chrome_hedge: config.chrome_hedge,
                 hedge_sem: Arc::new(tokio::sync::Semaphore::new((config.pool_size / 2).max(1))),
                 chrome_proxy_arm_sem: Arc::new(tokio::sync::Semaphore::new(
@@ -1255,6 +1264,7 @@ impl FallbackRenderer {
             latency_breakdown: config.latency_breakdown,
             auto_egress_escalation: config.auto_egress_escalation,
             cloak_recover_on_cf: config.cloak_recover_on_cf,
+            cloak_after_egress: config.cloak_after_egress,
             chrome_hedge: config.chrome_hedge,
             hedge_sem: Arc::new(tokio::sync::Semaphore::new((config.pool_size / 2).max(1))),
             chrome_proxy_arm_sem: Arc::new(tokio::sync::Semaphore::new(
@@ -1283,7 +1293,7 @@ impl FallbackRenderer {
             #[cfg(feature = "cloak")]
             cloak_arm,
             #[cfg(feature = "cloak")]
-            cloak_sem: Arc::new(tokio::sync::Semaphore::new(CLOAK_SEM_PERMITS)),
+            cloak_sem: Arc::new(tokio::sync::Semaphore::new(config.cloak_pool_size())),
             #[cfg(feature = "impersonated")]
             impersonated,
             #[cfg(feature = "impersonated")]
@@ -3921,9 +3931,17 @@ impl FallbackRenderer {
             {
                 let _ = cloak_attempted;
                 let _ = self.cloak_recover_on_cf;
+                let _ = self.cloak_after_egress;
                 false
             }
         };
+        // Set by the auto-egress arm when its OWN body is a Cloudflare
+        // challenge. That is the case `route_to_cloak` structurally cannot see:
+        // it is decided from the ladder's body, above, and on an origin that
+        // WAF-blocks datacenter IPs the challenge only appears once the request
+        // comes from a residential exit.
+        #[cfg(feature = "cloak")]
+        let mut arm_uncovered_cf = false;
         if let Some(arm) = auto_egress_arm {
             let kind = RendererKind::ChromeProxy;
             // chrome_proxy is default-Chrome + residential IP: it recovers
@@ -4003,12 +4021,43 @@ impl FallbackRenderer {
                         // being larger than the ladder's thin result, replaces it.
                         // CF is checked too: a managed challenge is 100-300KB and
                         // evades the size-capped vendor detector.
+                        // Hoisted out of the `&&` chain below rather than read
+                        // off it: `r_ok` short-circuits, and the CF check was
+                        // its LAST term, so a small challenge shell (which
+                        // carries "Enable JavaScript and cookies to continue",
+                        // verbatim in the generic-wall phrase list) exits at
+                        // `looks_like_generic_bot_wall` and never reaches it.
+                        // Reading the verdict off `!r_ok` instead would be
+                        // worse: that is true for a DataDome shell, a vendor
+                        // wall, a placeholder and anything under the text
+                        // floor, and would buy every one of them a cold
+                        // interactive solve.
+                        let r_cf_challenge = detector::looks_like_cloudflare_challenge(&r.html);
                         let r_ok = r_text >= Self::MIN_RENDERED_TEXT_LEN
                             && detector::looks_like_failed_render(&r.html).is_none()
                             && !detector::looks_like_loading_placeholder(&r.html)
                             && !detector::looks_like_generic_bot_wall(&r.html, r.truncated)
                             && detector::looks_like_vendor_block(&r.html).is_none()
-                            && !detector::looks_like_cloudflare_challenge(&r.html);
+                            && !r_cf_challenge;
+                        // The challenge this arm uncovered is the ONLY thing
+                        // that can open the cloak gate below. Set under cfg so
+                        // the lean build neither binds nor assigns it.
+                        #[cfg(feature = "cloak")]
+                        {
+                            if r_cf_challenge {
+                                arm_uncovered_cf = true;
+                                // Counted whether or not the flag is on, so the
+                                // prod-wide arrival rate of this shape is readable
+                                // on real traffic BEFORE the route is enabled.
+                                metrics()
+                                    .render_route_decision_total
+                                    .with_label_values(&[
+                                        RendererKind::Cloak.as_str(),
+                                        "afterEgressEligible",
+                                    ])
+                                    .inc();
+                            }
+                        }
                         if !host.is_empty() {
                             // Same split as the other content verdicts: success
                             // globally, the page judgement host-only. This arm had
@@ -4019,13 +4068,50 @@ impl FallbackRenderer {
                                     .record_outcome(&host, kind, BreakerOutcome::Success)
                                     .await;
                             } else {
+                                // A wall is not a renderer fault. `SiteBlocked`
+                                // exists for exactly this (see `breaker.rs`: an
+                                // anti-bot wall, a vendor block or a Cloudflare
+                                // interstitial "says nothing about tier
+                                // health") and is the one outcome that neither
+                                // fails nor advances the window.
+                                //
+                                // Load-bearing rather than tidiness: now that
+                                // the challenge this arm uncovers opens the
+                                // cloak gate, booking it `RenderError` would
+                                // open the ChromeProxy host breaker after ~50
+                                // walled pages (min_calls 50, failure rate
+                                // 0.80). `arm_wanted` would go false, the arm
+                                // would stop firing, and the challenge would
+                                // stop being uncovered: the recovery would
+                                // switch itself off on exactly the hosts it
+                                // exists for, and the better it worked the
+                                // faster it would happen.
+                                // Only the CF-challenge shape, and only while the
+                                // flag routes it onward: a DataDome or PerimeterX
+                                // wall must still open the ChromeProxy host breaker
+                                // after 50 calls (cloak never fires for those), or a
+                                // crawl of such a host pays ladder + 20s residential
+                                // Chrome on every page instead of 50. With the flag
+                                // off this is the same RenderError call as before.
+                                let cf_routed_onward = {
+                                    #[cfg(feature = "cloak")]
+                                    {
+                                        r_cf_challenge
+                                            && self.cloak_after_egress
+                                            && self.cloak_arm.is_some()
+                                    }
+                                    #[cfg(not(feature = "cloak"))]
+                                    {
+                                        false
+                                    }
+                                };
+                                let verdict = if cf_routed_onward {
+                                    BreakerOutcome::SiteBlocked
+                                } else {
+                                    BreakerOutcome::RenderError
+                                };
                                 self.breakers
-                                    .record_scoped_outcome(
-                                        &host,
-                                        kind,
-                                        None,
-                                        Some(BreakerOutcome::RenderError),
-                                    )
+                                    .record_scoped_outcome(&host, kind, None, Some(verdict))
                                     .await;
                             }
                         }
@@ -4089,8 +4175,23 @@ impl FallbackRenderer {
         // `cloak_sem` (non-blocking); pre-fire read-only breaker check; and
         // best-result-wins IDENTICAL to the chrome_proxy arm above so an Err/thin
         // cloak result never turns the baseline CF-block into Ok(empty).
+        //
+        // Second entry (`cloak_after_egress`, default off): the auto-egress arm
+        // uncovered a challenge the ladder could not see, because the origin
+        // WAF-blocks datacenter IPs and only serves the challenge to the
+        // residential exit. `!cloak_attempted` is repeated here deliberately: it
+        // is a conjunct INSIDE `route_to_cloak`, so an `||` that omitted it would
+        // let a cloak-first request fire a second permit and a second cold solve
+        // on the same page.
         #[cfg(feature = "cloak")]
-        if route_to_cloak && let Some(arm) = &self.cloak_arm {
+        let cloak_after_egress_route = arm_uncovered_cf
+            && self.cloak_after_egress
+            && self.cloak_arm.is_some()
+            && !cloak_attempted;
+        #[cfg(feature = "cloak")]
+        if (route_to_cloak || cloak_after_egress_route)
+            && let Some(arm) = &self.cloak_arm
+        {
             let kind = RendererKind::Cloak;
             let floor = std::time::Duration::from_millis(crw_core::config::CLOAK_ARM_FLOOR_MS);
             let deadline_ok = deadline.remaining() >= floor;
@@ -4125,16 +4226,44 @@ impl FallbackRenderer {
                 // needs ~21-40s regardless of how little of the shared deadline
                 // is left. Reuses the shared deadline unchanged otherwise (byte
                 // identical to today when it still clears the floor).
-                let arm_deadline = if deadline_ok {
+                // The fresh budget is the larger of the constant and the
+                // configured cloak tier timeout, so `CLOAK_TIMEOUT_MS` is a
+                // real knob here. And it is taken whenever the SHARED
+                // remainder cannot fit a whole mint, not only under the 24s
+                // floor: the sidecar refuses to start a mint it cannot finish
+                // (its guard is sized to echo + launch + solve + close), so a
+                // shared remainder in the band between the floor and a full
+                // mint would hand it a budget it declines, where a remainder
+                // under the floor already gets a full fresh one. That band
+                // would be strictly worse than being under the floor.
+                let fresh_budget =
+                    std::time::Duration::from_millis(crw_core::config::CLOAK_ARM_RECOVER_BUDGET_MS)
+                        .max(
+                            self.tier_timeouts
+                                .get(&RendererKind::Cloak)
+                                .copied()
+                                .unwrap_or_default(),
+                        );
+                let arm_deadline = if deadline.remaining() >= fresh_budget {
                     deadline
                 } else {
-                    crw_core::Deadline::now_plus(std::time::Duration::from_millis(
-                        crw_core::config::CLOAK_ARM_RECOVER_BUDGET_MS,
-                    ))
+                    crw_core::Deadline::now_plus(fresh_budget)
                 };
                 metrics()
                     .render_route_decision_total
-                    .with_label_values(&[kind.as_str(), "fired"])
+                    .with_label_values(&[
+                        kind.as_str(),
+                        // Split so the new entry is measurable on its own: the
+                        // whole reason this change exists is that a "cloak
+                        // fired" counter could not tell anyone WHICH route fired,
+                        // and production had been serving zero cloak requests
+                        // without that being visible.
+                        if cloak_after_egress_route {
+                            "firedAfterEgress"
+                        } else {
+                            "fired"
+                        },
+                    ])
                     .inc();
                 let entry = self.pick_proxy_for_url(url);
                 let attempt = REQUEST_PROXY
@@ -4182,6 +4311,17 @@ impl FallbackRenderer {
                                 Some(prev) => r.html.len() > prev.html.len(),
                                 None => true,
                             };
+                        // Ungated, host-only (these paths can be person names
+                        // and stdout leaves the box): the one line `docker logs`
+                        // needs to tell WHICH route fired and whether it won.
+                        // The metric above cannot say that per request.
+                        tracing::info!(
+                            host = %host,
+                            route = if cloak_after_egress_route { "afterEgress" } else { "ladder" },
+                            ok = r_ok,
+                            consumed = better,
+                            "cloak arm result"
+                        );
                         if self.latency_breakdown {
                             tracing::info!(
                                 target: "latency_breakdown",
@@ -4213,6 +4353,12 @@ impl FallbackRenderer {
                                 )
                                 .await;
                         }
+                        tracing::info!(
+                            host = %host,
+                            route = if cloak_after_egress_route { "afterEgress" } else { "ladder" },
+                            error = %e,
+                            "cloak arm result (error)"
+                        );
                         if self.latency_breakdown {
                             tracing::info!(
                                 target: "latency_breakdown",
@@ -7921,6 +8067,384 @@ mod tests {
             res.rendered_with.as_deref(),
             Some("chrome"),
             "the CF-challenge thin ladder result must ship unchanged (byte-identical to today)"
+        );
+    }
+
+    // ---- cloak_after_egress: the challenge the residential arm uncovers ----
+
+    /// Builds the shape no existing helper could: a real chrome_proxy auto-egress
+    /// arm AND a cloak arm on one renderer. Every suppression test in this file
+    /// builds one or the other, which is exactly why none of them could catch a
+    /// regression on this path.
+    #[cfg(feature = "cloak")]
+    fn renderer_with_egress_and_cloak(
+        proxy_body: String,
+        cloak: Arc<dyn PageFetcher>,
+    ) -> FallbackRenderer {
+        renderer_with_egress_and_cloak_ladder(network_security_block_html(), proxy_body, cloak)
+    }
+
+    /// Same, with the ladder's body chosen by the test: the live-capture test
+    /// needs the ladder to return the real Cloudflare 1020 block page.
+    #[cfg(feature = "cloak")]
+    fn renderer_with_egress_and_cloak_ladder(
+        ladder_body: String,
+        proxy_body: String,
+        cloak: Arc<dyn PageFetcher>,
+    ) -> FallbackRenderer {
+        renderer_with_egress_and_cloak_ladder_status(200, ladder_body, proxy_body, cloak)
+    }
+
+    /// And with the ladder's HTTP status chosen too: the live 1020 page is
+    /// served as a 403, and `saw_hard_block` reads the status.
+    #[cfg(feature = "cloak")]
+    fn renderer_with_egress_and_cloak_ladder_status(
+        ladder_status: u16,
+        ladder_body: String,
+        proxy_body: String,
+        cloak: Arc<dyn PageFetcher>,
+    ) -> FallbackRenderer {
+        let lp = Arc::new(MockFetcher {
+            name: "lightpanda",
+            behavior: MockBehavior::OkStatus(ladder_status, ladder_body.clone()),
+        }) as Arc<dyn PageFetcher>;
+        let chrome = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::OkStatus(ladder_status, ladder_body),
+        }) as Arc<dyn PageFetcher>;
+        let chrome_proxy = Arc::new(MockFetcher {
+            name: "chrome_proxy",
+            behavior: MockBehavior::Ok(proxy_body),
+        }) as Arc<dyn PageFetcher>;
+        let mut r = make_renderer_with_mocks(vec![lp, chrome, chrome_proxy]);
+        r.auto_egress_escalation = true;
+        r.cloak_arm = Some(cloak);
+        // After the arm has run, the shared deadline can never clear the 24s
+        // floor, so the entry gate rests entirely on this flag. Without it the
+        // test would pass for the wrong reason on a fast machine.
+        r.cloak_recover_on_cf = true;
+        r
+    }
+
+    /// The customer-reported shape: the ladder sees a WAF BLOCK (not a
+    /// challenge), the residential arm clears the WAF and uncovers the managed
+    /// challenge, and cloak now gets its turn and solves it.
+    #[cfg(feature = "cloak")]
+    #[tokio::test]
+    async fn cloak_fires_on_a_challenge_the_egress_arm_uncovered() {
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let cloak = Arc::new(CountingBodyFetcher {
+            name: "cloak",
+            calls: calls.clone(),
+            html: solved_html(),
+            fail: false,
+        }) as Arc<dyn PageFetcher>;
+        let mut r = renderer_with_egress_and_cloak(cf_challenge_html(), cloak);
+        r.cloak_after_egress = true;
+
+        let res = r
+            .fetch(
+                "https://example.com",
+                &HashMap::new(),
+                Some(true),
+                None,
+                Some("auto"),
+                crw_core::Deadline::from_request_ms(6_000),
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            res.html.contains("SOLVED"),
+            "the uncovered challenge must reach the cloak arm, got: {}",
+            res.html
+        );
+        assert_eq!(
+            calls.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "one page must still buy exactly one cloak permit"
+        );
+    }
+
+    /// The wrong-tier guard. A residential body that is a NON-CF wall (DataDome,
+    /// PerimeterX, a plain bot wall) must NOT buy a cold interactive Turnstile
+    /// solve. This is the test that fails if the verdict is ever read off
+    /// `!r_ok` instead of the hoisted CF predicate.
+    #[cfg(feature = "cloak")]
+    #[tokio::test]
+    async fn cloak_stays_out_when_the_egress_arm_hit_a_non_cf_wall() {
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let cloak = Arc::new(CountingBodyFetcher {
+            name: "cloak",
+            calls: calls.clone(),
+            html: solved_html(),
+            fail: false,
+        }) as Arc<dyn PageFetcher>;
+        let mut r = renderer_with_egress_and_cloak(network_security_block_html(), cloak);
+        r.cloak_after_egress = true;
+
+        let _ = r
+            .fetch(
+                "https://example.com",
+                &HashMap::new(),
+                Some(true),
+                None,
+                Some("auto"),
+                crw_core::Deadline::from_request_ms(6_000),
+            )
+            .await;
+
+        assert_eq!(
+            calls.load(std::sync::atomic::Ordering::SeqCst),
+            0,
+            "a non-CF wall must never buy a cold Turnstile solve"
+        );
+    }
+
+    /// Default off: with the flag clear the path is byte-identical to today, so
+    /// the arm cannot start costing anyone a solve until an operator opts in.
+    #[cfg(feature = "cloak")]
+    #[tokio::test]
+    async fn cloak_after_egress_is_off_by_default() {
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let cloak = Arc::new(CountingBodyFetcher {
+            name: "cloak",
+            calls: calls.clone(),
+            html: solved_html(),
+            fail: false,
+        }) as Arc<dyn PageFetcher>;
+        // renderer_with_egress_and_cloak leaves cloak_after_egress at its default.
+        let r = renderer_with_egress_and_cloak(cf_challenge_html(), cloak);
+        assert!(!r.cloak_after_egress, "the flag must default to off");
+
+        let _ = r
+            .fetch(
+                "https://example.com",
+                &HashMap::new(),
+                Some(true),
+                None,
+                Some("auto"),
+                crw_core::Deadline::from_request_ms(6_000),
+            )
+            .await;
+
+        assert_eq!(
+            calls.load(std::sync::atomic::Ordering::SeqCst),
+            0,
+            "with the flag off nothing about this path may change"
+        );
+    }
+
+    /// One page, one cloak permit, across the NEW route too. A cloak-first
+    /// attempt that already ran must not be followed by a second solve just
+    /// because the residential arm later uncovered a challenge.
+    #[cfg(feature = "cloak")]
+    #[tokio::test]
+    async fn cloak_first_still_suppresses_the_after_egress_route() {
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let cloak = Arc::new(CountingBodyFetcher {
+            name: "cloak",
+            calls: calls.clone(),
+            html: "<html><body>thin</body></html>".to_string(),
+            fail: false,
+        }) as Arc<dyn PageFetcher>;
+        let mut r = renderer_with_egress_and_cloak(cf_challenge_html(), cloak);
+        r.cloak_after_egress = true;
+
+        let _ = r
+            .fetch_hinted(
+                "https://example.com",
+                &HashMap::new(),
+                Some(true),
+                None,
+                Some("auto"),
+                true, // force_cloak: the pre-ladder attempt runs and sets cloak_attempted
+                crw_core::Deadline::from_request_ms(6_000),
+            )
+            .await;
+
+        assert_eq!(
+            calls.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "cloak_attempted must still cap the page at one solve"
+        );
+    }
+
+    /// The live Cloudflare 1020 block page (scrubbed capture) as the ladder's
+    /// body: it carries no strong challenge marker and only one weak one, so
+    /// `looks_like_cloudflare_challenge` is false, `antibot::classify` says
+    /// GenericBlock (not a fingerprint-vendor wall), the chrome_proxy arm MUST
+    /// still fire, and the challenge it uncovers MUST reach cloak. This is the
+    /// test that would fail if the vendor stamp ever moved into `antibot.rs`.
+    #[cfg(feature = "cloak")]
+    #[tokio::test]
+    async fn cloak_fires_after_egress_on_the_live_cf_block_page() {
+        let page = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../crw-crawl/tests/fixtures/cloudflare_1020_block.html"
+        ))
+        .to_string();
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        // Out-sizes the 4.5KB block page on purpose: the arm's best-result-wins
+        // compares RAW HTML length, and a genuinely solved person page is
+        // ~190KB against the block page's ~4.5KB. A 540-byte `solved_html()`
+        // would lose that race and the block page would ship, which says
+        // nothing about routing.
+        let solved = format!(
+            "<html><body><article>SOLVED{}</article></body></html>",
+            "x".repeat(page.len() + 1_000)
+        );
+        let cloak = Arc::new(CountingBodyFetcher {
+            name: "cloak",
+            calls: calls.clone(),
+            html: solved,
+            fail: false,
+        }) as Arc<dyn PageFetcher>;
+        let mut r =
+            renderer_with_egress_and_cloak_ladder_status(403, page, cf_challenge_html(), cloak);
+        r.cloak_after_egress = true;
+        let res = r
+            .fetch(
+                "https://example.com/find/person/x",
+                &HashMap::new(),
+                Some(true),
+                None,
+                Some("auto"),
+                crw_core::Deadline::from_request_ms(6_000),
+            )
+            .await
+            .unwrap();
+        assert!(
+            res.html.contains("SOLVED"),
+            "the real 1020 page must not suppress the residential arm; got: {}",
+            &res.html[..res.html.len().min(200)]
+        );
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    /// Dead band, after-egress route: a shared remainder that clears the 24s
+    /// floor but cannot fit a whole mint used to be handed to the sidecar as
+    /// is (~30s), which its guard refuses. The arm must take the fresh budget.
+    #[cfg(feature = "cloak")]
+    #[tokio::test]
+    async fn cloak_after_egress_takes_a_fresh_budget_inside_the_dead_band() {
+        let recorded = Arc::new(std::sync::Mutex::new(None));
+        let cloak = Arc::new(DeadlineRecordingFetcher {
+            recorded_remaining: recorded.clone(),
+            html: solved_html(),
+        }) as Arc<dyn PageFetcher>;
+        let mut r = renderer_with_egress_and_cloak(cf_challenge_html(), cloak);
+        r.cloak_after_egress = true;
+        let _ = r
+            .fetch(
+                "https://example.com",
+                &HashMap::new(),
+                Some(true),
+                None,
+                Some("auto"),
+                crw_core::Deadline::from_request_ms(30_000), // above the 24s floor
+            )
+            .await;
+        let remaining = recorded.lock().unwrap().expect("cloak arm must fire");
+        assert!(
+            remaining > Duration::from_secs(35),
+            "inside the band the arm must run on the fresh budget, not the ~30s \
+             shared remainder (recorded {remaining:?})"
+        );
+    }
+
+    /// Same rule on the ladder route, and `CLOAK_TIMEOUT_MS` is the knob: with
+    /// the cloak tier timeout at 45s, a 40s shared remainder is below a whole
+    /// mint and the arm must run on a fresh 45s budget.
+    #[cfg(feature = "cloak")]
+    #[tokio::test]
+    async fn cloak_ladder_route_fresh_budget_follows_the_configured_timeout() {
+        let recorded = Arc::new(std::sync::Mutex::new(None));
+        let cloak = Arc::new(DeadlineRecordingFetcher {
+            recorded_remaining: recorded.clone(),
+            html: solved_html(),
+        });
+        let ladder = Arc::new(MockFetcher {
+            name: "chrome",
+            behavior: MockBehavior::Ok(cf_challenge_html()),
+        });
+        let mut r = renderer_with_cloak(cloak, vec![ladder]);
+        r.cloak_recover_on_cf = true;
+        r.tier_timeouts
+            .insert(RendererKind::Cloak, Duration::from_secs(45));
+        let _ = r
+            .fetch_hinted(
+                "https://glassdoor.com/x",
+                &HashMap::new(),
+                Some(true),
+                None,
+                None,
+                false,
+                crw_core::Deadline::from_request_ms(40_000),
+            )
+            .await;
+        let remaining = recorded.lock().unwrap().expect("cloak arm must fire");
+        assert!(
+            remaining > Duration::from_secs(43),
+            "a 40s remainder cannot fit a 45s mint: fresh budget expected \
+             (recorded {remaining:?})"
+        );
+    }
+
+    /// The breaker verdict is gated on the flag: with it OFF a residential body
+    /// that is a CF challenge is still a RenderError and opens the ChromeProxy
+    /// host breaker exactly as before (main's behaviour); with it ON the same
+    /// body is SiteBlocked and the breaker stays closed, so the arm keeps
+    /// uncovering the challenge for cloak. Low `min_calls` so a handful of
+    /// fetches decides it.
+    #[cfg(feature = "cloak")]
+    #[tokio::test]
+    async fn breaker_verdict_on_an_uncovered_challenge_follows_the_flag() {
+        use crate::breaker::{BreakerConfig, BreakerRegistry};
+        async fn run(flag: bool) -> bool {
+            let cloak = Arc::new(MockFetcher {
+                name: "cloak",
+                behavior: MockBehavior::Ok(solved_html()),
+            }) as Arc<dyn PageFetcher>;
+            let mut r = renderer_with_egress_and_cloak(cf_challenge_html(), cloak);
+            r.cloak_after_egress = flag;
+            r.breakers = Arc::new(BreakerRegistry::new(BreakerConfig {
+                window_size: 10,
+                min_calls: 4,
+                failure_rate_threshold: 0.5,
+                base_cooldown: Duration::from_secs(60),
+                max_cooldown: Duration::from_secs(60),
+                max_probes: 1,
+                half_open_success_rate: 1.0,
+                eval_timeout: Duration::from_secs(1),
+                ejection_reset_after_closed: Duration::from_secs(60),
+                count_truncated_as_failure: false,
+            }));
+            for _ in 0..6 {
+                let _ = r
+                    .fetch(
+                        "https://example.com/p",
+                        &HashMap::new(),
+                        Some(true),
+                        None,
+                        Some("auto"),
+                        crw_core::Deadline::from_request_ms(6_000),
+                    )
+                    .await;
+            }
+            r.breakers
+                .host_for("example.com", RendererKind::ChromeProxy)
+                .await
+                .is_open()
+        }
+        assert!(
+            run(false).await,
+            "flag off: an uncovered challenge is a RenderError and must open the \
+             ChromeProxy host breaker (main's behaviour)"
+        );
+        assert!(
+            !run(true).await,
+            "flag on: the same body is SiteBlocked and must leave the breaker closed"
         );
     }
 

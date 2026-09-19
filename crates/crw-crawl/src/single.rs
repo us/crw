@@ -1670,6 +1670,20 @@ pub(crate) fn classify_block(
             reason: "cloudflare block page (cf-error-code)".to_string(),
         });
     }
+    // Cloudflare's CURRENT block-page template carries no `cf-error-code` span
+    // at all (a live capture: 0 occurrences), so the arm above never sees it
+    // and the page fell through to `generic_block`. Its structural markers are
+    // the `cf-error-details` container and the `block_headline` translation
+    // key on the heading; require both so a page that merely mentions one
+    // token in prose cannot trip this. The vendor stamp is what the routing
+    // learner counts; routing itself never reads `vendor`, so this arm cannot
+    // move a request between tiers.
+    if html.contains("cf-error-details") && html.contains(r#"data-translate="block_headline""#) {
+        return Some(BlockOutcome {
+            vendor: "cloudflare".to_string(),
+            reason: "cloudflare block page (cf-error-details)".to_string(),
+        });
+    }
     // Vercel's bot-check interstitial beats the guard too — the real page (with
     // its "Website owner? Click here to fix" link) extracts to ~135 bytes, over
     // threshold, so antibot::classify's Vercel pattern (which requires this same
@@ -2377,6 +2391,29 @@ mod tests {
         )
         .expect("cloudflare hard block must be flagged even with substantial markdown");
         assert_eq!(b.vendor, "cloudflare");
+    }
+
+    #[test]
+    fn classify_block_modern_cf_block_page_without_error_code_span() {
+        // The CURRENT Cloudflare block template (scrubbed live capture) has no
+        // `cf-error-code` span, so the arm above it never matched and the page
+        // fell through to `generic_block`, invisible to the routing learner.
+        let html = include_str!("../tests/fixtures/cloudflare_1020_block.html");
+        assert!(!html.contains(r#"<span class="cf-error-code">"#));
+        let md = "x".repeat(500);
+        let out = classify_block(
+            403,
+            Some("text/html"),
+            html,
+            Some(&md),
+            false,
+            THRESH,
+            "https://example.com/",
+            None,
+        )
+        .expect("the block page must classify");
+        assert_eq!(out.vendor, "cloudflare");
+        assert!(out.reason.contains("cf-error-details"), "{}", out.reason);
     }
 
     #[test]

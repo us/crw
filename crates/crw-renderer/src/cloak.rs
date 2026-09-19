@@ -267,11 +267,13 @@ impl PageFetcher for CloakRenderer {
                 // (29 min); and the caller then measured 0 bytes, scored `r_ok`
                 // false and booked a RenderError with no way to tell the
                 // sidecar's own fault apart from the site's. Rejecting here
-                // routes it to `last_err` instead, which is what the retry needs,
-                // and the arms then book it as ConnectionError. That still trips
-                // the global cloak breaker, deliberately: a sidecar that is
-                // failing IS a tier fault, and the point of the change is that it
-                // is now recorded as one rather than as an innocent host's.
+                // routes it to `last_err` instead, which is what the retry needs.
+                // The arms then split the verdict: `is_cloak_content_verdict`
+                // (renderer `lib.rs`) matches this message and books it
+                // host-only, so a body the sidecar returned and we rejected is
+                // the page's verdict, not a tier fault; only a transport
+                // failure (unreachable sidecar or proxy) reaches the global
+                // cloak breaker.
                 //
                 // The same floor the caller applies, so nothing that would have
                 // been accepted downstream is rejected here.
