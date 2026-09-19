@@ -13,6 +13,7 @@ use crw_core::error::CrwError;
 use crw_crawl::crawl::{DiscoverOptions, discover_urls};
 
 use super::adapters::V2Link;
+use super::error::V2Error;
 use crate::error::AppError;
 use crate::state::AppState;
 
@@ -75,7 +76,7 @@ pub struct V2MapResponse {
 pub async fn map(
     State(state): State<AppState>,
     body: Result<Json<V2MapRequest>, JsonRejection>,
-) -> Result<Json<V2MapResponse>, AppError> {
+) -> Result<Json<V2MapResponse>, V2Error> {
     let Json(req) = body.map_err(AppError::from)?;
     let parsed_url = url::Url::parse(&req.url)
         .map_err(|e| CrwError::InvalidRequest(format!("Invalid URL: {e}")))?;
@@ -121,7 +122,7 @@ pub async fn map(
 
     let result = match tokio::time::timeout(Duration::from_secs(timeout_secs), fut).await {
         Ok(r) => r?,
-        Err(_) => return Err(AppError(CrwError::Timeout(timeout_secs * 1000))),
+        Err(_) => return Err(V2Error(CrwError::Timeout(timeout_secs * 1000))),
     };
 
     let mut urls = result.urls;

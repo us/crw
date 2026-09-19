@@ -1,0 +1,24 @@
+{
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": {
+      "markdown": "MOCKSRV::js-hydrate::OK",
+      "metadata": {
+        "language": "en",
+        "title": "hydrate",
+        "viewport": "width=device-width,initial-scale=1",
+        "scrapeId": "01a0b4c6-38ee-775c-b84a-1b7aa44369e7",
+        "sourceURL": "https://mock.fastcrw.com/js/hydrate",
+        "url": "https://mock.fastcrw.com/js/hydrate",
+        "statusCode": 200,
+        "contentType": "text/html; charset=utf-8",
+        "proxyUsed": "basic",
+        "cacheState": "hit",
+        "cachedAt": "2026-09-18T13:45:07.234Z",
+        "creditsUsed": 1,
+        "concurrencyLimited": false
+      }
+    }
+  }
+}

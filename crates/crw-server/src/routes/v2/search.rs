@@ -11,6 +11,7 @@ use uuid::Uuid;
 use crw_core::error::CrwError;
 use crw_core::types::{ImageResult, LlmUsage, SearchData, SearchRequest, SearchResult};
 
+use super::error::V2Error;
 use crate::error::AppError;
 use crate::routes::search::search_inner;
 use crate::state::AppState;
@@ -94,7 +95,7 @@ fn shape(results: SearchData) -> V2SearchData {
 pub async fn search(
     State(state): State<AppState>,
     body: Result<Json<Value>, JsonRejection>,
-) -> Result<Json<V2SearchResponse>, AppError> {
+) -> Result<Json<V2SearchResponse>, V2Error> {
     let Json(raw) = body.map_err(AppError::from)?;
     let normalized = normalize_search_body(raw);
     let req: SearchRequest = serde_json::from_value(normalized)

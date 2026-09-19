@@ -1,0 +1,23 @@
+{
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": {
+      "markdown": "<html><head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"><meta name=\"color-scheme\" content=\"light dark\"></head><body><pre style=\"word-wrap: break-word; white-space: pre-wrap;\">status 401 MOCKSRV::status::OK</pre></body></html>",
+      "metadata": {
+        "color-scheme": "light dark",
+        "scrapeId": "01a0b421-cbb6-71c9-abbd-52d7776c70b9",
+        "sourceURL": "https://mock.fastcrw.com/status/401",
+        "url": "https://mock.fastcrw.com/status/401",
+        "statusCode": 401,
+        "error": "Unauthorized",
+        "contentType": "text/plain; charset=utf-8",
+        "proxyUsed": "stealth",
+        "cacheState": "hit",
+        "cachedAt": "2026-09-18T10:47:27.913Z",
+        "creditsUsed": 1,
+        "concurrencyLimited": false
+      }
+    }
+  }
+}

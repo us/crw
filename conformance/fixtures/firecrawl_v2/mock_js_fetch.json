@@ -1,0 +1,24 @@
+{
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": {
+      "markdown": "MOCKSRV::json::OK",
+      "metadata": {
+        "language": "en",
+        "viewport": "width=device-width,initial-scale=1",
+        "title": "js fetch",
+        "scrapeId": "01a0b4c6-52f8-71d9-932b-1d09ad4ad96d",
+        "sourceURL": "https://mock.fastcrw.com/js/fetch",
+        "url": "https://mock.fastcrw.com/js/fetch",
+        "statusCode": 200,
+        "contentType": "text/html; charset=utf-8",
+        "proxyUsed": "basic",
+        "cacheState": "hit",
+        "cachedAt": "2026-09-18T13:45:13.972Z",
+        "creditsUsed": 1,
+        "concurrencyLimited": false
+      }
+    }
+  }
+}

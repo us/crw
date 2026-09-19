@@ -1,6 +1,6 @@
 # crw — Firecrawl v2 conformance suite (issue #62)
 
-Proves crw's `/v2/*` API is compatible with Firecrawl v2 along two axes:
+Proves crw's `/v2/*` API is compatible with Firecrawl v2 along three axes:
 
 1. **SDK conformance (the literal #62 gate)** — the real `firecrawl-py` SDK,
    pointed at a self-hosted crw, runs its 6 core methods without a 404 and
@@ -8,6 +8,36 @@ Proves crw's `/v2/*` API is compatible with Firecrawl v2 along two axes:
 2. **Golden-fixture shape diff** — crw's responses are diffed, field-by-field,
    against captured **real** Firecrawl v2 responses. Value-independent: it
    compares structure (keys + types), since content legitimately differs.
+3. **Error-path behaviour parity** (`conformance/mock_parity.py`) — for a given
+   target response, does crw make the same *call* Firecrawl makes about
+   `success`, the HTTP status, the error `code` and the post-redirect
+   `metadata.url`?
+
+   Axes 1 and 2 are structurally blind to axis 3: every golden target returns
+   200 and none of them redirect, so `sourceURL == url` holds in all of them by
+   accident and no error path is exercised at all. That is how `metadata.url`
+   shipped aliased to `sourceURL`. The parity corpus drives
+   `mock.fastcrw.com` instead — a fixture server we control, public so that the
+   real Firecrawl API can be pointed at the identical URLs:
+
+   ```bash
+   # capture Firecrawl's real answers for the error corpus (costs credits)
+   FIRECRAWL_API_KEY=fc-... ./run.sh capture mock
+   # then diff crw against them
+   CRW_URL=http://localhost:3000 ./run.sh parity
+   ```
+
+   Fully offline variant — local mock, local engine, no third-party traffic:
+
+   ```bash
+   node ../../crw-saas/infra/mock-server/server.js &          # :9372
+   CRW_ALLOW_LOOPBACK_FOR_TESTS=1 cargo run --bin crw -- serve &
+   CRW_URL=http://127.0.0.1:3000 MOCK_URL=http://127.0.0.1:9372 ./run.sh parity
+   ```
+
+   Rows where Firecrawl does *worse* than crw (it 500s on a valid CSV and on
+   recoverable malformed HTML) are recorded as `[note]`, never matched.
+   Matching Firecrawl's contract does not mean copying its extraction failures.
 
 ## Run
 

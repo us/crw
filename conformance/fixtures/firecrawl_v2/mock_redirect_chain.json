@@ -1,0 +1,28 @@
+{
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": {
+      "markdown": "# The Cartographer's Complaint\n\nBy A. Surveyor \u00b7 11 March 2024\n\nEvery map is a lie told carefully. The projection you choose decides which\ncountries look important, and no projection is innocent. MOCKSRV::html-article::OK\n\n## On scale\n\nA map at 1:1 is useless, which is the first honest thing anyone learns\nabout abstraction. Detail is not the same as truth.\n\n- Mercator flatters the poles.\n- Peters flatters the equator.\n- Both flatter their authors.\n\n## On borders\n\nBorders are the only feature on a map that can be moved by argument alone.\n\n> The map is not the territory, but it is what gets funded.",
+      "metadata": {
+        "title": "The Cartographer's Complaint",
+        "language": "en",
+        "og:title": "The Cartographer's Complaint",
+        "og:type": "article",
+        "description": "A short essay on maps.",
+        "viewport": "width=device-width,initial-scale=1",
+        "ogTitle": "The Cartographer's Complaint",
+        "scrapeId": "01a0b421-e204-766e-912c-a107c847fafb",
+        "sourceURL": "https://mock.fastcrw.com/redirect/3",
+        "url": "https://mock.fastcrw.com/html/article",
+        "statusCode": 200,
+        "contentType": "text/html; charset=utf-8",
+        "proxyUsed": "basic",
+        "cacheState": "hit",
+        "cachedAt": "2026-09-18T10:47:36.395Z",
+        "creditsUsed": 1,
+        "concurrencyLimited": false
+      }
+    }
+  }
+}

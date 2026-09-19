@@ -1,0 +1,22 @@
+{
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": {
+      "markdown": "```json\n{\n  \"sentinel\": \"MOCKSRV::json::OK\",\n  \"nested\": {\n    \"list\": [\n      1,\n      2,\n      3\n    ],\n    \"ok\": true\n  }\n}\n```",
+      "metadata": {
+        "scrapeId": "01a0b42f-f76d-728a-81b2-a6577863d42d",
+        "sourceURL": "https://mock.fastcrw.com/json",
+        "url": "https://mock.fastcrw.com/json",
+        "statusCode": 200,
+        "contentType": "application/json",
+        "timezone": "America/New_York",
+        "proxyUsed": "basic",
+        "cacheState": "miss",
+        "indexId": "f2001b96-ef84-4ed9-98d0-9e7f98cfd626",
+        "creditsUsed": 1,
+        "concurrencyLimited": false
+      }
+    }
+  }
+}

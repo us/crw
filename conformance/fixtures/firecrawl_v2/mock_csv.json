@@ -1,0 +1,8 @@
+{
+  "status": 500,
+  "body": {
+    "success": false,
+    "code": "SCRAPE_RETRY_LIMIT",
+    "error": "Scrape aborted after exceeding retry limit (document_antibot)."
+  }
+}

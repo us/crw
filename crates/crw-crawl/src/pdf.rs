@@ -560,6 +560,9 @@ fn build_scrape_data(
             og_image: None,
             canonical_url: None,
             source_url: source.source_url.clone(),
+            // Same as the HTML path: `scrape_url` stamps this from the fetch.
+            // An uploaded document (`/v2/parse`) has no transport at all.
+            final_url: None,
             language: None,
             status_code: source.status_code,
             rendered_with: Some("pdf".to_string()),

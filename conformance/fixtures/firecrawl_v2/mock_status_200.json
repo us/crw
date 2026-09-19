@@ -1,0 +1,21 @@
+{
+  "status": 200,
+  "body": {
+    "success": true,
+    "data": {
+      "markdown": "status 200 MOCKSRV::status::OK",
+      "metadata": {
+        "scrapeId": "01a0b421-c93c-741d-836f-09ea635371df",
+        "sourceURL": "https://mock.fastcrw.com/status/200",
+        "url": "https://mock.fastcrw.com/status/200",
+        "statusCode": 200,
+        "contentType": "text/plain; charset=utf-8",
+        "proxyUsed": "basic",
+        "cacheState": "hit",
+        "cachedAt": "2026-09-18T10:47:25.997Z",
+        "creditsUsed": 1,
+        "concurrencyLimited": false
+      }
+    }
+  }
+}

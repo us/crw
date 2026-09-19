@@ -1,0 +1,8 @@
+{
+  "status": 500,
+  "body": {
+    "success": false,
+    "code": "SCRAPE_ALL_ENGINES_FAILED",
+    "error": "All scraping engines failed to retrieve content from this URL. Engines tried: [index, fire-engine;chrome-cdp, fire-engine(retry);chrome-cdp]. This usually happens when: (1) The URL is invalid or the page doesn't exist (404), (2) The website is blocking automated access, (3) The website is down or unreachable, (4) The page requires authentication. Double check the URL is correct and accessible in a browser. If the issue persists, contact us at help@firecrawl.com with your request ID for investigation."
+  }
+}

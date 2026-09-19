@@ -807,6 +807,13 @@ async fn scrape_url_inner(
         &fetch_result.url,
         fetch_result.final_url.as_deref(),
     );
+    // The URL actually read, for `/v2`'s Firecrawl-compatible `metadata.url`.
+    // Stamped unconditionally, NOT gated on `redirect_is_material`: that gate
+    // exists to decide whether a redirect is worth WARNING about (it ignores a
+    // bare http→https or trailing-slash hop), and Firecrawl reports the final
+    // URL whether or not the hop was interesting.
+    data.metadata.final_url = fetch_result.final_url.clone();
+
     // Surface redirect mismatch as warning. Helps detect cases like
     // northernair.ca/history.htm silently 302'ing to the homepage — extraction
     // looks "successful" but the user got the wrong page.

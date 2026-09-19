@@ -15,6 +15,7 @@ use crw_core::error::CrwError;
 
 use super::adapters::{DEFAULT_PAGE_LIMIT, V2CrawlStatus, build_crawl_status};
 use super::crawl::{PageQuery, base_url};
+use super::error::V2Error;
 use super::scrape::{V2ScrapeRequest, to_internal};
 use crate::error::AppError;
 use crate::state::AppState;
@@ -40,7 +41,7 @@ pub async fn start_batch(
     State(state): State<AppState>,
     headers: HeaderMap,
     body: Result<Json<Value>, JsonRejection>,
-) -> Result<Json<V2BatchStartResponse>, AppError> {
+) -> Result<Json<V2BatchStartResponse>, V2Error> {
     let Json(mut raw) = body.map_err(AppError::from)?;
     let obj = raw
         .as_object_mut()
@@ -52,13 +53,13 @@ pub async fn start_batch(
     let urls: Vec<String> = serde_json::from_value(urls_val)
         .map_err(|e| CrwError::InvalidRequest(format!("invalid `urls`: {e}")))?;
     if urls.is_empty() {
-        return Err(AppError::from(CrwError::InvalidRequest(
+        return Err(V2Error::from(CrwError::InvalidRequest(
             "`urls` must contain at least one URL".into(),
         )));
     }
     let max_urls = state.config.crawler.max_batch_urls;
     if urls.len() > max_urls {
-        return Err(AppError::from(CrwError::InvalidRequest(format!(
+        return Err(V2Error::from(CrwError::InvalidRequest(format!(
             "`urls` exceeds the maximum of {max_urls} URLs per batch (got {})",
             urls.len()
         ))));
@@ -119,12 +120,12 @@ pub async fn start_batch(
         if ok { valid.push(u) } else { invalid.push(u) }
     }
     if valid.is_empty() {
-        return Err(AppError::from(CrwError::InvalidRequest(
+        return Err(V2Error::from(CrwError::InvalidRequest(
             "no valid URLs to scrape".into(),
         )));
     }
     if !invalid.is_empty() && !ignore_invalid {
-        return Err(AppError::from(CrwError::InvalidRequest(format!(
+        return Err(V2Error::from(CrwError::InvalidRequest(format!(
             "invalid URLs: {}",
             invalid.join(", ")
         ))));
@@ -147,7 +148,7 @@ pub async fn get_batch(
     headers: HeaderMap,
     Path(id): Path<Uuid>,
     Query(page): Query<PageQuery>,
-) -> Result<Json<V2CrawlStatus>, AppError> {
+) -> Result<Json<V2CrawlStatus>, V2Error> {
     let (snapshot, created_at) = {
         let jobs = state.crawl_jobs.read().await;
         let job = jobs
@@ -171,11 +172,11 @@ pub async fn get_batch(
     )))
 }
 
-pub async fn cancel_batch(state: State<AppState>, id: Path<Uuid>) -> Result<Json<Value>, AppError> {
+pub async fn cancel_batch(state: State<AppState>, id: Path<Uuid>) -> Result<Json<Value>, V2Error> {
     super::crawl::cancel_crawl(state, id).await
 }
 
-pub async fn get_errors(state: State<AppState>, id: Path<Uuid>) -> Result<Json<Value>, AppError> {
+pub async fn get_errors(state: State<AppState>, id: Path<Uuid>) -> Result<Json<Value>, V2Error> {
     super::crawl::get_errors(state, id).await
 }
 
@@ -186,7 +187,7 @@ mod tests {
     use crw_core::config::AppConfig;
     use serde_json::json;
 
-    async fn call(body: Value) -> Result<V2BatchStartResponse, AppError> {
+    async fn call(body: Value) -> Result<V2BatchStartResponse, V2Error> {
         let config: AppConfig = toml::from_str("").unwrap();
         let state = AppState::new(config).unwrap();
         start_batch(State(state), HeaderMap::new(), Ok(Json(body)))

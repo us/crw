@@ -1,0 +1,8 @@
+{
+  "status": 408,
+  "body": {
+    "success": false,
+    "code": "CONCURRENCY_QUEUE_TIMEOUT",
+    "error": "The operation timed out while waiting for a concurrency slot to become available. This means that your requests are exhausting your concurrent browsers limit. Consider using batch endpoints which wait for concurrency slots to become available indefinitely, or consider upgrading your plan to incrase your concurrency limit at https://firecrawl.dev/pricing."
+  }
+}
